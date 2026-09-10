@@ -1,0 +1,27 @@
+id: offset-pagination-without-id-tiebreak
+valid:
+  - "db.item.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: pageSize, skip: (page - 1) * pageSize });"
+  - "db.warehouse.findMany({ where, orderBy: { id: 'asc' }, skip: 0, take: 10 });"
+  # no skip — not offset pagination
+  - "db.item.findMany({ where, orderBy: { createdAt: 'asc' }, take: 10 });"
+  # a type member named skip, not an object literal
+  - "interface PageParams { skip: number; take: number }"
+invalid:
+  - "db.item.findMany({ where, orderBy: { createdAt: 'asc' }, take: pageSize, skip: (page - 1) * pageSize });"
+  # no orderBy at all
+  - "db.stockMove.findMany({ where, take: 20, skip: 40 });"
+  # shorthand skip
+  - "const query = { where, skip, take };"
+  # multi-line, id-less compound order
+  - |
+    db.supplier.findMany({
+      where,
+      orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+  # opaque orderBy (identifier / helper call) is reported for a human read
+  - "db.item.findMany({ where, orderBy: DEFAULT_ITEM_ORDER, take: n, skip: s });"
+  - "db.item.findMany({ where, orderBy: sortOrderBy(params.sort), take: n, skip: s });"
+  # a column merely CONTAINING id is not an id tiebreak
+  - "db.stockMove.findMany({ orderBy: { warehouseId: 'asc' }, skip: s, take: n });"

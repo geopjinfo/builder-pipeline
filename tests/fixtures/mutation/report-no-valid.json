@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1",
+  "files": {
+    "src/items/reserve.ts": {
+      "source": "export const canReserve = (qty, onHand) => qty > 0 && qty <= onHand;\n",
+      "mutants": [
+        { "id": "1", "status": "CompileError", "mutatorName": "ArrowFunction", "location": { "start": { "line": 1, "column": 27 } } },
+        { "id": "2", "status": "RuntimeError", "mutatorName": "EqualityOperator", "location": { "start": { "line": 1, "column": 45 } } }
+      ]
+    }
+  }
+}

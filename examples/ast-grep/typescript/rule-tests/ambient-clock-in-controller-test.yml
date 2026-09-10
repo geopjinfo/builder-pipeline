@@ -1,0 +1,17 @@
+id: ambient-clock-in-controller
+valid:
+  - "const filename = exportFilename(this.clock.now());"
+  - "const asOf = new Date(query.asOf);"
+  - "const day = new Date(`${date}T00:00:00.000Z`);"
+  - "// never new Date() here\nconst x = 1;"
+  - "const s = 'Date.now()';"
+  - "const t = performance.now();"
+  - "const n = MyDate.now();"
+invalid:
+  - "const stamp = new Date();"
+  - "const stamp = new Date;"
+  - "const ms = Date.now();"
+  - "const ms = Date['now']();"
+  - "const ms = globalThis.Date.now();"
+  - "const stamp = new globalThis.Date();"
+  - "const ms = Date . now ( );"

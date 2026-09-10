@@ -1,0 +1,70 @@
+id: clock-read-outside-transaction
+valid:
+  # the read is inside the transaction callback
+  - |
+    class ItemService {
+      async create(input: NewItem) {
+        return this.tx.run(async (tx) => {
+          const now = this.clock.now();
+          return this.items.create({ ...input, createdAt: now }, tx);
+        });
+      }
+    }
+  # a method that opens no transaction
+  - |
+    class ItemService {
+      async list(query: ItemQuery) {
+        const now = this.clock.now();
+        return this.items.list(query, now);
+      }
+    }
+  # a non-callback run (e.g. a job) is not a transaction runner
+  - |
+    class StockSweep {
+      async tick() {
+        const now = this.clock.now();
+        await job.run(now);
+      }
+    }
+  # expression-bodied callback, read inside
+  - |
+    class ReservationService {
+      async release(id: string) {
+        await this.tx.run((tx) => this.reservations.release(id, this.clock.now(), tx));
+      }
+    }
+invalid:
+  # the instant is taken before the transaction it stamps
+  - |
+    class StockService {
+      async adjust(id: string) {
+        const now = this.clock.now();
+        const before = await this.mustExist(id);
+        return this.tx.run(async (tx) => {
+          await this.stock.apply(id, { adjustedAt: now }, tx);
+        });
+      }
+    }
+  # read after commit
+  - |
+    class ItemService {
+      async create(input: NewItem) {
+        const row = await this.tx.run(async (tx) => this.items.create(input, tx));
+        this.metrics.record(this.clock.now());
+        return row;
+      }
+    }
+  # function-expression callback, differently named clock
+  - |
+    class ReservationService {
+      async confirm(id: string) {
+        const at = this.systemClock.now();
+        await tx.run(async function (client) { await reservations.confirm(id, at, client); });
+      }
+    }
+  # free function
+  - |
+    async function sweep(deps: Deps) {
+      const now = deps.clock.now();
+      await deps.tx.run(async (tx) => deps.reservations.expire(now, tx));
+    }

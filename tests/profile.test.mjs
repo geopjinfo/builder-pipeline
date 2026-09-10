@@ -67,6 +67,24 @@ test('red: orchestratorModel active without a declared orchestrator model', () =
   assert.ok(errors.some((e) => e.startsWith('models.orchestrator')), errors.join('\n'));
 });
 
+test('red: a run directory other than .pipeline is refused, not half-honoured', () => {
+  const { errors } = profile.parse(block({ schema: 2, paths: { runs: 'build/runs' } }));
+  assert.ok(errors.some((e) => e.startsWith('paths.runs: fixed at ".pipeline"')), errors.join('\n'));
+  assert.deepEqual(profile.parse(block({ schema: 2, paths: { runs: '.pipeline' } })).errors, []);
+});
+
+test('red: a malformed plan oracle, handoff tracker or id pattern is refused at load, not mid-run', () => {
+  const bad = (features) => profile.parse(block({ schema: 2, features })).errors;
+  assert.ok(bad({ planSchema: { state: 'on', oracle: { table: 'routes' } } }).some((e) => e.startsWith('features.planSchema.oracle')));
+  assert.ok(bad({ handoffPack: { state: 'on', tracker: { files: [] } } }).some((e) => e.startsWith('features.handoffPack.tracker')));
+  assert.ok(bad({ claims: { state: 'on', registryIdPattern: '([' } }).some((e) => e.startsWith('features.claims.registryIdPattern')));
+  const good = bad({
+    planSchema: { state: 'on', oracle: { table: 'routes', column: 'Key', source: 'docs/keys.csv', keyColumn: 'key' } },
+    handoffPack: { state: 'on', tracker: { files: ['board.csv'], lists: 'lists.csv', columnLists: {} } },
+  });
+  assert.deepEqual(good, []);
+});
+
 test('feature() refuses a name the pack does not know', () => {
   assert.throws(() => profile.feature(profile.DEFAULTS, 'nope'), /unknown feature/);
 });

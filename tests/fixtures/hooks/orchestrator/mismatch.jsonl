@@ -1,0 +1,9 @@
+{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-01-01T00:00:01Z","message":{"id":"m1","model":"model-beta","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-01-01T00:00:01Z","message":{"id":"m1","model":"model-beta","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-01-01T00:00:02Z","message":{"id":"m2","model":"model-beta","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-01-01T00:00:03Z","message":{"id":"s1","model":"model-alpha","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-01-01T00:00:03Z","message":{"id":"s2","model":"model-alpha","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-01-01T00:00:03Z","message":{"id":"s3","model":"model-alpha","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-01-01T00:00:04Z","message":{"id":"m3","model":"model-beta","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05Z","message":{"id":"x1","model":"<synthetic>"}}

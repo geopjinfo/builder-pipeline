@@ -1,0 +1,31 @@
+id: offset-pagination-without-id-tiebreak
+language: TypeScript
+severity: warning
+message: >-
+  Offset pagination (`skip`) without an `id` tiebreak in `orderBy` — rows sharing a sort key can swap
+  between pages, so a row appears twice or never.
+note: >-
+  Matches an object literal carrying a `skip` key (pair or shorthand) whose `orderBy` is absent or whose
+  `orderBy` value text does not mention `id`. An `orderBy` held in an identifier or a helper call is opaque
+  to the rule and is reported — baseline it with the reason after reading the helper. Assumes a
+  Prisma-style query object; rename the keys for another query builder.
+files:
+  - src/**/*.ts
+ignores:
+  - '**/*.spec.ts'
+  - '**/*.test.ts'
+rule:
+  kind: object
+  all:
+    - has:
+        any:
+          - kind: pair
+            has: { field: key, regex: '^skip$' }
+          - kind: shorthand_property_identifier
+            regex: '^skip$'
+    - not:
+        has:
+          kind: pair
+          all:
+            - has: { field: key, regex: '^orderBy$' }
+            - has: { field: value, regex: '\bid\b' }

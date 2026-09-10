@@ -1,0 +1,7 @@
+{
+  "_doc": "test fixture — one known finding carried; every other failing finding in transcript.jsonl is NEW",
+  "transcript": "transcript.jsonl",
+  "findings": [
+    { "key": "undocumented-route GET /suppliers 200 GET /suppliers answered 200", "class": "undocumented-route", "count": 1, "example": "#9 GET /suppliers" }
+  ]
+}

@@ -1,0 +1,4 @@
+{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-01-01T00:00:01Z","message":{"id":"m1","model":"model-alpha[1m]","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-01-01T00:00:02Z","message":{"id":"m2","model":"model-alpha[1m]","usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-01-01T00:00:03Z","message":{"id":"s1","model":"model-beta","usage":{"input_tokens":10,"output_tokens":5}}}

@@ -1,0 +1,8 @@
+[
+  {
+    "ruleId": "offset-pagination-without-id-tiebreak",
+    "file": "src/items/items.repository.ts",
+    "snippet": "{ where, skip, take }",
+    "why": "TRUE POSITIVE — the caller sorts by id before paging; fix when the repository is next touched"
+  }
+]

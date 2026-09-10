@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { after, describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const cli = join(here, '..', 'scripts', 'features.mjs');
+const made = [];
+after(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })));
+
+const project = (profileText) => {
+  const dir = mkdtempSync(join(tmpdir(), 'builder-features-'));
+  made.push(dir);
+  if (profileText !== undefined) writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText);
+  return dir;
+};
+const block = (obj) => `# PIPELINE_PROFILE — inventory service\n\n## 16. Pipeline settings\n\n\`\`\`json pipeline-settings\n${JSON.stringify(obj, null, 2)}\n\`\`\`\n`;
+const run = (cwd) => spawnSync(process.execPath, [cli], { cwd, encoding: 'utf8' });
+
+describe('features', () => {
+  test('no profile: says defaults are in use, prints every feature line, exits 0', () => {
+    const r = run(project());
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^no PIPELINE_PROFILE\.md — defaults in use$/m);
+    assert.match(r.stdout, /^claims: on$/m);
+    assert.match(r.stdout, /^contractOracle: not configured$/m);
+    assert.match(r.stdout, /^fixLane: on \(unmeasured/m);
+    assert.match(r.stdout, /^livePage: experimental — not enabled$/m);
+  });
+
+  test('a profile without the settings block is said, and defaults apply', () => {
+    const r = run(project('# PIPELINE_PROFILE — prose only\n'));
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /has no pipeline-settings block — defaults in use/);
+  });
+
+  test('an off feature prints "<name>: not configured"', () => {
+    const r = run(project(block({ schema: 2, features: { claims: { state: 'off' }, handoffPack: { state: 'off' } } })));
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /^claims: not configured$/m);
+    assert.match(r.stdout, /^handoffPack: not configured$/m);
+    assert.match(r.stdout, /^features: profile valid$/m);
+  });
+
+  test('red: an invalid profile prints its errors and exits 1', () => {
+    const r = run(project(block({ schema: 2, features: { contractOracle: { state: 'on' }, claimz: { state: 'on' } } })));
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /features\.contractOracle\.spec: required while the feature is on/);
+    assert.match(r.stdout, /features\.claimz: unknown feature/);
+    assert.match(r.stdout, /features: INVALID/);
+  });
+
+  test('red: unparseable settings JSON exits 1', () => {
+    const r = run(project('```json pipeline-settings\n{ nope\n```\n'));
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /not valid JSON/);
+  });
+});

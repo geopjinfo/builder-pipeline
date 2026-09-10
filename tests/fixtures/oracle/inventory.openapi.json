@@ -1,0 +1,84 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Inventory (synthetic test fixture)", "version": "1.0.0" },
+  "paths": {
+    "/items": {
+      "get": {
+        "parameters": [{ "$ref": "#/components/parameters/Page" }, { "in": "query", "name": "pageSize", "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "A page of items" },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      },
+      "post": {
+        "responses": {
+          "201": { "description": "Created" },
+          "422": { "description": "Invalid", "content": { "application/problem+json": { "examples": { "invalid": { "value": { "code": "VALIDATION" } } } } } }
+        }
+      }
+    },
+    "/items/export": {
+      "get": {
+        "parameters": [{ "in": "query", "name": "format", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "A CSV export" } }
+      }
+    },
+    "/items/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/ItemId" }],
+      "get": {
+        "responses": {
+          "200": { "description": "One item" },
+          "404": { "description": "Not found", "content": { "application/problem+json": { "example": { "code": "NOT_FOUND" } } } }
+        }
+      }
+    },
+    "/items/{id}/reserve": {
+      "post": {
+        "responses": {
+          "200": { "description": "Reserved" },
+          "409": {
+            "description": "Conflict",
+            "content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/ConflictProblem" } } }
+          }
+        }
+      }
+    },
+    "/warehouses/{warehouseId}/stock": {
+      "parameters": [{ "in": "path", "name": "warehouseId", "required": true, "schema": { "type": "string" } }, { "$ref": "#/components/parameters/Page" }],
+      "get": {
+        "parameters": [{ "in": "query", "name": "sku", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Stock levels" } }
+      }
+    },
+    "/stock-moves": {
+      "get": {
+        "parameters": [{ "in": "query", "name": "filter", "style": "deepObject", "explode": true, "schema": { "type": "object" } }],
+        "responses": {
+          "200": { "description": "Moves" },
+          "4XX": { "description": "Client error", "content": { "application/json": { "example": { "code": "BAD_REQUEST" } } } }
+        }
+      }
+    },
+    "/reports": {
+      "get": {
+        "parameters": [{ "in": "query", "name": "options", "schema": { "type": "object", "additionalProperties": { "type": "string" } } }],
+        "responses": { "default": { "description": "Any answer" } }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Page": { "in": "query", "name": "page", "schema": { "type": "integer" } },
+      "ItemId": { "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }
+    },
+    "responses": {
+      "BadRequest": { "description": "Bad request", "content": { "application/problem+json": { "example": { "code": "VALIDATION" } } } }
+    },
+    "schemas": {
+      "ConflictProblem": {
+        "type": "object",
+        "properties": { "code": { "type": "string", "enum": ["CONFLICT"] }, "detail": { "type": "string" } }
+      }
+    }
+  }
+}

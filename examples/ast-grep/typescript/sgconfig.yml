@@ -1,0 +1,7 @@
+# ast-grep project config — EXAMPLE rules (see README.md).
+# Rules scan by SYNTAX TREE, so the syntactic variants a regex misses are in the corpus.
+# Prove them with `npx ast-grep test --skip-snapshot-tests` (valid + invalid cases per rule).
+ruleDirs:
+  - rules
+testConfigs:
+  - testDir: rule-tests

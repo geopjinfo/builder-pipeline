@@ -43,20 +43,20 @@ const FEATURES = {
   graph: { defaults: { state: 'off', check: null, sync: null, syncFree: null, autoLimitKb: 300 }, requires: ['check'] },
   claims: { defaults: { state: 'on', retracted: null, registryIdPattern: '[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?' }, requires: [] },
   planSchema: {
-    defaults: { state: 'on', sections: ['Track', 'Context', 'Tasks', 'BLOCKERS'], tables: {}, oracle: null },
+    defaults: { state: 'on', sections: ['Track', 'Context', 'Tasks', 'BLOCKERS'], tables: {}, taskColumns: ['Task', 'Cites', 'Test-seed'], oracle: null },
     requires: ['sections'],
   },
   findingsSchema: { defaults: { state: 'on' }, requires: [] },
   reviewTemplate: { defaults: { state: 'on' }, requires: [] },
-  handoffPack: { defaults: { state: 'on', tracker: null }, requires: [] },
+  handoffPack: { defaults: { state: 'on', tracker: null, decisionIdPattern: 'D-\\d+', base: 'main' }, requires: [] },
   rowReader: { defaults: { state: 'on' }, requires: [] },
   contractOracle: {
-    defaults: { state: 'off', adapter: 'openapi3', spec: null, transcript: null, baseline: null, codeField: 'code', statusFamilies: {} },
+    defaults: { state: 'off', adapter: 'openapi3', spec: null, transcript: null, baseline: null, codeField: 'code', statusFamilies: {}, platformCodePattern: null },
     requires: ['adapter', 'spec', 'transcript'],
   },
   rules: { defaults: { state: 'off', runner: 'ast-grep', scan: null, baseline: null, ratcheted: [] }, requires: ['scan'] },
   mutation: { defaults: { state: 'off', tool: null, command: null, report: null, payloadPattern: null }, requires: ['command', 'report'] },
-  orchestratorModel: { defaults: { state: 'off' }, requires: [] },
+  orchestratorModel: { defaults: { state: 'off', recentTurns: 40 }, requires: [] },
   costAccounting: { defaults: { state: 'off', reader: 'claude-code' }, requires: ['reader'] },
   bashCap: { defaults: { state: 'off', limitBytes: 4096 }, requires: ['limitBytes'] },
   registryGuard: { defaults: { state: 'off', seats: [] }, requires: ['seats'] },
@@ -113,6 +113,14 @@ function validate(settings) {
     errors.push('commands.tier: a command containing {tier}, or null');
   }
   if (settings.paths && !Array.isArray(settings.paths.citationRoots)) errors.push('paths.citationRoots: must be an array');
+  /*
+   * The run directory is fixed in schema 2. The board freshness gate, the watcher, the renderer's run-log reader and
+   * the installer's .gitignore line all use `.pipeline`; a setting three of them ignored would put a run's pages in
+   * one folder and read its log from another. Refused rather than half-honoured.
+   */
+  if (settings.paths && settings.paths.runs !== '.pipeline') {
+    errors.push(`paths.runs: fixed at ".pipeline" in schema ${SCHEMA} (the freshness gate, watcher and installer assume it), got ${JSON.stringify(settings.paths.runs)}`);
+  }
 
   for (const [name, config] of Object.entries(settings.features ?? {})) {
     const known = FEATURES[name];
@@ -131,6 +139,31 @@ function validate(settings) {
         const empty = v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
         if (empty) errors.push(`features.${name}.${key}: required while the feature is ${config.state} — fill it, or set state to "off"`);
       }
+    }
+  }
+  /* Nested shapes a script would otherwise only reject mid-run, after a seat had already been dispatched. */
+  const oracle = settings.features?.planSchema?.oracle;
+  if (oracle !== null && oracle !== undefined) {
+    const bad = !isObject(oracle) || ['table', 'column', 'source', 'keyColumn'].some((k) => typeof oracle[k] !== 'string' || !oracle[k]);
+    if (bad) errors.push('features.planSchema.oracle: null, or { "table", "column", "source", "keyColumn" } — all non-empty strings');
+  }
+  const tracker = settings.features?.handoffPack?.tracker;
+  if (tracker !== null && tracker !== undefined) {
+    const bad =
+      !isObject(tracker) ||
+      !Array.isArray(tracker.files) ||
+      tracker.files.length === 0 ||
+      typeof tracker.lists !== 'string' ||
+      !isObject(tracker.columnLists ?? {});
+    if (bad) errors.push('features.handoffPack.tracker: null, or { "files": [non-empty], "lists": "<csv>", "columnLists": { file: { column: list } } }');
+  }
+  for (const [name, key] of [['claims', 'registryIdPattern'], ['handoffPack', 'decisionIdPattern']]) {
+    const src = settings.features?.[name]?.[key];
+    if (typeof src !== 'string') continue;
+    try {
+      new RegExp(src);
+    } catch (e) {
+      errors.push(`features.${name}.${key}: not a valid regular expression — ${e.message}`);
     }
   }
   if (settings.features?.orchestratorModel && ACTIVE.has(settings.features.orchestratorModel.state) && !settings.models?.orchestrator) {

@@ -1,0 +1,14 @@
+{"seq":1,"method":"GET","url":"/items?page=1","status":200,"responseBody":"[]"}
+{"seq":2,"method":"GET","url":"/items/export?format=csv","status":200,"responseBody":"sku,qty"}
+{"seq":3,"method":"GET","url":"/items/42","status":404,"responseBody":"{\"code\":\"NOT_FOUND\"}"}
+{"seq":4,"method":"POST","url":"/items","status":200,"responseBody":"{}"}
+{"seq":5,"method":"GET","url":"/items?page=1&search=bolt","status":200,"responseBody":"[]"}
+{"seq":6,"method":"GET","url":"/items/42","status":404,"responseBody":"{\"code\":\"GONE\"}"}
+{"seq":7,"method":"POST","url":"/items/42/reserve","status":409,"responseBody":"{\"code\":\"STALE_VERSION\"}"}
+{"seq":8,"method":"POST","url":"/items/42/reserve","status":409,"responseBody":{"code":"item.locked"}}
+{"seq":9,"method":"GET","url":"/suppliers","status":200,"responseBody":"[]"}
+{"seq":10,"method":"GET","url":"/suppliers","status":404,"responseBody":""}
+{"seq":11,"method":"GET","url":"/warehouses/w1/stock?page=2&sku=A1","status":200,"responseBody":"[]"}
+
+{"seq":12,"method":"POST","url":"/items/43/reserve","status":409,"responseBody":"{\"code\":\"CONFLICT\"}"}
+{"seq":13,"method":"POST","url":"/items","status":200,"responseBody":"{}"}
