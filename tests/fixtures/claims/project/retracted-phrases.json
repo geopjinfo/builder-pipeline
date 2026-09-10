@@ -1,0 +1,5 @@
+{
+  "phrases": [
+    { "phrase": "stock counts are cached", "retractedBy": "D-2 — counts are read live on every request" }
+  ]
+}

@@ -145,11 +145,12 @@ test('--json writes one document per section, each within the cap, under paths.r
   assert.deepEqual(agents.rows.find((r) => r[0] === 'vuln-auditor').slice(2), ['—', '—', '—', '—', '—']);
 });
 
-test('--json follows a non-default paths.runs from the profile', (t) => {
+test('--json sends the documents to an explicit --out directory instead of paths.runs', (t) => {
   const dir = workspace(t);
-  setProfile(dir, (text) => text.replace('"runs": ".pipeline"', '"runs": "build-runs"'));
-  const { dir: out } = render.renderJson(join(dir, 'tasks', 'sample.md'), { transcripts });
-  assert.equal(out, join(dir, 'build-runs', 'sample', 'page'));
+  const out = join(dir, 'elsewhere', 'page');
+  const { dir: written } = render.renderJson(join(dir, 'tasks', 'sample.md'), { transcripts, outDir: out });
+  assert.equal(written, out);
+  assert.ok(readdirSync(out).some((f) => f.endsWith('.json')));
 });
 
 test('an oversized section splits into parts within the cap that add back to the whole; a later render leaves no orphan part', (t) => {

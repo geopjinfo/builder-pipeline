@@ -1,0 +1,16 @@
+{
+  "seat": "security-auditor",
+  "verdict": "CHANGES-REQUIRED",
+  "findings": [
+    {
+      "id": "S-1",
+      "severity": "blocker",
+      "location": "app/stock.py:3",
+      "cite": "the project's input-validation rule",
+      "claim": "a negative minimum is accepted",
+      "evidence": "app/stock.py:3 multiplies item.minimum with no lower bound"
+    }
+  ],
+  "filesTouched": ["app/stock.py"],
+  "commands": [{ "cmd": "grep -n minimum app/stock.py", "result": "3:    return item.minimum * 2" }]
+}

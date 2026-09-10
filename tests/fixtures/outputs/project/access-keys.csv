@@ -1,0 +1,3 @@
+key,description
+stock.read,"read stock levels, per item"
+stock.reorder,raise a reorder

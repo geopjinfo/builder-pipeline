@@ -1,0 +1,5 @@
+{"kind":"run.start","ts":"2026-02-03T09:00:00Z","module":"stock-levels"}
+{"kind":"gate","ts":"2026-02-03T10:00:00Z","gate":"unit","result":"fail","figure":"40/41"}
+{"kind":"gate","ts":"2026-02-03T10:30:00Z","gate":"unit","result":"pass","figure":"41/41"}
+{"kind":"gate","ts":"2026-02-03T10:40:00Z","gate":"integration","result":"pass","figure":"12/12"}
+{"kind":"run.end","ts":"2026-02-03T11:00:00Z","verdict":"MERGE-READY"}
