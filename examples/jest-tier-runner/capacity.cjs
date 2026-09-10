@@ -1,22 +1,22 @@
 'use strict';
 /**
+ * EXAMPLE — a worker-pool governor for jest. The interface it implements is in README.md beside this file.
+ *
  * Sizes jest worker pools to the memory actually free, not to the core count.
  *
- * WHY THIS EXISTS. the source repo measured its integration tier at ~9-10 min
- * GREEN with `maxWorkers: 50%`, and 19 min with FOURTEEN FAILURES at `--maxWorkers=16` on the same
- * commit. Oversubscription here costs correctness, not just time — the losing worker fails on
+ * WHY THIS EXISTS. In one project an integration tier ran green at half the cores, and on the same
+ * commit, with the worker count pushed towards the core count, took about twice as long and failed a
+ * dozen-plus tests. Oversubscription costs correctness, not just time — the losing worker fails on
  * timeouts, which reads as a regression and is not one.
  *
- * It may only ever LOWER the count below the tier's ceiling. Raising it is how the 19-minute shape
+ * It may only ever LOWER the count below the tier's ceiling. Raising it is how the slow, flaky shape
  * comes back, and a governor that can raise makes runs non-comparable across machines. CI pins
  * `MAX_TEST_WORKERS` so CI stays deterministic; developer machines float.
- *
- * Design rationale: the source repo's 2026-08-26 run-economy plan (evidence-backed; see PORTING.md).
  */
 const os = require('node:os');
 
 const MB = 1024 * 1024;
-/** The OS, Docker Desktop and the orchestrator's own Node all need a core. */
+/** The OS, the container runtime and the orchestrator's own Node all need a core. */
 const RESERVED_CORES = 2;
 
 function computeWorkers({ cores, freeMb, perWorkerMb, ceiling = Number.POSITIVE_INFINITY, override }) {
@@ -33,9 +33,9 @@ function computeWorkers({ cores, freeMb, perWorkerMb, ceiling = Number.POSITIVE_
 }
 
 /**
- * `os.loadavg()` is deliberately NOT consulted: it returns [0,0,0] on win32, this repo's primary
- * platform, so a load-based rule would be a no-op exactly where it is needed. Free memory is the
- * signal that is real on every platform we run on.
+ * `os.loadavg()` is deliberately NOT consulted: it returns [0,0,0] on win32, so a load-based rule
+ * would be a no-op on every Windows developer machine, exactly where it may be needed. Free memory is
+ * the signal that is real on every platform.
  */
 function maxWorkers({ perWorkerMb, ceiling }) {
   return computeWorkers({

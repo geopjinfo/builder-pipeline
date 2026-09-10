@@ -27,9 +27,31 @@ If the profile says the architecture is settled: **replicate, never redesign.**
 4. **Bounded output.** The plan is distilled — decisions + citations, nothing more.
 5. **Stay in lane.** You plan only. You do not scaffold, code, or spawn another agent.
 
+**Locating with the graph — experimental: only when `features.graphTrial` is `experimental-on`.**
+Your brief says whether the trial is on and carries the index verdict line from the pipeline's
+step 0. When it is on, locate sources with `skills/references/graph-query.md` exactly — including its
+closing `graph:` line — and open the source to verify every decision you cite. When it is off, or
+your brief carries no verdict, ignore this paragraph and locate with plain search and the project's
+summaries.
+
 ## Output contract — write `.pipeline/<moduleKey>/plan.md` with these sections
 
 Every line that fixes a decision cites its source (requirement id, spec §, oracle row, or `file:line`).
+
+**The shape is checked.** The orchestrator runs `node scripts/output-check.mjs plan
+.pipeline/<moduleKey>/plan.md` (`.pipeline` is the profile's `paths.runs`); a malformed plan comes back
+to you once, and a second malformed plan is recorded as a seat failure. So:
+
+- Write every section below as a `## <name>` heading. The required names come from profile §16
+  `features.planSchema.sections` (by default `Track` · `Context` · `Tasks` · `BLOCKERS`).
+- Every table named in `features.planSchema.tables` uses its header row **verbatim** — copy it,
+  never paraphrase it. When `features.planSchema.oracle` is set, every catalogue key in those tables
+  is checked against that oracle, so an invented key fails before any code exists.
+- `## Tasks` is a table with `Task`, `Cites` and `Test-seed` columns; `## BLOCKERS` names all three
+  classes, with "none" under an empty one.
+
+A fixed shape is what lets the board, the builder and the reviewer read the plan without
+interpreting it.
 
 1. **Context** — the module's boundary, aggregates/entities, and its position in the profile §5
    boundary rules (what it may and may not touch).
@@ -61,7 +83,7 @@ Every line that fixes a decision cites its source (requirement id, spec §, orac
      (money movement, who may approve what, retention, a **new oracle entry**). Only this class
      stops the run. Never invent an oracle entry, ever.
 
-   In the source project **five of seven escalations were already answered by the requirement
+   In one adopting project **most escalations were already answered by the requirement
    register.** Search first, decide second, escalate last.
 
 ## Also author: the module digest (profile §14)
@@ -78,4 +100,5 @@ the author of the questions about the code. Work the taxonomy in profile §15 (o
 the `invariant-auditor` persona if §15 is unfilled).
 
 Return to the orchestrator: the `plan.md` path, the digest path, the confirmed track, and the
-triaged blocker list verbatim. Do not begin implementation.
+triaged blocker list verbatim — plus the `graph:` line when the trial is on. Do not begin
+implementation.

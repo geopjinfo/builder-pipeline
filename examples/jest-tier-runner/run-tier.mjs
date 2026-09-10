@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
+ * EXAMPLE — one tier runner for a JavaScript project on jest. The interface it implements is in
+ * README.md beside this file; point `commands.tier` in PIPELINE_PROFILE §16 at your own equivalent.
+ *
  * The ONLY sanctioned way to run a test tier from an agent seat.
  *
  *   node scripts/run-tier.mjs integration              # full tier
  *   node scripts/run-tier.mjs integration --affected   # only what the diff can reach
- *   node scripts/run-tier.mjs unit --affected --since origin/development
+ *   node scripts/run-tier.mjs unit --affected --since origin/main
  *   node scripts/run-tier.mjs gates                    # the whole gate chain, one line of output
  *
  * It (1) takes the tier lock, (2) runs jest with `--json --outputFile`, (3) writes the human
@@ -13,8 +16,6 @@
  *
  * `--affected` is an INNER-LOOP convenience and is NEVER merge evidence: a board row cites a full
  * run, and full tiers stay mandatory at pipeline Phase 3, Phase 6/6.5 and before every PR.
- *
- * Design rationale: the source repo's 2026-08-26 run-economy plan (evidence-backed; see PORTING.md).
  */
 import { createRequire } from 'node:module';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -30,9 +31,9 @@ const WINDOWS = process.platform === 'win32';
 
 /**
  * `spawnSync`'s default `maxBuffer` is 1 MB, and a full integration run prints ~4 MB — the child
- * gets KILLED at the cap, mid-suite, with no summary and no JSON. This bit on the very first full
- * run this script attempted: 1 050 113 bytes of log and an exit 1 that looked like a test failure
- * and was not. The whole point of the runner is that a tier's output is large, so the buffer must
+ * gets KILLED at the cap, mid-suite, with no summary and no JSON. This bit on the first full run
+ * an earlier version attempted: just over a megabyte of log and an exit 1 that looked like a test
+ * failure and was not. The whole point of the runner is that a tier's output is large, so the buffer must
  * be sized for the largest tier, not the default.
  */
 const MAX_BUFFER = 256 * 1024 * 1024;
@@ -48,9 +49,9 @@ const [tier, ...rest] = process.argv.slice(2);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
 /**
- * `gates` is not a jest tier, but it is the second-largest context sink in the repo — twelve
- * chained sub-commands, and `logs/qa-app.log` shows the same shape at 3.13 MB. Scoping this runner
- * to jest alone would have left the biggest offenders untouched.
+ * `gates` is not a jest tier, but a gate chain — many chained sub-commands, each printing its own
+ * output — is typically one of the largest context sinks a project has, often megabytes per run.
+ * Scoping this runner to jest alone would leave one of the biggest offenders untouched.
  */
 if (tier === 'gates') {
   mkdirSync('logs', { recursive: true });
@@ -72,7 +73,7 @@ if (!CONFIGS[tier]) {
 }
 
 const wantsAffected = rest.includes('--affected');
-const since = rest.includes('--since') ? rest[rest.indexOf('--since') + 1] : 'development';
+const since = rest.includes('--since') ? rest[rest.indexOf('--since') + 1] : 'main'; // your integration branch
 
 function changedFiles() {
   const committed = execFileSync('git', ['diff', '--name-only', `${since}...HEAD`], { encoding: 'utf8' });
@@ -113,9 +114,9 @@ const logPath = `logs/${tier}-${stamp}.log`;
  * `acquire()` throws `TierBusyError` when a sibling holds the lock, which is the machine-wide
  * serialisation working as designed. Letting it propagate printed a Node stack trace — and a stack
  * trace reads as "the tooling broke", which is the reading most likely to make the next caller
- * delete the lock file and run anyway. That would put two tiers back on one PostgreSQL container,
- * which is the failure the lock exists to prevent (observed 2026-08-26: `FATAL: sorry, too many
- * clients already` from three worktrees sharing one database).
+ * delete the lock file and run anyway. That would put two tiers back on one database container,
+ * which is the failure the lock exists to prevent (observed in practice: `FATAL: sorry, too many
+ * clients already` from several worktrees sharing one database).
  *
  * So the busy case prints ONE line and exits `75` (EX_TEMPFAIL — "try again later"), distinct from
  * jest's `1` so a caller can tell "did not run" from "ran and failed". The stack is not
@@ -137,9 +138,9 @@ try {
    * `--outputFile` only once it has actually run tests, so anything that kills it earlier — a
    * globalSetup throw, no container runtime, a bad config — leaves the PREVIOUS result file in
    * place, and the summarize() call below parses it happily and prints the previous run's PASS
-   * for a run that executed nothing. Observed 2026-08-26: a tier whose globalSetup died with
-   * "Could not find a working container runtime strategy" reported
-   * `PASS — 177/177 suites, 2389/2390 tests` from a result file 48 minutes old.
+   * for a run that executed nothing. Observed in practice: a tier whose globalSetup died with
+   * "Could not find a working container runtime strategy" reported a full PASS line from a result
+   * file most of an hour old.
    *
    * That is the worst failure a governed runner can have, because this file is "the ONLY
    * sanctioned way to run a test tier from an agent seat" and the line it prints is what board

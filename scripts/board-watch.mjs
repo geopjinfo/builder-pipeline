@@ -1,5 +1,5 @@
 /**
- * `npm run board:watch` — keep every rendered run board current while a run is happening.
+ * `node scripts/board-watch.mjs` — keep every rendered run board current while a run is happening.
  *
  * WHY THIS EXISTS. A page that is only fresh when somebody remembers to render it is a page that is
  * usually stale, and the freshness gate would then be failing runs for a forgotten chore rather than

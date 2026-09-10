@@ -12,7 +12,8 @@
  * 400 chars; past that the digest SAYS so and names the log), then the last 30 lines verbatim, then the
  * log path. stderr is appended to stdout before digesting, so it is never lost either.
  *
- * WHAT IS EXEMPT. Output that is already a digest (the pack's tier runner, `scripts/run-tier.mjs`), and
+ * WHAT IS EXEMPT. Output that is already a digest (a tier runner installed as `scripts/run-tier.mjs`, as in the pack's
+ * `examples/jest-tier-runner/`), and
  * any command that opts out with `--no-cap` or `BUILDER_NO_BASH_CAP=1`.
  *
  * Pure: strings in, a digest out. The harness hook (`hooks/claude-code/bash-output-cap.js`) does the I/O.

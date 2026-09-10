@@ -1,16 +1,16 @@
 'use strict';
 /**
+ * EXAMPLE — the digest half of a jest tier runner. The interface it implements is in README.md beside this file.
+ *
  * A tier's result, in at most 25 lines.
  *
- * WHY THIS EXISTS. the source repo's worst integration log was 4.07 MB. Read raw into an orchestrator window
+ * WHY THIS EXISTS. A full integration log can run to several megabytes. Read raw into an orchestrator window
  * that is also holding a plan, a board and four auditors' findings, it does not just cost tokens —
  * it pushes the loop-back list into the MIDDLE of the window, the position least likely to be acted
  * on. The full log is still written; only the digest is spoken.
  *
  * Six facts are wanted from a tier run: suites, tests, which tests failed, in which file, the first
  * assertion line of each, and where the full log is. Everything else is burn.
- *
- * Design rationale: the source repo's 2026-08-26 run-economy plan (evidence-backed; see PORTING.md).
  */
 const NEWLINE = String.fromCharCode(10);
 const MAX_FAILURES_SHOWN = 10;

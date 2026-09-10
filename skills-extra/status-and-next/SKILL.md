@@ -59,6 +59,6 @@ Write the item as a FULL brief per the project's module brief template (the kit'
   fenced off; branch base named (the integration branch, never mainline); dirty-tree caution
   included when applicable.
 - Ends with the brief's closing tables: files + endpoints, the autonomous-decision log, and the
-  PRE/POST-merge doc/tracker handoff table — **including any tracker flips found owed in
+  PRE/POST-merge doc/tracker handoff pack — **including any tracker flips found owed in
   step 1**, even ones independent of this build.
 - The template's standing clause (search → decide+record → escalate) pasted in verbatim.

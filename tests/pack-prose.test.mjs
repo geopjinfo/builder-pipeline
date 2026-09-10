@@ -1,0 +1,156 @@
+/**
+ * The pack's prose holds to the pack's code.
+ *
+ * WHY. An adopter reads the playbook, the personas and the adapters, and does what they say. A command they name
+ * that the pack does not ship, a feature name the settings loader does not know, a step with no "not configured"
+ * branch, or a premise the pack has retracted is a defect the unit tests of the scripts cannot see — the scripts
+ * are fine; the instructions around them are wrong. These checks read the pack's own files only.
+ */
+import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, relative } from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const PACK = join(dirname(fileURLToPath(import.meta.url)), '..');
+const profile = require('../scripts/lib/profile.cjs');
+
+const read = (rel) => readFileSync(join(PACK, rel), 'utf8');
+const posix = (p) => p.split('\\').join('/');
+
+/** Every markdown file an adopter reads (not tests, not examples, not the history in CHANGELOG). */
+function prose() {
+  const out = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      if (['.git', 'node_modules', 'tests', 'examples'].includes(name)) continue;
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (name.endsWith('.md') && name !== 'CHANGELOG.md') out.push(posix(relative(PACK, p)));
+    }
+  };
+  walk(PACK);
+  return out.sort();
+}
+
+const PLAYBOOK = 'skills/build-module-pipeline.md';
+const flat = (text) => text.replace(/`/g, '').replace(/\s+/g, ' ');
+
+test('the prose corpus is not empty', () => {
+  const files = prose();
+  assert.ok(files.length > 30, `only ${files.length} prose files found`);
+  assert.ok(files.includes(PLAYBOOK));
+});
+
+test('every `node scripts/<x>.mjs` the prose names is a script the pack ships', () => {
+  const missing = [];
+  for (const file of prose()) {
+    for (const m of read(file).matchAll(/node scripts\/((?:experimental\/)?[\w-]+\.mjs)/g)) {
+      const shipped = m[1].startsWith('experimental/')
+        ? existsSync(join(PACK, 'tooling', m[1]))
+        : existsSync(join(PACK, 'scripts', m[1]));
+      if (!shipped) missing.push(`${file}: node scripts/${m[1]}`);
+    }
+  }
+  assert.deepEqual([...new Set(missing)], []);
+});
+
+test('every pack file the playbook, personas and adapters point at exists', () => {
+  const sources = [PLAYBOOK, ...prose().filter((f) => f.startsWith('agents/') || f.startsWith('adapters/'))];
+  const missing = [];
+  for (const file of sources) {
+    for (const m of read(file).matchAll(/\b((?:skills\/references|adapters|templates|hooks\/claude-code|agents\/experimental|tooling\/experimental)\/[\w.-]+\.(?:md|js|cjs|mjs)|EXPERIMENTS\.md)\b/g)) {
+      if (!existsSync(join(PACK, m[1]))) missing.push(`${file}: ${m[1]}`);
+    }
+  }
+  assert.deepEqual([...new Set(missing)], []);
+});
+
+/**
+ * Premises the pack has retracted. The changelog keeps them as history; nowhere else may assert them.
+ *   - nesting: harnesses may nest subagents; the no-nested-run rule rests on run ↔ branch ↔ board.
+ *   - the handoff is a pack FILE with sections, not a table in a chat report.
+ *   - the board is the one progress surface; there is no harness to-do mirror.
+ */
+test('no prose asserts a retracted premise', () => {
+  const retracted = [/subagents cannot spawn subagents/i, /\bhandoff table\b/i, /\bTodoWrite\b/, /mirror the rows/i];
+  const hits = [];
+  for (const file of prose()) {
+    read(file)
+      .split(/\r?\n/)
+      .forEach((line, i) => {
+        for (const re of retracted) if (re.test(line)) hits.push(`${file}:${i + 1} ${re}`);
+      });
+  }
+  assert.deepEqual(hits, []);
+});
+
+test('no persona pastes a command-shaped graph query — they point at the one query block', () => {
+  const shaped = /\bgraphify\s+(?:query|explain|path|affected)\b|graph\.mjs/;
+  const hits = prose()
+    .filter((f) => f.startsWith('agents/'))
+    .filter((f) => shaped.test(read(f)));
+  assert.deepEqual(hits, []);
+});
+
+const frontmatter = (rel) => {
+  const text = read(rel);
+  const end = text.indexOf('---', 4);
+  const fm = text.slice(4, end);
+  const get = (k) => ((fm.match(new RegExp(`^${k}:\\s*(.*)$`, 'm')) || [])[1] || '').split('#')[0].trim();
+  return { get };
+};
+
+test('seat frontmatter carries what the ports decided', () => {
+  const keeper = frontmatter('agents/experimental/page-keeper.md');
+  const caps = keeper.get('capabilities').split(',').map((c) => c.trim());
+  assert.ok(caps.includes('publish'), `keeper capabilities: ${caps}`);
+  for (const writer of ['code', 'docs', 'test-only']) assert.ok(!caps.includes(writer), `the keeper must never write — found ${writer}`);
+  assert.equal(keeper.get('writes'), '');
+
+  const reviewer = frontmatter('agents/module-reviewer.md');
+  assert.equal(reviewer.get('capabilities'), 'read-only');
+  assert.match(reviewer.get('writes'), /review-pass<n>\.md$/);
+
+  assert.equal(frontmatter('agents/docs-maintainer.md').get('effort'), 'low');
+  assert.equal(frontmatter('agents/module-tester.md').get('tier'), 'strong');
+});
+
+test('the codex and generic adapters say what every Claude-Code-only step becomes', () => {
+  const rows = ['Bash output cap hook', 'Session-start index refresh', 'Subagent spawn depth 1', 'Orchestrator model check', 'Per-seat cost accounting', 'Live page'];
+  for (const file of ['adapters/codex.md', 'adapters/generic.md']) {
+    const text = read(file);
+    for (const row of rows) assert.ok(text.includes(row), `${file} has no line for "${row}"`);
+    assert.match(text, /registry/i, `${file} says nothing about the registry read guard`);
+    assert.match(text, /reviewer/i, `${file} says nothing about the reviewer's single file`);
+  }
+  const claude = read('adapters/claude-code.md');
+  for (const hook of readdirSync(join(PACK, 'hooks', 'claude-code'))) assert.ok(claude.includes(hook), `adapters/claude-code.md does not wire ${hook}`);
+});
+
+test('the profile template parses, and its only problems are the placeholders an adopter fills', () => {
+  const { found, errors } = profile.parse(read('PIPELINE_PROFILE.template.md'));
+  assert.equal(found, true);
+  assert.ok(errors.length > 0, 'an unfilled template must not validate');
+  assert.deepEqual(errors.filter((e) => !e.includes('unfilled placeholder')), []);
+});
+
+test('every optional step in the playbook has its "not configured" line', () => {
+  const text = flat(read(PLAYBOOK));
+  const optional = ['graph', 'orchestratorModel', 'planSchema', 'builderBatch', 'claims', 'mutation', 'rules', 'findingsSchema', 'reviewTemplate', 'contractOracle', 'fixLane'];
+  for (const name of optional) assert.ok(text.includes(`${name}: not configured`), `${PLAYBOOK} has no "${name}: not configured" branch`);
+});
+
+test('every features.<name> the prose names is a feature the settings loader knows', () => {
+  const unknown = [];
+  for (const file of prose()) {
+    // `features.mjs` is the script's file name, not a setting: a captured file extension is skipped.
+    for (const m of read(file).matchAll(/(?<![\w/\\])features\.([A-Za-z]+)/g)) {
+      if (['mjs', 'cjs', 'js', 'md', 'json'].includes(m[1])) continue;
+      if (!profile.FEATURES[m[1]]) unknown.push(`${file}: features.${m[1]}`);
+    }
+  }
+  assert.deepEqual([...new Set(unknown)], []);
+});

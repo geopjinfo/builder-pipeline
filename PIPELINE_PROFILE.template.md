@@ -2,7 +2,7 @@
 
 > **This is the one file that makes the generic pipeline concrete.** Every persona agent loads it
 > first and treats it as authoritative. Fill every section; where a section truly doesn't apply,
-> write `N/A — <why>` (an explicit N/A is a decision; a blank is a bug). Keep it under ~300 lines —
+> write `N/A — <why>` (an explicit N/A is a decision; a blank is a bug). Keep it under ~330 lines —
 > it is loaded into every agent's context. Link out to longer specs instead of pasting them.
 >
 > Install location: repo root, named `PIPELINE_PROFILE.md`. Delete this note block after filling.
@@ -39,14 +39,14 @@
 | `<e.g. permission catalogue>` | `<path>` | `<every route's authorization key>` |
 | `<e.g. error-code registry>` | `<path>` | `<every error response code>` |
 | `<e.g. workflow state machines>` | `<path>` | `<state names + legal transitions>` |
-| `<e.g. requirements tracker>` | `<path>` | `<REQ ids, module scope, acceptance criteria>` |
+| `<e.g. requirements tracker>` | `<path>` | `<requirement ids, module scope, acceptance criteria>` |
 
 ## 4. Protected paths — agents must never edit
 
 | Path | Why | What to do instead |
 |---|---|---|
 | `<e.g. src/platform/**>` | `<stable core>` | stop and ask the human (a "boundary event") |
-| `<e.g. docs/**>` | `<read-only mirror>` | emit a handoff-table row in the final report |
+| `<e.g. docs/**>` | `<read-only mirror>` | an item in the handoff pack's §E |
 | `<generated files>` | `<regenerated>` | edit the generator input |
 
 ## 5. Golden path — the template to replicate
@@ -108,15 +108,17 @@ must cite *something* stable.)
 ## 10. Docs write-scope (Phase 5)
 
 - **Allowed:** `<e.g. OpenAPI source, module README, product-docs/**>`
-- **Forbidden:** `<e.g. docs/** mirror — goes in the handoff table>`
+- **Forbidden:** `<e.g. docs/** mirror — goes in the handoff pack>`
 - **Required doc invariants:** `<e.g. every API operation documents its permission key>`
 
 ## 11. Ledgers
 
 - **Task board:** `tasks/<moduleKey>.md` (format: `templates/task-board.md` from the kit — install
-  its rules as `tasks/README.md`)
+  its rules as `tasks/README.md`) — the one progress surface
 - **Deferred registry:** `DEFERRED_TASKS.md` at repo root
-- **Run artifacts:** `.pipeline/<moduleKey>/{plan,review}.md` (gitignore `.pipeline/`)
+- **Decision log:** `<e.g. DECISIONS.md>` — every decision a run takes: what, citation, why, how to reverse
+- **Handoff packs:** `<e.g. handoffs/<date>-<moduleKey>-handoff.md>` — one per run, §A–§F
+- **Run artifacts:** `.pipeline/<moduleKey>/{plan,state,review-pass<n>}.md` + `run.jsonl` (gitignore `.pipeline/`)
 - **Versioning:** `<e.g. semver in package.json + CHANGELOG.md entry per module; who tags>`
 
 ## 12. Phase → model mapping & harness settings (filled at setup, per chosen harness)
@@ -128,8 +130,12 @@ must cite *something* stable.)
 > from here at dispatch time.
 
 **Tier assignments (fixed by the kit — don't change without reading DESIGN.md §2):**
-strong = plan · code · standards-audit · security-audit · **invariant-audit** · review;
-mid = vuln-audit · docs. **test moved to the TOP tier 2026-08-26** — the Test phase is the first full verification and its work is adversarial, not mechanical; the source repo promoted it after green-suite misses (IDOR loops, money bugs) proved the class. Phases 0.5, 3b and 6.5 are orchestrator-run and use no model.
+strong = plan · code · **test** · standards-audit · security-audit · **invariant-audit** · review;
+mid = vuln-audit · docs. Test is strong because it is the first full verification and its work is
+adversarial, not mechanical — green-suite misses (authorization-scope loops, money defects) proved
+the class. Phases 0.5, 3b and 6.5 are orchestrator-run and spend no seat model. **The orchestrator
+has no persona file**, so no tier routes it: declare its model in §16 `models.orchestrator` and turn
+on `features.orchestratorModel` to be warned when a session runs on another.
 
 | Harness in use | strong = | mid = | How a phase is launched at that model |
 |---|---|---|---|
@@ -141,6 +147,8 @@ mid = vuln-audit · docs. **test moved to the TOP tier 2026-08-26** — the Test
 
 - **Parallel audit dispatch:** `<supported (one message, 4 dispatches) | sequential fresh sessions>`
 - **Reasoning effort / thinking budget:** `<e.g. high for strong phases, default for mid — or N/A>`
+  (a persona's neutral `effort:` hint — docs carries `low` — is applied where the harness has one)
+- **Nested dispatch:** `<the harness's spawn-depth setting, capped so seats cannot dispatch — or N/A>`
 - **Permission / autonomy mode:** `<what the harness needs so read-only seats can run inspection
   commands but the pipeline still stops at the human seam>`
 - **Tool-scoping enforcement:** `<native (frontmatter/policy) | verify-by-git-status per adapters/generic.md>`
@@ -153,22 +161,19 @@ mid = vuln-audit · docs. **test moved to the TOP tier 2026-08-26** — the Test
 
 ## 14. Behavioural gate / QA audit — **required if the application can be containerised**
 
-> The pattern lives in `skills-extra/qa-audit/SKILL.md`; this section is the part that is
-> **yours**. The skill never names a stack — it reads what is here.
->
-> **This is no longer optional decoration.** Pipeline phase **6.5** is the only phase that runs the
-> real application, and phase **3b** reads the drift oracles named here; phase **1** writes the
-> module digest to the path below. Leave this section unfilled and every one of those degrades to a
-> **recorded skip** — which the reviewer treats as CHANGES-REQUIRED until a human waives it, because
-> absent evidence is never a pass. If the app genuinely cannot be containerised, say so here in one
-> line; that sentence is the waiver, and it beats silence.
+> The pattern lives in `skills-extra/qa-audit/SKILL.md`; this section is the part that is **yours**.
+> Phase **6.5** is the only phase that runs the real application, phase **3b** reads the drift
+> oracles named here, and phase **1** writes the module digest to the path below. Leave this section
+> unfilled and each degrades to a **recorded skip** — CHANGES-REQUIRED until a human waives it,
+> because absent evidence is never a pass. If the app genuinely cannot be containerised, say so here
+> in one line; that sentence is the waiver, and it beats silence.
 
 **Requirement source** — where executable requirements come from, and how to read one:
 
 | | |
 |---|---|
 | Source | `<e.g. tracker CSV / requirements/*.yaml / Jira export>` |
-| Id shape | `<e.g. REQ-<MOD>-NNN>` |
+| Id shape | `<e.g. <MOD>-R-NNN>` |
 | Acceptance text | `<which column/field carries the rule the pack must assert>` |
 | Deferral registry | `<path>` — **read before authoring**; a documented deferral asserted as a requirement is a false defect |
 
@@ -194,9 +199,8 @@ read-only and `cli.js check-targets` fails the build if a shared target is marke
 **Redaction** — secret headers/body fields in this stack, redacted to a short correlating prefix
 in the call transcript: `<e.g. cookie, authorization, x-csrf-token; password, token, secret>`
 
-**Conventions** — the four seams the Phase-C layers (global invariants, hostile input, monkey) read.
-These are the ONLY project-specific things in otherwise fully generic code, so getting them right
-here is what makes those layers portable:
+**Conventions** — the seams the Phase-C layers (global invariants, hostile input, monkey) read: the
+ONLY project-specific things in otherwise fully generic code, so getting them right makes those layers portable:
 
 | | |
 |---|---|
@@ -223,22 +227,22 @@ damage whoever performs them, so they must never self-target a seeded persona:
 | | |
 |---|---|
 | Module digests | `<e.g. digests/<module>.digest.md>` — see `templates/module-digest.md` |
-| Digest regen + validate | `<e.g. npm run qa:digests>`; `<… -- --check>` wired into the gate chain (§8) |
+| Digest regen + validate | `<digest regen command>`; `<its --check form>` wired into the gate chain (§8) |
 | Invariant registry | `<e.g. invariants.json>` — see `templates/invariant-registry.md` |
 | Ruling requests | `<where generated NEEDS-RULING requests are written for a human>` |
 | Stories | `<e.g. scenarios/stories/<module>.stories.pack.ts>` — see `templates/story-pack.md` |
 | Story lint | `<the banned assert-by-absence idiom, and the check that enforces it>` |
-| Monkey walk | `<e.g. npm run qa:run -- --monkey --seed <n> --steps <n>>` |
+| Monkey walk | `<monkey-walk command, taking a seed and a step count>` |
 
 **Artifacts + commands**
 
 | | |
 |---|---|
 | Report | `<e.g. audits/<date>-qa-audit.md>` (dated, never overwritten) |
-| Transcript | `<e.g. reports/transcript.{md,jsonl}>` |
-| Run | `<e.g. npm run qa:run [-- --target <name>]>` |
-| Worklist | `<e.g. npm run qa:flows>` — declared effects nothing exercises |
-| Effect drift | `<e.g. npm run test:effects:drift>` — wire into the gate chain (§8) |
+| Transcript | `<e.g. reports/transcript.{md,jsonl}>` — the JSONL is what §16 `features.contractOracle.transcript` reads |
+| Run | `<QA run command, taking a target name>` |
+| Worklist | `<worklist command>` — declared effects nothing exercises |
+| Effect drift | `<effect-drift command>` — wire into the gate chain (§8) |
 
 ## 15. Invariant taxonomy — the coherence questions THIS project has paid for
 
@@ -271,3 +275,61 @@ the expectation becomes the author of the requirement it audits, and the audit s
 | Invariant registry (machine-readable, if any) | `<e.g. invariants.json>` — see `templates/invariant-registry.md` |
 | Where `NEEDS-RULING` requests are written | `<path/channel>` (§13) |
 | Ruled entries gain | `<expect + citation, after which they are asserted like any requirement>` |
+
+## 16. Pipeline settings (machine-read)
+
+The one block the pack's scripts read — exactly one. It holds the tier runner (full log to a file,
+≤25-line digest), the ledger paths (keep them equal to §11), the model ids (§12), the protected globs
+(mirror §4) and the optional features. Replace every `<…>`: an unfilled placeholder fails validation.
+Check it with `node scripts/features.mjs`. **States:** `on` runs, and its required keys must be filled
+or the profile is invalid — never a silent skip · `off` prints `<feature>: not configured` and does
+nothing (it means *not told*, never *unimportant*) · `unmeasured` runs and every report says its
+benefit is unmeasured · `experimental-off` / `experimental-on` are opt-in; the second needs
+`unpack --experimental` and owes the measurement in `EXPERIMENTS.md`. An unknown feature name is an
+error, because a typo would otherwise switch a check off in silence.
+
+```json pipeline-settings
+{
+  "schema": 2,
+  "commands": {
+    "tier": "<command with {tier}, e.g. make test-{tier}>",
+    "tiers": ["unit", "integration", "gates"],
+    "affected": null,
+    "typecheck": null
+  },
+  "paths": {
+    "boards": "tasks",
+    "registry": "DEFERRED_TASKS.md",
+    "runs": ".pipeline",
+    "decisions": "DECISIONS.md",
+    "handoffs": "handoffs",
+    "logs": "logs",
+    "citationRoots": ["src", "tests", "docs", "tasks"]
+  },
+  "models": { "orchestrator": null, "strong": "<id>", "mid": "<id>" },
+  "protected": ["<glob>"],
+  "features": {
+    "graph":            { "state": "off", "check": null, "sync": null, "syncFree": null, "autoLimitKb": 300 },
+    "claims":           { "state": "on", "retracted": null, "registryIdPattern": "[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?" },
+    "planSchema":       { "state": "on", "sections": ["Track", "Context", "Tasks", "BLOCKERS"], "tables": {}, "oracle": null },
+    "findingsSchema":   { "state": "on" },
+    "reviewTemplate":   { "state": "on" },
+    "handoffPack":      { "state": "on", "tracker": null },
+    "rowReader":        { "state": "on" },
+    "contractOracle":   { "state": "off", "adapter": "openapi3", "spec": null, "transcript": null, "baseline": null, "codeField": "code", "statusFamilies": {} },
+    "rules":            { "state": "off", "runner": "ast-grep", "scan": null, "baseline": null, "ratcheted": [] },
+    "mutation":         { "state": "off", "tool": null, "command": null, "report": null, "payloadPattern": null },
+    "orchestratorModel":{ "state": "off" },
+    "costAccounting":   { "state": "off", "reader": "claude-code" },
+    "bashCap":          { "state": "off", "limitBytes": 4096 },
+    "registryGuard":    { "state": "off", "seats": [] },
+    "builderBatch":     { "state": "unmeasured", "rows": 5 },
+    "fixLane":          { "state": "unmeasured" },
+    "livePage":         { "state": "experimental-off" },
+    "graphTrial":       { "state": "experimental-off" },
+    "personas":         { "state": "experimental-off" },
+    "advisorBuilder":   { "state": "experimental-off" },
+    "mutationGate":     { "state": "experimental-off" }
+  }
+}
+```

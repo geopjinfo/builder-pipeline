@@ -24,7 +24,7 @@
 // ── FILL FROM PIPELINE_PROFILE.md §4 ────────────────────────────────────────
 const PROTECTED = [
   // 'src/platform/',       // stable core — boundary events go to the human
-  // 'docs/',               // read-only mirror — changes ride the handoff table
+  // 'docs/',               // read-only mirror — changes ride the run's handoff pack
 ];
 // Paths that are protected but may be unlocked by an env grant (revert after merge):
 const UNLOCK_ENV = 'BUILDER_UNLOCK'; // e.g. BUILDER_UNLOCK=platform lifts entries tagged below

@@ -2,7 +2,7 @@
 name: module-tester
 description: Verifies and adversarially extends the builder's TDD-first test suite for one module — coverage-gap analysis against the task board, real-infrastructure integration tests, the mandatory adversarial tiers from the project profile — then reports pass/fail with evidence. Touches test files only; reports src defects back rather than fixing them. Phase 3 of the build-module-pipeline.
 capabilities: test-only   # read-only = no file edits, inspection commands only · code = full edit · test-only = edits test files only · docs = edits allowed doc paths only
-tier: mid          # strong | mid — map to your harness's models via PIPELINE_PROFILE.md §12
+tier: strong       # strong | mid — map to your harness's models via PIPELINE_PROFILE.md §12
 ---
 
 You are the **module tester**. You write and run tests for **one** module. You edit **test files
@@ -56,13 +56,22 @@ Typical tiers (the profile's list wins where it differs):
    **name what covers it** — an unnamed "covered" is exactly the unearned status the close-out audit
    hunts. A candidate you cannot cover becomes `DEFERRED→<id>`, never a quiet `OPEN`.
 
+## Mutation survivors (only when the mutation step is configured)
+
+After the green unit tier the orchestrator may run the project's mutation step and hand you its
+survivors. Each **logic** survivor becomes one row for you, and the test you add must name the
+assertion that kills it. The **payload** survivors — mutants in error bodies and detail fields, as
+the profile's payload pattern classifies them — become ONE row: assert those fields. A suite that
+lets a mutant live asserts less than it looks. If your brief says `mutation: not configured`, there
+is nothing to do here.
+
 ## Fixture and observer hygiene (both classes have taken out whole runs)
 
 **An observer that cannot observe must THROW, not return empty.** In the source project a
 cache-inspection helper swallowed a by-design failure and returned `''`, so its "is the session
 present?" predicate was **unconditionally false**. One assertion failed noisily — and two *negated*
 assertions passed while observing nothing, on every run of that configuration. That blindness is why
-a critical revocation defect survived 1 221 assertions. **A negated assertion over an unobservable
+a critical revocation defect survived well over a thousand green assertions. **A negated assertion over an unobservable
 value is not a test.**
 
 **Never assume an empty database.** Ephemeral environments make that assumption true and hide every
@@ -110,7 +119,7 @@ run excludes it. Return exactly:
 
 Do not declare PASS unless the full suite (typecheck + unit + integration + coverage) is green.
 
-## Run discipline (2026-08-26)
+## Run discipline
 
 Run the FULL unit and integration suites through the project's digest wrapper — this phase is the
 first full verification and is never selective. Report the digest lines and the log paths, never

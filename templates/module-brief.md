@@ -5,13 +5,13 @@ from the project's sources, delete any inapplicable line, and pass the result to
 
 **Why this template exists:** every module needs the same decisions made up front — boundary fork,
 exact catalogue keys, access-scope shape, dependency fallbacks — and the same close-out (tests
-green, auditors clean, handoff table). Every historical escaped defect in the source project traced
+green, auditors clean, handoff pack). Every historical escaped defect in the source project traced
 to a skipped line of this brief.
 
 **Golden rules baked in (never negotiate):** never edit a protected path (profile §4) without the
 human's explicit grant; never invent an oracle entry (§3); replicate the template shape (§5);
 run the full integration tier before merge if the default gates exclude it; agents never edit
-forbidden doc paths — changes there ride the handoff table.
+forbidden doc paths — changes there ride the handoff pack.
 
 ---
 
@@ -19,8 +19,9 @@ forbidden doc paths — changes there ride the handoff table.
 
 > **Prompt — `build-module-pipeline`: `<MODULE_KEY> — <Title>`**
 >
-> Build `<MODULE_KEY>` through the full pipeline (planner → coder → tester → standards+security+vuln
-> auditors → docs → reviewer, gate-fail loop). **Wave/priority:** `<…>`. **Why now / unblocks:** `<one line>`.
+> Build `<MODULE_KEY>` through the full pipeline (planner → coder → tester → standards+security+vuln+
+> invariant auditors → docs → reviewer → behavioural gate, gate-fail loop). **Wave/priority:** `<…>`.
+> **Why now / unblocks:** `<one line>`.
 >
 > **1. Scope (planner grounds):** requirements `<ids / spec §s>`, tracker row(s) `<id>`.
 > Data: `<schema/tables/collections>`. Confirm fields against `<ERD / data spec>`.
@@ -58,19 +59,33 @@ forbidden doc paths — changes there ride the handoff table.
 > from the plan's Test-seed column), the tester then verifies + extends adversarially. Tiers per
 > profile §9, plus module-specific cases: `<list>`.
 >
-> **11. Definition of done:** gates + integration green; `module-readiness-check` clean; all three
-> auditors + `module-reviewer` **MERGE-READY**; task board fully closed (DONE / DROPPED /
-> DEFERRED→registry-id); version bump + changelog entry on the branch. Commit on
-> `<branch convention>`; **do NOT merge** — the human reviews, merges, tags, reverts any unlock.
+> **11. Definition of done:** gates + integration green; `module-readiness-check` clean; all four
+> auditors + `module-reviewer` **MERGE-READY**; the behavioural-gate result recorded; task board
+> fully closed (DONE / DROPPED / DEFERRED→registry-id); version bump + changelog entry on the
+> branch; the handoff pack written and passing its check. Commit on `<branch convention>`; **do NOT
+> merge** — the human reviews, merges, tags, reverts any unlock.
 >
-> **12. FINAL — handoff table (REQUIRED in the report):** agents cannot edit `<protected doc
-> paths>`. Output a table — every human-only change this module implies. Columns: **File · Where
-> (row/section) · What → to-what · Why · Context (exact values to fill)**. Must cover at minimum:
-> - tracker/status flips for this module's rows;
-> - any architecture-decision record the design warrants (a boundary/scope/fallback decision that
->   diverges from a spec);
-> - any catalogue amendment — only if a required key was missing (the module must have STOPPED
->   rather than invented it); list the exact rows to add.
+> **12. FINAL — the handoff pack (REQUIRED, a FILE — not a table in the report):** agents cannot
+> edit `<protected doc paths>`. At close-out the orchestrator generates and fills ONE file,
+> `<handoffs>/<date>-<MODULE_KEY>-handoff.md` (`paths.handoffs`):
+> `node scripts/handoff-pack.mjs <MODULE_KEY> --base <ref>`, then
+> `node scripts/handoff-check.mjs <handoffs>/<date>-<MODULE_KEY>-handoff.md`. Every item carries a
+> `RESPONSE REQUIRED` line. Sections:
+> - **§A progress** — commit, version, verdict, board rows done / deferred / dropped, tier results,
+>   behavioural-gate result.
+> - **§B tracker flips**, split **pre-merge / post-merge** — exact row ids and values, every value
+>   from the tracker's own vocabulary (`features.handoffPack.tracker`; write
+>   `tracker: not configured` when the project keeps none).
+> - **§C decisions** — every decision recorded this run, in-session human rulings to declare,
+>   `NEEDS-RULING` items.
+> - **§D registry** — deferred-registry rows added / closed / moved.
+> - **§E docs** — every change to a protected doc path; any architecture-decision record the design
+>   warrants (a boundary/scope/fallback decision that diverges from a spec); any catalogue amendment
+>   — only if a required key was missing (the module must have STOPPED rather than invented it),
+>   with the exact rows to add; the contract diff.
+> - **§F merge conditions** and the tag.
+>
+> The report may summarise the pack; it never replaces it.
 
 ---
 
@@ -79,5 +94,7 @@ forbidden doc paths — changes there ride the handoff table.
 1. Run gates + the full integration tier on the merged result.
 2. Merge per project convention; tag the version; regenerate clients if the schema changed.
 3. Revert any protected-path unlock (re-arm the guardrail).
-4. Apply the module's handoff table in the doc workspace/tracker.
-5. Record notable rulings somewhere durable (decision log / memory) so the next brief inherits them.
+4. Apply the module's handoff pack (§A–§F) in the doc workspace/tracker, answering each
+   `RESPONSE REQUIRED` line — tracker flips, decision records, catalogue amendments.
+5. Record notable rulings in the decision workspace (`paths.decisions`) so the next brief inherits
+   them.

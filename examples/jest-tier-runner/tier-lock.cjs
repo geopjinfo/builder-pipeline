@@ -1,15 +1,14 @@
 'use strict';
 /**
+ * EXAMPLE — a machine-wide tier lock. The interface it implements is in README.md beside this file.
+ *
  * One tier at a time.
  *
- * WHY THIS EXISTS. The integration and e2e configs share
- * `test/integration/support/pg-global-setup.ts` — ONE PostgreSQL container and ONE template
- * database per RUN. Two concurrent runs therefore fight over the same container and the same
+ * WHY THIS EXISTS. In the project this came from, the integration and e2e configs share one global
+ * setup — ONE PostgreSQL container and ONE template database per RUN. Two concurrent runs therefore fight over the same container and the same
  * template, and the loser fails on timeouts rather than on assertions, which reads as a regression
  * and is not one. Nothing prevented that before this file; it only stayed rare because a human runs
  * one tier at a time. An orchestrator dispatching background work does not.
- *
- * Design rationale: the source repo's 2026-08-26 run-economy plan (evidence-backed; see PORTING.md).
  */
 const { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { dirname, join } = require('node:path');
@@ -27,8 +26,8 @@ const { tmpdir } = require('node:os');
  * resource it protects is not a weaker lock, it is an absent one; it just fails silently, as
  * timeouts in whichever run lost, which "reads as a regression and is not one".
  *
- * That was flagged as a plausible cause of two intermittent integration failures on 2026-08-26 and
- * is confirmed here by reading the path rather than by reproducing the race.
+ * That was flagged as a plausible cause of intermittent integration failures, and was confirmed by
+ * reading the path rather than by reproducing the race.
  *
  * Deliberately NOT keyed by repo path: two clones on one machine share the same Docker daemon and
  * would contend just as hard, so they should share the lock too.
@@ -51,17 +50,17 @@ function isAlive(pid) {
 /**
  * Is the pid addressable AND is it plausibly still the process that took the lock?
  *
- * PID REUSE IS NOT HYPOTHETICAL — it was OBSERVED on 2026-08-27. A tier run finished at 07:53,
- * the OS later handed pid 28560 to a browser started at 12:47, and `isAlive(28560)` then answered
- * `true` for a run that had been over for an hour. Two `npm run tier` invocations were refused as
- * BUSY by a lock nobody held.
+ * PID REUSE IS NOT HYPOTHETICAL — it has been OBSERVED. A tier run finished in the morning, the OS
+ * later handed its pid to a browser started hours afterwards, and `isAlive(pid)` then answered
+ * `true` for a run that was long over. Later tier invocations were refused as BUSY by a lock nobody
+ * held.
  *
  * `isAlive` answers *"is this number addressable"*. The question the lock actually needs is
  * *"is that RUN still going"*, and the two diverge the moment the OS recycles the number. This
  * adds the cheap second fact: a holder whose lock is older than a full tier run's plausible
  * lifetime is treated as stale even if its pid now resolves. It is a CEILING, not a heuristic
- * about how long tiers take — the longest tier here is the e2e/QA pair at well under an hour, and
- * a run genuinely exceeding this has itself become the thing worth interrupting.
+ * about how long tiers take — set it to roughly twice your longest tier, so that a run genuinely
+ * exceeding it has itself become the thing worth interrupting.
  *
  * The precise fix would compare the holder's process START TIME against `startedAt`, which needs a
  * per-platform call (`/proc/<pid>/stat`, `Get-Process -Id`) and a fallback for when it is

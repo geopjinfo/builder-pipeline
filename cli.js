@@ -2,22 +2,27 @@
 /*
  * builder-kit CLI — unpack the builder pipeline kit into the current repo.
  *
- * Zero dependencies; Node >= 14. Run from the TARGET repo root (the repo you pasted
- * the builder/ folder into):
+ * Zero dependencies; Node >= 18. Run from the TARGET repo root (the repo you unpacked the builder/
+ * folder into):
  *
  *   node builder/cli.js unpack --tool claude-code
  *   node builder/cli.js unpack --tool claude-code,codex
- *   node builder/cli.js unpack --tool all [--dry-run] [--no-extras]
+ *   node builder/cli.js unpack --tool all [--dry-run] [--no-extras] [--experimental]
  *   node builder/cli.js unpack --tool claude-code --models strong=opus,mid=haiku
  *   node builder/cli.js targets
- *   node builder/cli.js verify
- *   node builder/cli.js check-ledgers     (mechanical board/registry gates — wire into CI)
+ *   node builder/cli.js verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
+ *   node builder/cli.js features         (which optional checks are on, off, unmeasured or experimental)
+ *   node builder/cli.js check-ledgers    (mechanical board/registry gates — wire into CI)
+ *   node builder/cli.js check-targets    (qa-audit environment safety — wire into CI)
  *
  * --no-extras skips the optional utility skills in skills-extra/ (status-and-next, caveman,
  * graphify, ledger-audit — see skills-extra/README.md).
+ * --experimental also installs the experimental files (agents/experimental/, tooling/experimental/). They are
+ * shipped but unproven; EXPERIMENTS.md names the measurement that promotes or removes each one.
  *
  * Safe by design: copy-if-absent (never overwrites), pointer blocks are appended once
- * (marker-guarded), --dry-run previews everything. The kit itself is inert until you run this.
+ * (marker-guarded), --dry-run previews everything, hooks are copied but never armed. The kit itself is
+ * inert until you run this.
  */
 'use strict';
 
@@ -52,6 +57,7 @@ const TOOLS = {
 // --------------------------- small helpers ---------------------------------
 let DRY = false;
 let NO_EXTRAS = false;
+let EXPERIMENTAL = false;
 const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
 
 function copyIfAbsent(src, dst) {
@@ -85,33 +91,77 @@ function appendPointerOnce(dst, block) {
   log(DRY ? 'would wire:' : 'wired:', dst);
 }
 
+/** Files under a kit directory, recursively, as paths relative to that directory. Missing dir → none. */
+function filesUnder(dir) {
+  const root = path.join(KIT, dir);
+  if (!fs.existsSync(root)) return [];
+  const out = [];
+  const walk = (abs, rel) => {
+    for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+      const a = path.join(abs, entry.name);
+      const r = rel ? path.join(rel, entry.name) : entry.name;
+      if (entry.isDirectory()) walk(a, r);
+      else out.push(r);
+    }
+  };
+  walk(root, '');
+  return out.sort();
+}
+
 function agentFiles() {
   return fs.readdirSync(path.join(KIT, 'agents')).filter((f) => f.endsWith('.md'));
 }
 
-// Persona frontmatter is harness-NEUTRAL (capabilities + tier). Adapters that have a native
+function experimentalAgentFiles() {
+  return filesUnder(path.join('agents', 'experimental')).filter((f) => f.endsWith('.md'));
+}
+
+// Persona frontmatter is harness-NEUTRAL (capabilities + tier [+ effort]). Adapters that have a native
 // agent format transform it at install time; everyone else consumes it as-is (prompt text).
 const CAP_TO_CLAUDE_TOOLS = {
   'read-only': 'Read, Grep, Glob, Bash',
   code: 'Read, Grep, Glob, Edit, Write, Bash',
   'test-only': 'Read, Grep, Glob, Edit, Write, Bash', // scope narrowed by the persona text itself
   docs: 'Read, Grep, Glob, Edit, Write, Bash',
+  // A read-only seat that must write exactly ONE file of its own (the reviewer's review). The grant is only a
+  // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.js does.
+  'read-only+own-file': 'Read, Grep, Glob, Bash, Write',
+  // Reads and publishes a page; never edits the repo (experimental live-page keeper).
+  publish: 'Bash, Read, Artifact',
 };
 // Default tier→model mapping for adapters with a native model field. Override per install with
 // --models strong=<x>,mid=<y> (the setup-builder skill picks these by inspecting the user's
 // harness/subscription). Only harnesses with a native agent format need this — everyone else
 // records their mapping in PIPELINE_PROFILE.md §12 instead.
-let TIER_TO_CLAUDE_MODEL = { strong: 'opus', mid: 'sonnet' };
+let TIER_TO_CLAUDE_MODEL = { strong: 'opus', mid: 'sonnet', low: 'haiku' };
+const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 function toClaudeAgent(content) {
   const end = content.indexOf('---', 4);
   if (end === -1) return content;
   const fm = content.slice(4, end);
   const get = (k) => ((fm.match(new RegExp(`^${k}: (.*)$`, 'm')) || [])[1] || '').split('#')[0].trim();
-  const cap = get('capabilities') || 'read-only';
+  // `capabilities` may be one value or a comma list (`read-only, shell, publish`); `writes:` names the ONE file a
+  // read-only seat may write. Anything unrecognised falls back to read-only tools — a seat never gains write access
+  // by a typo.
+  const caps = (get('capabilities') || 'read-only').split(',').map((c) => c.trim()).filter(Boolean);
+  const writes = get('writes');
+  let tools = CAP_TO_CLAUDE_TOOLS['read-only'];
+  if (caps.includes('publish')) tools = CAP_TO_CLAUDE_TOOLS.publish;
+  else if (caps.length === 1 && CAP_TO_CLAUDE_TOOLS[caps[0]]) tools = CAP_TO_CLAUDE_TOOLS[caps[0]];
+  if (writes && caps.includes('read-only') && !caps.includes('publish')) tools = CAP_TO_CLAUDE_TOOLS['read-only+own-file'];
   const tier = get('tier') || 'strong';
-  const nf = `---\nname: ${get('name')}\ndescription: ${get('description')}\ntools: ${CAP_TO_CLAUDE_TOOLS[cap] || CAP_TO_CLAUDE_TOOLS['read-only']}\nmodel: ${TIER_TO_CLAUDE_MODEL[tier] || 'opus'}\n---`;
-  return nf + content.slice(end + 3);
+  const effort = get('effort');
+  const lines = [
+    '---',
+    `name: ${get('name')}`,
+    `description: ${get('description')}`,
+    `tools: ${tools}`,
+    `model: ${TIER_TO_CLAUDE_MODEL[tier] || 'opus'}`,
+  ];
+  if (EFFORTS.has(effort)) lines.push(`effort: ${effort}`);
+  lines.push('---');
+  return lines.join('\n') + content.slice(end + 3);
 }
 
 function copyTransformed(src, dst, fn) {
@@ -155,11 +205,14 @@ Module/feature builds go through the multi-agent builder pipeline.
 
 - **Grounding:** \`PIPELINE_PROFILE.md\` (repo root). If it still contains template placeholders,
   FIRST run the discovery prompt in \`builder/DISCOVERY.md\` — it fills the profile from THIS
-  project's own docs.
+  project's own docs, including the §16 settings block.
 - **Orchestrator playbook:** ${playbook}.
 - **Personas:** ${personas}.
+- **Optional checks:** \`node scripts/features.mjs\` says which are on here; a check that is off prints
+  "<feature>: not configured" and is never a pass.
 - **Ledgers:** task boards in \`tasks/\`, deferred work in \`DEFERRED_TASKS.md\`, run artifacts in
-  \`.pipeline/\` (gitignored). The pipeline never merges — it hands MERGE-READY to a human.
+  \`.pipeline/\` (gitignored), one handoff pack per run. The pipeline never merges — it hands
+  MERGE-READY to a human.
 - **Utility skills** (if installed — see \`builder/skills-extra/README.md\`): \`status-and-next\`
   to open a session (verify state fresh, pick the next item, emit its brief), \`graphify\` for
   cheap scoped doc/architecture lookups (query the graph before re-reading big docs), \`caveman\`
@@ -179,20 +232,34 @@ ${body}`;
 function installTool(tool) {
   const t = TOOLS[tool];
   console.log(`\n[${tool}] ${t.label}`);
+  const references = filesUnder(path.join('skills', 'references'));
   if (t.style === 'native') {
     for (const f of agentFiles()) copyTransformed(path.join(KIT, 'agents', f), path.join('.claude', 'agents', f), toClaudeAgent);
+    if (EXPERIMENTAL) {
+      for (const f of experimentalAgentFiles()) copyTransformed(path.join(KIT, 'agents', 'experimental', f), path.join('.claude', 'agents', f), toClaudeAgent);
+    }
     for (const s of SKILLS) copyIfAbsent(path.join(KIT, 'skills', `${s}.md`), path.join('.claude', 'skills', s, 'SKILL.md'));
-    // Guardrail hook: copied, never armed — enabling in settings.json is a deliberate human act.
-    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.js'), path.join('.claude', 'hooks', 'protected-paths.js'));
+    copyIfAbsent(path.join(KIT, 'skills', 'state-template.md'), path.join('.claude', 'skills', 'build-module-pipeline', 'references', 'state-template.md'));
+    for (const r of references) copyIfAbsent(path.join(KIT, 'skills', 'references', r), path.join('.claude', 'skills', 'build-module-pipeline', 'references', r));
     /**
-     * Copied, never armed — same rule as the fence hook above. The settings entry is the user's
-     * deliberate act (`PostToolUse`, matcher `Write|Edit|MultiEdit|Bash`), and hooks are read at
-     * session start, so one added mid-session does not fire until the next one.
+     * Hooks: copied, never armed. Enabling one in `.claude/settings.json` is the user's deliberate act, and
+     * hooks are read at session start, so one added mid-session does not fire until the next session.
+     * `adapters/claude-code.md` names the event and matcher for each.
      */
+    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.js'), path.join('.claude', 'hooks', 'protected-paths.js'));
     copyIfAbsent(path.join(KIT, 'hooks', 'board-render.js'), path.join('.claude', 'hooks', 'board-render.js'));
+    for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
+      copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
+    }
   } else {
     for (const f of agentFiles()) copyIfAbsent(path.join(KIT, 'agents', f), path.join('.builder', 'personas', f));
-    for (const f of fs.readdirSync(path.join(KIT, 'skills'))) copyIfAbsent(path.join(KIT, 'skills', f), path.join('.builder', 'playbooks', f));
+    if (EXPERIMENTAL) {
+      for (const f of experimentalAgentFiles()) copyIfAbsent(path.join(KIT, 'agents', 'experimental', f), path.join('.builder', 'personas', 'experimental', f));
+    }
+    for (const f of fs.readdirSync(path.join(KIT, 'skills')).filter((x) => x.endsWith('.md'))) {
+      copyIfAbsent(path.join(KIT, 'skills', f), path.join('.builder', 'playbooks', f));
+    }
+    for (const r of references) copyIfAbsent(path.join(KIT, 'skills', 'references', r), path.join('.builder', 'playbooks', 'references', r));
   }
   if (!NO_EXTRAS) {
     const base = t.style === 'native' ? path.join('.claude', 'skills') : path.join('.builder', 'skills');
@@ -212,30 +279,31 @@ function installCommon() {
   copyIfAbsent(path.join(KIT, 'PIPELINE_PROFILE.template.md'), 'PIPELINE_PROFILE.md');
 
   /**
-   * The board scripts, not just the board rules. A progress bar that is TYPED is a claim nobody
-   * re-derives — the rows move and the bar does not, and the board then reports last week's number
-   * with this week's authority. These make it a projection of the Status column instead, and fail
-   * the gate when it drifts. Shipping the template without them leaves the rule unenforceable.
-   * Wire `board-check-all.mjs` into the gate chain (profile §8).
+   * The scripts, not just the rules they enforce.
+   *
+   * A progress bar that is TYPED is a claim nobody re-derives; a findings list nobody validates is a list
+   * nobody can verify mechanically; a citation nobody resolves is a confident-looking invention. Every rule in
+   * the playbook that a script can hold is held by one of these, and a rule shipped without its script is
+   * unenforceable. They read `PIPELINE_PROFILE.md` §16 and say "<feature>: not configured" for anything the
+   * project does not have. Wire `board-check-all.mjs` into the gate chain (profile §8).
+   *
+   * Every file under builder/scripts/ is installed under scripts/ with the same relative path (so each
+   * script's `./lib/…` requires keep resolving), except the no-Node unpack fallbacks.
    */
-  for (const s of ['board-progress.mjs', 'board-check-all.mjs', 'board-render.mjs', 'board-watch.mjs']) {
-    copyIfAbsent(path.join(KIT, 'scripts', s), path.join('scripts', s));
+  console.log('\n[common] scripts');
+  for (const rel of filesUnder('scripts')) {
+    if (/^unpack\.(sh|ps1)$/.test(rel)) continue;
+    copyIfAbsent(path.join(KIT, 'scripts', rel), path.join('scripts', rel));
   }
-
-  /**
-   * The rendered run board and its readers.
-   *
-   * A markdown board says what the rows ARE; it cannot hold what a run DID — the order things
-   * happened in, the files each step produced, which seat spent what. That lived only in a
-   * transcript, which is exactly what a context compaction discards. `board-render.mjs` joins the
-   * board to an append-only run log (`.pipeline/<key>/run.jsonl`) and to the harness's own dispatch
-   * records, and writes one self-contained page. `board-watch.mjs` keeps it current so nobody has
-   * to remember a render command — a page that is only fresh when asked is usually stale.
-   *
-   * Ship the readers too, or the renderer is inert.
-   */
-  for (const s of ['board-rows.cjs', 'board-parse.cjs', 'run-log.cjs', 'transcript-usage.cjs', 'pricing.cjs', 'board-freshness.cjs']) {
-    copyIfAbsent(path.join(KIT, 'scripts', 'lib', s), path.join('scripts', 'lib', s));
+  // Contract-oracle adapters (one file per contract format). The oracle script looks in scripts/oracles/.
+  for (const rel of filesUnder('oracles')) {
+    copyIfAbsent(path.join(KIT, 'oracles', rel), path.join('scripts', 'oracles', rel));
+  }
+  if (EXPERIMENTAL) {
+    console.log('\n[experimental] shipped, unproven — see builder/EXPERIMENTS.md');
+    for (const rel of filesUnder(path.join('tooling', 'experimental'))) {
+      copyIfAbsent(path.join(KIT, 'tooling', 'experimental', rel), path.join('scripts', 'experimental', rel));
+    }
   }
 
   const gi = path.join(CWD, '.gitignore');
@@ -308,13 +376,18 @@ function cmdCheckTargets() {
 function cmdUnpack(tools) {
   if (!fs.existsSync(path.join(KIT, 'agents'))) die('kit incomplete: builder/agents/ not found next to cli.js');
   if (path.relative(CWD, KIT) === '') die('run from the TARGET repo root, not from inside builder/');
+  if (fs.existsSync(path.join(KIT, '.git'))) {
+    console.log('note: builder/ contains a .git directory — this is a working copy of the pack\'s own repository, not a release.');
+    console.log('      Unpacking works, but receive releases as an archive (see UNPACK.md) so the pack\'s history never lands in this repo.');
+  }
   for (const tool of tools) installTool(tool);
   installCommon();
-  console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'} Next steps:
-  1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md from THIS
-     project's docs (not the kit's source project).
+  console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'}${EXPERIMENTAL ? ' Experimental files included.' : ''} Next steps:
+  1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md (incl. §16 settings) from
+     THIS project's docs (not the kit's source project).
   2. Answer the agent's "⚠ CONFIRM" questions; then run: node builder/cli.js verify
-  3. Write a brief from specs/module-brief.template.md and start:
+  3. See which optional checks are on: node builder/cli.js features
+  4. Write a brief from specs/module-brief.template.md and start:
      "Build the <X> module through the pipeline."`);
 }
 
@@ -322,6 +395,10 @@ function cmdTargets() {
   console.log('Available --tool values:\n');
   for (const [k, t] of Object.entries(TOOLS)) console.log(`  ${k.padEnd(13)} ${t.label}`);
   console.log(`  all           every tool above except 'generic'`);
+}
+
+function profileLib() {
+  return require(path.join(KIT, 'scripts', 'lib', 'profile.cjs'));
 }
 
 function cmdVerify() {
@@ -344,6 +421,9 @@ function cmdVerify() {
       fs.existsSync(path.join(CWD, 'scripts', 'lib', 'board-parse.cjs')),
     'run-board tooling installed (scripts/board-{render,watch}.mjs + scripts/lib/*.cjs)',
   );
+  const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')];
+  const missing = checkers.filter((s) => !fs.existsSync(path.join(CWD, 'scripts', s)));
+  check(missing.length === 0, `checkers installed (scripts/{${checkers.join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
 
@@ -365,10 +445,31 @@ function cmdVerify() {
     check(placeholders === 0, `no template placeholders left (found ${placeholders})`);
     check(confirms === 0, `no unresolved "⚠ CONFIRM" lines (found ${confirms})`);
     check(!prof.includes('Delete this note block'), 'template note block removed (profile was actually filled)');
+    /**
+     * §16 is what every optional check reads. A profile without it still runs — every optional check is then
+     * off and says so — but `verify` is the moment an adopter expects to learn that, so it fails here.
+     */
+    const settings = profileLib().parse(prof);
+    check(settings.found, '§16 pipeline-settings block present (```json pipeline-settings)');
+    check(settings.errors.length === 0, `pipeline settings valid (${settings.errors.length} problem(s))`);
+    for (const e of settings.errors) console.log(`        ${e}`);
   }
 
   console.log(fail === 0 ? '\nAll checks passed — pipeline ready.' : `\n${fail} check(s) failed — see above.`);
   process.exit(fail === 0 ? 0 : 1);
+}
+
+function cmdFeatures() {
+  const lib = profileLib();
+  const loaded = lib.load(CWD);
+  console.log(loaded.found ? `settings: ${path.relative(CWD, loaded.path)} §16` : 'settings: no pipeline-settings block found — defaults in use');
+  for (const name of Object.keys(lib.FEATURES)) console.log(`  ${lib.feature(loaded.settings, name).line}`);
+  if (loaded.errors.length > 0) {
+    console.log(`\n${loaded.errors.length} settings problem(s):`);
+    for (const e of loaded.errors) console.log(`  ${e}`);
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
 // --------------------------- check-ledgers ----------------------------------
@@ -411,21 +512,22 @@ function cmdCheckLedgers() {
   // Boards
   const tasksDir = path.join(CWD, 'tasks');
   const boards = fs.existsSync(tasksDir)
-    ? fs.readdirSync(tasksDir).filter((f) => f.endsWith('.md') && f !== 'README.md')
+    ? fs.readdirSync(tasksDir).filter((f) => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('_'))
     : [];
   for (const b of boards) {
     const rel = path.join('tasks', b);
     for (const cells of parseTableRows(fs.readFileSync(path.join(tasksDir, b), 'utf8'))) {
-      const [id, , status, evidence] = cells;
-      if (!/^(T|C|FIX-?)\d+/i.test(id)) continue; // not a task row
-      const def = status.match(/^DEFERRED(?:→|->)(.+)$/);
+      const [id, , , status, evidence] = cells;
+      if (!/^(T|C|IC-|FIX-?)\d+/i.test(id)) continue; // not a task row
+      const bare = String(status || '').replace(/\s+\d{4}-\d{2}-\d{2}$/, '');
+      const def = bare.match(/^DEFERRED(?:→|->)(.+)$/);
       if (def) {
         const ref = def[1].trim();
         if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in DEFERRED_TASKS.md`);
-      } else if (!BOARD_STATUSES.includes(status)) {
+      } else if (!BOARD_STATUSES.includes(bare)) {
         note(rel, id, 'LG-2', `status "${status}" not in board vocabulary [${BOARD_STATUSES.join(', ')}, DEFERRED→<id>]`);
       }
-      if (status === 'DONE' && (!evidence || evidence === '—' || evidence === '-' || evidence === ''))
+      if (bare === 'DONE' && (!evidence || evidence === '—' || evidence === '-' || evidence === ''))
         note(rel, id, 'LG-5', 'DONE row without named test evidence — an unevidenced DONE is invalid (board rule)');
     }
   }
@@ -446,17 +548,22 @@ function cmdCheckLedgers() {
 function die(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
 function main() {
+  const major = Number(process.versions.node.split('.')[0]);
+  if (major < 18) die(`Node ${process.versions.node} — the builder kit needs Node 18 or newer`);
+
   const argv = process.argv.slice(2);
   const cmd = argv[0];
   DRY = argv.includes('--dry-run');
   NO_EXTRAS = argv.includes('--no-extras');
+  EXPERIMENTAL = argv.includes('--experimental');
 
   if (cmd === 'targets') return cmdTargets();
   if (cmd === 'verify') return cmdVerify();
+  if (cmd === 'features') return cmdFeatures();
   if (cmd === 'check-ledgers') return cmdCheckLedgers();
   if (cmd === 'check-targets') return cmdCheckTargets();
   if (cmd !== 'unpack') {
-    console.log('usage: node builder/cli.js <unpack|targets|verify|check-ledgers|check-targets> [--tool <list|all>] [--dry-run] [--no-extras]');
+    console.log('usage: node builder/cli.js <unpack|targets|verify|features|check-ledgers|check-targets> [--tool <list|all>] [--dry-run] [--no-extras] [--experimental]');
     console.log('       node builder/cli.js unpack --tool claude-code,codex');
     process.exit(cmd ? 1 : 0);
   }
@@ -465,10 +572,10 @@ function main() {
   if (m !== -1 && argv[m + 1]) {
     for (const pair of argv[m + 1].split(',')) {
       const [tier, model] = pair.split('=').map((s) => s.trim());
-      if (!['strong', 'mid'].includes(tier) || !model) die(`bad --models entry "${pair}" — use strong=<model>,mid=<model>`);
+      if (!['strong', 'mid', 'low'].includes(tier) || !model) die(`bad --models entry "${pair}" — use strong=<model>,mid=<model>[,low=<model>]`);
       TIER_TO_CLAUDE_MODEL[tier] = model;
     }
-    console.log(`model mapping: strong=${TIER_TO_CLAUDE_MODEL.strong}, mid=${TIER_TO_CLAUDE_MODEL.mid} (native-format targets only; others record theirs in PIPELINE_PROFILE.md §12)`);
+    console.log(`model mapping: strong=${TIER_TO_CLAUDE_MODEL.strong}, mid=${TIER_TO_CLAUDE_MODEL.mid}, low=${TIER_TO_CLAUDE_MODEL.low} (native-format targets only; others record theirs in PIPELINE_PROFILE.md §12)`);
   }
 
   const i = argv.indexOf('--tool');

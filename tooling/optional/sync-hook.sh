@@ -54,9 +54,9 @@ cmd_install() {
   cat >> "$tmp" <<EOF
 $BEGIN
 # Auto-regenerate the local graphify graph after a merge lands on main OR development.
-# The base branch was added alongside main in the source repo after 20 days of silent rot: every feature branch
+# The base branch was added alongside main after weeks of silent rot in one adopting project: every feature branch
 # bases on development (branch model), so a main-only guard meant the hook essentially never
-# fired — the graph sat 20 days stale while 10 skill/agent files routed seats to it.
+# fired — the graph sat stale for weeks while the skill and agent files routed seats to it.
 # Managed by scripts/graphify/sync-hook.sh — edit there, not here.
 # Set GRAPHIFY_SYNC_SKIP=1 to disable ad-hoc.
 if [ -z "\${GRAPHIFY_SYNC_SKIP:-}" ]; then

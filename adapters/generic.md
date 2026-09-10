@@ -11,14 +11,16 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 2. **Distilled artifacts between phases** — file paths and structured findings lists, never raw
    file contents or prior transcripts.
 3. **Role scoping honoured** — read-only seats make no edits; the tester touches test files only;
-   nobody edits protected paths. If the harness can't enforce it, verify with `git status` after
-   each read-only phase.
-4. **The ledgers are files on disk** — task board, deferred registry, plan, review. Any harness
-   can write files; the mechanism's memory is the repo, not the context window.
+   the reviewer writes only its review file; nobody edits protected paths. If the harness can't
+   enforce it, verify with `git status` after each read-only phase.
+4. **The ledgers are files on disk** — task board, deferred registry, plan, review, handoff pack.
+   Any harness can write files; the mechanism's memory is the repo, not the context window.
 5. **The loop-back protocol** — consolidated verified blocker list → coder ("fix exactly these")
    → re-run affected phases → two-strike escalation to the human.
-6. **The close-out** — board closed, every DONE's evidence re-verified, registry swept, version
-   bumped, handoff table emitted, human merges.
+6. **The close-out** — board closed, every DONE's evidence re-verified, claims checked, registry
+   swept, version bumped, handoff pack written and checked, human merges.
+7. **One run per session, and no nested runs** — one run is one branch, one board, one version
+   bump. Stop at `run.end`; follow-up work takes a new key and a new session.
 
 ## Minimal mapping table
 
@@ -27,9 +29,26 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 | Subagent dispatch | fresh session / new chat / fresh API conversation |
 | Agent frontmatter `tools:` | instruction + post-phase `git status` verification |
 | Agent frontmatter `model:` | per-session model choice (profile §12), or strongest available |
+| Agent frontmatter `effort:` | a per-session reasoning setting if the harness has one; otherwise ignored |
 | Skill | a playbook file the orchestrator (agent or human) follows |
-| Parallel auditors | 3 concurrent sessions, or sequential (independent; order irrelevant) |
-| TodoWrite / task list | the task board file itself |
+| Parallel auditors | 4 concurrent sessions, or sequential (independent; order irrelevant) |
+| Progress tracking | **the board file is the one progress surface** — no parallel to-do list |
+
+## What each Claude-Code-only step becomes here
+
+| Claude Code step | Any harness |
+|---|---|
+| Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`); never paste raw suite output into a context |
+| Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>` |
+| Reviewer write guard hook | post-phase `git status --porcelain`: the reviewer may leave only its review file |
+| Protected-path hook | the universal pre-commit guard in `hooks/` (it holds for any agent) |
+| Session-start index refresh | unavailable. The P1 index gate (`node scripts/index-check.mjs`) is the catch |
+| Subagent spawn depth 1 | the no-nested-run rule, by instruction; a fresh session that cannot dispatch satisfies it by construction |
+| Prompt-cache TTL by replay | unavailable unless your harness exposes cache settings; if it does, the replay method in `adapters/claude-code.md` applies unchanged |
+| Orchestrator model check | `node scripts/orchestrator-check.mjs` prints `unmeasurable here` |
+| Per-seat cost accounting | em-dashes in the agents table; set `features.costAccounting` to `off` so the board says so |
+| Live page · Workflow-driven runs · advisor A/B | unavailable |
+| Language server plugin | unavailable as part of the pipeline |
 
 ## Scaling down (see DESIGN.md for the full rationale)
 

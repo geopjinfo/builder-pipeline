@@ -1,6 +1,6 @@
 ---
 name: security-auditor
-description: Read-only security auditor for one module's changes — authorization per interface, access-scope/IDOR, secrets & PII handling, boundary validation hardening, session/credential safety, and the reliability contracts viewed as security controls. Returns structured findings + verdict; makes no edits. Phase 4b of the build-module-pipeline (parallel with standards-auditor and vuln-auditor).
+description: Read-only security auditor for one module's changes — authorization per interface, access-scope/IDOR, secrets & PII handling, boundary validation hardening, session/credential safety, and the reliability contracts viewed as security controls. Returns structured findings + verdict; makes no edits. Phase 4b of the build-module-pipeline (parallel with standards-auditor, vuln-auditor and invariant-auditor).
 capabilities: read-only   # read-only = no file edits, inspection commands only · code = full edit · test-only = edits test files only · docs = edits allowed doc paths only
 tier: strong          # strong | mid — map to your harness's models via PIPELINE_PROFILE.md §12
 ---
@@ -46,6 +46,14 @@ oracles (§3), invariants (§7), plus any threat-model doc the profile cites. Th
    (e.g. air-gap, egress policy).
 
 ## Output contract
+
+**Also return it as one fenced `json` block** in the findings schema the orchestrator checks:
+`{ "seat", "verdict", "findings": [{ "id", "severity", "location": "<file:line>", "cite": "<profile §/gate/threat id>", "claim", "evidence" }], "filesTouched": [], "commands": [{ "cmd", "result" }] }`.
+`severity` is `blocker` · `warning` · `nit`; `claim` is the one-sentence issue; `evidence` is what you
+read that proves it. The orchestrator saves the block as `.pipeline/<moduleKey>/findings-<seat>.json`
+and runs `node scripts/output-check.mjs findings`: a finding missing a field, a `location` that is not
+a real `file:line`, a PASS over a blocker, or a `filesTouched` path outside the diff is sent back to
+you once.
 
 Return exactly this shape — no narration, no echoed inputs:
 

@@ -10,10 +10,10 @@ questions a contract can never answer: **"does it do what the business asked, an
 business forbade?"**, **"did every transition actually cause what it claims to cause?"**, and —
 the one almost every suite misses — **"is the system still coherent afterwards?"**
 
-Proven on a 17-module production backend: 1 200+ assertions over real HTTP, a 4 800-call
-transcript, and findings a green suite had been hiding — **53 of 81 declared audit actions fired
-in no scenario at all**, and later, **51 invariant findings (31 confirmed live) against a suite
-that was fully green**. A green run is not a covered run, and a covered run is not a sound system.
+Proven on a multi-module production backend: well over a thousand assertions over real HTTP, a
+transcript of thousands of calls, and findings a green suite had been hiding — **most of its
+declared audit actions fired in no scenario at all**, and later, **dozens of invariant findings,
+most confirmed live, against a suite that was fully green**. A green run is not a covered run, and a covered run is not a sound system.
 
 ```mermaid
 flowchart LR
@@ -167,8 +167,8 @@ mechanical than the next.
   printed full coverage while holding zero evidence is the worst defect this pattern produced.)
 - **An observer that cannot observe must THROW, not return empty.** A store probe that swallows its
   connection error and returns "not found" makes every NEGATED assertion over it pass while
-  observing nothing. That blindness hid a critical session-revocation defect behind 1 221 green
-  assertions. **A negated assertion over an unobservable value is not a test.**
+  observing nothing. That blindness hid a critical session-revocation defect behind well over a
+  thousand green assertions. **A negated assertion over an unobservable value is not a test.**
 - **When a probe asserts absence, prove it could have observed presence.** Give every
   refusal-based check a positive control — the actor completes an ordinary action first, or the
   grant is asserted live before it is revoked. Twice this pattern produced a *phantom guard*: a

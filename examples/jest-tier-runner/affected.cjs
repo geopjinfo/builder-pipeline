@@ -1,25 +1,32 @@
 'use strict';
 /**
+ * EXAMPLE — the "affected" selector for a JavaScript project on jest. The interface it implements is in
+ * README.md beside this file; point `commands.affected` in PIPELINE_PROFILE §16 at your own equivalent.
+ *
  * Which tests can this changeset possibly break?
  *
  * Deliberately thin: selection itself is jest's own `--findRelatedTests`, which walks the REAL
  * import graph. An ownership map (module -> spec glob) was considered and REJECTED — it rots the
- * moment someone adds a spec, and this harness has already lost a whole tier to exactly that kind
- * of silent drift (677 e2e tests dead behind green gates; see `test/jest.e2e.config.cjs`).
+ * moment someone adds a spec, and a whole test tier can go dead behind green gates through exactly
+ * that kind of silent drift.
  *
- * The graph cannot see through a migration, a platform edit, a seed, a shared harness file or a
+ * The graph cannot see through a migration, a shared-kernel edit, a seed, a shared harness file or a
  * jest config: those change behaviour for suites that never import them. Hence the escalation list.
  * Anything not obviously safe belongs on it — a false `full` costs minutes, a false `related` costs
  * a missed regression.
  *
  * SELECTIVE IS AN INNER-LOOP TOOL. It never produces merge evidence: a board row cites a full run,
  * and full tiers stay mandatory at pipeline Phase 3, Phase 6/6.5 and before every PR.
- *
- * Design rationale: the source repo's 2026-08-26 run-economy plan (evidence-backed; see PORTING.md).
+ */
+
+/**
+ * EXAMPLE PATTERNS — replace every entry with YOUR layout. Each line stands for a category:
+ * migrations and schema, the shared kernel, app bootstrap and config, test harness and support
+ * files, the test-runner configs, the scripts' shared libraries, and the manifests.
  */
 const FULL_RUN_PATTERNS = [
   /^prisma\//,
-  /^src\/platform\//,
+  /^src\/shared\//,
   /^src\/app\.module\.ts$/,
   /^src\/main\.ts$/,
   /^src\/config\//,

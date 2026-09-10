@@ -1,13 +1,14 @@
 'use strict';
 /**
- * The CI half of the instruction fence (source repo: hardening board, gap G-C).
+ * EXAMPLE — the CI half of an instruction fence, for a repo whose agent instructions live in
+ * CLAUDE.md, AGENTS.md and `.claude/`. Change `INSTRUCTION_DIFF` to your own instruction-file paths.
  *
- * The local PreToolUse hook blocks ACCIDENTAL writes to the instruction layer (CLAUDE.md,
- * AGENTS.md, .claude/**) and says at its own code site that it is not airtight — a determined
- * shell always wins. This is the airtight half, placed where airtight is possible: post-hoc, in
- * CI, over the DIFF. A change that touches the instruction layer must be DECLARED — some commit
- * in the range carries an `instructions-change:` trailer naming why. Detection where prevention
- * can't be total; the same split the hook's docblock promises ("CI remains the full enforcer").
+ * A local tool-call hook (for example a Claude Code PreToolUse hook) blocks ACCIDENTAL writes to the
+ * instruction layer, and it is not airtight — a determined shell always wins. This is the airtight
+ * half, placed where airtight is possible: post-hoc, in CI, over the DIFF. A change that touches the
+ * instruction layer must be DECLARED — some commit in the range carries an `instructions-change:`
+ * trailer naming why. Detection where prevention can't be total; the local hook catches mistakes,
+ * CI remains the full enforcer.
  */
 const INSTRUCTION_DIFF = /^(CLAUDE\.md|AGENTS\.md|\.claude\/(rules|agents|skills|hooks|settings[^/]*\.json))(\/|$)/;
 const TRAILER = /^instructions-change:\s*\S+/m;
@@ -25,7 +26,7 @@ function verdict({ changedFiles, commitMessages }) {
     reason:
       `${touched.length} instruction file(s) changed with no "instructions-change:" trailer in any ` +
       `commit of the range:\n  ${touched.join('\n  ')}\n` +
-      `Add a trailer line to a commit message, e.g. "instructions-change: tighten tester brief per D2".`,
+      `Add a trailer line to a commit message, e.g. "instructions-change: tighten the tester brief".`,
   };
 }
 

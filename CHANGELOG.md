@@ -1,3 +1,97 @@
+# Changelog — builder kit
+
+All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
+versions independently of any project it is pasted into.
+
+## [0.12.0] — 2026-09-11
+
+### The pipeline gains its instruments and its script checks — and every one of them is optional and says so
+
+This release ports a round of improvements proven in the source project, as **mechanisms**, with everything project-
+or stack-specific moved into `PIPELINE_PROFILE.md` or an adapter. Five further ideas ship as **experiments** and two
+as **unmeasured defaults** — `EXPERIMENTS.md` names the measurement that promotes or removes each. Nothing in this
+release assumes a language, a contract format, a permission catalogue, a knowledge index or a mutation tool: a
+project without one gets a working pipeline, and the missing feature prints `<feature>: not configured` instead of
+crashing or passing.
+
+**The pack now lives in its own repository** and is released as an archive (`git -C builder archive …`, see
+`UNPACK.md`). Receive releases as archives; a working copy with a `.git` inside belongs to the pack's maintainers.
+
+### Added
+
+- **Settings — `PIPELINE_PROFILE.md` §16.** One ` ```json pipeline-settings ` block: commands (with `{tier}`), paths,
+  models, protected globs, and 21 features each in a declared state (`on` · `off` · `unmeasured` · `experimental-off`
+  · `experimental-on`). `scripts/lib/profile.cjs` validates it — a feature switched on without its required keys is an
+  error, never a silent skip, and a misspelt feature name is an error. `node scripts/features.mjs` and
+  `node builder/cli.js features` print every state; `cli.js verify` refuses an invalid block.
+- **Checks that catch record-class defects before review.** `claims-check` (re-runs counts, anchors `file:line`
+  citations, refuses retracted phrases and ownerless "owed" notes) at the end of P2 and P5; `output-check` for the plan
+  (sections and table headers from the profile, optional catalogue oracle), the auditors' findings JSON and the
+  reviewer's review file (`skills/references/review-template.md`); `handoff-pack` + `handoff-check` — P7 cannot close
+  without one handoff file per run, sections §A–§F, each with a `RESPONSE REQUIRED` line.
+- **Instruments.** Per-seat cost read from each seat's own transcript, background dispatches included, with the
+  orchestrator's own turns scoped to the run (Claude Code; other harnesses render em-dashes); a versioned rate table
+  with both cache-write TTLs; `orchestrator-check` (warns when a session is not on the declared orchestrator model);
+  `cost-window`, `seat-peaks`, `fix-rate`.
+- **Optional checks behind interfaces.** `contract-oracle` with an OpenAPI 3 adapter (`oracles/openapi3.cjs`) judging
+  served status codes, query parameters and error-code families against a baseline; `rules-module`, a structural-rules
+  runner interface keyed without line numbers (ast-grep TypeScript rules under `examples/`, not a default set);
+  `mutation-step`, non-blocking, reading the mutation-testing-report schema (Stryker named as one example);
+  `index-check`, the knowledge-index freshness exit-code contract behind the P1 gate.
+- **Row readers.** `ledger-row` prints one registry or board row with its section and real header, so seats never read
+  a whole ledger.
+- **Board tooling.** `## Todo`, `## Definition of Done` and `## Modules & endpoints` sections; a `decision` run-log
+  event; `board-render --json` writes one document per section, split and never truncated; the declared orchestrator
+  model is read from the profile.
+- **Claude Code hooks** (`hooks/claude-code/`, copied by the installer and never armed): an output cap for the
+  orchestrator's shell results that never drops an error line, a registry read guard, and a reviewer guard that holds
+  the reviewer to its one review file.
+- **The pack tests itself.** `node builder/tests/run.mjs` — node:test over synthetic fixtures, no project needed —
+  including an adopter dogfood that unpacks the pack into a throwaway Python project with every optional feature off,
+  and a prose self-test that holds the playbook, seats and adapters to the scripts the pack actually ships.
+- **Experimental, opt-in with `unpack --experimental`:** the read-only live page and its keeper seat
+  (`tooling/experimental/page-shell.*`, `agents/experimental/page-keeper.md`), script-driven runs, the graph-seat
+  trial, role persona profiles, a builder on a mid-tier model with a strong advisor, and a blocking mutation threshold.
+
+### Changed
+
+- **Playbook.** Orchestrator model check before step 0; the index freshness gate at step 0 refuses the planner on an
+  unrecorded non-zero exit; builder dispatched in batches of `features.builderBatch.rows` (default five — unmeasured)
+  reading rows through `ledger-row`; the narrow FIX lane in the loop-back (unmeasured, judged by `fix-rate`); rule hits
+  handed to the vuln-auditor, who must account for every line; **stop at `run.end`, one run per session**; the board
+  file is the one progress surface — no harness to-do mirror; the handoff is a file, never a table in a chat report.
+- **The "subagents cannot spawn subagents" premise is retracted.** Harnesses may nest; the pipeline caps it where it
+  can (Claude Code: spawn depth 1), and the no-nested-run rule rests on run ↔ branch ↔ board ↔ version bump.
+- **Seats.** The reviewer writes its own review file (neutral `writes:` field; Claude Code maps it to one guarded
+  write); the four auditors return a findings JSON block; the tester moves to the strong tier; the docs seat carries
+  `effort: low`; the planner holds to the fixed plan shape.
+- **DESIGN.md** gains the principles behind this release — instruments before savings, scripts before reviewers, a
+  figure in an instruction file is read from its source by a test, an instruction with no runnable command is
+  decoration, every optional check is declared, one run per session, decide harness settings by replay, ship unproven
+  ideas as experiments — and loses the source project's exact figures.
+- **Adapters.** `claude-code.md` holds every Claude-Code-only step (hooks, spawn depth, cache TTL guidance, effort,
+  transcript accounting, the live page, Workflow runs, the advisor); `codex.md` and `generic.md` say what each becomes
+  without that harness, or that it is unavailable.
+- **Run-economy scripts moved** from `tooling/` to `examples/jest-tier-runner/`: they are one jest implementation of
+  the tier-runner interface, not the pack's runner for every stack.
+- **Installer.** Installs every script and lib by walking `scripts/`, the oracle adapters, the playbook references and
+  the Claude Code hooks; maps comma-listed capabilities and `writes:`; passes `effort:` through. **Node 18 or newer.**
+- `board-progress.mjs` requires a board path (it used to fall back to a board file of the source project).
+
+### Fixed
+
+- `cli.js check-ledgers` read the **Cites** column as the status on the pack's own board format, so valid boards
+  failed; it now reads Status, accepts `DONE <date>`, counts `IC-n` rows and skips `_*.md` templates.
+- The no-Node unpack fallbacks missed libraries the renderer now needs.
+- House references removed from templates, optional tooling and extra skills.
+
+### Upgrading from 0.11
+
+The installer is copy-if-absent, so it never overwrites an installed file. Unpack 0.12.0 into a clean directory with
+the same `--tool`, diff it against your installed `.claude/` or `.builder/` and `scripts/`, and take what you want;
+then add §16 to your `PIPELINE_PROFILE.md` (start from `PIPELINE_PROFILE.template.md`, switch on only what your project
+has) and run `node builder/cli.js verify`.
+
 ## 2026-08-28 — status-and-next (generic port from the source repo)
 
 - **`skills-extra/status-and-next/`** — the session-start planning pass: re-verify repo + tracker +
@@ -40,11 +134,6 @@
 - Deliberately NOT ported (source-repo-specific): graphify mechanics, the jest capacity governor
   and tier-lock scripts (adapters may copy them), the instruction fence hook, `DALIL_*` unlocks.
 
-# Changelog — builder kit
-
-All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
-versions independently of any project it is pasted into.
-
 ## [0.11.0] — 2026-08-25
 
 ### Added — phases 0.5, 3b, 4d and 6.5: the pipeline stops asking only one question
@@ -55,10 +144,10 @@ proven **in design** — each one is the direct answer to a measured failure in 
 but the four new phases have not yet run end to end there. Exported at the maintainer's explicit
 call. Treat the shapes as sound and the ergonomics as version 1.
 
-**The measurement they answer.** An estate with 1 221 passing behavioural assertions, a
-164-operation × 13-role permission matrix, 138 integration suites and 695 end-to-end tests — fully
-green — was hunted for one question none of those tiers asks, and returned **51 findings, 31
-confirmed live**. Every existing tier asked *"may actor X call operation Y, and does it return the
+**The measurement they answer.** An estate with well over a thousand passing behavioural
+assertions, a full operation × role permission matrix, dozens of integration suites and hundreds of
+end-to-end tests — fully green — was hunted for one question none of those tiers asks, and returned
+**dozens of findings, most confirmed live**. Every existing tier asked *"may actor X call operation Y, and does it return the
 right code?"* **None asked whether the system was still coherent afterwards.** Two of the four worst
 findings were not in the domain code at all.
 
@@ -83,14 +172,15 @@ findings were not in the domain code at all.
   a track escalates **up** mid-run and never down. Out-of-scope work becomes a `SPLIT` finding — a
   registry row plus a *proposed* separate run. **The pipeline never starts another pipeline**:
   subagents cannot spawn subagents, and a nested run has no answer to *whose board, whose registry
-  rows, whose version bump*.
+  rows, whose version bump* (a premise retracted in 0.12.0: harnesses may nest; the rule rests on
+  run ↔ branch ↔ board).
 - **Digest-first planning.** The planner authors the invariant candidates, the coder consumes them
   as `IC-n` board rows and never writes them, the tester covers them as adversarial stories,
   MERGE-READY requires each one covered-and-named or deferred. Three seats, so the author of the
-  code is never the author of the questions about the code. In the source project 17 digests existed
+  code is never the author of the questions about the code. In the source project many module digests existed
   while exactly **one** story pack did — that is what "optional" produces.
 - **Triaged blockers** — `DECIDED-FROM-DOCS` (decide, record, continue) · `NEEDS-RULING` (proceed on
-  a stated assumption) · `BLOCKING` (stop). Only the third halts a run. Five of seven escalations in
+  a stated assumption) · `BLOCKING` (stop). Only the third halts a run. Most escalations in
   the source project were already answered by its own requirement register.
 - **`DESIGN.md` §14 — the declaration ceiling**, the principle under all of it: every tier derived
   from a declaration inherits that declaration's blind spots, and no amount of extra assertions
@@ -156,7 +246,7 @@ by every declared measure), and a duplicate unique field returned **500** while 
 ### Added — rules earned the hard way
 - **An observer that cannot observe must THROW, not return empty.** A store probe that swallowed its
   connection error and returned "not found" made every negated assertion over it pass while
-  observing nothing — hiding a critical session-revocation defect behind 1 221 green assertions.
+  observing nothing — hiding a critical session-revocation defect behind well over a thousand green assertions.
   *A negated assertion over an unobservable value is not a test.*
 - **When a probe asserts absence, prove it could have observed presence.** Twice this pattern
   produced a *phantom guard*: a refusal that looked exactly like the protection under test but came
@@ -167,7 +257,7 @@ by every declared measure), and a duplicate unique field returned **500** while 
 - **Shift EVERY published port** in the disposable stack — one unshifted port takes down the whole
   bring-up.
 - **The honesty boundary.** A green run means *"every declared behaviour held"*, never *"the system
-  is sound"*. An invariant hunt on the source project found 51 findings (31 confirmed live) against
+  is sound"*. An invariant hunt on the source project found dozens of findings, most confirmed live, against
   a fully green suite; business invariants and infrastructure posture are not reachable from a route
   inventory, and the skill now says so.
 
@@ -198,8 +288,8 @@ is a few hundred lines that would have caught both production escapes on their f
   never does — two runners against one environment corrupt each other's fixtures.
 
 ### Rationale
-Proven on a 17-module production backend: 709 assertions over real HTTP surfaced that **53 of 81
-declared audit actions fired in no scenario at all**. A green suite was implying coverage that did
+Proven on a production modular backend: hundreds of assertions over real HTTP surfaced that **a majority of
+the declared audit actions fired in no scenario at all**. A green suite was implying coverage that did
 not exist — which no contract-level oracle can detect, because a transition that silently stops
 auditing changes no route, no schema and no permission key.
 

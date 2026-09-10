@@ -1,7 +1,7 @@
 # 🧠 DESIGN — why the pipeline is shaped this way
 
 <p align="center">
-  <img alt="principles" src="https://img.shields.io/badge/design_principles-14-blue?style=flat-square">
+  <img alt="principles" src="https://img.shields.io/badge/design_principles-22-blue?style=flat-square">
   <img alt="battle-tested" src="https://img.shields.io/badge/battle--tested-15%2B_modules-success?style=flat-square">
   <img alt="war stories" src="https://img.shields.io/badge/war_stories-included-red?style=flat-square">
 </p>
@@ -25,27 +25,39 @@ Building many similar feature modules with AI agents fails in predictable ways:
    to the claim; nobody notices until several modules later, when the cost is 10×.
 5. **Lost work** — deferred items scattered in prose, module folders, or chat history never
    resurface when their blocker lands.
+6. **Unchecked numbers** — costs, counts and savings get stated with confidence and read from
+   nowhere: a self-reported spend, a figure typed into an instruction file, a setting chosen on one
+   run's evidence.
 
 Each mechanism below targets one or more of these:
 
 ```mermaid
 flowchart TB
-    F1["🧪 1. Context pollution"] --> M1["Fresh persona per phase<br/>+ distilled artifacts (§1–§3)"]
+    F1["🧪 1. Context pollution"] --> M1["Fresh persona per phase<br/>+ distilled artifacts (§1–§3, §20)"]
     F2["🪞 2. Self-review blindness"] --> M2["Adversarial tester + 4 auditors<br/>+ verify-don't-trust reviewer (§2, §10, §14)"]
-    F3["🎲 3. Invented facts"] --> M3["Oracles + cite-or-BLOCKER<br/>operating contract (§4, §5)"]
+    F3["🎲 3. Invented facts"] --> M3["Oracles + cite-or-BLOCKER<br/>+ record checkers (§4, §5, §16)"]
     F4["🏅 4. Unearned status"] --> M4["TDD seeds + earn-each-DONE<br/>close-out audit (§7, §11)"]
     F5["🕳️ 5. Lost work"] --> M5["Durable ledgers + registry<br/>entry/exit sweeps (§8)"]
+    F6["📏 6. Unchecked numbers"] --> M6["Instruments, figures read from source,<br/>replay, declared features (§15, §17–§19, §21, §22)"]
 ```
 
-## The 14 design principles
+## The 22 design principles
 
 ### 1. Orchestrator conducts; personas play
 
 The main agent is a **conductor**: it dispatches one persona agent per phase, threads outputs
-between them, and owns the loop. It never writes module code itself. Subagents cannot spawn
-subagents, so sequencing lives in exactly one place. This gives you: fresh context per phase
-(anti-pollution), a different "pair of eyes" per gate (anti-self-review), and a single place to
-enforce ordering and loop-back policy.
+between them, and owns the loop. It never writes module code itself, and sequencing lives in
+exactly one place. This gives you: fresh context per phase (anti-pollution), a different "pair of
+eyes" per gate (anti-self-review), and a single place to enforce ordering and loop-back policy.
+
+**No seat starts a run, and no run starts inside another.** The rule stands on a mapping, not on a
+harness limit: **one run is one branch, one board and one version bump.** A run nested inside
+another run's phase would write a second board and a second bump into a diff that is already under
+review, and neither ledger could then say which work belongs to which verdict. An earlier version
+of this principle rested the rule on harnesses being unable to nest dispatches. Some harnesses nest
+by default, so that premise was wrong, but the rule still holds. Where the harness offers a
+spawn-depth setting, set it so seats dispatch nothing. Where it does not, the playbook carries the
+rule.
 
 ### 2. Persona-per-phase, with role-scoped tools and models
 
@@ -56,18 +68,26 @@ Each phase is a distinct persona with **only the tools its role needs**:
 | 0.5 Track | orchestrator | board header only | — |
 | 1 Plan | module-planner | plan + digest files only | strong |
 | 2 Code | module-builder | src + tests | strong |
-| 3 Test | module-tester | **test files only** | mid |
+| 3 Test | module-tester | **test files only** | strong |
 | 3b Drift | orchestrator | nothing (runs oracles) | — |
 | 4a/4b/4c/4d Audit | standards / security / vuln / **invariant** auditors | **nothing** (read-only) | strong / strong / mid / **strong** |
 | 5 Docs | docs-maintainer | allowed doc paths only | mid |
-| 6 Review | module-reviewer | review file only | strong |
+| 6 Review | module-reviewer | its review file only | strong |
 | 6.5 Behavioural | orchestrator | reports only (runs the real app) | — |
 
-Tool scoping is not decoration: a read-only auditor *cannot* "helpfully fix" what it finds
-(which would hide the defect from the coder and the record); a tester that can only touch test
-files *must* report source defects instead of patching around them. Model tiers put the strong
-model where judgment lives (planning, coding, auditing nuance, final gate) and the cheaper model
-where the work is mechanical-adversarial (test extension, pattern-grep audits, docs).
+Tiers are fixed in profile §12. Tool scoping is not decoration: a read-only auditor *cannot*
+"helpfully fix" what it finds (which would hide the defect from the coder and the record); a tester
+that can only touch test files *must* report source defects instead of patching around them. Model
+tiers put the strong model where judgment lives — planning, coding, testing, auditing nuance, the
+final gate — and the cheaper model where the work is mechanical (pattern-grep audits, docs). The
+test seat moved up to the strong tier: the Test phase is the first full verification and its work
+is adversarial, and green-suite misses on access-control and money paths proved it needs the
+stronger model. A persona may also declare `effort:`; the docs seat runs low, because it writes
+prose from facts it is handed.
+
+The reviewer is read-only except for one file, its review. That grant is only a grant if something
+enforces the one file, so a harness that can see which seat is writing blocks every other path, and
+a harness that cannot gets a post-phase `git status` check.
 
 ### 3. The context firewall: distilled artifacts, never raw dumps
 
@@ -101,6 +121,10 @@ agent's transcript. Consequences:
   authoritative docs plus the written plan are the single source each run.
 - Token cost stays flat per phase instead of compounding.
 
+The same reasoning covers ledgers: a seat that needs one registry row reads that row
+(`node scripts/ledger-row.mjs registry <ID>`), not the whole file. Every later turn of that seat
+pays again for whatever it read once.
+
 ### 4. The five-clause operating contract (in every persona, verbatim)
 
 Every persona carries the same non-negotiable preamble:
@@ -125,7 +149,7 @@ Any project has a small set of **closed catalogues** whose contents are decided 
 derivable by an agent — permission keys, error codes, workflow state names, API envelope shapes.
 The pipeline treats each as a **build oracle**: every use must match an existing entry; a missing
 entry is a hard BLOCKER surfaced to the human ("stop and flag a catalogue amendment"), never an
-invention. In the source project, a permission catalogue CSV plus a CI gate asserting routes
+invention. In one adopting project, a permission catalogue file plus a CI gate asserting routes
 against it eliminated an entire class of plausible-but-invented authorization keys.
 List your oracles in `PIPELINE_PROFILE.md` §3.
 
@@ -133,10 +157,10 @@ List your oracles in `PIPELINE_PROFILE.md` §3.
 
 The architecture is designed **once** (a template module + written conventions); every subsequent
 module **replicates the shape exactly**. "Replicate, never redesign" appears in the planner and
-coder personas because a weak pattern invented in module 3 gets copied into modules 4–31. If a
-module genuinely can't fit the shape, that is a boundary event: **stop and ask the human**, don't
-improvise. Corollary: keep one real reference implementation per hard invariant and point coders
-at it ("copy these, don't reinvent") — a named reference beats a paragraph of prose.
+coder personas because a weak pattern invented in module 3 gets copied into every module after it.
+If a module genuinely can't fit the shape, that is a boundary event: **stop and ask the human**,
+don't improvise. Corollary: keep one real reference implementation per hard invariant and point
+coders at it ("copy these, don't reinvent") — a named reference beats a paragraph of prose.
 
 ### 7. TDD per board row, with seeded tests
 
@@ -155,7 +179,9 @@ Three git-tracked (or at least written-to-disk) artifacts outlive every agent co
 - **Task board** `tasks/<moduleKey>.md` — one row per deliverable; statuses
   `PLANNED / IN-PROGRESS / DONE / DEFERRED→<id> / DROPPED`; row kinds `T-n` (planned),
   `C-n` (candidates folded in from the registry), `FIX-n` (loop-back fixes). Format in
-  [`templates/task-board.md`](templates/task-board.md).
+  [`templates/task-board.md`](templates/task-board.md). **The board file is the one progress
+  surface**: a harness to-do list mirroring it is a second truth that drifts from the first, and
+  nobody reconciles it.
 - **Deferred registry** `DEFERRED_TASKS.md` — the single cross-module backlog. Every pipeline run
   **sweeps it on entry** ("did the module I'm about to build unblock a row?") and **updates it on
   exit** ("what did I defer; what did I just unblock?"). Deferrals never live in module folders or
@@ -165,15 +191,19 @@ Three git-tracked (or at least written-to-disk) artifacts outlive every agent co
 - **Plan + review** `.pipeline/<moduleKey>/{plan,review}.md` — the run's audit trail (these can
   stay gitignored; the board and registry must not).
 
+At close-out the run also writes **one handoff pack** — progress, tracker flips, decisions,
+registry changes, docs owed, merge conditions, each item with a `RESPONSE REQUIRED` line — so
+nothing a human must act on lives only in a chat report.
+
 **A status summary is computed, never typed.** The moment a board carries a hand-maintained
 progress bar it acquires a second, unreconciled truth: the rows move and the bar does not, and the
 board then reports last week's number with this week's authority. `scripts/board-progress.mjs`
 makes the bar a *projection of the Status column* and rewrites nothing else;
 `scripts/board-check-all.mjs` fails CI on any board that has drifted. The first run of that pair in
-the source project found a board reading **0% while sitting at 8 of 12 done** — nobody had noticed,
-because a bar looks like an output even when it is an input. The same reasoning applies to a
-`Cites` column: an *unchecked* citation is just a more confident-looking invention (failure mode 3),
-so resolve every id in a recognised scheme against your oracles and report prose as
+one adopting project found a board reading **0% while sitting at 8 of 12 done** — nobody had
+noticed, because a bar looks like an output even when it is an input. The same reasoning applies to
+a `Cites` column: an *unchecked* citation is just a more confident-looking invention (failure
+mode 3), so resolve every id in a recognised scheme against your oracles and report prose as
 **not-evaluable** rather than pretending you read a PDF.
 
 ### 9. Gate-fail loop-back: fix exactly these
@@ -244,10 +274,10 @@ other gate):
   reaches.
 
 Related tester rule (**the positive-control rule**): every assertion that something is ABSENT
-(`toEqual([])`, `not.toContain`, `toBeNull`) needs a positive control on the same fixture proving
-the collection *could* have contained the thing. Otherwise you're testing the fixture, not the
-code. This was the single most common defect class found in the source project's ledger audit —
-including in the very gate written to catch it.
+(an empty-collection, not-contains or null assertion) needs a positive control on the same fixture
+proving the collection *could* have contained the thing. Otherwise you're testing the fixture, not
+the code. This was the single most common defect class found in one adopting project's ledger
+audit — including in the very gate written to catch it.
 
 Also: re-read multi-clause acceptance criteria (joined by `;`/`and`) — partial delivery hides
 there; meeting one clause of three is not DONE. A row whose evidence fails becomes
@@ -258,8 +288,7 @@ there; meeting one clause of three is not DONE. A row whose evidence fails becom
 Some paths are **hook-blocked or convention-blocked** for agents: the stable platform/core layer,
 read-only doc mirrors, generated catalogues. When a phase concludes it must cross one, it stops
 and surfaces the decision — the pipeline never works around a guardrail. Changes that only humans
-may apply come back as a **handoff table** in the final report
-(File · Where · What → to-what · Why · Context) rather than silent edits. The pipeline also never
+may apply come back in the **handoff pack** rather than as silent edits. The pipeline also never
 merges or opens PRs — MERGE-READY is a verdict handed to the human, with the plan + review files
 as the audit trail. Version bump + changelog entry ride the branch; the human merges and tags.
 
@@ -269,34 +298,16 @@ A passing suite reports what it *ran*, never what it *skipped*, so coverage gets
 absence of red. That inference is wrong often enough to be dangerous. The fix is to derive the
 denominator from code rather than from the tests: extract every side effect the system claims to
 cause — audit writes, event publishes, session revocations, concurrency guards — and after a full
-run, ask which of them actually fired. In the source project, 709 green assertions over real
-infrastructure sat alongside **53 of 81 declared audit actions that fired in no scenario at all**;
-the approval, committee and change-request paths had never had a single effect verified. No
-contract-level oracle can see this, because a transition that silently stops auditing changes no
-route, no schema and no permission key.
+run, ask which of them actually fired. In one adopting project, hundreds of green assertions over
+real infrastructure sat alongside **a majority of the declared audit actions firing in no scenario
+at all**; whole workflow paths had never had a single effect verified. No contract-level oracle can
+see this, because a transition that silently stops auditing changes no route, no schema and no
+permission key.
 
 Two consequences run through the kit. **Absent evidence must render as `UNKNOWN`, never as a
 pass** — a report that shows 100% because it holds no data is worse than one that shows nothing.
 And **the unexercised list is the backlog**: it converts "we should test more" into named work
 with the routes that reach it. The `qa-audit` skill implements this; profile §14 grounds it.
-
-## Tuning it for a new project — what varies vs. what doesn't
-
-**Varies (all captured in `PIPELINE_PROFILE.md`):** stack and commands; layer rules; oracle
-catalogues; protected paths; error/response conventions; the invariant list with reference
-implementations; gate names; the readiness checklist content; docs write-scope; which model tier
-maps to which phase in your harness.
-
-**Does not vary (keep even if it feels heavy):** the phase order; parallel independent auditors;
-read-only enforcement on audit seats; the five-clause operating contract; distilled-artifact
-threading; TDD-per-row with seeds; DONE-requires-test-evidence; the loop-back protocol with
-two-strike escalation; verify-don't-trust in review; the close-out DONE audit; the deferred
-registry entry/exit sweeps; stop-and-ask on boundary events.
-
-**Scaling down** (small project / solo dev): you may merge phases 4a–4c into one auditor persona
-with all four lenses, and skip phase 5 if there are no product docs — but never merge the coder
-and the reviewer, and never drop the board. The minimum viable pipeline is
-plan → code(TDD) → test → audit → review, five seats.
 
 ### 14. The declaration ceiling — buy a second question, not more assertions
 
@@ -305,11 +316,11 @@ permission matrix, a state machine, an effect inventory. That is a structural ce
 oversight — **no derivation reaches a case no declaration mentions.** You can triple the assertion
 count and move the ceiling not at all.
 
-The source project measured it. Against 1 221 passing behavioural assertions, a 164-operation ×
-13-role permission matrix, 138 integration suites and 695 end-to-end tests — all green — a hunt for
-one different question returned **51 findings, 31 confirmed live.** Every existing tier asked *"may
-actor X call operation Y, and does it return the right code?"* **None asked whether the system was
-still coherent afterwards.**
+One adopting project measured it. It had well over a thousand passing behavioural assertions, a
+full operation × role permission matrix, over a hundred integration suites and several hundred
+end-to-end tests, all green. A hunt for one different question returned **dozens of findings, most
+of them confirmed live.** Every existing tier asked *"may actor X call operation Y, and does it
+return the right code?"* **None asked whether the system was still coherent afterwards.**
 
 Two escapes from the ceiling, and the kit ships both:
 
@@ -327,10 +338,146 @@ Two escapes from the ceiling, and the kit ships both:
 is the only one that exercises the running application. Some defects are only reachable there: a
 session type that in-process stubs cannot mint, a rate limiter that is real, a cache the app talks
 to over a socket. A pipeline whose every phase is a code reader has a second ceiling under the
-first one.
+first one. Where the project has an API contract, phase 6.5 also judges every served response
+against it (`node scripts/contract-oracle.mjs`): a document compared with itself cannot see a route
+that answers with a status its contract never declared.
 
 **The honest sentence for a green run** is *"every declared behaviour held"* — never *"the system
 is sound"*. Those are different claims, and only one of them was tested.
+
+### 15. Instruments before savings
+
+No saving is claimed until the instrument that would show it has been checked against the bill.
+An economy effort built on a wrong meter optimises the wrong seat, and its projected savings are
+wrong by the same factor as the meter.
+
+- **Accounting is read from the harness's own records**, per seat, including **background seats**
+  whose results never pass through the orchestrator's turn. It is never read from an agent's report
+  about itself. A board that counts only the dispatches it saw reports a fraction of the spend with
+  the authority of the whole. In one adopting project the board's own cost line showed a small
+  fraction of the real spend for weeks.
+- **Unmeasured is an em-dash.** A zero claims a measurement nobody took. A total that includes an
+  unmeasured seat says it is partial.
+- **A hand-typed rate table is versioned**, and every figure names the version it was derived at.
+  One adopting project found every rate in its table wrong when it checked them against published
+  prices. Every baseline and projection derived from that table was wrong along with it.
+
+So the first work of any economy effort is fixing the meter. It is not cutting the seat the broken
+meter blames.
+
+### 16. Scripts catch record-class defects before a reviewer does
+
+A reviewer who re-opens citations is an expensive way to find a line number that drifted. In one
+adopting project, false records and citations were the largest share of loop-back fixes. Examples:
+a stale count, a citation to a line that had moved, a phrase an earlier decision had retracted, an
+"owed" note that named nothing. Most were mechanically catchable. So the pack checks records with
+scripts, at the phase that writes them:
+
+- `node scripts/claims-check.mjs --run <key>` at the end of the code and docs phases. It re-runs
+  every recorded count's command, holds every `file:line` to that line's content, refuses retracted
+  phrases, and requires every owed note to resolve to a decision-workspace entry, a registry id or a
+  handoff section.
+- **Fixed output shapes.** `node scripts/output-check.mjs plan|findings|review <file>`: a plan,
+  finding or review with a missing section, or a finding without evidence, fails at the phase that
+  wrote it, not three phases later. When plans and reviews come in any shape, a checker cannot hold
+  them to anything.
+- `node scripts/handoff-check.mjs <file>`: close-out cannot finish on an incomplete handoff pack.
+
+Every checker ships a red proof beside its green case. The reviewer's judgement then goes to what
+needs judgement.
+
+### 17. A figure in an instruction file is read from its source by a test
+
+Every seat loads its instruction files, so a number stated there is repeated as fact in every run:
+a catalogue's size, a role count, a limit. When the source changes and the sentence does not, every
+seat is wrong the same way. No gate notices, because no gate reads prose. In one adopting project, a
+catalogue figure stayed stale in every instruction file long after one spec had corrected it. The
+spec was right, and the files every seat loads still carried the old number.
+
+The fix is a test that parses the source, derives the figure, and holds every instruction file to
+it, with a red proof that the stale sentence fails. A count in a ledger follows the same rule:
+record it with the command that produced it, so the claims check can re-run it.
+
+### 18. An instruction with no runnable command is decoration
+
+A seat told what to value but not what to run does nothing: "use the knowledge index", "consult
+the graph", "check the registry". In one adopting project, every seat file named the index tool and
+none gave a command, and the seats made zero calls to it. That reads as missing instructions, not
+as a tool without value.
+
+The rule: every tool a persona is told to use comes with the exact command. The command lives in
+one reference file that personas point at. It is never pasted into each persona, where the copies
+drift. A pack test resolves every command and reference a persona names.
+
+### 19. Every optional check is declared
+
+The pack runs on projects with no API contract, no knowledge index and no mutation tool. A check
+that assumes one of them either crashes, or finds nothing and prints PASS. The second is worse,
+because it reads as evidence. So every optional step asks `PIPELINE_PROFILE.md` §16 first, and an
+absent feature is said out loud: `<feature>: not configured`.
+
+- A feature switched **on** with a required key empty is a validation error, never a skip.
+- An **unknown feature name** is an error: a typo would otherwise switch a check off in silence.
+- A feature is never switched on without the file or tool it needs. The setup step reads the
+  project to decide, and `node builder/cli.js verify` holds the block to that.
+
+`node scripts/features.mjs` prints every feature's state, so "which checks ran?" has one answer.
+
+### 20. One run per session; stop at `run.end`
+
+A session that finishes a run and keeps going carries the whole run's context into work that needs
+none of it, and every later turn pays to re-read that context. In one adopting project, most of one
+session's orchestrator tokens were spent after its run had ended. Follow-up work after MERGE-READY
+takes a new key, a new board and a new session. The board and the state file make resuming cheap,
+so a long session buys nothing and costs recall.
+
+### 21. Decide harness settings by replay, not by one run
+
+Cache lifetimes, batch sizes and model choices all have this problem: a one-run A/B measures that
+run's noise. When the harness keeps transcripts, **replay them**. Re-price the recorded turns under
+each setting and compare the totals over many runs. In one adopting project, replaying the cache
+lifetime split the answer by role. The main session was cheaper on the long lifetime and the seats
+on the short one, because the orchestrator sits idle while seats run, and a seat's turns follow each
+other closely. A single A/B that applied one setting to both roles would have hidden that.
+
+Before trusting a replay, verify the setting's premise: that the harness documents it, and that the
+harness build which actually runs your sessions honours it.
+
+### 22. Ship unproven ideas as experiments, with their measurement
+
+An idea that looks right but has not been measured ships in one of two labelled forms:
+
+- **Unmeasured.** On by default, because the proven pipeline already does it, and every report says
+  its benefit is unmeasured. Builder batches and the narrow FIX lane ship this way, each with the
+  instrument that measures it (`node scripts/seat-peaks.mjs`, `node scripts/fix-rate.mjs`).
+- **Experimental.** Installed only with `unpack --experimental`, off until someone turns it on, and
+  with the measurement that promotes or removes it written in [`EXPERIMENTS.md`](EXPERIMENTS.md)
+  before it runs.
+
+A keep-or-stop call made on zero runs is exactly the impression the experiment exists to replace.
+Fix the measurement rule before the data arrives, too. In one adopting project, a fix-of-fix rate
+that counted every mention of another fix read nearly twice the rate that counted only actual
+repairs. The rule is written down, with a red proof, before any run is judged by it.
+
+## Tuning it for a new project — what varies vs. what doesn't
+
+**Varies (all captured in `PIPELINE_PROFILE.md`):** stack and commands; layer rules; oracle
+catalogues; protected paths; error/response conventions; the invariant list with reference
+implementations; gate names; the readiness checklist content; docs write-scope; which model tier
+maps to which phase in your harness; which optional features are on (§16), from what the project
+actually has.
+
+**Does not vary (keep even if it feels heavy):** the phase order; parallel independent auditors;
+read-only enforcement on audit seats; the five-clause operating contract; distilled-artifact
+threading; TDD-per-row with seeds; DONE-requires-test-evidence; the loop-back protocol with
+two-strike escalation; verify-don't-trust in review; the close-out DONE audit; the deferred
+registry entry/exit sweeps; stop-and-ask on boundary events; one run per session; optional checks
+that say `not configured` rather than pass.
+
+**Scaling down** (small project / solo dev): you may merge phases 4a–4d into one auditor persona
+with all four lenses, and skip phase 5 if there are no product docs — but never merge the coder
+and the reviewer, and never drop the board. The minimum viable pipeline is
+plan → code(TDD) → test → audit → review, five seats.
 
 **Scaling up:** add lenses as parallel phase-4 seats (performance, accessibility, i18n,
 compliance) — each read-only, each with the same findings shape, all dispatched in one message.

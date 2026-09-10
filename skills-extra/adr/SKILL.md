@@ -15,7 +15,7 @@ inherits · it rejects an obvious alternative · it will be re-litigated without
 `<adr dir>` — use the project's existing ADR directory if one exists (check profile §3/§5 docs
 and `docs/**/adr*`); otherwise create `docs/adr/` (or `adr/` in doc-less repos) plus an
 `index.md`. If the project's ADR dir is a **protected path** (profile §4), write the ADR body in
-your report and hand it off via the handoff table — never edit the mirror.
+the run's handoff pack (§E docs) and hand it off — never edit the mirror.
 
 ## Format (one file: `ADR-NNN-<kebab-title>.md`)
 
@@ -52,6 +52,6 @@ decision won't be re-litigated.
    `DECISIONS.md` row's "Full ADR" column with the ADR id — the two stay cross-linked.
 4. **One decision per ADR.** Two decisions that always travel together are still two ADRs with
    cross-references.
-5. Pipeline integration: the module brief's handoff table (§12) is where a build's "warranted
+5. Pipeline integration: the run's handoff pack (§E docs) is where a build's "warranted
    ADR" surfaces; write it with this skill before merge, so the merge commit and the record land
    together.

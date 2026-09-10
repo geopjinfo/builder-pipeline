@@ -1,5 +1,5 @@
 /**
- * `npm run board:cp2` — recompute the progress block at the top of a task board.
+ * `node scripts/board-progress.mjs <board>` — recompute the progress block at the top of a task board.
  *
  * WHY THIS EXISTS. A hand-maintained progress bar is a claim nobody re-derives: the rows move and
  * the bar does not, and the board then reports a number that was true a week ago. The bar is not
@@ -9,11 +9,14 @@
  * phases on a per-module build board), counts each row's Status cell, and rewrites ONLY the block
  * between the `progress:auto` markers. Nothing else in the file is touched.
  *
- *   node scripts/board-progress.mjs [path]        rewrite the block (default: tasks/cp2.md)
- *   node scripts/board-progress.mjs [path] --check exit 1 if the block is stale (CI-friendly)
+ *   node scripts/board-progress.mjs <path>          rewrite the block
+ *   node scripts/board-progress.mjs <path> --check  exit 1 if the block is stale (CI-friendly)
+ *
+ * No path is a usage error (exit 2): there is no default board to fall back on, and guessing one
+ * would rewrite whichever file happened to match.
  *
  * A row counts as SETTLED when its status is DONE, DROPPED or DEFERRED→<id> — the three ways the
- * house format lets a row legitimately end. PLANNED, IN-PROGRESS and PROPOSED (a drafted ruling
+ * board format lets a row legitimately end. PLANNED, IN-PROGRESS and PROPOSED (a drafted ruling
  * awaiting the lead) are all open; a proposal is not a decision.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -29,12 +32,21 @@ const CELL = /(?<!\\)\|/;
 
 const SETTLED = /^(DONE|DROPPED|DEFERRED→)/;
 const DOING = /^IN-PROGRESS/;
-/** Rows whose first cell looks like an id the house format does not know. Reported, not counted. */
+/** Rows whose first cell looks like an id the board format does not know. Reported, not counted. */
 const unrecognised = [];
+
+const USAGE = [
+  'usage: node scripts/board-progress.mjs <board.md>          rewrite the progress block',
+  '       node scripts/board-progress.mjs <board.md> --check  exit 1 if the block is stale',
+].join('\n');
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
-const file = args.find((a) => !a.startsWith('--')) ?? 'tasks/cp2.md';
+const file = args.find((a) => !a.startsWith('--'));
+if (!file) {
+  console.error(USAGE);
+  process.exit(2);
+}
 
 const source = readFileSync(file, 'utf8');
 const eol = source.includes('\r\n') ? '\r\n' : '\n';
@@ -81,12 +93,12 @@ for (const line of lines) {
      * An unrecognised id is REPORTED, never silently skipped.
      *
      * This loop used to `continue` on any first cell the pattern did not match, so a row filed
-     * under an id outside the house set was dropped from every count while the table still showed
-     * it. The board then read "7/7" over nine rows and `board:check-all` passed, because a stale
+     * under an id outside the known set was dropped from every count while the table still showed
+     * it. The board then read "7/7" over nine rows and `board-check-all.mjs` passed, because a stale
      * block and a block that never counted those rows are indistinguishable from the outside.
      *
-     * It happened twice on 2026-08-26: rows filed as `N-1`/`N-2`, and a `## B34 — …` heading whose
-     * shape the section regex did not match, taking its whole section with it. Both were the
+     * It has happened in practice both ways: rows filed under an ad-hoc id, and a batch heading
+     * whose shape the section regex did not match, taking its whole section with it. Both were the
      * orchestrator's naming, and neither was visible in any output.
      *
      * **When an id is also an index, "unrecognised" and "absent" look the same.** So say so: a
@@ -171,8 +183,7 @@ try {
     .filter((d) => resolve(d) !== resolve(process.cwd()) && existsSync(join(d, file)));
   if (others.length > 0) {
     console.log(
-      `\nNOTE: ${others.length} other checkout(s) also hold ${file} — these totals count THIS one only.` +
-        `\n      Cross-checkout view: npm run board:cp3:live`,
+      `\nNOTE: ${others.length} other checkout(s) also hold ${file} — these totals count THIS one only.`,
     );
   }
 } catch {

@@ -18,7 +18,7 @@ the pipeline — useful on its own, more useful together.
 | 🛡️ **qa-audit** | The REAL app on real infrastructure, nothing stubbed. Two halves: **declaration-derived** — requirement packs asserting what the business asked AND what it forbade, a side-effect inventory extracted from code (a *second* drift oracle catching what a contract hash cannot), adversarial probes, a redacted call transcript — and **invariant-derived**, which is the layer that finds what a declaration-derived suite structurally CANNOT: global transcript invariants, reflexive/system-safety cases, a hostile-input battery, per-module semantic digests, an adversarial story taxonomy, and a seeded monkey walk. | Pattern skill (guides the build in *your* stack). Needs a containerisable app + a machine-readable requirement source. Builds ON `e2e-harness` — same scenarios, second transport. Two universal rules: a shared environment must be enforced read-only **in code**, and the auditor OBSERVES unruled cases rather than inventing expectations for them. |
 | 🛰️ **repo-audit** | Whole-repo read-only sweep: gate baseline → every module through the kit's three auditor lenses → verify-before-accept → dedup + **systemic-pattern** extraction → one ranked report in `audits/`. Catches the cross-module drift no single build gate can see. | Reuses the kit's own auditor personas — nothing extra to install. Parallel fan-out on Claude Code; sequential fresh sessions elsewhere. |
 | 🧭 **status-and-next** | Session-start planning pass: re-verify repo + tracker + deferred-registry state from scratch (trust nothing cached), report deltas and owed status flips, then emit the single next unblocked item as a full pipeline brief per the module-brief template. Read-only except the report; flags-never-acts on irreversible items (merges, tags, releases). | Fully self-contained prompt skill; reads `PIPELINE_PROFILE.md` §11 (ledgers) / §2 (gates) / §5 (fences) when present. |
-| 📜 **adr** | House-format Architecture Decision Records: when to promote a `DECISIONS.md` ruling into a full ADR, the template, sequential numbering, Accepted-is-immutable + supersede flow, index cross-linking. | Fully self-contained prompt skill; respects protected doc dirs via the handoff table. |
+| 📜 **adr** | House-format Architecture Decision Records: when to promote a `DECISIONS.md` ruling into a full ADR, the template, sequential numbering, Accepted-is-immutable + supersede flow, index cross-linking. | Fully self-contained prompt skill; respects protected doc dirs via the run's handoff pack. |
 
 ## Wiring into the pipeline
 
@@ -46,7 +46,7 @@ the pipeline — useful on its own, more useful together.
 - **repo-audit:** run after every 3–5 modules or quarterly; systemic findings feed template/
   profile §7 fixes (one root-cause fix, not N patches) — rule them in `DECISIONS.md`, record the
   big ones with the `adr` skill.
-- **adr:** the module brief's handoff table (§12) is where a build's "warranted ADR" surfaces —
+- **adr:** the run's handoff pack (§E docs) is where a build's "warranted ADR" surfaces —
   write it with this skill before the merge so record and code land together.
 - **status-and-next:** the front door to every pipeline run — run it at session start, take its
   brief, hand that to `build-module-pipeline`. Its step-1 verification is also the cheap standing

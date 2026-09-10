@@ -4,7 +4,7 @@
  *
  * A result over `features.bashCap.limitBytes` is written whole to `<paths.logs>/bash/`, and the context
  * receives a digest instead: every error-shaped line with its line number, the last 30 lines, and the log
- * path (`scripts/lib/bash-cap.cjs`). Output of the pack's tier runner (already a digest), a command carrying
+ * path (`scripts/lib/bash-cap.cjs`). Output of a `run-tier.mjs` tier runner (already a digest), a command carrying
  * `--no-cap`, and a command or environment with `BUILDER_NO_BASH_CAP=1` pass through untouched.
  * Feature off → the hook exits silently and changes nothing.
  *

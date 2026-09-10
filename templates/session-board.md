@@ -71,6 +71,6 @@ like `REQ-004` and only one of them exists. Pair this template with a checker th
 every id in a recognised scheme against your oracles, and reports prose citations as
 **not-evaluable** rather than pretending it read a PDF.
 
-The other half of the case is retrieval: in the source project, **five of seven escalations to a
+The other half of the case is retrieval: in one adopting project, **most escalations to a
 human were already answered by the requirement register.** Making every row name its source is how
 that gets noticed before the escalation instead of after it.
