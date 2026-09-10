@@ -1,0 +1,15 @@
+{"kind":"run.start","ts":"2026-01-05T10:00:00.000Z","module":"sample","track":"FULL","branch":"feat/sample","base":"main"}
+{"kind":"step","ts":"2026-01-05T10:01:00.000Z","id":"P1","phase":"P1","seat":"module-planner","title":"Plan written","status":"DONE","files":[{"path":".pipeline/sample/plan.md","act":"NEW","kind":"plan"}]}
+{"kind":"step","ts":"2026-01-05T10:10:00.000Z","id":"P2","phase":"P2","seat":"module-builder","agentId":"fg1","title":"Build the rows","status":"RUNNING"}
+{"kind":"decision","ts":"2026-01-05T10:20:00.000Z","id":"DEC-1","what":"Round quantities down","why":"the spec states integer stock","by":"orchestrator"}
+{"kind":"gate","ts":"2026-01-05T10:40:00.000Z","gate":"unit","result":"RED","figure":"41/42","detail":"one failing"}
+{"kind":"step","ts":"2026-01-05T10:45:00.000Z","id":"P2","status":"DONE","files":[{"path":"app/adjust.py","act":"NEW","kind":"code"}]}
+{"kind":"gate","ts":"2026-01-05T10:50:00.000Z","gate":"unit","result":"GREEN","figure":"42/42"}
+{"kind":"step","ts":"2026-01-05T11:00:00.000Z","id":"P4a","phase":"P4","agentId":"bg1","title":"Security audit","status":"DONE"}
+{"kind":"step","ts":"2026-01-05T11:00:00.000Z","id":"P4b","phase":"P4","seat":"vuln-auditor","agentId":"bg2","title":"Vulnerability audit","status":"DONE"}
+{"kind":"finding","ts":"2026-01-05T11:20:00.000Z","id":"F-1","sev":"BLOCKER","finding":"reason text rendered unescaped","mechanism":"html output"}
+{"kind":"finding.close","ts":"2026-01-05T11:30:00.000Z","id":"F-1","closedBy":"FIX-1"}
+{"kind":"decision","ts":"2026-01-05T11:35:00.000Z","id":"DEC-1","reversal":"restore fractional stock in one migration"}
+{"kind":"decision","ts":"2026-01-05T11:36:00.000Z","id":"DEC-2","what":"Keep the audit in-process","why":"the project runs no queue","by":"orchestrator"}
+{"kind":"ceiling","ts":"2026-01-05T11:40:00.000Z","item":"D3-b","claim":"8 of 8","reality":"7 of 8","disposition":"deferred","owner":"the next run"}
+{"kind":"run.end","ts":"2026-01-05T12:00:00.000Z","verdict":"MERGE-READY","done":7,"total":8}

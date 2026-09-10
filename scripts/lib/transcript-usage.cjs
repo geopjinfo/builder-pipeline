@@ -2,10 +2,12 @@
  * Per-agent accounting the seats cannot self-report.
  *
  * WHAT THIS READS. Claude Code writes a session transcript per project under
- * `~/.claude/projects/<slug>/*.jsonl`. Probed on 2026-08-28: every `Agent` dispatch lands a
- * `toolUseResult` carrying `agentId`, `agentType`, `resolvedModel`, `status`, `totalDurationMs`,
- * `totalTokens`, `totalToolUseCount` and a full `usage` block. That is the honest source for the
- * board's model / time / token / cost columns.
+ * `~/.claude/projects/<slug>/*.jsonl`. Every foreground `Agent` dispatch lands a `toolUseResult`
+ * carrying `agentId`, `agentType`, `resolvedModel`, `status`, `totalDurationMs`, `totalTokens`,
+ * `totalToolUseCount` and a full `usage` block. A background dispatch lands one with NO usage; for
+ * those, the seat's own transcript is read instead (`session-usage.cjs`). That is the honest source
+ * for the board's model / time / token / cost columns. Another harness writes none of these files,
+ * and every seat then renders as unmeasured.
  *
  * WHY NOT ASK THE AGENTS. Because an agent reporting its own cost is reporting a number nobody
  * checked, and the failure mode is silent: a seat that forgets, rounds, or overstates produces a
@@ -21,6 +23,7 @@
 const { existsSync, readFileSync, readdirSync, statSync } = require('node:fs');
 const { homedir } = require('node:os');
 const { join } = require('node:path');
+const sessionUsage = require('./session-usage.cjs');
 
 /** The per-project transcript directory: `~/.claude/projects/<cwd with separators as dashes>`. */
 function transcriptDir(cwd = process.cwd()) {
@@ -31,14 +34,16 @@ function transcriptDir(cwd = process.cwd()) {
 /**
  * Newest-first transcript files, capped.
  *
- * WHY A CAP AT ALL. This directory grows without bound and is large — 101 files / 298 MB when this
- * was last measured — and every caller reads every byte. The cap is a real guard, not an oversight.
+ * WHY A CAP AT ALL. This directory grows without bound and gets large — in one adopting project, a
+ * hundred files and hundreds of megabytes — and every caller reads every byte. The cap is a real
+ * guard, not an oversight.
  *
- * WHY 60 WAS THE WRONG NUMBER. It sat below the actual corpus, so 41 transcripts were dropped in
- * silence and the runs they covered rendered an em-dash for model, wall clock and cost — identical
- * to the honest "no transcript here" case. A limit that quietly changes the answer is worse than a
- * slower read. The default now sits above the corpus with headroom, and `scanCoverage()` reports
- * the moment it does bite, so a truncated scan can say so instead of looking merely empty.
+ * WHY A LOW CAP IS THE WRONG NUMBER. An earlier default sat below the actual corpus, so dozens of
+ * transcripts were dropped in silence and the runs they covered rendered an em-dash for model, wall
+ * clock and cost — identical to the honest "no transcript here" case. A limit that quietly changes
+ * the answer is worse than a slower read. The default sits well above a busy project's corpus, and
+ * `scanCoverage()` reports the moment it does bite, so a truncated scan can say so instead of
+ * looking merely empty.
  */
 const DEFAULT_LIMIT = 250;
 
@@ -103,11 +108,58 @@ function collect(dir = transcriptDir()) {
         outputTokens: num(u.output_tokens),
         cacheReadTokens: num(u.cache_read_input_tokens),
         cacheWriteTokens: num(u.cache_creation_input_tokens),
+        cacheWrite5mTokens: num(u.cache_creation?.ephemeral_5m_input_tokens),
+        cacheWrite1hTokens: num(u.cache_creation?.ephemeral_1h_input_tokens),
+        hasUsage: Boolean(r.usage),
+        source: 'dispatch-result',
         at: record.timestamp ?? null,
       });
     }
   }
+
+  /**
+   * The seat's OWN transcript wins over the dispatch result. A background dispatch lands a
+   * `toolUseResult` with no usage (`isAsync: true`), and a pipeline that runs its auditors in
+   * parallel dispatches them that way; read as zeros, those seats became `$0.00` — a measurement
+   * nobody took, and in one adopting project the reason a board summed to a small fraction of what
+   * the run really cost. `subagents/agent-<id>.jsonl` holds every turn with its usage.
+   *
+   * No transcript file AND no usage in the result ⇒ `unmeasured`: the renderer prints an em-dash.
+   */
+  const index = sessionUsage.subagentIndex(dir);
+  for (const [agentId, row] of map) {
+    const own = sessionUsage.subagentUsage(agentId, index);
+    if (own && own.turns > 0) {
+      Object.assign(row, {
+        agentType: row.agentType ?? own.agentType,
+        model: row.model ?? own.model,
+        durationMs: row.durationMs || own.durationMs,
+        inputTokens: own.inputTokens,
+        outputTokens: own.outputTokens,
+        cacheReadTokens: own.cacheReadTokens,
+        cacheWriteTokens: own.cacheWriteTokens,
+        cacheWrite5mTokens: own.cacheWrite5mTokens,
+        cacheWrite1hTokens: own.cacheWrite1hTokens,
+        perModel: own.perModel,
+        sessionId: own.sessionId,
+        source: 'subagent-transcript',
+      });
+    } else if (!row.hasUsage) {
+      row.unmeasured = true;
+    }
+  }
   return map;
+}
+
+/**
+ * The orchestrator's own turns for a run: the non-sidechain turns of the sessions that dispatched the
+ * run's seats, inside the run window. Scoping by session matters — other lanes work in the same
+ * project directory at the same time, and a window-only filter would bill their turns to this run.
+ */
+function orchestratorUsage(sessionIds, sinceIso = null, untilIso = null, dir = transcriptDir()) {
+  if (!sessionIds || sessionIds.length === 0) return null;
+  const summary = sessionUsage.orchestratorUsage(dir, sessionIds, sinceIso, untilIso);
+  return summary.turns > 0 ? summary : null;
 }
 
 /**
@@ -116,8 +168,9 @@ function collect(dir = transcriptDir()) {
  * WHY IT NEEDS ITS OWN READER. `collect()` keeps only records carrying `toolUseResult.agentId`,
  * which exist for subagent dispatches and nothing else. The orchestrator is not a subagent: it is
  * the session itself, so it has no agent file, no frontmatter, and no dispatch record. That blind
- * spot is not academic: a project that rules the orchestrator onto one model session-level, with
- * eight pipeline runs then ran on Opus without one file in the repo being able to say so.
+ * spot is not academic: in one adopting project the orchestrator was set to one model session-level,
+ * and a run of pipeline builds then ran on a different model without one file in the repo being
+ * able to say so.
  *
  * WHAT IT READS. Assistant turns in the project transcript that are NOT sidechain (a sidechain turn
  * belongs to a subagent), tallied by `message.model`. A session may legitimately span models — the
@@ -158,4 +211,4 @@ function orchestratorModel(dir = transcriptDir(), sinceIso = null) {
   return { models, dominant: dominant ? dominant[0] : null, turns };
 }
 
-module.exports = { collect, transcriptDir, orchestratorModel, scanCoverage };
+module.exports = { collect, transcriptDir, orchestratorModel, orchestratorUsage, scanCoverage };

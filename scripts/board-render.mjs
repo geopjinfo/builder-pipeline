@@ -1,37 +1,43 @@
 /**
- * `npm run board:render -- <moduleKey|path>` — render a task board as a live run board.
+ * `node scripts/board-render.mjs <moduleKey|path>` — render a task board as a live run board.
  *
  * WHAT IT PRODUCES. `tasks/<key>.html`: one self-contained page showing what is green, what is
  * blocking, what happened so far, which files were produced, which seat did it, on which model,
- * for how long, and at what cost. It opens from `file://` on the air-gapped host — no stylesheet,
- * no script, no font, no image loaded from anywhere — so it opens from `file://` on an air-gapped host.
+ * for how long, and at what cost. No stylesheet, no script, no font, no image is loaded from
+ * anywhere — so it opens from `file://` on an offline, air-gapped host.
  *
  * WHAT IT IS NOT. Not a second ledger. The markdown board is the git truth and this is a projection
  * of it joined to two other sources; where they disagree the markdown wins and this renderer is the
  * defect. The page says so in its own footer, because a reader who only ever opens the pretty one
  * needs to know which file to trust.
  *
- *   S1  tasks/<key>.md                     rows, phases, deferred        (board-parse.cjs)
+ *   S1  tasks/<key>.md                     rows, phases, deferred, todo  (board-parse.cjs)
  *   S2  .pipeline/<key>/run.jsonl          steps, gates, findings, files (run-log.cjs)
  *   S3  ~/.claude/projects/<slug>/*.jsonl  model, wall, tokens per seat  (transcript-usage.cjs)
  *
  * S2 and S3 are optional. A historical board with neither still renders — every accounting cell an
  * em-dash. THAT IS THE POINT: absence renders as absence. A zero would be a measurement nobody took.
+ * S3 is Claude Code's transcript layout; on any other harness every seat renders as unmeasured.
  *
- *   node scripts/board-render.mjs tasks/prj_14.md          write tasks/prj_14.html
- *   node scripts/board-render.mjs prj_14 --open            …and open it
+ *   node scripts/board-render.mjs tasks/<key>.md           write tasks/<key>.html
+ *   node scripts/board-render.mjs <key> --open             …and open it
  *   node scripts/board-render.mjs --all                    every board carrying a run log
+ *   node scripts/board-render.mjs <key> --json [--out <dir>] [--limit <bytes>]
+ *                                                          one JSON document per section (see page-docs.cjs)
+ *   --transcripts <dir>                                    read S3 from <dir> instead of the harness default
  */
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const { parseBoard } = require('./lib/board-parse.cjs');
+const { splitDocs, PAGE_DOC_LIMIT } = require('./lib/page-docs.cjs');
 const runLog = require('./lib/run-log.cjs');
 const transcript = require('./lib/transcript-usage.cjs');
 const pricing = require('./lib/pricing.cjs');
+const profile = require('./lib/profile.cjs');
 
 const DASH = '—';
 
@@ -98,9 +104,9 @@ const td = (v, cls = '') => `<td${cls ? ` class="${cls}"` : ''}>${v}</td>`;
 /* ── sources ────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Resolve a board argument to `{ boardPath, key, root }`. A bare key (`prj_14`) resolves against
- * the repo's `tasks/`; a path is used as given, and its grandparent is the root so a fixture board
- * in a temporary directory finds its own `.pipeline/` and not this repo's.
+ * Resolve a board argument to `{ boardPath, key, root }`. A bare key resolves against the repo's
+ * `tasks/`; a path is used as given, and its grandparent is the root so a fixture board in a
+ * temporary directory finds its own `.pipeline/` and profile, and not this repo's.
  */
 function resolveBoard(arg) {
   const repoRoot = resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
@@ -112,18 +118,35 @@ function resolveBoard(arg) {
 
 const seatOf = (step, usage) => step.seat ?? usage.get(step.agentId ?? '')?.agentType ?? null;
 
+/** The profile's settings for a root, or the defaults when there is no profile to read. */
+function settingsFor(root) {
+  try {
+    return profile.load(root).settings;
+  } catch {
+    return profile.DEFAULTS;
+  }
+}
+
 /**
- * The model the pipeline SKILL declares the orchestrator should run on, or `null` if it declares
- * none. Read-only: the instruction layer is hook-fenced against writes, and this only ever reads it.
+ * The model the project declares the orchestrator should run on, or `null` if it declares none.
+ * Read-only: this only ever reads the declaration.
  *
- * WHY PARSE THE SKILL RATHER THAN HOLD A CONSTANT HERE. A second copy of the expectation is a
- * second thing to drift. The SKILL's phase table is where a reader looks to answer "what runs
- * this?", so it is the declaration, and this is the check.
+ * WHERE THE DECLARATION LIVES. First `models.orchestrator` in `PIPELINE_PROFILE.md` — the one file
+ * that makes the pipeline concrete, and the same on every harness. Only when the profile declares
+ * nothing does it fall back to the Claude Code install of the pipeline SKILL, whose phase table
+ * carries an `orchestrator (this session)` row naming a model.
+ *
+ * WHY READ A DECLARATION RATHER THAN HOLD A CONSTANT HERE. A second copy of the expectation is a
+ * second thing to drift. The declaration is where a reader looks to answer "what runs this?", and
+ * this is the check.
  *
  * No declaration means no warning. That is deliberate: a missing expectation is not evidence of a
- * wrong model, and inventing one would manufacture the alarm rather than report it.
+ * wrong model, and inventing one would manufacture the alarm rather than report it. An unfilled
+ * placeholder (`<model id>`) is no declaration either.
  */
-function declaredOrchestratorModel(root) {
+export function declaredOrchestratorModel(root) {
+  const declared = settingsFor(root)?.models?.orchestrator;
+  if (typeof declared === 'string' && declared.trim() !== '' && !/^<.*>$/.test(declared.trim())) return declared.trim();
   try {
     const skill = readFileSync(join(root, '.claude', 'skills', 'build-module-pipeline', 'SKILL.md'), 'utf8');
     const row = skill.split('\n').find((l) => /^\|.*orchestrator \(this session\)/i.test(l));
@@ -134,26 +157,33 @@ function declaredOrchestratorModel(root) {
 }
 
 /** Join the run log's steps to the harness's own accounting. Unjoined steps keep empty columns. */
-function accounting(steps, usage, orchModel = null) {
+function accounting(steps, usage, orchModel = null, orchUsage = null) {
   const bySeat = new Map();
+  const blank = (seat) => ({
+    seat,
+    model: null,
+    steps: [],
+    durationMs: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    cacheWrite5mTokens: 0,
+    cacheWrite1hTokens: 0,
+    priced: true,
+    measured: false,
+    status: null,
+    cost: null,
+    unpriced: false,
+  });
   for (const step of steps) {
     const seat = seatOf(step, usage) ?? 'orchestrator';
     const u = step.agentId ? usage.get(step.agentId) : null;
-    const row = bySeat.get(seat) ?? {
-      seat,
-      model: null,
-      steps: [],
-      durationMs: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      priced: true,
-      measured: false,
-      status: null,
-    };
+    const row = bySeat.get(seat) ?? blank(seat);
     row.steps.push(step.id ?? '');
-    if (u) {
+    /* `unmeasured`: a background dispatch whose own transcript is not on this machine. Its result
+     * carried no usage, so counting it as zero tokens would be a `$0.00` nobody measured. */
+    if (u && !u.unmeasured) {
       row.measured = true;
       row.model = u.model ?? row.model;
       row.durationMs += u.durationMs;
@@ -161,24 +191,56 @@ function accounting(steps, usage, orchModel = null) {
       row.outputTokens += u.outputTokens;
       row.cacheReadTokens += u.cacheReadTokens;
       row.cacheWriteTokens += u.cacheWriteTokens;
+      row.cacheWrite5mTokens += u.cacheWrite5mTokens ?? 0;
+      row.cacheWrite1hTokens += u.cacheWrite1hTokens ?? 0;
       row.status = u.status ?? row.status;
+      const c = pricing.cost(u.model, u);
+      if (c === null) row.unpriced = true;
+      else row.cost = (row.cost ?? 0) + c;
     }
-    /* The orchestrator is the session itself, not a dispatch, so `collect()` holds no record of it
-     * and its model cell would otherwise be a permanent em-dash — which is how a ruled
-     * orchestrator model can go many runs unnoticed. Fill it from the transcript's own
-     * non-sidechain turns. Time and tokens stay empty on purpose: those are not attributable
-     * per-step for this seat, and an em-dash is honest where a 0 would be a claim. */
-    if (seat === 'orchestrator' && !row.model && orchModel) row.model = orchModel;
-    row.cost = row.measured ? pricing.cost(row.model, row) : null;
     bySeat.set(seat, row);
   }
+
+  /* The orchestrator is the session itself, not a dispatch, so `collect()` holds no record of it.
+   * Its model cell was once a permanent em-dash — which is how a declared orchestrator model can go
+   * many runs unnoticed — and its tokens stayed empty even after the model was filled. The
+   * orchestrator is typically one of the largest seats of a run, so its own non-sidechain turns in
+   * this run's sessions and window are summed and priced model by model. */
+  if (orchUsage || orchModel) {
+    const row = bySeat.get('orchestrator') ?? blank('orchestrator');
+    if (orchUsage) {
+      row.measured = true;
+      row.model = orchUsage.model;
+      row.durationMs = orchUsage.durationMs;
+      for (const k of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'cacheWrite5mTokens', 'cacheWrite1hTokens']) row[k] = orchUsage[k];
+      let c = 0;
+      for (const m of orchUsage.perModel) {
+        const mc = pricing.cost(m.model, m);
+        if (mc === null) row.unpriced = true;
+        else c += mc;
+      }
+      row.cost = c;
+    } else if (!row.model) {
+      row.model = orchModel;
+    }
+    if (row.steps.length > 0 || orchUsage) bySeat.set('orchestrator', row);
+  }
+
+  for (const row of bySeat.values()) if (row.unpriced) row.cost = null;
   return [...bySeat.values()];
+}
+
+/** Sum of seat costs. `null` if any measured seat is unpriced — a partial total is a lie. */
+function sumCost(seats) {
+  const measured = seats.filter((s) => s.measured);
+  if (measured.length === 0 || measured.some((s) => s.cost === null)) return null;
+  return measured.reduce((a, s) => a + s.cost, 0);
 }
 
 /* ── sections ───────────────────────────────────────────────────────────────────────────────── */
 
 function renderRun(board, log, seats, orch = null, declared = null) {
-  const spend = seats.some((s) => s.measured) ? pricing.total(seats.filter((s) => s.measured)) : null;
+  const spend = sumCost(seats);
   const wall = seats.reduce((a, s) => a + s.durationMs, 0);
   const t = board.totals;
   const open = t.total - t.settled - t.doing;
@@ -193,9 +255,10 @@ function renderRun(board, log, seats, orch = null, declared = null) {
     ['UNLOCK', or(board.header.unlock)],
     ['ROWS', `${t.settled} settled · ${t.doing} in flight · ${open} open · ${t.total} total`],
     ['DEFERRALS', board.deferred.length > 0 ? board.deferred.map((d) => esc(d.id)).join(', ') : DASH],
-    /* WARNS, never fails. D1 chose a session-level model deliberately, so a run on another model is
-     * a fact to report, not an error to refuse — but it must be REPORTED, which is precisely what
-     * did not happen for eight runs. No declaration or no transcript ⇒ an em-dash, not an alarm. */
+    /* WARNS, never fails. A project may choose a session-level model deliberately, so a run on
+     * another model is a fact to report, not an error to refuse — but it must be REPORTED, because
+     * an unreported divergence is exactly what goes unnoticed run after run. No declaration or no
+     * transcript ⇒ an em-dash, not an alarm. */
     [
       'ORCHESTRATOR',
       orch?.dominant
@@ -320,6 +383,28 @@ function renderDeferred(board) {
 ${table(['Registry ID', 'Row · why · mirrored where'], rows, { empty: 'Nothing deferred this cycle.' })}`;
 }
 
+/* Todo, definition of done, modules & endpoints (board sections) and decisions (run log). Each
+ * renders even when absent, in words: a page silent about decisions reads as "none were taken". */
+function renderTodo(board) {
+  const rows = board.todo.map((x) => ({ tone: x.done ? '' : 'hot', cells: [td(x.done ? tag('DONE') : tag('OPEN')), td(esc(x.text))] }));
+  return `<h2 id="todo">Todo<span>${board.todo.filter((x) => !x.done).length} open · ${board.todo.length} total</span></h2>
+${table(['State', 'Item'], rows, { empty: 'This board declares no ## Todo list.' })}`;
+}
+
+function renderNamedTable(id, title, parsed, empty) {
+  const rows = (parsed?.rows ?? []).map((r) => ({ cells: (parsed?.columns ?? []).map((_, i) => td(or(r[i]), i === 0 ? 'mono' : '')) }));
+  return `<h2 id="${id}">${esc(title)}<span>${rows.length} rows</span></h2>
+${table(parsed?.columns ?? [], rows, { empty })}`;
+}
+
+function renderDecisions(log) {
+  const rows = log.decisions.map((d) => ({
+    cells: [td(esc(d.id ?? DASH), 'mono'), td(or(d.what)), td(or(d.why), 'sub'), td(or(d.by)), td(or(d.reversal)), td(clock(d.ts), 'num')],
+  }));
+  return `<h2 id="decisions">Decisions this run<span>${rows.length} logged</span></h2>
+${table(['ID', 'What', 'Why', 'By', 'Reversal', { label: 'When', num: true }], rows, { empty: 'No decision event in the run log.' })}`;
+}
+
 function renderSteps(log, usage) {
   const rows = [...log.steps].reverse().map((step) => {
     const u = step.agentId ? usage.get(step.agentId) : null;
@@ -343,7 +428,7 @@ function renderSteps(log, usage) {
         td(chips || DASH),
         td(clock(step.startedAt ?? step.ts), 'num'),
         td(u ? duration(u.durationMs) : DASH, 'num'),
-        td(u ? usd(pricing.cost(u.model, u)) : DASH, 'num'),
+        td(u && !u.unmeasured ? usd(pricing.cost(u.model, u)) : DASH, 'num'),
       ],
     };
   });
@@ -383,7 +468,7 @@ function renderAgents(seats) {
     ],
   }));
   const measured = seats.filter((s) => s.measured);
-  const sum = pricing.total(measured);
+  const sum = sumCost(seats);
   const foot =
     rows.length > 0
       ? [
@@ -445,8 +530,8 @@ pre{margin:12px 0 0;overflow-x:auto;font-family:var(--mono);font-size:12px;line-
 .foot{color:var(--dim);font-size:12.5px;margin-top:14px;max-width:78ch}
 .age{color:var(--ok)}.age.stale{color:var(--warn)}`;
 
-function renderPage({ board, log, usage, boardPath, key, orch = null, declared = null }) {
-  const seats = accounting(log.steps, usage, orch?.dominant ?? null);
+function renderPage({ board, log, usage, boardPath, key, orch = null, declared = null, orchUsage = null }) {
+  const seats = accounting(log.steps, usage, orch?.dominant ?? null, orchUsage);
   const t = board.totals;
   const pct = Math.round((t.settled / Math.max(t.total, 1)) * 100);
   const runningPhase = board.phases.find((p) => /^IN-PROGRESS/.test(p.status));
@@ -465,7 +550,7 @@ function renderPage({ board, log, usage, boardPath, key, orch = null, declared =
 
   const unrecognised =
     board.unrecognised.length > 0
-      ? `<p class="empty"><b>${board.unrecognised.length} board row(s) carry an id the house format does not know</b> — counted nowhere: ${board.unrecognised
+      ? `<p class="empty"><b>${board.unrecognised.length} board row(s) carry an id the board format does not know</b> — counted nowhere: ${board.unrecognised
           .map((u) => `${esc(u.section)}: "${esc(u.id)}"`)
           .join(', ')}.</p>`
       : '';
@@ -490,6 +575,10 @@ ${renderFindings(log)}
 ${renderPhases(board, log, usage)}
 ${renderSections(board)}
 ${renderDeferred(board)}
+${renderTodo(board)}
+${renderNamedTable('dod', 'Definition of Done', board.dod, 'This board declares no ## Definition of Done table.')}
+${renderNamedTable('modules', 'Modules & endpoints', board.modules, 'This board declares no ## Modules & endpoints table.')}
+${renderDecisions(log)}
 ${renderSteps(log, usage)}
 ${renderFiles(log)}
 ${renderAgents(seats)}
@@ -514,21 +603,106 @@ ${renderSource(board, boardPath)}
 `;
 }
 
-/** Render one board. Returns the written path. */
-export function renderBoard(arg, { open = false } = {}) {
-  const { boardPath, key, root } = resolveBoard(arg);
-  if (!existsSync(boardPath)) throw new Error(`board-render: no such board — ${boardPath}`);
+/* ── section documents ──────────────────────────────────────────────────────────────────────── */
 
+const plain = (v) => (v === null || v === undefined || v === '' ? DASH : String(v));
+const hhmm = (iso) => (typeof iso === 'string' && iso.length >= 16 ? iso.slice(11, 16) : DASH);
+
+/**
+ * The same projection as the page, as plain documents — text cells only, never markup, so whatever
+ * page consumes them escapes everything it shows. Ordered as the local page orders its sections.
+ */
+export function sectionDocs({ board, log, seats, key }) {
+  const t = board.totals;
+  const spend = sumCost(seats);
+  const docs = [];
+  const add = (id, title, subtitle, columns, rows) =>
+    docs.push({ id, order: docs.length, title, subtitle: plain(subtitle), columns, rows: rows.map((r) => columns.map((_, i) => plain(r[i]))) });
+
+  add('run', board.header.title ?? key, `${Math.round((t.settled / Math.max(t.total, 1)) * 100)}% · ${t.settled} / ${t.total} rows`, ['Fact', 'Value'], [
+    ['Status', log.end ? String(log.end.verdict ?? 'DONE') : log.run ? 'RUNNING' : null],
+    ['Spend', spend === null ? null : `${usd(spend)} (derived · rates ${pricing.version})`],
+    ['Track', board.header.track ?? log.run?.track],
+    ['Branch', board.header.branch ?? log.run?.branch],
+    ['Rows', `${t.settled} settled · ${t.doing} in flight · ${t.total - t.settled - t.doing} open · ${t.total} total`],
+  ]);
+  add('ceiling', 'Ceiling — what this run will not reach', `${log.ceiling.length} declared`, ['Item', 'Claim if unchecked', 'Reality', 'Disposition', 'Owner'], log.ceiling.map((c) => [c.item, c.claim, c.reality, c.disposition, c.owner]));
+  add('gates', 'Gates', 'last result per gate', ['Gate', 'Result', 'Figure', 'Detail', 'Ran'], (log.gatesLatest ?? []).map((g) => [g.gate, g.result, g.figure, g.detail, hhmm(g.ts)]));
+  add('findings', 'Findings', `${log.findings.filter((f) => !f.closedBy).length} open`, ['ID', 'Sev', 'Finding', 'Closed by'], log.findings.map((f) => [f.id, f.sev, f.finding, f.closedBy ?? 'OPEN']));
+  add('phases', 'Phases', 'from the board', ['Phase', 'Seat', 'Status', 'Artifact', 'Verdict'], board.phases.map((p) => [p.phase, p.seat, p.status, p.artifact, p.verdict]));
+  for (const s of board.sections) {
+    add(`rows-${s.id}`, `${s.id} — ${s.title}`, `${s.rows.filter((r) => r.state === 'settled').length} / ${s.rows.length}`, s.columns, s.rows.map((r) => r.cells));
+  }
+  add('deferred', 'Deferred this cycle', `${board.deferred.length} rows`, ['Registry ID', 'Row'], board.deferred.map((d) => [d.id, d.text]));
+  add('todo', 'Todo', `${board.todo.filter((x) => !x.done).length} open`, ['State', 'Item'], board.todo.map((x) => [x.done ? 'DONE' : 'OPEN', x.text]));
+  add('dod', 'Definition of Done', `${board.dod?.rows.length ?? 0} rows`, board.dod?.columns ?? ['Batch', 'Done when'], board.dod?.rows ?? []);
+  add('modules', 'Modules & endpoints', `${board.modules?.rows.length ?? 0} rows`, board.modules?.columns ?? ['Module', 'Endpoints'], board.modules?.rows ?? []);
+  add('decisions', 'Decisions this run', `${log.decisions.length} logged`, ['ID', 'What', 'Why', 'By', 'Reversal', 'When'], log.decisions.map((d) => [d.id, d.what, d.why, d.by, d.reversal, hhmm(d.ts)]));
+  add('steps', 'Step log — newest first', `${log.steps.length} steps`, ['Step', 'Seat', 'What happened', 'Status', 'Start'], [...log.steps].reverse().map((s) => [s.id, s.seat, s.title, s.status, hhmm(s.startedAt ?? s.ts)]));
+  add('agents', 'Agents · cost · time', `cost derived, rates ${pricing.version}`, ['Seat', 'Model', 'Wall', 'In', 'Out', 'Cached', 'Cost'], seats.map((s) => [
+    s.seat,
+    s.model,
+    s.measured ? duration(s.durationMs) : null,
+    s.measured ? tokens(s.inputTokens) : null,
+    s.measured ? tokens(s.outputTokens) : null,
+    s.measured ? tokens(s.cacheReadTokens) : null,
+    s.cost === null ? null : usd(s.cost),
+  ]));
+  return docs;
+}
+
+/**
+ * Board, run log and the harness accounting for one board — shared by both output modes.
+ * `transcripts` overrides the harness's default transcript directory (another operator's layout,
+ * or a fixture); omitted, the Claude Code per-project directory for the current working directory.
+ */
+function loadSources(boardPath, key, root, transcripts = null) {
+  const dir = transcripts ? resolve(transcripts) : transcript.transcriptDir();
   const board = parseBoard(readFileSync(boardPath, 'utf8'));
   const log = runLog.read(join(root, '.pipeline', key, 'run.jsonl'));
-  const usage = log.steps.some((s) => s.agentId) ? transcript.collect() : new Map();
+  const usage = log.steps.some((s) => s.agentId) ? transcript.collect(dir) : new Map();
 
   /* Scoped to this run's own window, so a board reports the model ITS run used rather than whatever
    * the session is set to today. No window (no `run.start`) means no claim. */
-  const orch = log.run?.ts ? transcript.orchestratorModel(undefined, log.run.ts) : null;
+  const orch = log.run?.ts ? transcript.orchestratorModel(dir, log.run.ts) : null;
+
+  /* The orchestrator's tokens come from the sessions that dispatched THIS run's seats (other lanes
+   * share the transcript directory), inside the run window. No dispatched seat on this machine ⇒ no
+   * session to attribute ⇒ no claim. */
+  const sessions = [...new Set(log.steps.map((s) => usage.get(s.agentId ?? '')?.sessionId).filter(Boolean))];
+  const orchUsage = log.run?.ts ? transcript.orchestratorUsage(sessions, log.run.ts, log.end?.ts ?? null, dir) : null;
+  return { board, log, usage, orch, orchUsage };
+}
+
+/**
+ * Write one JSON document per section — split, never truncated, at `limit` bytes (default: one hosted
+ * store's per-document cap, see page-docs.cjs) — into `<paths.runs>/<key>/page/` or `outDir`.
+ * `paths.runs` comes from the profile and defaults to `.pipeline`. Earlier `*.json` there are removed
+ * first, so a section that shrank from three parts to two leaves no orphan part behind for the page
+ * to merge.
+ */
+export function renderJson(arg, { outDir = null, limit = PAGE_DOC_LIMIT, transcripts = null } = {}) {
+  const { boardPath, key, root } = resolveBoard(arg);
+  if (!existsSync(boardPath)) throw new Error(`board-render: no such board — ${boardPath}`);
+  const { board, log, usage, orch, orchUsage } = loadSources(boardPath, key, root, transcripts);
+  const seats = accounting(log.steps, usage, orch?.dominant ?? null, orchUsage);
+  const docs = splitDocs(sectionDocs({ board, log, seats, key }), limit);
+  const runs = settingsFor(root)?.paths?.runs ?? '.pipeline';
+  const dir = outDir ? resolve(outDir) : join(root, runs, key, 'page');
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(dir)) if (f.endsWith('.json')) unlinkSync(join(dir, f));
+  for (const d of docs) writeFileSync(join(dir, `${d.id}.json`), JSON.stringify(d), 'utf8');
+  return { dir, ids: docs.map((d) => d.id) };
+}
+
+/** Render one board. Returns the written path. */
+export function renderBoard(arg, { open = false, transcripts = null } = {}) {
+  const { boardPath, key, root } = resolveBoard(arg);
+  if (!existsSync(boardPath)) throw new Error(`board-render: no such board — ${boardPath}`);
+  const { board, log, usage, orch, orchUsage } = loadSources(boardPath, key, root, transcripts);
 
   const out = boardPath.replace(/\.md$/, '.html');
-  writeFileSync(out, renderPage({ board, log, usage, boardPath, key, orch, declared: declaredOrchestratorModel(root) }), 'utf8');
+  writeFileSync(out, renderPage({ board, log, usage, boardPath, key, orch, orchUsage, declared: declaredOrchestratorModel(root) }), 'utf8');
   if (open) {
     try {
       execFileSync(process.platform === 'win32' ? 'cmd' : 'open', process.platform === 'win32' ? ['/c', 'start', '', out] : [out], { stdio: 'ignore' });
@@ -545,9 +719,30 @@ const invokedDirectly = process.argv[1] && resolve(process.argv[1]).endsWith('bo
 if (invokedDirectly) {
   const args = process.argv.slice(2);
   const open = args.includes('--open');
-  const targets = args.filter((a) => !a.startsWith('--'));
+  const VALUE_FLAGS = ['--out', '--transcripts', '--limit'];
+  const valueOf = (flag) => {
+    const at = args.indexOf(flag);
+    return at === -1 ? null : (args[at + 1] ?? null);
+  };
+  const valueIndexes = new Set(VALUE_FLAGS.map((f) => args.indexOf(f)).filter((i) => i !== -1).map((i) => i + 1));
+  const targets = args.filter((a, i) => !a.startsWith('--') && !valueIndexes.has(i));
+  const outDir = valueOf('--out');
+  const transcripts = valueOf('--transcripts');
+  const limitArg = valueOf('--limit');
+  const limit = limitArg === null ? PAGE_DOC_LIMIT : Number(limitArg);
+  if (!Number.isInteger(limit) || limit <= 0) {
+    console.error(`board-render: --limit must be a positive whole number of bytes, got ${JSON.stringify(limitArg)}.`);
+    process.exit(1);
+  }
 
-  if (args.includes('--all')) {
+  if (args.includes('--json')) {
+    if (targets.length !== 1) {
+      console.error('board-render --json: name exactly one board — `node scripts/board-render.mjs <key> --json [--out <dir>] [--limit <bytes>]`.');
+      process.exit(1);
+    }
+    const { dir, ids } = renderJson(targets[0], { outDir, limit, transcripts });
+    console.log(`board-render --json: ${ids.length} document(s) → ${dir}`);
+  } else if (args.includes('--all')) {
     const { root } = resolveBoard('x');
     const pipelineRoot = join(root, '.pipeline');
     const keys = existsSync(pipelineRoot)
@@ -556,12 +751,12 @@ if (invokedDirectly) {
     if (keys.length === 0) console.log('board-render: no board carries a run log yet.');
     for (const key of keys) {
       if (!existsSync(join(root, 'tasks', `${key}.md`))) continue;
-      console.log(`board-render: ${renderBoard(key)}`);
+      console.log(`board-render: ${renderBoard(key, { transcripts })}`);
     }
   } else if (targets.length === 0) {
-    console.error('board-render: name a board — `node scripts/board-render.mjs tasks/prj_14.md` or `prj_14`.');
+    console.error('board-render: name a board — `node scripts/board-render.mjs tasks/<key>.md` or `<key>`.');
     process.exit(1);
   } else {
-    for (const target of targets) console.log(`board-render: ${renderBoard(target, { open })}`);
+    for (const target of targets) console.log(`board-render: ${renderBoard(target, { open, transcripts })}`);
   }
 }

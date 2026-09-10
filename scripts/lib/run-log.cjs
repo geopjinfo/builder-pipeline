@@ -15,6 +15,7 @@
  * FOLD RULES, and why each is a rule rather than a convenience:
  *   - a re-emitted `step` with the same id replaces the earlier one on render, but BOTH lines stay
  *     on disk: the render is a projection, the log is the evidence;
+ *   - a re-emitted `decision` with the same id amends the earlier one on render, the same way;
  *   - a `finding` is closed by a later `finding.close`, never by editing the line;
  *   - an unparseable line is COUNTED (`corrupt`), never skipped. A half-written line — a killed
  *     process, a full disk — is indistinguishable from "nothing happened" once it is dropped, and
@@ -24,11 +25,11 @@ const { appendFileSync, existsSync, mkdirSync, readFileSync } = require('node:fs
 const { dirname } = require('node:path');
 
 /**
- * The event's discriminator. `kind` is the name this reader is written around, but the corpus on
- * disk carries FOUR spellings — `kind`, `type`, `t` and `event` — because nothing ever asserted
- * one. Those runs happened whether or not the key matched, so all four are accepted: the log is the
- * evidence, the render is a projection, and an evidence file is never rewritten to make a
- * projection look right.
+ * The event's discriminator. `kind` is the name this reader is written around, but logs in the wild
+ * carry FOUR spellings — `kind`, `type`, `t` and `event` — because nothing ever asserted one. Those
+ * runs happened whether or not the key matched, so all four are accepted: the log is the evidence,
+ * the render is a projection, and an evidence file is never rewritten to make a projection look
+ * right.
  *
  * The count is the point. One drifted key is a typo; four is a schema nobody was holding, which is
  * why `unrecognised` below is counted and surfaced rather than silently skipped — a fifth spelling
@@ -64,6 +65,7 @@ function read(file) {
     findings: [],
     ceiling: [],
     files: [],
+    decisions: [],
     end: null,
     lastEventAt: null,
   };
@@ -120,12 +122,21 @@ function read(file) {
       case 'ceiling':
         out.ceiling.push(event);
         break;
+      /* A decision the run took (id: what · why · by · reversal). The decision workspace
+       * (`paths.decisions`) stays the record; this puts the decision on the timeline where it was
+       * taken. A re-emitted id amends the earlier one on render, like a step — both lines stay on disk. */
+      case 'decision': {
+        const existing = out.decisions.find((d) => d.id !== undefined && d.id === event.id);
+        if (existing) Object.assign(existing, event);
+        else out.decisions.push({ ...event });
+        break;
+      }
       default:
         /* A line that parsed as JSON but carries no kind this reader knows is COUNTED, for the
          * same reason `corrupt` is: silently dropping it makes schema drift indistinguishable from
-         * "nothing happened". That is not hypothetical — every run log written between 2026-08-29
-         * and 2026-09-07 stamped `type`/`t` instead of `kind` and fell through this branch, so ten
-         * of eleven logs rendered an empty timeline under a green gate. */
+         * "nothing happened". That is not hypothetical — in one adopting project, run logs written
+         * over more than a week stamped `type`/`t` instead of `kind` and fell through this branch,
+         * so nearly every log rendered an empty timeline under a green gate. */
         out.unrecognised += 1;
         break;
     }
@@ -143,11 +154,12 @@ function read(file) {
  * Which phases a CLOSED run never logged a step for.
  *
  * WHY. Observed in practice: one run recorded the plan, code, test and close-out phases and then
- * `run.end` with a MERGE-READY verdict, with no auditor, docs or review phase logged at all.
- * recorded `LOG-OPENED-LATE` against itself. Both closed clean. A run log that can end while whole
- * phases are unaccounted for is a record of a run that "went fine", which is the same shape as the
- * absent evidence this repo already refuses elsewhere: P6.5 must write `QA: skipped — <reason>`
- * rather than say nothing, and an open board row is a gate failure rather than a warning.
+ * `run.end` with a MERGE-READY verdict, with no auditor, docs or review phase logged at all. Another
+ * opened its log only at the review phase and recorded `LOG-OPENED-LATE` against itself. Both closed
+ * clean. A run log that can end while whole phases are unaccounted for is a record of a run that
+ * "went fine", which is the same shape as the absent evidence the pipeline already refuses
+ * elsewhere: P6.5 must write `QA: skipped — <reason>` rather than say nothing, and an open board row
+ * is a gate failure rather than a warning.
  *
  * The board's own `phase:status` block is the expectation — not the SKILL's table — because a SOLO
  * or FIX board legitimately runs a different set of phases, and the board states which.
@@ -168,10 +180,10 @@ function closureGaps(board, log) {
       if (m) logged.add(m[0].toUpperCase());
     }
   }
-  /* A log whose steps carry no phase vocabulary at all (`STEP 0`, `STEP 1`, … — the convention the
-   * first runs used) cannot be compared to a phase table. That is UNMATCHABLE, not missing, and
-   * reporting it as a gap would flag every early run for a naming difference rather than a real
-   * hole. Silence here is the honest answer; the T3 corpus test is what keeps the log readable. */
+  /* A log whose steps carry no phase vocabulary at all (`STEP 0`, `STEP 1`, … — a convention early
+   * runs used) cannot be compared to a phase table. That is UNMATCHABLE, not missing, and reporting
+   * it as a gap would flag every early run for a naming difference rather than a real hole. Silence
+   * here is the honest answer; a test over real run logs is what keeps the log readable. */
   if (logged.size === 0) return [];
 
   const gaps = [];

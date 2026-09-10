@@ -1,6 +1,7 @@
 /**
  * Read a task board (`tasks/<key>.md`) into structure — header, phase:status block, counted
- * sections with their rows, the deferred list, and the same totals `board-progress.mjs` computes.
+ * sections with their rows, the deferred list, the todo list, the definition-of-done and
+ * modules-and-endpoints tables, and the same totals `board-progress.mjs` computes.
  *
  * WHY THIS EXISTS. The rendered run board (`tasks/<key>.html`) must be a projection of the markdown
  * board, not a second account of it. The moment the renderer carries its own idea of what a row is,
@@ -9,8 +10,8 @@
  * the row vocabulary (`board-rows.cjs`), one definition of "settled", and this module.
  *
  * It parses; it does not judge. An unknown row id is REPORTED (`unrecognised`), never dropped —
- * the same rule `board-progress.mjs` learned on 2026-08-26, when rows filed under an id outside the
- * house set vanished from every count while the table still showed them.
+ * the same rule `board-progress.mjs` learned when rows filed under an id outside the known set
+ * vanished from every count while the table still showed them.
  */
 const { ROW_ID, stripAnnotation, isDecorativeCell, normalizeStatus } = require('./board-rows.cjs');
 
@@ -138,6 +139,45 @@ function parseDeferred(lines) {
   return out;
 }
 
+/**
+ * `## Todo` — checkbox bullets (`- [ ] …` / `- [x] …`). The page shows what is left to do beside
+ * the rows, read from the board rather than typed twice.
+ */
+function parseTodo(lines) {
+  const start = lines.findIndex((l) => /^##\s+Todos?\b/i.test(l));
+  if (start === -1) return [];
+  const out = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^##\s/.test(line)) break;
+    const m = /^\s*-\s+\[([ xX])\]\s+(.+)$/.exec(line);
+    if (m) out.push({ done: m[1] !== ' ', text: m[2].trim() });
+  }
+  return out;
+}
+
+/**
+ * The first table under a named `## ` heading, header and rows verbatim — `## Definition of Done`
+ * and `## Modules & endpoints`. Not counted: these are prose tables, never rows. `null` when the
+ * board has no such section, so the renderer says "none declared" instead of inventing one.
+ */
+function parseNamedTable(lines, heading) {
+  const start = lines.findIndex((l) => heading.test(l));
+  if (start === -1) return null;
+  let columns = null;
+  const rows = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^##\s/.test(line)) break;
+    if (!line.startsWith('|')) {
+      if (columns && line.trim() === '') break;
+      continue;
+    }
+    if (isSeparator(line)) continue;
+    if (columns) rows.push(cells(line));
+    else columns = cells(line);
+  }
+  return columns ? { columns, rows } : null;
+}
+
 /** Parse a board's markdown source. Pure — no filesystem, so the tests can hold a fixture. */
 function parseBoard(source) {
   const lines = source.split(/\r?\n/);
@@ -159,6 +199,9 @@ function parseBoard(source) {
     phases: parsePhases(lines),
     sections,
     deferred: parseDeferred(lines),
+    todo: parseTodo(lines),
+    dod: parseNamedTable(lines, /^##\s+Definition of Done\b/i),
+    modules: parseNamedTable(lines, /^##\s+Modules (?:&|and) endpoints\b/i),
     unrecognised,
     totals,
     source,

@@ -30,7 +30,7 @@ Run and read, in parallel where possible:
   cite a blocker that has since CLOSED (retirement, ruling, landed migration) — the requirement
   row and registry status outrank the tracker's prose.
 - Open boards: the active `tasks/<key>.md`, any follow-ups board, the deferred registry's open
-  section. Note which open rows belong to **another party** (documenter/lead — never closable
+  section. Note which open rows belong to **another party** (the decision workspace or the lead — never closable
   from this side) vs this side.
 
 ## 2. Report deltas, then pick ONE

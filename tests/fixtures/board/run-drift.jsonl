@@ -1,0 +1,6 @@
+{"type":"step","ts":"2026-01-06T09:00:00.000Z","id":"P1","status":"DONE"}
+{"t":"gate","ts":"2026-01-06T09:05:00.000Z","gate":"unit","result":"GREEN"}
+{"event":"run.start","ts":"2026-01-06T08:59:00.000Z"}
+{not json
+{"kind":"mystery","id":"x"}
+{"id":"an event with no kind at all"}

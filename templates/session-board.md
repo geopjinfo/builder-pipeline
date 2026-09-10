@@ -66,8 +66,8 @@ work, not after — a status written afterwards is a log, not a signal.
 ## The `Cites` column earns its width
 
 Failure mode 3 of this kit is **invented facts**. A citation is the defence against it — and an
-*unchecked* citation is just a more confident-looking invention, since `REQ-PRJ9-014` reads exactly
-like `REQ-PRJ9-004` and only one of them exists. Pair this template with a checker that resolves
+*unchecked* citation is just a more confident-looking invention, since `REQ-014` reads exactly
+like `REQ-004` and only one of them exists. Pair this template with a checker that resolves
 every id in a recognised scheme against your oracles, and reports prose citations as
 **not-evaluable** rather than pretending it read a PDF.
 

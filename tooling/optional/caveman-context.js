@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dalil PMP — SessionStart caveman-mode injector (token saver).
+ * SessionStart caveman-mode injector (token saver). Optional; Claude Code only.
  *
  * Registered in .claude/settings.json for SessionStart. Caveman is a
  * session-scoped output style (~/.claude/skills/caveman/SKILL.md) that

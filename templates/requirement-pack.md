@@ -28,10 +28,10 @@ ignore the report.
 A step name should read as a sentence a non-engineer can judge:
 
 ```
-REQ-XXX-005: a second user with the same email is refused
-REQ-XXX-013 [by-design <ruling ref>]: the seeded set is per-wave, not the range the REQ names
-REQ-XXX-008 [known-gap]: the "no history attached" clause is unenforced
-REQ-XXX-004 [skipped]: lockout — rate limit reached; throttled, not refused
+REQ-005: a second user with the same email is refused
+REQ-013 [by-design <ruling ref>]: the seeded set is per-wave, not the range the requirement names
+REQ-008 [known-gap]: the "no history attached" clause is unenforced
+REQ-004 [skipped]: lockout — rate limit reached; throttled, not refused
 ```
 
 ## Shape
