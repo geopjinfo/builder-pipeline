@@ -99,7 +99,10 @@ test('per-seat accounting: foreground, background-from-own-transcript, orchestra
   assert.ok(vuln, 'the unmeasured seat still has a row');
   assert.doesNotMatch(vuln, /\$/);
   assert.match(vuln, /—/);
-  assert.match(html, /\$0\.13 <span class="hint">derived · rates/);
+  // two seats unmeasured: the totals are floors, and say so
+  assert.match(html, /≥ \$0\.13 · 2 seats unmeasured <span class="hint">derived · rates/);
+  assert.match(html, /<td class="num">≥ \$0\.13 · 2 seats unmeasured<\/td><\/tr><\/tfoot>/);
+  assert.doesNotMatch(agentRow(html, 'module-builder'), /≥/, 'a measured seat is its own figure, never a floor');
 });
 
 test('with no transcript on this machine every cost is an em-dash and no $0.00 appears anywhere', (t) => {
@@ -182,6 +185,12 @@ test('a single row over the cap throws rather than being truncated', (t) => {
   assert.throws(() => render.renderJson(join(dir, 'tasks', 'sample.md'), { transcripts, limit: 200 }), /refusing to/);
 });
 
+test('splitDocs: a section whose envelope alone is over the cap throws, rows or none, rather than vanishing', () => {
+  const doc = { id: 'steps', order: 0, title: 'z'.repeat(2000), subtitle: 'x', columns: ['A'], rows: [['a'], ['b']] };
+  assert.throws(() => splitDocs([doc], 1024), /section "steps" is over 1024 bytes before any row \(2 rows\)/);
+  assert.throws(() => splitDocs([{ ...doc, rows: [] }], 1024), /before any row \(0 rows\)/);
+});
+
 test('splitDocs: under-cap untouched, over-cap split, a lone oversized row or a rowless oversized section throws', () => {
   const doc = { id: 'steps', order: 0, title: 'Step log', subtitle: 'x', columns: ['A'], rows: Array.from({ length: 50 }, (_, i) => [`row ${i} ${'x'.repeat(80)}`]) };
   assert.deepEqual(splitDocs([doc], 1 << 20), [doc]);
@@ -191,7 +200,7 @@ test('splitDocs: under-cap untouched, over-cap split, a lone oversized row or a 
   assert.deepEqual(parts.flatMap((p) => p.rows), doc.rows);
   assert.deepEqual(parts.map((p) => p.id), parts.map((_, i) => `steps~${i + 1}`));
   assert.throws(() => splitDocs([{ ...doc, rows: [...doc.rows, ['y'.repeat(2000)]] }], 1024), /row 51 alone is over 1024 bytes/);
-  assert.throws(() => splitDocs([{ ...doc, title: 'z'.repeat(2000), rows: [] }], 1024), /no rows to split/);
+  assert.throws(() => splitDocs([{ ...doc, title: 'z'.repeat(2000), rows: [] }], 1024), /before any row \(0 rows\)/);
 });
 
 /* ── the CLI ─────────────────────────────────────────────────────────────────────────────────── */

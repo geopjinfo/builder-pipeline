@@ -3,6 +3,19 @@
 All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
 versions independently of any project it is pasted into.
 
+## [0.12.1] — 2026-09-11
+
+### Fixed
+
+- **A spend total with unmeasured seats now says it is a floor.** The live board summed only the seats it
+  could measure and printed that sum as the run's spend, beneath rows showing an em-dash — an incomplete
+  figure that read as complete. The run summary, the agents footer and the `--json` run document now print
+  `≥ $x · n seats unmeasured`, and the footer's wall-clock and token sums carry `≥` too. A fully measured
+  run is unchanged.
+- **A section too large before its first row is refused with the true reason.** `page-docs` blamed the
+  first row when a section's title, subtitle and columns alone exceeded the per-document cap; it now names
+  the envelope, with or without rows, and still never drops the section.
+
 ## [0.12.0] — 2026-09-11
 
 ### The pipeline gains its instruments and its script checks — and every one of them is optional and says so

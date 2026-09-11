@@ -34,10 +34,13 @@ function splitDocs(docs, limit = PAGE_DOC_LIMIT) {
     }
     /* The envelope of a part at its widest (`~9999`, `part`/`parts` fields) plus each row and its comma. */
     const envelope = bytes({ ...doc, id: `${doc.id}~9999`, rows: [], part: 9999, parts: 9999 });
-    /* No rows to split and still over the cap: without this the section would yield zero parts and
-     * vanish from the output — a truncation to nothing, which is the one outcome this file refuses. */
-    if (doc.rows.length === 0) {
-      throw new Error(`page-docs: section "${doc.id}" is over ${limit} bytes with no rows to split — refusing to drop it`);
+    /* Over the cap before any row — its title, subtitle and columns alone. With no rows it would yield
+     * zero parts and vanish from the output (a truncation to nothing, the one outcome this file
+     * refuses); with rows, every row would be blamed for an envelope that no split can fix. */
+    if (envelope > limit) {
+      throw new Error(
+        `page-docs: section "${doc.id}" is over ${limit} bytes before any row (${doc.rows.length} rows) — its title, subtitle and columns alone; refusing to truncate or drop it`,
+      );
     }
     const parts = [];
     let rows = [];

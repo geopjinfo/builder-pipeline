@@ -230,12 +230,26 @@ function accounting(steps, usage, orchModel = null, orchUsage = null) {
   return [...bySeat.values()];
 }
 
-/** Sum of seat costs. `null` if any measured seat is unpriced — a partial total is a lie. */
+/**
+ * Sum of seat costs, or `null` when there is no figure to give: no seat measured, or a measured seat
+ * unpriced (it has tokens and no rate — that total is withheld).
+ *
+ * `unmeasured` counts the seats whose cost is NOT in `usd` — a background dispatch with no transcript
+ * on this machine, or a step no dispatch record joins. The sum over the rest is a floor, and an
+ * unmarked floor beneath a row that shows an em-dash reads as complete. Print it with `floorText`.
+ */
 function sumCost(seats) {
   const measured = seats.filter((s) => s.measured);
   if (measured.length === 0 || measured.some((s) => s.cost === null)) return null;
-  return measured.reduce((a, s) => a + s.cost, 0);
+  return { usd: measured.reduce((a, s) => a + s.cost, 0), unmeasured: seats.length - measured.length };
 }
+
+/** `$12.34` when every seat is measured; `≥ $12.34 · 1 seat unmeasured` when some are not. */
+const floorText = (sum) =>
+  sum.unmeasured === 0 ? usd(sum.usd) : `≥ ${usd(sum.usd)} · ${sum.unmeasured} ${sum.unmeasured === 1 ? 'seat' : 'seats'} unmeasured`;
+
+/** A per-seat sum (wall, tokens) over measured seats only is a floor too when any seat is unmeasured. */
+const floor = (seats, text) => (text !== DASH && seats.some((s) => !s.measured) ? `≥ ${text}` : text);
 
 /* ── sections ───────────────────────────────────────────────────────────────────────────────── */
 
@@ -246,9 +260,9 @@ function renderRun(board, log, seats, orch = null, declared = null) {
   const open = t.total - t.settled - t.doing;
   const pairs = [
     ['STATUS', log.end ? tag(log.end.verdict ?? 'DONE') : log.run ? tag('RUNNING') : DASH],
-    ['SPEND', spend === null ? DASH : `${usd(spend)} <span class="hint">derived · rates ${pricing.version}</span>`],
+    ['SPEND', spend === null ? DASH : `${floorText(spend)} <span class="hint">derived · rates ${pricing.version}</span>`],
     ['TRACK', or(board.header.track ?? log.run?.track)],
-    ['WALL CLOCK', wall > 0 ? duration(wall) : DASH],
+    ['WALL CLOCK', wall > 0 ? floor(seats, duration(wall)) : DASH],
     ['BRANCH', or(board.header.branch ?? log.run?.branch)],
     ['BASE', or(log.run?.base)],
     ['SCOPE', or(board.header.scope)],
@@ -475,11 +489,11 @@ function renderAgents(seats) {
           td(`${seats.length} seats`, ''),
           td('', ''),
           td('', ''),
-          td(measured.length > 0 ? duration(measured.reduce((a, s) => a + s.durationMs, 0)) : DASH, 'num'),
-          td(measured.length > 0 ? tokens(measured.reduce((a, s) => a + s.inputTokens, 0)) : DASH, 'num'),
-          td(measured.length > 0 ? tokens(measured.reduce((a, s) => a + s.outputTokens, 0)) : DASH, 'num'),
-          td(measured.length > 0 ? tokens(measured.reduce((a, s) => a + s.cacheReadTokens, 0)) : DASH, 'num'),
-          td(sum === null ? DASH : usd(sum), 'num'),
+          td(measured.length > 0 ? floor(seats, duration(measured.reduce((a, s) => a + s.durationMs, 0))) : DASH, 'num'),
+          td(measured.length > 0 ? floor(seats, tokens(measured.reduce((a, s) => a + s.inputTokens, 0))) : DASH, 'num'),
+          td(measured.length > 0 ? floor(seats, tokens(measured.reduce((a, s) => a + s.outputTokens, 0))) : DASH, 'num'),
+          td(measured.length > 0 ? floor(seats, tokens(measured.reduce((a, s) => a + s.cacheReadTokens, 0))) : DASH, 'num'),
+          td(sum === null ? DASH : floorText(sum), 'num'),
         ]
       : null;
   return `<h2 id="agents">Agents · cost · time<span>harness-recorded · cost derived, rates ${pricing.version}</span></h2>
@@ -621,7 +635,7 @@ export function sectionDocs({ board, log, seats, key }) {
 
   add('run', board.header.title ?? key, `${Math.round((t.settled / Math.max(t.total, 1)) * 100)}% · ${t.settled} / ${t.total} rows`, ['Fact', 'Value'], [
     ['Status', log.end ? String(log.end.verdict ?? 'DONE') : log.run ? 'RUNNING' : null],
-    ['Spend', spend === null ? null : `${usd(spend)} (derived · rates ${pricing.version})`],
+    ['Spend', spend === null ? null : `${floorText(spend)} (derived · rates ${pricing.version})`],
     ['Track', board.header.track ?? log.run?.track],
     ['Branch', board.header.branch ?? log.run?.branch],
     ['Rows', `${t.settled} settled · ${t.doing} in flight · ${t.total - t.settled - t.doing} open · ${t.total} total`],
