@@ -520,7 +520,11 @@ function parseTables(md) {
   for (const raw of md.split('\n')) {
     const line = raw.trim();
     if (!line.startsWith('|')) { cur = null; continue; } // a blank line or prose ends the table
-    const cells = line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    // Split on UNESCAPED pipes only. Markdown's cell delimiter is `|` and its literal is `\|` — a table row
+    // that quotes a command (`grep -iE "clock\|date"`) is written with the escape, and a parser that splits on
+    // every pipe turns one cell into three and then reports the row as ragged. The escape is then removed, so
+    // a rule reads the text a person sees.
+    const cells = line.replace(/^\||(?<!\\)\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'));
     if (cur === null) { cur = { headers: cells.map((h) => h.toLowerCase()), rows: [] }; tables.push(cur); continue; }
     if (cells.every((c) => /^[-: ]*$/.test(c))) continue; // the header separator
     cur.rows.push(cells);
