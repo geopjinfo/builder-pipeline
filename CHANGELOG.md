@@ -29,6 +29,15 @@ Two upstream fixes (released there as 0.12.2 and 0.12.3) merged into this line, 
   looked in: an empty input set is not a pass. Its `LG-3` message names the configured registry too. The report
   prints forward-slash paths on every host, since the path is what a person cites. Note the ordering this
   imposes: wire `check-ledgers` into CI once the first board exists, not before.
+- **Ledger columns are resolved by header name, and a row that does not match its header is refused (LG-6).**
+  Every rule read a fixed position — status at index 3, evidence at index 4 — so a ledger whose rows carry one
+  column fewer than their header did not fail that read: it passed it, against the wrong cell. On a real board
+  whose `FIX-*` rows omitted the `Cites` cell the gate reported hundreds of "status not in vocabulary"
+  violations quoting the evidence prose, while the statuses themselves were never examined. `parseTables()`
+  keeps each header with its rows and `columnsOf()` finds id, status and evidence by name, so a column inserted
+  before Status moves nothing; a table with no id-and-status header pair is not a ledger table and is skipped,
+  as the old id-shaped row filter skipped a board’s phase table. LG-6 names both cell counts and the header,
+  and the row is not read — a missing cell or an unescaped `|` in prose is a board defect, not a status.
 - **The board tooling reads `paths.boards` from §16, and a nested boards directory keeps its root.**
   The same assumption was in four more readers. `board-check-all` walked `tasks/` and crashed with `ENOENT`
   once the boards had moved; `board-render <key>` resolved a bare key against `tasks/`; `board-watch` and the
