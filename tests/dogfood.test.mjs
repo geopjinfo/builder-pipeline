@@ -490,7 +490,7 @@ ${rows}
  * A status cell is read for the term it CLAIMS, not for its typography.
  *
  * WHY. People write ledgers in markdown, for people: `**DONE**`, `DONE 2026-09-03`, `**DONE (2026-08-26)**
- * — CP3 B4`. All three claim DONE, and an exact-match gate failed all three. On one repo's ledgers that was
+ * — wave 4`. All three claim DONE, and an exact-match gate failed all three. On one repo's ledgers that was
  * 146 findings of which 127 were emphasis and annotation — and a gate that fails on bold teaches its readers
  * to skip it, so the nineteen that were REAL (`OPEN`, `BUILT`, `CLOSED — by observation`, `needs-ruling`)
  * went unread with the rest. Being liberal here is what makes the remaining findings worth reading; the
@@ -524,7 +524,7 @@ describe('check-ledgers reads the status a cell claims, not its markup', () => {
     '**DONE**',
     'DONE 2026-09-03',
     '**DONE 2026-09-03**',
-    '**DONE (2026-08-26)** — CP3 B4, ADR-105',
+    '**DONE (2026-08-26)** — wave 4, decision D-9',
     '**DONE (2026-08-20, v0.73.1)**',
     'IN-PROGRESS',
     '**IN-PROGRESS** — three of five routes',
@@ -552,7 +552,7 @@ describe('check-ledgers reads the status a cell claims, not its markup', () => {
   test('the evidence rule follows the claim: an annotated DONE with no evidence is still LG-5', () => {
     // This is the half that BITES. Before, such a row failed LG-2 on its markup and its evidence was
     // never examined; now the claim resolves to DONE and the missing evidence is the finding.
-    const r = check('**DONE (2026-08-26)** — CP3 B4', '—');
+    const r = check('**DONE (2026-08-26)** — wave 4', '—');
     assert.equal(r.status, 1, r.out);
     assert.match(r.out, /\[LG-5\] tasks\/stock-levels\.md :: T1/);
     assert.doesNotMatch(r.out, /\[LG-2\]/);
