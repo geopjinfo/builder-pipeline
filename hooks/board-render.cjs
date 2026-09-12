@@ -23,7 +23,8 @@ const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 try {
   const freshness = require(join(root, 'scripts', 'lib', 'board-freshness.cjs'));
-  const tasksDir = join(root, 'tasks');
+  const profile = require(join(root, 'scripts', 'lib', 'profile.cjs'));
+  const tasksDir = join(root, profile.load(root).settings.paths?.boards || 'tasks');
 
   if (existsSync(tasksDir)) {
     const stale = readdirSync(tasksDir)

@@ -3,7 +3,7 @@
 #
 # Works with ANY coding agent (or human): whatever wrote the change, a commit touching a
 # protected path is rejected unless an explicit unlock grant is set. This is the universal
-# enforcement layer; harness-specific hooks (e.g. hooks/protected-paths.js for Claude Code)
+# enforcement layer; harness-specific hooks (e.g. hooks/protected-paths.cjs for Claude Code)
 # merely intercept EARLIER — this one is the backstop that always holds.
 #
 # Enable:

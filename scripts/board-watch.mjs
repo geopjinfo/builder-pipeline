@@ -39,7 +39,8 @@ const flag = (name, fallback) => {
 const root = resolve(flag('root', process.cwd()));
 const once = args.includes('--once');
 const intervalMs = Math.max(5, Number(flag('interval', '20'))) * 1000;
-const tasksDir = join(root, 'tasks');
+const profile = require('./lib/profile.cjs');
+const tasksDir = join(root, profile.load(root).settings.paths?.boards || 'tasks'); // §16 paths.boards
 const pipelineDir = join(root, '.pipeline');
 
 const boards = () =>
@@ -109,5 +110,5 @@ for (const dir of [tasksDir, pipelineDir]) {
 setInterval(sweep, intervalMs);
 
 console.log(
-  `board-watch: watching tasks/ and .pipeline/ under ${root} — sweeping every ${intervalMs / 1000}s. Ctrl-C to stop.`,
+  `board-watch: watching ${tasksDir} and .pipeline/ under ${root} — sweeping every ${intervalMs / 1000}s. Ctrl-C to stop.`,
 );

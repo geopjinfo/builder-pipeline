@@ -124,7 +124,7 @@ const CAP_TO_CLAUDE_TOOLS = {
   'test-only': 'Read, Grep, Glob, Edit, Write, Bash', // scope narrowed by the persona text itself
   docs: 'Read, Grep, Glob, Edit, Write, Bash',
   // A read-only seat that must write exactly ONE file of its own (the reviewer's review). The grant is only a
-  // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.js does.
+  // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.cjs does.
   'read-only+own-file': 'Read, Grep, Glob, Bash, Write',
   // Reads and publishes a page; never edits the repo (experimental live-page keeper).
   publish: 'Bash, Read, Artifact',
@@ -260,8 +260,8 @@ function installTool(tool) {
      * hooks are read at session start, so one added mid-session does not fire until the next session.
      * `adapters/claude-code.md` names the event and matcher for each.
      */
-    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.js'), path.join('.claude', 'hooks', 'protected-paths.js'));
-    copyIfAbsent(path.join(KIT, 'hooks', 'board-render.js'), path.join('.claude', 'hooks', 'board-render.js'));
+    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join('.claude', 'hooks', 'protected-paths.cjs'));
+    copyIfAbsent(path.join(KIT, 'hooks', 'board-render.cjs'), path.join('.claude', 'hooks', 'board-render.cjs'));
     for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
       copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
     }
@@ -424,11 +424,17 @@ function cmdVerify() {
   let fail = 0;
   const check = (ok, msg) => { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fail++; };
   const profileAbs = path.join(CWD, 'PIPELINE_PROFILE.md');
+  /**
+   * The ledgers live where §16 `paths` says, not where the installer first put them. An adopter whose
+   * conventions keep the boards elsewhere moves them and records the move in §16; every script reads it, so
+   * `verify` reads it too — otherwise it would fail the one install that followed the profile.
+   */
+  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
 
   console.log('Install:');
   check(fs.existsSync(profileAbs), 'PIPELINE_PROFILE.md exists at repo root');
-  check(fs.existsSync(path.join(CWD, 'tasks', 'README.md')), 'tasks/README.md (board rules) exists');
-  check(fs.existsSync(path.join(CWD, 'DEFERRED_TASKS.md')), 'DEFERRED_TASKS.md exists');
+  check(fs.existsSync(path.join(CWD, boardsDir, 'README.md')), `${boardsDir}/README.md (board rules) exists (paths.boards)`);
+  check(fs.existsSync(path.join(CWD, registryFile)), `${registryFile} exists (paths.registry)`);
   check(
     fs.existsSync(path.join(CWD, 'scripts', 'board-progress.mjs')) &&
       fs.existsSync(path.join(CWD, 'scripts', 'board-check-all.mjs')),
@@ -497,52 +503,120 @@ function cmdFeatures() {
 const BOARD_STATUSES = ['PLANNED', 'IN-PROGRESS', 'DONE', 'DROPPED'];
 const REGISTRY_STATUSES = ['DEFERRED', 'NOW UNBLOCKED', 'DONE', 'DROPPED'];
 
-function parseTableRows(md) {
-  // Returns arrays of trimmed cells for pipe-table body rows (skips header + separator rows).
-  return md
-    .split('\n')
-    .filter((l) => l.trim().startsWith('|'))
-    .map((l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
-    .filter((cells) => cells.length >= 4 && !/^[-: ]+$/.test(cells[1] || '-') && !/^(#|Id)$/i.test(cells[0]));
+/**
+ * Pipe tables as `{ headers, rows }`, each row keeping its own cells.
+ *
+ * WHY A TABLE AND NOT A ROW. This used to return bare cell arrays and every rule then read a FIXED
+ * POSITION — status at index 3, evidence at index 4. A ledger whose rows carry one column fewer than
+ * their header does not fail that read; it passes it, against the wrong cell. Observed on a real board
+ * whose `FIX-*` rows omitted the `Cites` cell: the gate reported hundreds of "status not in vocabulary"
+ * violations quoting the EVIDENCE prose, and the actual statuses — the thing the gate exists to check —
+ * were never examined at all. A check whose predicate measures a cell adjacent to its claim is worse
+ * than no check, because its noise reads as the finding.
+ */
+function parseTables(md) {
+  const tables = [];
+  let cur = null;
+  for (const raw of md.split('\n')) {
+    const line = raw.trim();
+    if (!line.startsWith('|')) { cur = null; continue; } // a blank line or prose ends the table
+    const cells = line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    if (cur === null) { cur = { headers: cells.map((h) => h.toLowerCase()), rows: [] }; tables.push(cur); continue; }
+    if (cells.every((c) => /^[-: ]*$/.test(c))) continue; // the header separator
+    cur.rows.push(cells);
+  }
+  return tables;
+}
+
+/**
+ * Where a ledger table keeps its id, status and evidence — BY HEADER NAME, so a column inserted or moved
+ * shifts nothing. A table with no id-and-status pair of headers is not a ledger table (a board's phase
+ * table, a prose table) and is skipped, exactly as the old id-shaped row filter skipped it.
+ */
+function columnsOf(headers) {
+  const find = (re) => headers.findIndex((h) => re.test(h));
+  return { id: find(/^(#|id)$/), status: find(/^status$/), evidence: find(/evidence|test-seed/) };
+}
+
+const isLedgerTable = (cols) => cols.id >= 0 && cols.status >= 0;
+
+/**
+ * Every ledger row in a file, each with the column map of the table it belongs to. A row whose cell count
+ * does not match its own header is reported (LG-6) and NOT read: its cells cannot be mapped to columns, and
+ * reading them anyway is the silent mis-measurement this exists to stop. A ragged row is a real defect in
+ * the board — a missing cell, an unescaped `|` in prose — and it hid behind the positional read for as long
+ * as that read existed.
+ */
+function* ledgerRows(md, file, note) {
+  for (const table of parseTables(md)) {
+    const cols = columnsOf(table.headers);
+    if (!isLedgerTable(cols)) continue;
+    for (const cells of table.rows) {
+      if (cells.length !== table.headers.length) {
+        const id = cells[0] || '-';
+        note(file, id, 'LG-6', `row has ${cells.length} cell(s), its header has ${table.headers.length} [${table.headers.join(' | ')}] — the row was not checked; a missing cell, or an unescaped "|" in prose`);
+        continue;
+      }
+      yield { cells, cols };
+    }
+  }
+}
+
+/** The ledger locations every script agrees on: §16 `paths`, or the installer's defaults when there is no profile. */
+function ledgerPaths() {
+  const { settings } = profileLib().load(CWD);
+  const p = settings?.paths ?? {};
+  return { boards: p.boards || 'tasks', registry: p.registry || 'DEFERRED_TASKS.md' };
 }
 
 function cmdCheckLedgers() {
   const problems = [];
   const note = (file, row, rule, msg) => problems.push({ file, row, rule, msg });
+  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
 
   // Registry first (boards cross-reference it)
-  const regPath = path.join(CWD, 'DEFERRED_TASKS.md');
+  const regPath = path.join(CWD, registryFile);
   const regIds = new Set();
-  if (!fs.existsSync(regPath)) note('DEFERRED_TASKS.md', '-', 'LG-0', 'registry file missing');
+  if (!fs.existsSync(regPath)) note(registryFile, '-', 'LG-0', 'registry file missing');
   else {
     const raw = fs.readFileSync(regPath, 'utf8');
     if (raw.includes('⚠ VERIFY'))
-      note('DEFERRED_TASKS.md', '-', 'LG-4', 'unresolved "⚠ VERIFY" flag — resolve it, either way');
-    for (const cells of parseTableRows(raw)) {
-      const [id, , , status] = cells;
+      note(registryFile, '-', 'LG-4', 'unresolved "⚠ VERIFY" flag — resolve it, either way');
+    for (const { cells, cols } of ledgerRows(raw, registryFile, note)) {
+      const id = cells[cols.id];
+      const status = cells[cols.status];
       if (!/^[A-Za-z0-9_.-]+$/.test(id)) continue; // prose/example rows
-      if (regIds.has(id)) note('DEFERRED_TASKS.md', id, 'LG-1', 'duplicate registry id');
+      if (regIds.has(id)) note(registryFile, id, 'LG-1', 'duplicate registry id');
       regIds.add(id);
       if (status && !REGISTRY_STATUSES.includes(status))
-        note('DEFERRED_TASKS.md', id, 'LG-2', `status "${status}" not in registry vocabulary [${REGISTRY_STATUSES.join(', ')}] — out-of-vocabulary rows are silently dropped by anything that counts`);
+        note(registryFile, id, 'LG-2', `status "${status}" not in registry vocabulary [${REGISTRY_STATUSES.join(', ')}] — out-of-vocabulary rows are silently dropped by anything that counts`);
     }
   }
 
-  // Boards
-  const tasksDir = path.join(CWD, 'tasks');
+  /**
+   * Boards. A gate that finds no input must fail, not pass: a boards directory that is missing, or that holds no
+   * board, used to loop over nothing and print PASS — which is exactly the reading an adopter gets after moving
+   * the boards and forgetting §16. Before the first run there are legitimately no boards; wire this gate into CI
+   * once the first board exists, as the board rules say. Until then the failure names the path it looked in.
+   */
+  const tasksDir = path.join(CWD, boardsDir);
   const boards = fs.existsSync(tasksDir)
     ? fs.readdirSync(tasksDir).filter((f) => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('_'))
     : [];
+  if (!fs.existsSync(tasksDir)) note(boardsDir, '-', 'LG-0', `boards directory missing — paths.boards says ${JSON.stringify(boardsDir)}; nothing was checked`);
+  else if (!boards.length) note(boardsDir, '-', 'LG-0', `no boards found under ${boardsDir}/ — an empty input set is not a pass; wire this gate in once the first board exists`);
   for (const b of boards) {
-    const rel = path.join('tasks', b);
-    for (const cells of parseTableRows(fs.readFileSync(path.join(tasksDir, b), 'utf8'))) {
-      const [id, , , status, evidence] = cells;
+    const rel = `${boardsDir}/${b}`; // forward slashes: the report is what a person cites, on any host
+    for (const { cells, cols } of ledgerRows(fs.readFileSync(path.join(tasksDir, b), 'utf8'), rel, note)) {
+      const id = cells[cols.id];
+      const status = cells[cols.status];
+      const evidence = cols.evidence >= 0 ? cells[cols.evidence] : '';
       if (!/^(T|C|IC-|FIX-?)\d+/i.test(id)) continue; // not a task row
       const bare = String(status || '').replace(/\s+\d{4}-\d{2}-\d{2}$/, '');
       const def = bare.match(/^DEFERRED(?:→|->)(.+)$/);
       if (def) {
         const ref = def[1].trim();
-        if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in DEFERRED_TASKS.md`);
+        if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in ${registryFile}`);
       } else if (!BOARD_STATUSES.includes(bare)) {
         note(rel, id, 'LG-2', `status "${status}" not in board vocabulary [${BOARD_STATUSES.join(', ')}, DEFERRED→<id>]`);
       }
@@ -552,14 +626,13 @@ function cmdCheckLedgers() {
   }
 
   // Report
-  if (!boards.length) console.log('note: no boards found under tasks/ (nothing built yet?) — registry checked only.');
   if (problems.length === 0) {
     console.log(`check-ledgers: PASS — ${boards.length} board(s), ${regIds.size} registry row(s), 0 violations.`);
     process.exit(0);
   }
   console.log(`check-ledgers: FAIL — ${problems.length} violation(s):\n`);
   for (const p of problems) console.log(`  [${p.rule}] ${p.file} :: ${p.row} — ${p.msg}`);
-  console.log('\nRules: LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 DEFERRED→id must exist in registry · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence');
+  console.log('\nRules: LG-0 a ledger the gate could not read · LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 DEFERRED→id must exist in registry · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence · LG-6 a row that does not match its own header');
   process.exit(1);
 }
 

@@ -18,7 +18,7 @@
  *
  * Protocol: stdin JSON; exit 2 with the reason on stderr blocks the call; exit 0 allows it. A failure in the
  * hook itself allows the call. Arming is a person's deliberate act: copy to `.claude/hooks/` and add the
- * `PreToolUse` entry running `node .claude/hooks/reviewer-write-guard.js`.
+ * `PreToolUse` entry running `node .claude/hooks/reviewer-write-guard.cjs`.
  */
 'use strict';
 const fs = require('node:fs');

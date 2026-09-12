@@ -42,7 +42,7 @@ authoritative procedure. Summary of what you will do:
    pre-commit guard `hooks/protected-paths-precommit.sh` (works with ANY agent — fill its
    PROTECTED list from profile §4, tell me how to enable it); (b) adding
    `node builder/cli.js check-ledgers` to CI; (c) harness-specific earlier interception if my
-   harness has it — for Claude Code: `hooks/protected-paths.js`, and the `hooks/claude-code/`
+   harness has it — for Claude Code: `hooks/protected-paths.cjs`, and the `hooks/claude-code/`
    guards for the features switched on in §16 (output cap, registry read guard, reviewer write
    guard), plus spawn depth 1 — show me the exact settings entries from
    `builder/adapters/claude-code.md`; I must approve; (d) the knowledge-index triggers if an index
