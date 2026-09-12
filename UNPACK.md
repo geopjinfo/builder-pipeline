@@ -125,9 +125,19 @@ builder/skills/module-readiness-check.md
                                → .claude/skills/module-readiness-check/SKILL.md
 builder/templates/task-board.md → tasks/README.md           (create tasks/ dir)
 builder/templates/deferred-registry.md → DEFERRED_TASKS.md  (repo root; keep header, empty table)
+builder/templates/decision-log.md → DECISIONS.md            (repo root; keep header, empty index)
 builder/templates/module-brief.md → specs/module-brief.template.md  (or wherever briefs live)
 builder/templates/session-board.md
                                → tasks/_session-board.template.md  (cross-run delivery boards)
+```
+
+> **The four ledger destinations above are FIRST-INSTALL only.** Once `PIPELINE_PROFILE.md` exists,
+> §16 `paths` — not this table — says where the boards, the registry and the decision log live, and
+> the CLI installs them there. Copying to the defaults a second time adds a blank twin beside the
+> real ledger that every checker reads §16 and passes over in silence, so the fallback scripts skip
+> the ledgers when a profile is present, and `node builder/cli.js verify` fails on any that survive.
+
+```
 builder/scripts/*.mjs          → scripts/                   (board tooling + checkers)
 builder/scripts/lib/*.cjs      → scripts/lib/               (the readers and checkers they share)
 builder/oracles/               → beside the scripts          (contract-oracle adapters)
@@ -175,7 +185,8 @@ See [`adapters/codex.md`](adapters/codex.md) for the full mapping. Summary:
 builder/agents/     → .builder/personas/     (kept as prompt files, not auto-loaded)
 builder/skills/     → .builder/playbooks/    (references/ included)
 builder/templates/  → tasks/README.md, tasks/_session-board.template.md, DEFERRED_TASKS.md,
-                      specs/ as above
+                      DECISIONS.md, specs/ as above — the ledger four at those DEFAULTS only on a
+                      first install; §16 paths rules once a profile exists (see the note above)
 builder/scripts/    → scripts/               (harness-independent; plain Node)
                     NOT materialised: qa-targets.md and requirement-pack.md are REFERENCES the
                     agent reads. The target config is written during setup step 6b (its format is
@@ -208,7 +219,9 @@ persona + inputs.
 - [ ] `node scripts/features.mjs` lists every feature, and each `on` feature's file or tool exists
       in this repo (no feature switched on to be filled in later).
 - [ ] All 9 personas + the skills placed per the harness mapping; frontmatter `model:` matches §12.
-- [ ] `tasks/README.md` and `DEFERRED_TASKS.md` exist; `.pipeline/` gitignored.
+- [ ] The board rules, the registry and the decision log exist at their §16 `paths`
+      (`<boards>/README.md`, `<registry>`, `<decisions>`) and **nowhere else** — `verify` fails on a
+      copy left behind at a default §16 moved; `.pipeline/` gitignored.
 - [ ] `scripts/board-{progress,check-all}.mjs` installed and `board-check-all` wired into the gate
       chain — a computed bar nobody re-checks is back to being a typed claim.
 - [ ] The harness conventions file (`CLAUDE.md` / `AGENTS.md`) points to the pipeline + profile.
