@@ -59,6 +59,7 @@ this example are listed in [`../../tooling/PORTING.md`](../../tooling/PORTING.md
 | `capacity.cjs` | 3 — `maxWorkers()` for your jest configs | `scripts/lib/capacity.cjs` |
 | `tier-lock.cjs` | 4 — the machine-wide lock with a stale-holder ceiling | `scripts/lib/tier-lock.cjs` |
 | `instruction-trailer.cjs` | not part of the interface — a CI check that a change to the agent instruction files is declared by a commit trailer | `scripts/lib/instruction-trailer.cjs` |
+| `instruction-trailer-check.mjs` | not part of the interface — the CI entry for `instruction-trailer.cjs`: `node scripts/instruction-trailer-check.mjs [<base-ref>]` (default `origin/main`); exit 0 pass · 1 undeclared change · 2 git could not answer. Requires `./lib/instruction-trailer.cjs` when installed, else the helper beside it | `scripts/instruction-trailer-check.mjs` |
 
 `run-tier.mjs` requires its helpers from `./lib/`, so keep that layout or change the three requires.
 Requires Node 18 or newer; no dependencies beyond the test runner itself.

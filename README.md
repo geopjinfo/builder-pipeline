@@ -111,14 +111,19 @@ builder/
 │                                    Claude-Code-only step becomes elsewhere
 ├── 🛟 scripts/                   ← board tooling (progress · check-all · render · watch) and the
 │                                    checkers: features · index-check · orchestrator-check ·
-│                                    claims-check · output-check · handoff-pack / handoff-check ·
-│                                    ledger-row · fix-rate · seat-peaks · cost-window ·
+│                                    claims-check · citations-check · line-citations-check ·
+│                                    output-check · handoff-pack / handoff-check · ledger-row ·
+│                                    decision-index · wiring-check · instruction-budget ·
+│                                    ratchet-refresh · fix-rate · seat-peaks · cost-window ·
 │                                    contract-oracle · rules-module · mutation-step + lib/
 ├── 🔮 oracles/                   ← contract-oracle adapters (OpenAPI 3)
-├── 📐 examples/                  ← ast-grep rules with fixtures · jest-tier-runner/ (one tier
-│                                    runner for a JS project) — examples, not defaults
-├── 🧰 tooling/                   ← PORTING.md (the run economy) · optional/ (index sync, caveman) ·
-│                                    experimental/ (live page shell)
+├── 📐 examples/                  ← ast-grep rules with fixtures · wiring/ (seam kinds for a
+│                                    TypeScript DI service) · jest-tier-runner/ (one tier runner for
+│                                    a JS project, + its instruction-trailer CI entry) — examples,
+│                                    not defaults
+├── 🧰 tooling/                   ← PORTING.md (the run economy) · optional/ (index sync with lock,
+│                                    limit and session hook; caveman) · experimental/ (live page
+│                                    shell · graph-trial report · persona generator)
 ├── ✅ tests/                     ← the pack's own suite: node builder/tests/run.mjs
 └── 🗒️ CHANGELOG.md               ← kit version history
 ```

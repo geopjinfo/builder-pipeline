@@ -1,0 +1,2 @@
+{"type":"assistant","isSidechain":true,"uuid":"b1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"cd src; idx find \"Restock\""}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"b2","message":{"role":"assistant","content":[{"type":"text","text":"Rows done."}]}}

@@ -1,0 +1,2 @@
+{"type":"assistant","isSidechain":true,"uuid":"s1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"src/stock.ts","command":"idx find \"x\""}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"s2","message":{"role":"assistant","content":[{"type":"text","text":"Findings written.\ngraph: not used — index absent"}]}}

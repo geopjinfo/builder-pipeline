@@ -60,11 +60,26 @@ const FEATURES = {
   costAccounting: { defaults: { state: 'off', reader: 'claude-code' }, requires: ['reader'] },
   bashCap: { defaults: { state: 'off', limitBytes: 4096 }, requires: ['limitBytes'] },
   registryGuard: { defaults: { state: 'off', seats: [] }, requires: ['seats'] },
+  citations: { defaults: { state: 'off', schemes: [] }, requires: ['schemes'] },
+  lineCitations: {
+    defaults: { state: 'off', catalogues: [], roots: [], extensions: ['.md'], roster: null, control: null, minFiles: 1, keyColumn: 0 },
+    requires: ['catalogues', 'roots'],
+  },
+  wiring: { defaults: { state: 'off', roots: [], extensions: [], testPattern: null, allow: null, kinds: [] }, requires: ['roots', 'extensions', 'kinds'] },
+  instructionBudget: { defaults: { state: 'off', files: [], maxLines: 200 }, requires: ['files', 'maxLines'] },
+  decisionIndex: { defaults: { state: 'off', roots: [], idPattern: 'D-\\d+', out: null }, requires: ['roots', 'idPattern', 'out'] },
+  ratchets: { defaults: { state: 'off', lists: [] }, requires: ['lists'] },
   builderBatch: { defaults: { state: 'unmeasured', rows: 5 }, requires: ['rows'] },
   fixLane: { defaults: { state: 'unmeasured' }, requires: [] },
   livePage: { defaults: { state: 'experimental-off' }, requires: [] },
-  graphTrial: { defaults: { state: 'experimental-off' }, requires: [] },
-  personas: { defaults: { state: 'experimental-off' }, requires: [] },
+  graphTrial: {
+    defaults: { state: 'experimental-off', seats: ['orchestrator', 'module-planner', 'standards-auditor', 'invariant-auditor'], callPattern: null },
+    requires: ['seats', 'callPattern'],
+  },
+  personas: {
+    defaults: { state: 'experimental-off', catalogue: null, keyColumn: 0, labelColumn: 1, roleColumns: null, grant: '1', out: null, logins: null, citationPattern: null },
+    requires: ['catalogue', 'out', 'citationPattern'],
+  },
   advisorBuilder: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
 };
@@ -157,15 +172,76 @@ function validate(settings) {
       !isObject(tracker.columnLists ?? {});
     if (bad) errors.push('features.handoffPack.tracker: null, or { "files": [non-empty], "lists": "<csv>", "columnLists": { file: { column: list } } }');
   }
-  for (const [name, key] of [['claims', 'registryIdPattern'], ['handoffPack', 'decisionIdPattern']]) {
-    const src = settings.features?.[name]?.[key];
-    if (typeof src !== 'string') continue;
+  const badRegex = (src) => {
     try {
       new RegExp(src);
+      return null;
     } catch (e) {
-      errors.push(`features.${name}.${key}: not a valid regular expression — ${e.message}`);
+      return e.message;
+    }
+  };
+  for (const [name, key] of [
+    ['claims', 'registryIdPattern'],
+    ['handoffPack', 'decisionIdPattern'],
+    ['wiring', 'testPattern'],
+    ['lineCitations', 'control'],
+    ['decisionIndex', 'idPattern'],
+    ['graphTrial', 'callPattern'],
+    ['personas', 'citationPattern'],
+  ]) {
+    const src = settings.features?.[name]?.[key];
+    if (typeof src !== 'string') continue;
+    const why = badRegex(src);
+    if (why) errors.push(`features.${name}.${key}: not a valid regular expression — ${why}`);
+  }
+  /*
+   * The list-shaped features. Each entry is checked here, at load, because a malformed entry found mid-run is
+   * found after a seat has already been dispatched on the strength of a check that could not have run.
+   */
+  const entries = (name, key) => {
+    const v = settings.features?.[name]?.[key];
+    return Array.isArray(v) ? v : null;
+  };
+  for (const [name, key] of [['citations', 'schemes'], ['wiring', 'kinds'], ['ratchets', 'lists'], ['lineCitations', 'catalogues'], ['instructionBudget', 'files']]) {
+    const v = settings.features?.[name]?.[key];
+    if (v !== undefined && v !== null && !Array.isArray(v)) errors.push(`features.${name}.${key}: must be an array`);
+  }
+  (entries('citations', 'schemes') ?? []).forEach((s, i) => {
+    const at = `features.citations.schemes[${i}]`;
+    if (!isObject(s) || typeof s.name !== 'string' || !s.name) return errors.push(`${at}: { "name", "pattern", "source" } with a non-empty name`);
+    if (typeof s.pattern !== 'string' || badRegex(s.pattern)) errors.push(`${at}.pattern: a valid regular expression for the whole id`);
+    if (s.skip !== undefined && s.skip !== null && (typeof s.skip !== 'string' || badRegex(s.skip))) errors.push(`${at}.skip: null, or a valid regular expression`);
+    const src = s.source;
+    const kinds = isObject(src) ? ['csv', 'dir', 'files'].filter((k) => src[k] !== undefined) : [];
+    if (kinds.length !== 1) return errors.push(`${at}.source: exactly one of { "csv", "column" } · { "dir", "filePattern" } · { "files", "idPattern" }`);
+    if (kinds[0] === 'csv' && (typeof src.csv !== 'string' || !(typeof src.column === 'string' || Number.isInteger(src.column)))) errors.push(`${at}.source: "csv" needs a path and a "column" (header name or 0-based index)`);
+    if (kinds[0] === 'dir' && (typeof src.dir !== 'string' || typeof src.filePattern !== 'string' || badRegex(src.filePattern))) errors.push(`${at}.source: "dir" needs a path and a "filePattern" regular expression with one capture group`);
+    if (kinds[0] === 'files' && (!Array.isArray(src.files) || src.files.length === 0 || typeof src.idPattern !== 'string' || badRegex(src.idPattern))) errors.push(`${at}.source: "files" needs a non-empty path list and an "idPattern" regular expression`);
+  });
+  (entries('wiring', 'kinds') ?? []).forEach((k, i) => {
+    const at = `features.wiring.kinds[${i}]`;
+    if (!isObject(k) || typeof k.name !== 'string' || !k.name) return errors.push(`${at}: { "name", "declare", "join" } with a non-empty name`);
+    if (typeof k.declare !== 'string' || badRegex(k.declare) || !/\((?!\?)/.test(k.declare)) errors.push(`${at}.declare: a valid regular expression with one capture group (the seam id)`);
+    if (typeof k.join !== 'string' || !k.join.includes('{id}') || badRegex(k.join.split('{id}').join('x'))) errors.push(`${at}.join: a regular expression containing {id}`);
+    if (k.scope !== undefined && !['other-files', 'any-file'].includes(k.scope)) errors.push(`${at}.scope: "other-files" (default) or "any-file"`);
+    if (k.optional !== undefined && typeof k.optional !== 'boolean') errors.push(`${at}.optional: true or false`);
+    if (k.detail !== undefined && typeof k.detail !== 'string') errors.push(`${at}.detail: a string`);
+  });
+  (entries('ratchets', 'lists') ?? []).forEach((l, i) => {
+    const at = `features.ratchets.lists[${i}]`;
+    if (!isObject(l) || ['name', 'bank', 'measured'].some((k) => typeof l[k] !== 'string' || !l[k])) errors.push(`${at}: { "name", "bank", "measured" } — all non-empty strings`);
+  });
+  /* A repeated name silently merges two entries in every report keyed by it — one bank drained into another. */
+  for (const [name, key] of [['citations', 'schemes'], ['wiring', 'kinds'], ['ratchets', 'lists']]) {
+    const seen = new Set();
+    for (const e of entries(name, key) ?? []) {
+      if (!isObject(e) || typeof e.name !== 'string') continue;
+      if (seen.has(e.name)) errors.push(`features.${name}.${key}: the name "${e.name}" is used twice — names must be unique`);
+      seen.add(e.name);
     }
   }
+  const budget = settings.features?.instructionBudget?.maxLines;
+  if (budget !== undefined && budget !== null && !(Number.isInteger(budget) && budget > 0)) errors.push('features.instructionBudget.maxLines: a positive integer');
   if (settings.features?.orchestratorModel && ACTIVE.has(settings.features.orchestratorModel.state) && !settings.models?.orchestrator) {
     errors.push('models.orchestrator: required while features.orchestratorModel is active');
   }

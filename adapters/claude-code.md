@@ -117,12 +117,18 @@ subagent tool calls. A guard blocks with exit code 2 and says what to do instead
 
 ### Session-start index refresh (optional)
 
-If §16 has `features.graph` on, a `SessionStart` hook can start your index sync **detached**, so it
-never delays the session. Use the same lock and the same automatic-embed size limit as your other
-triggers, and speak only when the previous run left docs above the limit. The pack ships no
-session-start hook file, because it would wrap your index tool (see
-[`tooling/optional/README.md`](../tooling/optional/README.md)). It catches docs that arrive with no
-commit or merge. Without it, the P1 index gate still refuses a stale index.
+If §16 has `features.graph` on, arm `tooling/optional/session-sync-hook.js` (copied into your hooks
+folder) on `SessionStart`. It starts the index sync **detached**, so it never delays the session.
+Through `autosync.py --trigger session` it shares the lock and the automatic-embed limit with your
+other triggers.
+
+- **When it speaks:** only when the previous run left docs above the limit.
+- **When it stays silent:** no index, no interpreter, or `INDEX_SYNC_SKIP` set.
+- **Another index tool:** it is written for the graphify example; keep its shape and change the
+  command it spawns (see [`tooling/optional/README.md`](../tooling/optional/README.md)).
+
+It catches docs that arrive with no commit or merge. Without it, the P1 index gate still refuses a
+stale index.
 
 Belt and braces for the board: `hooks/board-render.js` on `PostToolUse` matching
 `Write|Edit|MultiEdit|Bash` re-renders any stale board after a tool write. It covers the case where

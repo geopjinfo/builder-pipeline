@@ -18,13 +18,15 @@ with no dependencies beyond jest:
 | `capacity.cjs` | env override name is `MAX_TEST_WORKERS` (rename if your CI convention differs — pin it in CI); per-tier `perWorkerMb`/`ceiling` at the call sites in your test-runner configs — ceilings AT OR BELOW the tier's current worker count, the governor only ever lowers |
 | `tier-lock.cjs` | `DEFAULT_LOCK` filename (machine-wide tmpdir path — keep it machine-wide: the contended resource is the container daemon or database, not the repo; a worktree-scoped lock is an absent lock). `MAX_PLAUSIBLE_RUN_MS` to your longest tier ×2 (pid-reuse ceiling — observed in production, not hypothetical) |
 | `affected.cjs` | `FULL_RUN_PATTERNS` — YOUR migrations dir, YOUR shared-kernel path, YOUR test-harness dirs, the test-runner configs, the package manifest. Anything the import graph cannot see through belongs on it; a false `full` costs minutes, a false `related` costs a missed regression. Point `commands.affected` at it |
-| `instruction-trailer.cjs` | `INSTRUCTION_DIFF` — YOUR instruction-file paths. Wire an `instruction-trailer-check` style entry into CI before the gate step |
+| `instruction-trailer.cjs` | `INSTRUCTION_DIFF` — YOUR instruction-file paths |
+| `instruction-trailer-check.mjs` | the default base ref (`origin/main`). Wire it into CI before the gate step: `instruction-trailer-check.mjs <base>` fails an instruction-file change no commit in the range declares with an `instructions-change:` trailer. It requires `./lib/instruction-trailer.cjs` when installed, else the helper beside it |
 
 Not included: a protected-path fence for shell and interpreter writes (harness-specific; the
 Claude Code tool-call fence is `hooks/protected-paths.js`, and the universal backstop is the
 pre-commit guard) and the path-scoped rules content (project constitution, write your own — but DO
 use the pattern: root instruction file under ~200 lines, path-scoped rule files for anything that
-only matters in one directory, and a gate on the line count so it cannot grow back).
+only matters in one directory, and a gate on the line count so it cannot grow back — that gate ships
+as `node scripts/instruction-budget.mjs`, `features.instructionBudget`).
 
 Rules that ride with any tier runner (bake into your orchestrator playbook):
 - never run a suite bare — wrapper only, digest spoken, full log kept. This is also what stands in

@@ -71,20 +71,40 @@ two concurrent embeds double the spend and can corrupt the index. Store the hold
 time in the lock, so a lock left by a dead process can be reclaimed once it is older than the longest
 plausible sync.
 
-### The graphify example: `sync.py` + `sync-hook.sh`
+### The graphify example: `sync.py` + `autosync.py` + `session-sync-hook.js` + `sync-hook.sh`
 
-These keep a graphify graph current: a free structural re-sync on every merge to the base branch(es)
-via a guarded post-merge block, and deferred doc embeds tracked in a visible pending file.
-`hooks/graphify-post-merge.sh` is the simpler standalone merge trigger.
+These keep a graphify graph current and meet the whole contract:
 
-How far they meet the contract: `sync.py` exits `0` (synced or nothing to do), `10` (docs pending),
-`3` (no graph yet) and `1` (error). That covers `0` / `3` / `10`. It **syncs rather than reports**,
-so it has no code-behind verdict (`11` / `12`), and it has **no lock and no size limit**. To use it
-as `features.graph.check`, add a report-only mode or a wrapper that compares the index with the
-working tree without syncing. Add the lock and the limit before wiring a second trigger.
+- **`sync.py --check`** reports without syncing. It prints one JSON facts line (`index`, `tooling`,
+  `changedCode`, `deleted`, `pendingDocs`, `pruned`, `builtAtCommit`, `head`) and exits
+  `0` / `3` / `4` / `10` / `11` / `12`. Use it as `features.graph.check`. Plain `sync.py` does the
+  free code sync and exits `10` whenever docs are pending, including an earlier run's backlog.
+- **`autosync.py --trigger merge|session|p1|p4|manual [--no-embed]`** is the one entry for every
+  trigger.
+  - **Lock:** `<index dir>/.sync.lock`, holding pid and start time; reclaimed once past
+    `INDEX_STALE_LOCK_SECONDS` (default 7200).
+  - **Decision:** after the code sync it decides `none`, `not-requested`, `over-limit`,
+    `no-embedder` or `embed`.
+  - **Embed:** only when the pending docs total at most `INDEX_AUTO_LIMIT_KB` (default 300; keep it
+    equal to `features.graph.autoLimitKb`) **and** `INDEX_EMBED_COMMAND` names your embed step. The
+    pack assumes no model CLI.
+  - **No re-trigger:** the embed runs with `INDEX_SYNC_SKIP=1` and `INDEX_PENDING_FILE` set, and
+    rewrites that file to whatever it did not embed.
+  - **Records:** output is appended to `.sync.log`, and the decision is written to
+    `.autosync-status.json`.
+  - **Exit codes:** `0` fresh · `10` pending · `20` lock held · `3` no index · `1` error.
+    `--no-embed` is the free `features.graph.syncFree` step before the phase-4 auditors.
+- **`session-sync-hook.js`** is the session-start trigger for Claude Code. It starts
+  `autosync.py --trigger session` detached, exits 0 at once, and speaks only when the previous run's
+  decision was `over-limit`. Its header gives the `settings.json` snippet.
+- **`sync-hook.sh`** installs the guarded post-merge block. The block runs
+  `autosync.py --trigger merge` on the branches in `BASE_BRANCHES` (default `main`). List every base
+  branch your feature work merges into.
 
-**Requires the graphify tool installed** (`graphify-out/.graphify_python` written by a full run) —
-without it these are inert. Localize: the branch list in `sync-hook.sh`'s guard, and a
-`.graphifyignore` excluding human-facing publishes and derived artifacts.
+**Requires graphify installed** (`graphify-out/.graphify_python`, written by a full run). Without it
+these are inert. Place the Python files two levels below the repo root (for example
+`scripts/graphify/`), or set `INDEX_ROOT`. Localize the branch list, the embed command, and a
+`.graphifyignore` that excludes human-facing publishes and derived artifacts.
+`hooks/graphify-post-merge.sh` is the simpler standalone merge trigger; it has no lock.
 
 All of these ship un-wired; UNPACK never arms them. They are choices.

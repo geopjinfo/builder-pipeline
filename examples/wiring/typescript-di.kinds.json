@@ -1,0 +1,20 @@
+[
+  {
+    "name": "motor",
+    "declare": "^[ \\t]*(?:(?:public|protected|static|override)[ \\t]+)*async[ \\t]+(dispatch\\w*|drain\\w*|flush\\w*|pump\\w*|\\w+Batch|run\\w*Cycle)[ \\t]*\\(",
+    "join": "\\.{id}\\s*\\(",
+    "detail": "no production caller — the queue has no motor"
+  },
+  {
+    "name": "subscription",
+    "declare": "\\.subscribe\\(\\s*(?:['\"`]([^'\"`\\n]+)['\"`]|[A-Za-z_$][\\w$.]*)",
+    "join": "['\"`]{id}['\"`]",
+    "detail": "no other production file constructs this event name — the handler can never run"
+  },
+  {
+    "name": "provider",
+    "declare": "(?<=providers\\s*:\\s*\\[[^\\]]*)\\b([A-Z][a-z0-9][A-Za-z0-9_$]*)\\b",
+    "join": ":\\s*{id}\\b|\\bnew\\s+{id}\\s*\\(|\\binject\\w*\\(\\s*{id}\\b",
+    "detail": "registered as a provider and injected nowhere — nothing is on the other end"
+  }
+]

@@ -1,0 +1,4 @@
+{"type":"assistant","isSidechain":true,"uuid":"p1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"C:\\tools\\idx.exe explain \"Stock\""}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"p2","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"idx record \"where is stock read\" useful"}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"p3","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"npm test"}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"p4","message":{"role":"assistant","content":[{"type":"text","text":"Plan written.\ngraph: 3 calls, 1 useful, 0 dead-end"}]}}
