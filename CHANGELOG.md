@@ -3,6 +3,44 @@
 All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
 versions independently of any project it is pasted into.
 
+## [0.13.1] — 2026-09-12
+
+Two upstream fixes (released there as 0.12.2 and 0.12.3) merged into this line, which branched at
+0.12.1 and never carried them. Renumbered rather than back-inserted: in this line they follow
+0.13.0, and a changelog that says otherwise is a changelog nobody can date a bug against.
+
+### Fixed
+
+- **The kit runs under a host whose `package.json` says `"type": "module"`.** Node decides how to load a
+  `.js` file from the nearest `package.json`, so in such a host `cli.js` and every hook were loaded as ES
+  modules and threw on their first `require()`. For a `PreToolUse` guard that is a guard that crashes and
+  lets the tool call through — the failure this kit exists to prevent, and one its own suite could not see
+  because it ran in a CommonJS host. `builder/package.json` now pins the kit to CommonJS, and the five hooks
+  ship as `.cjs` so the copies installed into the host stay CommonJS wherever they land. A dogfood test
+  unpacks into an ESM host and runs every installed hook; its red twin deletes the package.json and shows the
+  `require is not defined` failure. The settings snippets in `adapters/claude-code.md` name the `.cjs` files,
+  and so does every other live pointer — including `hooks/protected-paths-precommit.sh`, which the upstream
+  sweep missed. The one `.js` name left standing is in this file's own history, where it was true.
+- **`verify` and `check-ledgers` read the ledger paths from §16.** Both looked at the installer's defaults
+  (`tasks/`, `DEFERRED_TASKS.md`) whatever `paths.boards` and `paths.registry` said, so an adopter who moved
+  the ledgers as the profile allows failed `verify` — and `check-ledgers` looped over a directory that was no
+  longer there and printed PASS over nothing. Each now reads §16 (defaults unchanged with no profile), and
+  `check-ledgers` fails with `LG-0` when the boards directory is missing or holds no board, naming the path it
+  looked in: an empty input set is not a pass. Its `LG-3` message names the configured registry too. The report
+  prints forward-slash paths on every host, since the path is what a person cites. Note the ordering this
+  imposes: wire `check-ledgers` into CI once the first board exists, not before.
+- **The board tooling reads `paths.boards` from §16, and a nested boards directory keeps its root.**
+  The same assumption was in four more readers. `board-check-all` walked `tasks/` and crashed with `ENOENT`
+  once the boards had moved; `board-render <key>` resolved a bare key against `tasks/`; `board-watch` and the
+  `board-render.cjs` hook swept `tasks/`. Deeper than the path: `board-render` and `board-freshness` took a
+  board's **grandparent** as the repo root — true only in the installer's default layout — so a board nested
+  two levels down looked for its run log and its profile in the wrong place, found neither, and the freshness
+  gate reported *not applicable*: a stale page passed. One `profile.rootOf(dir)` now walks up to the nearest
+  ancestor holding `PIPELINE_PROFILE.md` or `.pipeline/` (the grandparent stands in when nothing marks a root,
+  so a fixture in a bare temp directory behaves as before), and every board reader uses it. `board-check-all`
+  fails with the path it looked in when the directory is missing. Dogfood tests move the boards two levels
+  down and drive all four.
+
 ## [0.13.0] — 2026-09-11
 
 ### Every rule the pack stated without a command now has one

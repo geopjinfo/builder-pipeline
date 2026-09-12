@@ -64,7 +64,7 @@ Review/behavioural gates, and before every PR. If the harness supports it, size 
 from free memory, not core count — oversubscription costs correctness (timeouts that read as
 regressions), not just time.
 
-*Optional, Claude Code only:* `hooks/claude-code/bash-output-cap.js` (`features.bashCap`) caps the
+*Optional, Claude Code only:* `hooks/claude-code/bash-output-cap.cjs` (`features.bashCap`) caps the
 orchestrator's own shell output while keeping every error line. It does not cap subagents — see
 `adapters/claude-code.md`.
 

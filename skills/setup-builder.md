@@ -101,8 +101,8 @@ rows in `DECISIONS.md`.
 |---|---|
 | **Universal pre-commit guard** (any agent — offer first) | fill `hooks/protected-paths-precommit.sh`'s `PROTECTED` list from profile §4, tell the human how to enable it (copy to `.git/hooks/pre-commit` or the `core.hooksPath` directory, executable), apply only on explicit yes |
 | Ledger gate in CI | add `node builder/cli.js check-ledgers` to the CI pipeline / pre-push |
-| Harness-specific earlier interception (if the harness has one) | e.g. Claude Code: fill `protected-paths.js`'s `PROTECTED` list, show the exact `settings.json` `PreToolUse` snippet (in the hook's header), apply only on explicit yes. Other harnesses: mirror profile §4 into their policy/rules mechanism if any |
-| Claude Code settings and guards — **only for features `on` in §16** | spawn depth 1; `hooks/claude-code/bash-output-cap.js` (`bashCap`), `registry-read-guard.js` (`registryGuard`), `reviewer-write-guard.js` (`reviewTemplate`). Show the exact entries from `builder/adapters/claude-code.md` § Settings; apply only on explicit yes. Remind the human that settings take effect in the next session |
+| Harness-specific earlier interception (if the harness has one) | e.g. Claude Code: fill `protected-paths.cjs`'s `PROTECTED` list, show the exact `settings.json` `PreToolUse` snippet (in the hook's header), apply only on explicit yes. Other harnesses: mirror profile §4 into their policy/rules mechanism if any |
+| Claude Code settings and guards — **only for features `on` in §16** | spawn depth 1; `hooks/claude-code/bash-output-cap.cjs` (`bashCap`), `registry-read-guard.cjs` (`registryGuard`), `reviewer-write-guard.cjs` (`reviewTemplate`). Show the exact entries from `builder/adapters/claude-code.md` § Settings; apply only on explicit yes. Remind the human that settings take effect in the next session |
 | Knowledge-index triggers | only if `features.graph` is on: the merge trigger, and a session-start trigger where the harness has one, under one lock and the automatic-embed limit (`builder/tooling/optional/README.md`) |
 
 ## Phase 6 — verify + dry run

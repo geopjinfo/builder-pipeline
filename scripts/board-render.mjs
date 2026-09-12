@@ -105,16 +105,24 @@ const td = (v, cls = '') => `<td${cls ? ` class="${cls}"` : ''}>${v}</td>`;
 
 /**
  * Resolve a board argument to `{ boardPath, key, root }`. A bare key resolves against the repo's
- * `tasks/`; a path is used as given, and its grandparent is the root so a fixture board in a
- * temporary directory finds its own `.pipeline/` and profile, and not this repo's.
+ * boards directory — `paths.boards` from §16, `tasks/` with no profile. A path is used as given, and
+ * its root is the nearest ancestor that holds a profile or a `.pipeline/`, so a fixture board in a
+ * temporary directory finds its own `.pipeline/` and profile, and not this repo's; with neither in
+ * sight the grandparent stands in, which is the installer's default layout.
  */
 function resolveBoard(arg) {
   const repoRoot = resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
-  const boardPath = arg.endsWith('.md') ? resolve(arg) : join(repoRoot, 'tasks', `${arg}.md`);
+  const boardPath = arg.endsWith('.md') ? resolve(arg) : join(repoRoot, boardsDirOf(repoRoot), `${arg}.md`);
   const key = basename(boardPath, '.md');
-  const root = resolve(dirname(boardPath), '..');
-  return { boardPath, key, root };
+  return { boardPath, key, root: rootOf(dirname(boardPath)) };
 }
+
+/** `paths.boards` for a root — the one place the boards directory is decided. */
+function boardsDirOf(root) {
+  return settingsFor(root).paths?.boards || 'tasks';
+}
+
+const rootOf = profile.rootOf;
 
 const seatOf = (step, usage) => step.seat ?? usage.get(step.agentId ?? '')?.agentType ?? null;
 
@@ -764,7 +772,7 @@ if (invokedDirectly) {
       : [];
     if (keys.length === 0) console.log('board-render: no board carries a run log yet.');
     for (const key of keys) {
-      if (!existsSync(join(root, 'tasks', `${key}.md`))) continue;
+      if (!existsSync(join(root, boardsDirOf(root), `${key}.md`))) continue;
       console.log(`board-render: ${renderBoard(key, { transcripts })}`);
     }
   } else if (targets.length === 0) {

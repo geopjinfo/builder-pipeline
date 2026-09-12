@@ -16,7 +16,7 @@
  * `examples/jest-tier-runner/`), and
  * any command that opts out with `--no-cap` or `BUILDER_NO_BASH_CAP=1`.
  *
- * Pure: strings in, a digest out. The harness hook (`hooks/claude-code/bash-output-cap.js`) does the I/O.
+ * Pure: strings in, a digest out. The harness hook (`hooks/claude-code/bash-output-cap.cjs`) does the I/O.
  */
 
 const LIMIT_BYTES = 4096;

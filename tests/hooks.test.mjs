@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const profile = require('../scripts/lib/profile.cjs');
-const registryGuard = require('../hooks/claude-code/registry-read-guard.js');
-const reviewerGuard = require('../hooks/claude-code/reviewer-write-guard.js');
-const bashCapHook = require('../hooks/claude-code/bash-output-cap.js');
+const registryGuard = require('../hooks/claude-code/registry-read-guard.cjs');
+const reviewerGuard = require('../hooks/claude-code/reviewer-write-guard.cjs');
+const bashCapHook = require('../hooks/claude-code/bash-output-cap.cjs');
 
 const hooksDir = join(here, '..', 'hooks', 'claude-code');
 const fx = (...p) => join(here, 'fixtures', 'hooks', ...p);
@@ -54,11 +54,11 @@ test('registry guard: the registry path comes from paths.registry', () => {
 
 test('registry guard as a hook: exit 2 with the reason on stderr for a seat, exit 0 for the orchestrator', () => {
   const project = fx('guard-project');
-  const blocked = hook('registry-read-guard.js', { tool_name: 'Read', agent_type: 'module-tester', tool_input: { file_path: join(project, 'DEFERRED_TASKS.md') } }, project);
+  const blocked = hook('registry-read-guard.cjs', { tool_name: 'Read', agent_type: 'module-tester', tool_input: { file_path: join(project, 'DEFERRED_TASKS.md') } }, project);
   assert.equal(blocked.status, 2);
   assert.match(blocked.stderr, /Blocked Read of .*DEFERRED_TASKS\.md by module-tester/);
-  assert.equal(hook('registry-read-guard.js', { tool_name: 'Read', tool_input: { file_path: join(project, 'DEFERRED_TASKS.md') } }, project).status, 0);
-  assert.equal(hook('registry-read-guard.js', {}, project).status, 0);
+  assert.equal(hook('registry-read-guard.cjs', { tool_name: 'Read', tool_input: { file_path: join(project, 'DEFERRED_TASKS.md') } }, project).status, 0);
+  assert.equal(hook('registry-read-guard.cjs', {}, project).status, 0);
 });
 
 // ---- reviewer write guard ------------------------------------------------------------------------------
@@ -93,10 +93,10 @@ test('reviewer guard: the runs directory comes from paths.runs', () => {
 
 test('reviewer guard as a hook: exit 2 outside, exit 0 on the review file', () => {
   const project = fx('guard-project');
-  const out = hook('reviewer-write-guard.js', { tool_name: 'Write', agent_type: 'module-reviewer', tool_input: { file_path: join(project, 'src', 'x.ts'), content: 'x' } }, project);
+  const out = hook('reviewer-write-guard.cjs', { tool_name: 'Write', agent_type: 'module-reviewer', tool_input: { file_path: join(project, 'src', 'x.ts'), content: 'x' } }, project);
   assert.equal(out.status, 2);
   assert.match(out.stderr, /Blocked write to src\/x\.ts by module-reviewer/);
-  const ok = hook('reviewer-write-guard.js', { tool_name: 'Write', agent_type: 'module-reviewer', tool_input: { file_path: join(project, '.pipeline', 'items', 'review-pass1.md'), content: '# review' } }, project);
+  const ok = hook('reviewer-write-guard.cjs', { tool_name: 'Write', agent_type: 'module-reviewer', tool_input: { file_path: join(project, '.pipeline', 'items', 'review-pass1.md'), content: '# review' } }, project);
   assert.equal(ok.status, 0, ok.stderr);
 });
 
@@ -132,15 +132,15 @@ test('bash cap hook: a large result is replaced by the digest, the log goes unde
 test('bash cap hook as a hook: rewrites a large result and writes one log; small and exempt print nothing', () => {
   const project = fx('bash-cap-project');
   rmSync(capLogs, { recursive: true, force: true });
-  const large = hook('bash-output-cap.js', bashInput(big('fine')), project);
+  const large = hook('bash-output-cap.cjs', bashInput(big('fine')), project);
   assert.equal(large.status, 0, large.stderr);
   assert.match(JSON.parse(large.stdout).hookSpecificOutput.updatedToolOutput.stdout, /output capped/);
   const logs = readdirSync(join(capLogs, 'bash'));
   assert.equal(logs.length, 1);
   assert.match(readFileSync(join(capLogs, 'bash', logs[0]), 'utf8'), /after 299/);
-  assert.equal(hook('bash-output-cap.js', bashInput('small'), project).stdout, '');
-  assert.equal(hook('bash-output-cap.js', bashInput(big('fine'), 'node scripts/run-tier.mjs unit'), project).stdout, '');
-  assert.equal(hook('bash-output-cap.js', bashInput(big('fine')), fx('guard-project')).stdout, '');
-  assert.equal(hook('bash-output-cap.js', 'not json at all', project).status, 0);
+  assert.equal(hook('bash-output-cap.cjs', bashInput('small'), project).stdout, '');
+  assert.equal(hook('bash-output-cap.cjs', bashInput(big('fine'), 'node scripts/run-tier.mjs unit'), project).stdout, '');
+  assert.equal(hook('bash-output-cap.cjs', bashInput(big('fine')), fx('guard-project')).stdout, '');
+  assert.equal(hook('bash-output-cap.cjs', 'not json at all', project).status, 0);
   assert.equal(existsSync(join(fx('guard-project'), 'logs')), false);
 });

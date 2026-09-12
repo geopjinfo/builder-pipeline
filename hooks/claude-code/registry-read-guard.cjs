@@ -20,7 +20,7 @@
  * the hook itself allows the call — a guard that crashes a session is worse than the read it prevents.
  *
  * Arming: copy to `.claude/hooks/`, then add a `PreToolUse` entry with matcher `Read` running
- * `node .claude/hooks/registry-read-guard.js`. Arming is a person's deliberate act.
+ * `node .claude/hooks/registry-read-guard.cjs`. Arming is a person's deliberate act.
  */
 'use strict';
 const fs = require('node:fs');

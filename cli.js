@@ -124,7 +124,7 @@ const CAP_TO_CLAUDE_TOOLS = {
   'test-only': 'Read, Grep, Glob, Edit, Write, Bash', // scope narrowed by the persona text itself
   docs: 'Read, Grep, Glob, Edit, Write, Bash',
   // A read-only seat that must write exactly ONE file of its own (the reviewer's review). The grant is only a
-  // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.js does.
+  // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.cjs does.
   'read-only+own-file': 'Read, Grep, Glob, Bash, Write',
   // Reads and publishes a page; never edits the repo (experimental live-page keeper).
   publish: 'Bash, Read, Artifact',
@@ -260,8 +260,8 @@ function installTool(tool) {
      * hooks are read at session start, so one added mid-session does not fire until the next session.
      * `adapters/claude-code.md` names the event and matcher for each.
      */
-    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.js'), path.join('.claude', 'hooks', 'protected-paths.js'));
-    copyIfAbsent(path.join(KIT, 'hooks', 'board-render.js'), path.join('.claude', 'hooks', 'board-render.js'));
+    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join('.claude', 'hooks', 'protected-paths.cjs'));
+    copyIfAbsent(path.join(KIT, 'hooks', 'board-render.cjs'), path.join('.claude', 'hooks', 'board-render.cjs'));
     for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
       copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
     }
@@ -424,11 +424,17 @@ function cmdVerify() {
   let fail = 0;
   const check = (ok, msg) => { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fail++; };
   const profileAbs = path.join(CWD, 'PIPELINE_PROFILE.md');
+  /**
+   * The ledgers live where §16 `paths` says, not where the installer first put them. An adopter whose
+   * conventions keep the boards elsewhere moves them and records the move in §16; every script reads it, so
+   * `verify` reads it too — otherwise it would fail the one install that followed the profile.
+   */
+  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
 
   console.log('Install:');
   check(fs.existsSync(profileAbs), 'PIPELINE_PROFILE.md exists at repo root');
-  check(fs.existsSync(path.join(CWD, 'tasks', 'README.md')), 'tasks/README.md (board rules) exists');
-  check(fs.existsSync(path.join(CWD, 'DEFERRED_TASKS.md')), 'DEFERRED_TASKS.md exists');
+  check(fs.existsSync(path.join(CWD, boardsDir, 'README.md')), `${boardsDir}/README.md (board rules) exists (paths.boards)`);
+  check(fs.existsSync(path.join(CWD, registryFile)), `${registryFile} exists (paths.registry)`);
   check(
     fs.existsSync(path.join(CWD, 'scripts', 'board-progress.mjs')) &&
       fs.existsSync(path.join(CWD, 'scripts', 'board-check-all.mjs')),
@@ -506,35 +512,50 @@ function parseTableRows(md) {
     .filter((cells) => cells.length >= 4 && !/^[-: ]+$/.test(cells[1] || '-') && !/^(#|Id)$/i.test(cells[0]));
 }
 
+/** The ledger locations every script agrees on: §16 `paths`, or the installer's defaults when there is no profile. */
+function ledgerPaths() {
+  const { settings } = profileLib().load(CWD);
+  const p = settings?.paths ?? {};
+  return { boards: p.boards || 'tasks', registry: p.registry || 'DEFERRED_TASKS.md' };
+}
+
 function cmdCheckLedgers() {
   const problems = [];
   const note = (file, row, rule, msg) => problems.push({ file, row, rule, msg });
+  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
 
   // Registry first (boards cross-reference it)
-  const regPath = path.join(CWD, 'DEFERRED_TASKS.md');
+  const regPath = path.join(CWD, registryFile);
   const regIds = new Set();
-  if (!fs.existsSync(regPath)) note('DEFERRED_TASKS.md', '-', 'LG-0', 'registry file missing');
+  if (!fs.existsSync(regPath)) note(registryFile, '-', 'LG-0', 'registry file missing');
   else {
     const raw = fs.readFileSync(regPath, 'utf8');
     if (raw.includes('⚠ VERIFY'))
-      note('DEFERRED_TASKS.md', '-', 'LG-4', 'unresolved "⚠ VERIFY" flag — resolve it, either way');
+      note(registryFile, '-', 'LG-4', 'unresolved "⚠ VERIFY" flag — resolve it, either way');
     for (const cells of parseTableRows(raw)) {
       const [id, , , status] = cells;
       if (!/^[A-Za-z0-9_.-]+$/.test(id)) continue; // prose/example rows
-      if (regIds.has(id)) note('DEFERRED_TASKS.md', id, 'LG-1', 'duplicate registry id');
+      if (regIds.has(id)) note(registryFile, id, 'LG-1', 'duplicate registry id');
       regIds.add(id);
       if (status && !REGISTRY_STATUSES.includes(status))
-        note('DEFERRED_TASKS.md', id, 'LG-2', `status "${status}" not in registry vocabulary [${REGISTRY_STATUSES.join(', ')}] — out-of-vocabulary rows are silently dropped by anything that counts`);
+        note(registryFile, id, 'LG-2', `status "${status}" not in registry vocabulary [${REGISTRY_STATUSES.join(', ')}] — out-of-vocabulary rows are silently dropped by anything that counts`);
     }
   }
 
-  // Boards
-  const tasksDir = path.join(CWD, 'tasks');
+  /**
+   * Boards. A gate that finds no input must fail, not pass: a boards directory that is missing, or that holds no
+   * board, used to loop over nothing and print PASS — which is exactly the reading an adopter gets after moving
+   * the boards and forgetting §16. Before the first run there are legitimately no boards; wire this gate into CI
+   * once the first board exists, as the board rules say. Until then the failure names the path it looked in.
+   */
+  const tasksDir = path.join(CWD, boardsDir);
   const boards = fs.existsSync(tasksDir)
     ? fs.readdirSync(tasksDir).filter((f) => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('_'))
     : [];
+  if (!fs.existsSync(tasksDir)) note(boardsDir, '-', 'LG-0', `boards directory missing — paths.boards says ${JSON.stringify(boardsDir)}; nothing was checked`);
+  else if (!boards.length) note(boardsDir, '-', 'LG-0', `no boards found under ${boardsDir}/ — an empty input set is not a pass; wire this gate in once the first board exists`);
   for (const b of boards) {
-    const rel = path.join('tasks', b);
+    const rel = `${boardsDir}/${b}`; // forward slashes: the report is what a person cites, on any host
     for (const cells of parseTableRows(fs.readFileSync(path.join(tasksDir, b), 'utf8'))) {
       const [id, , , status, evidence] = cells;
       if (!/^(T|C|IC-|FIX-?)\d+/i.test(id)) continue; // not a task row
@@ -542,7 +563,7 @@ function cmdCheckLedgers() {
       const def = bare.match(/^DEFERRED(?:→|->)(.+)$/);
       if (def) {
         const ref = def[1].trim();
-        if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in DEFERRED_TASKS.md`);
+        if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in ${registryFile}`);
       } else if (!BOARD_STATUSES.includes(bare)) {
         note(rel, id, 'LG-2', `status "${status}" not in board vocabulary [${BOARD_STATUSES.join(', ')}, DEFERRED→<id>]`);
       }
@@ -552,14 +573,13 @@ function cmdCheckLedgers() {
   }
 
   // Report
-  if (!boards.length) console.log('note: no boards found under tasks/ (nothing built yet?) — registry checked only.');
   if (problems.length === 0) {
     console.log(`check-ledgers: PASS — ${boards.length} board(s), ${regIds.size} registry row(s), 0 violations.`);
     process.exit(0);
   }
   console.log(`check-ledgers: FAIL — ${problems.length} violation(s):\n`);
   for (const p of problems) console.log(`  [${p.rule}] ${p.file} :: ${p.row} — ${p.msg}`);
-  console.log('\nRules: LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 DEFERRED→id must exist in registry · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence');
+  console.log('\nRules: LG-0 a ledger the gate could not read · LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 DEFERRED→id must exist in registry · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence');
   process.exit(1);
 }
 
