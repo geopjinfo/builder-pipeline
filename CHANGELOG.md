@@ -5,6 +5,16 @@ versions independently of any project it is pasted into.
 
 ## [0.13.2] — 2026-09-13
 
+### Added
+
+- **`verify` fails on a ledger left at a default path that §16 moved.** Fixing the writer does not find
+  what the writer already wrote: a repo that ran the buggy upgrade still holds the blank twin, and every
+  checker reads §16, so all of them pass over it in silence — which is the entire failure. The check names
+  each surviving file, the §16 key that moved it, and what to do (move any content into the §16 copy, then
+  delete). It looks only for the kit's own filenames, and only for a ledger §16 actually moved, so a
+  project with an unrelated `tasks/` directory and a default install are both untouched — a test asserts
+  the default install is not accused.
+
 ### Fixed
 
 - **The installer honours §16 `paths` — it was the last reader that did not.** An adopter who keeps

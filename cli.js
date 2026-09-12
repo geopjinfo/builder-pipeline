@@ -444,12 +444,37 @@ function cmdVerify() {
    * conventions keep the boards elsewhere moves them and records the move in §16; every script reads it, so
    * `verify` reads it too — otherwise it would fail the one install that followed the profile.
    */
-  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
+  const { boards: boardsDir, registry: registryFile, decisions: decisionsFile } = ledgerPaths();
 
   console.log('Install:');
   check(fs.existsSync(profileAbs), 'PIPELINE_PROFILE.md exists at repo root');
   check(fs.existsSync(path.join(CWD, boardsDir, 'README.md')), `${boardsDir}/README.md (board rules) exists (paths.boards)`);
   check(fs.existsSync(path.join(CWD, registryFile)), `${registryFile} exists (paths.registry)`);
+  /**
+   * A ledger has exactly one home, and the checkers cannot see the other one.
+   *
+   * WHY. Until 0.13.2 the installer copied to its own defaults whatever §16 said, so a re-run at a moved
+   * install left a blank board dir, registry and decision log at the defaults beside the real ones. The
+   * installer is fixed, but a repo that already ran the buggy upgrade still holds them — and every checker
+   * reads §16, so all of them pass over the twin in silence. That is the whole failure: a blank file wearing
+   * the kit's own header reads as "nothing deferred, nothing decided" with the authority of a real ledger.
+   * Detecting it is the only thing that turns a silent second truth into a deletion someone performs.
+   *
+   * Only the kit's OWN filenames are checked, and only where §16 moved that ledger — a project that keeps an
+   * unrelated `tasks/` directory is not accused of anything, because `tasks/README.md` is the kit's file.
+   */
+  const twins = [
+    ['tasks', 'tasks/README.md', boardsDir, 'paths.boards'],
+    ['tasks', 'tasks/_session-board.template.md', boardsDir, 'paths.boards'],
+    ['DEFERRED_TASKS.md', 'DEFERRED_TASKS.md', registryFile, 'paths.registry'],
+    ['DECISIONS.md', 'DECISIONS.md', decisionsFile, 'paths.decisions'],
+  ].filter(([def, file, configured]) => configured !== def && fs.existsSync(path.join(CWD, file)));
+  check(
+    twins.length === 0,
+    twins.length === 0
+      ? 'no ledger left at a default path that §16 moved'
+      : `left at a default path that §16 moved: ${twins.map(([, file, configured, key]) => `${file} (${key} says "${configured}")`).join(', ')} — a second, unreconciled ledger the checkers cannot see; move any content into the §16 copy, then delete it`,
+  );
   check(
     fs.existsSync(path.join(CWD, 'scripts', 'board-progress.mjs')) &&
       fs.existsSync(path.join(CWD, 'scripts', 'board-check-all.mjs')),
