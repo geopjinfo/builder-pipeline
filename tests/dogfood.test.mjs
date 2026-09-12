@@ -479,3 +479,90 @@ ${rows}
     assert.match(r.out, /\[LG-6\] DEFERRED_TASKS\.md :: D-2 — row has 6 cell\(s\), its header has 7/);
   });
 });
+
+/**
+ * A status cell is read for the term it CLAIMS, not for its typography.
+ *
+ * WHY. People write ledgers in markdown, for people: `**DONE**`, `DONE 2026-09-03`, `**DONE (2026-08-26)**
+ * — CP3 B4`. All three claim DONE, and an exact-match gate failed all three. On one repo's ledgers that was
+ * 146 findings of which 127 were emphasis and annotation — and a gate that fails on bold teaches its readers
+ * to skip it, so the nineteen that were REAL (`OPEN`, `BUILT`, `CLOSED — by observation`, `needs-ruling`)
+ * went unread with the rest. Being liberal here is what makes the remaining findings worth reading; the
+ * limit is that the cell must still BEGIN with a vocabulary term.
+ */
+describe('check-ledgers reads the status a cell claims, not its markup', () => {
+  let root;
+  const board = (status, evidence = 'tests/test_stock.py') => `# stock-levels — build board
+
+## P2 — Code
+
+| # | Task | Cites | Status | Test-seed / evidence | Notes |
+|---|------|-------|--------|----------------------|-------|
+| T1 | reorder level per item | D-1 | ${status} | ${evidence} | |
+`;
+
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'builder-status-'));
+    copyPack(root);
+    assert.equal(run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']).status, 0);
+  });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  const check = (status, evidence) => {
+    write(root, 'tasks/stock-levels.md', board(status, evidence));
+    return run(root, ['builder/cli.js', 'check-ledgers']);
+  };
+
+  for (const status of [
+    'DONE',
+    '**DONE**',
+    'DONE 2026-09-03',
+    '**DONE 2026-09-03**',
+    '**DONE (2026-08-26)** — CP3 B4, ADR-105',
+    '**DONE (2026-08-20, v0.73.1)**',
+    'IN-PROGRESS',
+    '**IN-PROGRESS** — three of five routes',
+  ]) {
+    test(`accepted: ${status}`, () => {
+      const r = check(status);
+      assert.equal(r.status, 0, r.out);
+    });
+  }
+
+  for (const [status, why] of [
+    ['OPEN', 'not a vocabulary term at all'],
+    ['**CLOSED — by observation**', 'CLOSED is not DONE, and the annotation does not make it one'],
+    ['**BUILT (2026-07-23)**', 'a term the board vocabulary does not have'],
+    ['**needs-ruling** — DEFERRED→`X-D1`', 'a deferral hidden behind a word that is not DEFERRED'],
+    ['DONEISH', 'a term must end at a separator, not merely start the cell'],
+  ]) {
+    test(`still refused: ${status} — ${why}`, () => {
+      const r = check(status);
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /\[LG-2\] tasks\/stock-levels\.md :: T1/);
+    });
+  }
+
+  test('the evidence rule follows the claim: an annotated DONE with no evidence is still LG-5', () => {
+    // This is the half that BITES. Before, such a row failed LG-2 on its markup and its evidence was
+    // never examined; now the claim resolves to DONE and the missing evidence is the finding.
+    const r = check('**DONE (2026-08-26)** — CP3 B4', '—');
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /\[LG-5\] tasks\/stock-levels\.md :: T1/);
+    assert.doesNotMatch(r.out, /\[LG-2\]/);
+  });
+
+  test('a deferral is read through its emphasis and its backticks', () => {
+    write(root, 'DEFERRED_TASKS.md', `# Deferred
+
+| Id | Raised by | Task | Status | Dependency | Why blocked | How to resume |
+|----|-----------|------|--------|------------|-------------|---------------|
+| D-7 | stock | wait for the queue | **DEFERRED** | queue | one line | steps |
+`);
+    const ok = check('**DEFERRED→`D-7`**', '—');
+    assert.equal(ok.status, 0, ok.out);
+    const missing = check('DEFERRED→D-99', '—');
+    assert.equal(missing.status, 1, missing.out);
+    assert.match(missing.out, /\[LG-3\] .*DEFERRED→D-99 has no matching row/);
+  });
+});

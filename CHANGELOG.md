@@ -38,6 +38,15 @@ Two upstream fixes (released there as 0.12.2 and 0.12.3) merged into this line, 
   before Status moves nothing; a table with no id-and-status header pair is not a ledger table and is skipped,
   as the old id-shaped row filter skipped a board’s phase table. LG-6 names both cell counts and the header,
   and the row is not read — a missing cell or an unescaped `|` in prose is a board defect, not a status.
+- **A status cell is read for the term it claims, not for its typography.**
+  People write ledgers in markdown, for people: `**DONE**`, `DONE 2026-09-03`, `**DONE (2026-08-26)** — CP3 B4`.
+  All three claim DONE and an exact-match gate failed all three. On one repo’s ledgers that was 146 findings of
+  which 127 were emphasis and annotation — and a gate that fails on bold teaches its readers to skip it, so the
+  nineteen that were REAL (`OPEN`, `BUILT`, `CLOSED — by observation`, `needs-ruling`) went unread with the rest.
+  Emphasis is now stripped wherever it appears and the cell must BEGIN with a vocabulary term, the remainder
+  starting at a separator; the longest term wins, so `IN-PROGRESS` and `NOW UNBLOCKED` survive. `DONEISH` and
+  `CLOSED — by observation` still fail. The evidence rule follows the claim, which is the half that bites: a row
+  whose markup used to fail LG-2 now resolves to DONE and its missing evidence becomes the finding.
 - **The board tooling reads `paths.boards` from §16, and a nested boards directory keeps its root.**
   The same assumption was in four more readers. `board-check-all` walked `tasks/` and crashed with `ENOENT`
   once the boards had moved; `board-render <key>` resolved a bare key against `tasks/`; `board-watch` and the
