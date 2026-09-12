@@ -53,10 +53,20 @@ between phases, which is exactly where loop-back decisions are made.
 to it in `module-planner`, `standards-auditor` and `invariant-auditor`. Each pointer says it applies
 only when this feature is `experimental-on`. The block ends every dispatch with a
 `graph: <calls> calls, <useful> useful, <dead_end> dead-end` line.
+`tooling/experimental/graph-trial-report.mjs` (installed as `scripts/experimental/`) is the
+measurement. It reads the harness's own transcripts, never the seats' accounting. Per session and
+seat, it counts the index calls: Bash commands matching `callPattern`, split by subcommand. It shows
+the seat's claimed return line beside that count and marks any mismatch. Seats outside
+`graphTrial.seats` are the control group, and a control seat with calls is flagged. A renamed seat
+silently moves into the control group, so keep `seats` equal to your installed seat names. Claude
+Code transcripts only.
 
-**Opt in.** `features.graph` configured (a working `check`), then
-`features.graphTrial.state: "experimental-on"`. Resolve the block's placeholder commands for your
-index tool first. A pointer with no runnable command measures nothing.
+**Opt in.** `features.graph` configured (a working `check`), then `unpack --experimental` and
+`features.graphTrial.state: "experimental-on"` with `callPattern` set. `callPattern` is a regular
+expression over the Bash command, with backslashes normalised to `/`. Capture 1 is the subcommand.
+Put in it only the subcommands the return line counts as calls. Resolve the block's placeholder
+commands for your index tool first. A pointer with no runnable command measures nothing. After each
+run: `node scripts/experimental/graph-trial-report.mjs <sessionId>…`.
 
 **Measurement.** Two runs with the trial on **and** a control group: comparable runs with it off,
 where no graph instruction reaches the seats by any other route (the brief, the profile). For each
@@ -93,19 +103,31 @@ saved. A replay of one run is a small sample; say so in the decision.
 
 ## 4. Role persona profiles from a permission catalogue — `personas` (experimental)
 
-**What ships.** Nothing but this protocol. The mechanism is described so an adopter with a permission
-catalogue can build it.
+**What ships.** `tooling/experimental/persona-gen.mjs` + `persona.cjs` (installed as
+`scripts/experimental/`). They write one profile per role column of the permission catalogue.
 
-**The mechanism.** One profile per role column of the permission catalogue. The **generated** half —
-the role's permission keys and, where one exists, its seeded test login — is written by a script
-from the catalogue, never typed. A checker refuses a key that differs from the catalogue column (a
-hand-added grant, a dropped key). The **drafted** half — scope rules, separation-of-duties limits,
-abuse goals — is written only for the roles a run touches, and every bullet cites its source; the
-checker refuses an uncited bullet.
+- **The generated half** sits between markers and is never typed: the role's keys, plus a
+  seeded-login line from an optional JSON map.
+- **The drafted half** — scope rules, separation-of-duties limits, abuse goals — keeps its text when
+  profiles are regenerated. A profile that has lost its markers is refused, not overwritten.
+- **`--check` fails** on:
+  - a missing or stray profile;
+  - a generated block that differs from the catalogue, naming each hand-added or dropped key;
+  - login drift, or a stale key count;
+  - a drafted bullet that does not match `citationPattern`.
+- It refuses a catalogue with zero role columns.
 
-**Opt in.** Build the generator and checker, then `features.personas.state: "experimental-on"`; the
-orchestrator attaches the profiles of the roles the module touches to the `security-auditor` and
-`invariant-auditor` dispatches.
+**Opt in.** `unpack --experimental`, then set `features.personas`:
+- `catalogue`, `out` and `citationPattern` are required.
+- `keyColumn` / `labelColumn` take a header name or a 0-based index.
+- Prefer an explicit `roleColumns` list. Inference, when it is `null`, takes every column that holds
+  only the `grant` value, so an "active" flag column would pass for a role.
+- `logins` is optional.
+
+Set `state` to `"experimental-on"` and run `node scripts/experimental/persona-gen.mjs`. Draft profiles
+only for the roles a run touches, and add `persona-gen.mjs --check` to the run's gates. The
+orchestrator attaches the touched roles' profiles to the `security-auditor` and `invariant-auditor`
+dispatches.
 
 **Measurement.** Two runs with the profiles attached. For each: actor-class findings (wrong actor,
 reflexive acts, separation-of-duties breaks) and the two seats' tokens, against comparable runs

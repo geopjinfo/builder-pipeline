@@ -1,0 +1,10 @@
+{
+  "_doc": "test fixture — declared effects no scenario exercises; shrink-only, moved by ratchet-refresh",
+  "items": [
+    "stock.adjust",
+    "stock.release",
+    "stock.reserve"
+  ],
+  "count": 3,
+  "measuredAt": "2026-08-01T00:00:00.000Z"
+}

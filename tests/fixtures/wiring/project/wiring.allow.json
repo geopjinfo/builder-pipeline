@@ -1,0 +1,8 @@
+[
+  {
+    "id": "drainPending",
+    "kind": "motor",
+    "reason": "The ledger queue ships ahead of the nightly reconciliation job that turns it, so writers can enqueue now. Delete this row the moment a production caller lands.",
+    "citation": "DECISIONS.md — STK-4"
+  }
+]

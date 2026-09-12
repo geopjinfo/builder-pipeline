@@ -252,6 +252,18 @@ reports the model the run actually used, where the harness keeps that record.
    progress bar is a projection of the Status column, never typed. Pass the `plan.md` **path** (not
    contents) + the board path to Phase 2.
 
+   **Resolve the board's citations before the builder reads them:**
+
+   ```
+   node scripts/citations-check.mjs <boards>/<key>.md
+   ```
+
+   Every `Cites` id in a scheme the profile declares (`features.citations.schemes`) must resolve to
+   its source; prose citations are reported not-evaluable, never failed. An unresolved id goes back to
+   the planner **now**: an unchecked citation is a more confident-looking invention, and one id reads
+   exactly like its neighbour that exists. Log a `gate` event; feature off → record
+   `citations: not configured` in `state.md`.
+
    Then **open the run log** — `<runs>/<key>/run.jsonl`, append-only — with a `run.start` event, and
    render once so the page exists from minute one:
 
@@ -318,6 +330,25 @@ reports the model the run actually used, where the harness keeps that record.
    reviewer later: in one adopting project 44% of loop-back fixes were false records (stale counts,
    drifted citations, ownerless notes), and they drove most review re-loops. Log the result as a
    `gate` event; feature off → `claims: not configured` in `state.md`.
+
+   Two more free checks at the same point, each a `gate` event, each failure a `FIX-n` row now:
+
+   ```
+   node scripts/line-citations-check.mjs
+   node scripts/wiring-check.mjs
+   ```
+
+   - **Line citations** (`features.lineCitations`) — a catalogue cited by line number instead of by
+     key. A line number rots the moment a row is inserted above it and launders a guess as
+     verification: in one adopting project every one of 120 such citations pointed at the wrong row.
+     The scan runs a positive control first, so a zero from a scan that found nothing fails. Feature
+     off → `lineCitations: not configured`.
+   - **Wiring** (`features.wiring`) — a declared seam with nothing on the other end: a queue whose
+     dispatcher has no production caller, a subscription to an event nothing emits, a registered
+     provider nothing references. Every artifact is individually correct, so no test fails; only the
+     join is missing. The builder joins it, deletes it, or — when a person rules it deliberately
+     latent — adds an allow row with a reason and a citation. A waiver matching no unjoined seam is
+     dead and fails. Feature off → `wiring: not configured`.
 3. **Test** — dispatch `module-tester` (verifier + adversary — it extends the builder's suite,
    never rewrites it). It also **covers the digest's `IC-n` invariant candidates as adversarial
    story journeys**, flipping each covered candidate and **naming what covers it** — an unnamed
@@ -346,8 +377,9 @@ reports the model the run actually used, where the harness keeps that record.
    changed**: read the REMOVED lines first — a transition that silently stopped auditing, an event
    that stopped firing, a dropped revocation. A red contract oracle means the API moved.
    **Do not re-baseline either oracle to make it green** — that marks untested operations as
-   accounted-for. A deliberate re-baseline needs a registry row saying what moved and why, never a
-   silent hash bump.
+   accounted-for. **Baselines are shrink-only**: a move that removes resolved entries is free, and
+   anything that adds one names each item and carries a registry row saying what moved and why —
+   never a silent hash bump that absorbs everything new in one motion.
 4. **Audit** — three preparations, then the dispatch.
 
    *Re-sync the index (optional, free).* When `features.graph.syncFree` is set, run it: an auditor
@@ -394,8 +426,9 @@ reports the model the run actually used, where the harness keeps that record.
    verdict **is** a pass.
 5. **Docs** — dispatch `docs-maintainer` (profile §10 scope). Docs findings are not a code gate,
    but a missing required annotation (e.g. the authZ key on an API operation) is.
-   **End of P5 — run the claims check again** (`node scripts/claims-check.mjs --run <key>`) before
-   the reviewer is dispatched: P3–P5 wrote counts and citations of their own.
+   **End of P5 — run the claims check again** (`node scripts/claims-check.mjs --run <key>`), and
+   `node scripts/line-citations-check.mjs`, before the reviewer is dispatched: P3–P5 wrote counts and
+   citations of their own.
 6. **Review** — dispatch `module-reviewer` with the diff ref, `plan.md`, and the structured
    upstream findings. It verifies each finding's evidence, runs the readiness checklist, performs
    the requirements-alignment audit, audits the board, **writes `<runs>/<key>/review-pass<n>.md`
@@ -430,8 +463,24 @@ reports the model the run actually used, where the harness keeps that record.
    parameters and error-code families the contract does not declare. Only drift absent from the
    baseline fails the gate. A check that compares the contract document with itself cannot see this
    class; only what was actually served can. Log it as a `gate` event; feature off →
-   `contractOracle: not configured`. `--write-baseline` is for a deliberate re-baseline only, with a
-   registry row saying what moved and why.
+   `contractOracle: not configured`. **The baseline is shrink-only.** A plain `--write-baseline`
+   only removes resolved entries and refuses while any new finding exists. A new finding is carried
+   only by name — `--write-baseline --accept "<key>"` — with a registry row saying why. `--initial`
+   is the adoption path, and works only while no baseline exists. Never accept a finding to turn the
+   gate green: fix the drift or carry it by name.
+
+   **Then move any shrink-only gap list by measurement, never by hand (optional):**
+
+   ```
+   node scripts/ratchet-refresh.mjs
+   ```
+
+   Each list in `features.ratchets.lists` is a bank of known gaps (declared effects nothing
+   exercises, operations not yet baselined) with its ceiling in the same file. The script refuses an
+   item the run newly measures — that is something shipped without coverage, and the fix is
+   coverage, not a line in the bank — and drains what is now covered (`--write` applies; the list and
+   its ceiling move together, so no slack is left for a later entry to slip in). Log a `gate` event;
+   feature off → `ratchets: not configured`.
 
    **Delta-scoped, so the gate is hard without being hostage to estate-wide noise:** it blocks on
    any *new* failure attributable to this module's operations, effects or candidates. A
@@ -469,7 +518,8 @@ misalignment):
    off → one builder dispatch with the plan path, the board path and the whole list, and record
    `fixLane: not configured`.
 3. Re-run the affected phases (always Test **and 3b drift** — both are cheap, and a fix is exactly
-   when a declared effect silently disappears; always the claims check; re-run an auditor only if
+   when a declared effect silently disappears; always the claims, line-citation and wiring checks;
+   re-run an auditor only if
    its domain was touched; re-run 6.5 if the fix changed runtime behaviour, and always if it changed
    a transition; re-run the alignment audit if a requirement-related fix landed).
 4. Repeat until `module-reviewer` returns **MERGE-READY**. **If the same blocker survives two
@@ -507,7 +557,21 @@ When **MERGE-READY**:
    before proceeding (an out-of-vocabulary status or dangling `DEFERRED→id` rots silently
    otherwise). Make sure every decision and human ruling of this run (boundary events, catalogue
    amendments, fold-in calls, escalation outcomes) is a row in `<decisions>` — future planners cite
-   these ids instead of re-asking.
+   these ids instead of re-asking. Then the two free record gates:
+
+   ```
+   node scripts/decision-index.mjs --check
+   node scripts/instruction-budget.mjs
+   ```
+
+   - **Decision index** (`features.decisionIndex`) — the index of decision ids is derived from their
+     anchors, never typed, so an id this run cited but never anchored is visibly absent instead of
+     invisible. `--check` fails on a stale index, an unanchored id, or an id anchored twice; run it
+     without `--check` to regenerate. Feature off → `decisionIndex: not configured`.
+   - **Instruction budget** (`features.instructionBudget`) — the agent instruction files stay under
+     their line budget. Over budget → move a section into a path-scoped rule file (moved, not
+     copied). Without a gate the root file grows back one working agreement at a time. Feature off →
+     `instructionBudget: not configured`.
 4. **Version bump** per profile §11 (e.g. semver + changelog entry: module key, requirements
    covered, interfaces/keys, deferrals, notable audit catches). Version + changelog ride the branch.
 5. **The handoff pack — P7 cannot close without it.** Every human-only change this module implies

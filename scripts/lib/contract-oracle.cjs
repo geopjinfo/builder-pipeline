@@ -146,12 +146,72 @@ function compare(result, baseline) {
   };
 }
 
+const entryOf = ({ key, class: c, count, example }) => ({ key, class: c, count, example });
+
 function baselineDocument(failing, transcript) {
   return {
-    _doc: 'contract-oracle baseline — known drift that does not fail the run. Each entry needs a registry row or a written reason; re-baselining is a deliberate act.',
+    _doc: 'contract-oracle baseline — known drift that does not fail the run. Each entry needs a registry row or a written reason; it shrinks by itself and grows only by a named --accept.',
     transcript,
-    findings: failing.map(({ key, class: c, count, example }) => ({ key, class: c, count, example })),
+    findings: failing.map(entryOf),
   };
+}
+
+/**
+ * The next baseline — SHRINK-ONLY.
+ *
+ * WHY. A write that re-records "whatever fails now" absorbs every new drift finding in one motion, and the
+ * baseline's whole value is that it holds only drift somebody CHOSE to carry. So a plain write may only
+ * prune entries the run no longer produces. A new finding enters one of two ways: named, one key at a time
+ * (`accept`), or — on adoption, when there is no baseline yet to protect — all at once (`initial`).
+ *
+ * Entries already carried are left exactly as they were (their count and example are not refreshed): a
+ * refresh would rewrite the file on every run, and a baseline that changes when nothing was decided is noise
+ * on the one artefact that must only move deliberately.
+ *
+ * @param {{ key: string }[]} current   the run's FAILING findings (`compare().failing`)
+ * @param {object|null} baseline        the parsed baseline document, or null when no file exists
+ * @param {{ accept?: string[], initial?: boolean, transcript?: string|null }} [options]
+ * @returns {{ document: object|null, added: object[], pruned: object[], refused: object[], noop: string[],
+ *             unknown: string[], invalid: string[], changed: boolean }}
+ *   invalid / unknown → a usage error (nothing may be written) · refused → unnamed fresh findings (nothing may
+ *   be written) · otherwise `document` is what to write when `changed`.
+ */
+function nextBaseline(current, baseline, options = {}) {
+  const accept = [...new Set(options.accept ?? [])];
+  const initial = Boolean(options.initial);
+  const out = { document: null, added: [], pruned: [], refused: [], noop: [], unknown: [], invalid: [], changed: false };
+  if (initial && baseline) out.invalid.push('--initial records every failing finding and is only for adoption — a baseline already exists; prune with --write-baseline, add with --accept');
+  if (initial && accept.length) out.invalid.push('--initial and --accept are exclusive — --initial already records every failing finding');
+  if (out.invalid.length) return out;
+
+  if (initial) {
+    out.added = current.map(entryOf);
+    out.document = baselineDocument(current, options.transcript ?? null);
+    out.changed = true;
+    return out;
+  }
+
+  const carried = baseline?.findings ?? [];
+  const carriedKeys = new Set(carried.map((f) => f.key));
+  const byKey = new Map(current.map((f) => [f.key, f]));
+  for (const key of accept) {
+    if (carriedKeys.has(key)) out.noop.push(key);
+    else if (!byKey.has(key)) out.unknown.push(key);
+  }
+  if (out.unknown.length) return out;
+
+  const named = new Set(accept);
+  const fresh = current.filter((f) => !carriedKeys.has(f.key));
+  out.refused = fresh.filter((f) => !named.has(f.key));
+  if (out.refused.length) return out;
+
+  out.added = fresh.map(entryOf);
+  out.pruned = carried.filter((f) => !byKey.has(f.key));
+  out.changed = out.added.length > 0 || out.pruned.length > 0;
+  const kept = carried.filter((f) => byKey.has(f.key));
+  const base = baseline ?? baselineDocument([], options.transcript ?? null);
+  out.document = { ...base, findings: [...kept, ...out.added] };
+  return out;
 }
 
 /** JSONL text → records; a blank line is skipped, a malformed one throws with its line number. */
@@ -170,4 +230,4 @@ function parseTranscript(text) {
   return out;
 }
 
-module.exports = { FAILING, judge, findings, compare, baselineDocument, parseTranscript };
+module.exports = { FAILING, judge, findings, compare, baselineDocument, nextBaseline, parseTranscript };

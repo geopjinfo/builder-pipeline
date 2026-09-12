@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -125,14 +126,144 @@ test('CLI red: new drift exits 1; the baselined finding is reported as known', (
   assert.match(r.stdout, /contract-oracle: FAIL — 3 new drift finding\(s\)/);
 });
 
-test('CLI: --write-baseline records every failing finding, and the next run passes', () => {
-  const written = run(fx(), ['--baseline', tmpBaseline, '--write-baseline']);
+test('CLI: --write-baseline --initial records every failing finding when no baseline exists, and the next run passes', () => {
+  const written = run(fx(), ['--baseline', tmpBaseline, '--write-baseline', '--initial']);
   assert.equal(written.status, 0, written.stderr);
-  assert.match(written.stdout, /baseline written — 4 failing finding\(s\)/);
+  assert.match(written.stdout, /initial baseline recorded — 4 failing finding\(s\)/);
   assert.equal(JSON.parse(readFileSync(tmpBaseline, 'utf8')).findings.length, 4);
   const again = run(fx(), ['--baseline', tmpBaseline]);
   assert.equal(again.status, 0, again.stdout);
   assert.match(again.stdout, /contract-oracle: PASS \(no new drift\)/);
+});
+
+/* ---- shrink-only baseline ---------------------------------------------------------------------------- */
+
+const K = {
+  status: 'status-drift POST /items 200 declared 201/422',
+  query: 'query-drift GET /items 200 accepted undeclared query parameter "search"',
+  code: 'code-drift GET /items/{id} 404 404 carried GONE; declared NOT_FOUND',
+  route: 'undocumented-route GET /suppliers 200 GET /suppliers answered 200',
+  stale: 'query-drift GET /gone 200 accepted undeclared query parameter "q"',
+};
+const made = [];
+after(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })));
+const project = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'builder-oracle-'));
+  cpSync(fx(), dir, { recursive: true });
+  made.push(dir);
+  return dir;
+};
+const entry = (key) => ({ key, class: key.split(' ')[0], count: 1, example: '#0 fixture' });
+const withBaseline = (dir, keys) => {
+  writeFileSync(join(dir, 'baseline.json'), `${JSON.stringify({ _doc: 'carried', transcript: 'transcript.jsonl', findings: keys.map(entry) }, null, 2)}\n`);
+  return readFileSync(join(dir, 'baseline.json'));
+};
+const failingNow = [K.status, K.query, K.code, K.route].map((key) => ({ ...entry(key), count: 2 }));
+
+describe('nextBaseline — pure', () => {
+  test('prunes resolved entries and never adds; carried entries are left exactly as they were', () => {
+    const baseline = { _doc: 'x', findings: [entry(K.stale), ...[K.status, K.query, K.code, K.route].map(entry)] };
+    const n = oracle.nextBaseline(failingNow, baseline);
+    assert.deepEqual(n.pruned.map((f) => f.key), [K.stale]);
+    assert.deepEqual(n.added, []);
+    assert.equal(n.changed, true);
+    assert.equal(n.document._doc, 'x');
+    assert.deepEqual(n.document.findings.map((f) => f.count), [1, 1, 1, 1]);
+  });
+
+  test('red: an unnamed fresh finding is refused, and nothing is offered to write', () => {
+    const n = oracle.nextBaseline(failingNow, { findings: [entry(K.route), entry(K.stale)] });
+    assert.deepEqual(n.refused.map((f) => f.key), [K.status, K.query, K.code]);
+    assert.equal(n.document, null);
+    assert.equal(n.changed, false);
+  });
+
+  test('--accept adds only the named key; unnamed fresh still refuse; a carried key is a no-op; an unproduced key is unknown', () => {
+    const base = { findings: [K.route, K.status, K.query].map(entry) };
+    const one = oracle.nextBaseline(failingNow, base, { accept: [K.code, K.route] });
+    assert.deepEqual(one.added.map((f) => f.key), [K.code]);
+    assert.deepEqual(one.noop, [K.route]);
+    assert.equal(one.document.findings.length, 4);
+    assert.deepEqual(oracle.nextBaseline(failingNow, { findings: [entry(K.route)] }, { accept: [K.code] }).refused.map((f) => f.key), [K.status, K.query]);
+    assert.deepEqual(oracle.nextBaseline(failingNow, base, { accept: [K.stale] }).unknown, [K.stale]);
+  });
+
+  test('--initial only without a baseline, and never with --accept', () => {
+    assert.equal(oracle.nextBaseline(failingNow, null, { initial: true }).document.findings.length, 4);
+    assert.match(oracle.nextBaseline(failingNow, { findings: [] }, { initial: true }).invalid[0], /already exists/);
+    assert.match(oracle.nextBaseline(failingNow, null, { initial: true, accept: [K.code] }).invalid[0], /exclusive/);
+  });
+
+  test('nothing moved → changed is false', () => {
+    const n = oracle.nextBaseline(failingNow, { findings: [K.status, K.query, K.code, K.route].map(entry) });
+    assert.equal(n.changed, false);
+    assert.deepEqual([n.added.length, n.pruned.length, n.refused.length], [0, 0, 0]);
+  });
+});
+
+describe('contract-oracle — shrink-only baseline CLI', () => {
+  test('red: fresh findings + bare --write-baseline refuses, names each key and both ways forward, and leaves the file unchanged', () => {
+    const dir = project();
+    const before = readFileSync(join(dir, 'baseline.json'));
+    const r = run(dir, ['--write-baseline']);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    for (const key of [K.status, K.query, K.code]) assert.ok(r.stdout.includes(`+ ${key}`), `refusal does not name ${key}`);
+    assert.match(r.stdout, /fix the drift/);
+    assert.match(r.stdout, /--write-baseline --accept "<key>"/);
+    assert.match(r.stdout, /contract-oracle: FAIL — --write-baseline refused: 3 NEW/);
+    assert.deepEqual(readFileSync(join(dir, 'baseline.json')), before);
+  });
+
+  test('bare --write-baseline prunes a resolved entry; a second run moves nothing and leaves the file byte-identical', () => {
+    const dir = project();
+    withBaseline(dir, [K.stale, K.status, K.query, K.code, K.route]);
+    const r = run(dir, ['--write-baseline']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.ok(r.stdout.includes(`pruned    ${K.stale}`));
+    assert.match(r.stdout, /1 pruned, 0 accepted, 4 carried/);
+    const after1 = readFileSync(join(dir, 'baseline.json'));
+    const again = run(dir, ['--write-baseline']);
+    assert.equal(again.status, 0);
+    assert.match(again.stdout, /nothing moved; baseline left byte-identical/);
+    assert.deepEqual(readFileSync(join(dir, 'baseline.json')), after1);
+  });
+
+  test('red: --accept adds only the named key — with another fresh finding unnamed it refuses and writes nothing', () => {
+    const dir = project();
+    const before = withBaseline(dir, [K.route, K.status]);
+    const partial = run(dir, ['--write-baseline', '--accept', K.code]);
+    assert.equal(partial.status, 1);
+    assert.ok(partial.stdout.includes(`+ ${K.query}`));
+    assert.ok(!partial.stdout.includes(`+ ${K.code}`));
+    assert.deepEqual(readFileSync(join(dir, 'baseline.json')), before);
+
+    withBaseline(dir, [K.route, K.status, K.query, K.stale]);
+    const named = run(dir, ['--write-baseline', '--accept', K.code, '--accept', K.route]);
+    assert.equal(named.status, 0, named.stdout + named.stderr);
+    assert.ok(named.stdout.includes(`already baselined — no-op: ${K.route}`));
+    const keys = JSON.parse(readFileSync(join(dir, 'baseline.json'), 'utf8')).findings.map((f) => f.key);
+    assert.deepEqual(keys, [K.route, K.status, K.query, K.code]);
+  });
+
+  test('red: an --accept key the run does not produce exits 2 and writes nothing', () => {
+    const dir = project();
+    const before = withBaseline(dir, [K.route, K.status, K.query]);
+    const r = run(dir, ['--write-baseline', '--accept', K.stale]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /does not produce as a failing finding/);
+    assert.deepEqual(readFileSync(join(dir, 'baseline.json')), before);
+  });
+
+  test('red: --initial over an existing baseline exits 2 and leaves it unchanged; --accept without --write-baseline exits 2', () => {
+    const dir = project();
+    const before = readFileSync(join(dir, 'baseline.json'));
+    const r = run(dir, ['--write-baseline', '--initial']);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /only for adoption/);
+    assert.deepEqual(readFileSync(join(dir, 'baseline.json')), before);
+    assert.equal(run(dir, ['--accept', K.code]).status, 2);
+    assert.equal(run(dir, ['--write-baseline', '--accept']).status, 2);
+  });
 });
 
 test('CLI: feature off prints not configured and exits 0; a missing transcript exits 2', () => {

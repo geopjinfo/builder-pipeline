@@ -16,7 +16,7 @@
  *   node builder/cli.js check-targets    (qa-audit environment safety — wire into CI)
  *
  * --no-extras skips the optional utility skills in skills-extra/ (status-and-next, caveman,
- * graphify, ledger-audit — see skills-extra/README.md).
+ * graphify, ledger-audit — see skills-extra/README.md) and the personas they ship (skills-extra/<name>/agents/).
  * --experimental also installs the experimental files (agents/experimental/, tooling/experimental/). They are
  * shipped but unproven; EXPERIMENTS.md names the measurement that promotes or removes each one.
  *
@@ -174,8 +174,9 @@ function copyTransformed(src, dst, fn) {
   log(DRY ? 'would install:' : 'installed:', dst);
 }
 
-function copyDirIfAbsent(srcDir, dstDir) {
+function copyDirIfAbsent(srcDir, dstDir, skipTop = []) {
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    if (skipTop.includes(entry.name)) continue;
     const src = path.join(srcDir, entry.name);
     const dst = path.join(dstDir, entry.name);
     if (entry.isDirectory()) copyDirIfAbsent(src, dst);
@@ -187,6 +188,19 @@ function extrasList() {
   const dir = path.join(KIT, 'skills-extra');
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+}
+
+/**
+ * Personas an extra skill ships (`skills-extra/<name>/agents/*.md`). They install like `agents/*.md`, into the
+ * persona registry, and only with the extras. They are NOT also copied into the skill's own folder: a second copy
+ * there would keep the neutral frontmatter, never load as a subagent, and drift from the one that does.
+ */
+function extraAgentFiles() {
+  return extrasList().flatMap((name) =>
+    fs.existsSync(path.join(KIT, 'skills-extra', name, 'agents'))
+      ? fs.readdirSync(path.join(KIT, 'skills-extra', name, 'agents')).filter((f) => f.endsWith('.md')).map((file) => ({ name, file }))
+      : [],
+  );
 }
 
 // --------------------------- pointer content -------------------------------
@@ -263,7 +277,12 @@ function installTool(tool) {
   }
   if (!NO_EXTRAS) {
     const base = t.style === 'native' ? path.join('.claude', 'skills') : path.join('.builder', 'skills');
-    for (const name of extrasList()) copyDirIfAbsent(path.join(KIT, 'skills-extra', name), path.join(base, name));
+    for (const name of extrasList()) copyDirIfAbsent(path.join(KIT, 'skills-extra', name), path.join(base, name), ['agents']);
+    for (const { name, file } of extraAgentFiles()) {
+      const src = path.join(KIT, 'skills-extra', name, 'agents', file);
+      if (t.style === 'native') copyTransformed(src, path.join('.claude', 'agents', file), toClaudeAgent);
+      else copyIfAbsent(src, path.join('.builder', 'personas', file));
+    }
   }
   if (t.mdc) writeIfAbsent(t.pointer, pointerBlock(tool));
   else appendPointerOnce(t.pointer, pointerBlock(tool));

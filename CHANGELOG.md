@@ -3,6 +3,76 @@
 All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
 versions independently of any project it is pasted into.
 
+## [0.13.0] — 2026-09-11
+
+### Every rule the pack stated without a command now has one
+
+The pack wrote down rules it shipped nothing to hold: the board's `Cites` column with no resolver, a
+"seam with no motor" invariant class asking for "the mechanical check + its allowlist" with none
+shipped, a line-count gate on the instruction file named in `tooling/PORTING.md` with no gate, a
+"never re-baseline to green" rule beside a `--write-baseline` that absorbed every new finding in one
+motion, and two experiments whose measurement was prose. This release ships the command for each —
+every one ported as a mechanism from the source project, with everything project-specific moved into
+§16, and every one `off` (or experimental) until an adopter says what their project has.
+
+### Added
+
+- **`citations-check`** (`features.citations`) — every board `Cites` id in a declared scheme must
+  resolve to its source (`{ csv, column }` · `{ dir, filePattern }` · `{ files, idPattern }`); prose
+  is not-evaluable, never failed. A scheme whose source yields zero ids fails (the positive control),
+  and so do boards with no `Cites` column at all. Playbook: P1, right after the board is created.
+- **`line-citations-check`** (`features.lineCitations`) — a catalogue cited by line number instead of
+  by key. Positive control first; an optional shrink-only roster for a backlog being swept (a dead
+  entry fails, and so does a `total` above the count); `--stale` measures cited vs actual lines.
+  Playbook: end of P2 and P5.
+- **`wiring-check`** (`features.wiring`) — declared seams with nothing on the other end, inventoried by
+  per-kind `declare` / `join` patterns; an allow file for seams a person rules latent (reason and
+  citation required, dead waivers fail); zero inventory or a mandatory kind with no seams fails.
+  `examples/wiring/` holds the kinds for a TypeScript dependency-injection service. Playbook: end of P2.
+- **`instruction-budget`** (`features.instructionBudget`) — the agent instruction files stay under
+  `maxLines`; a missing listed file fails. Playbook: close-out.
+- **`decision-index`** (`features.decisionIndex`) — the index of decision ids derived from their
+  anchors (headings, decision-log rows); `--check` fails on a stale index, an id cited but never
+  anchored, or one anchored twice. Playbook: close-out.
+- **`ratchet-refresh`** (`features.ratchets`) — shrink-only gap lists moved by measurement only: a
+  newly measured item is refused, a covered one drained, and the list and its ceiling live in one
+  file and move together. Playbook: after the behavioural run.
+- **`examples/jest-tier-runner/instruction-trailer-check.mjs`** — the CI entry for the shipped
+  `instruction-trailer.cjs`.
+- **Experimental instruments ship** — `tooling/experimental/graph-trial-report.mjs` (the graph-trial
+  measurement from the harness's transcripts, claimed vs counted side by side, the control group
+  flagged) and `tooling/experimental/persona-gen.mjs` (role profiles generated from a permission
+  catalogue; `--check` holds the generated half to the catalogue and every drafted bullet to
+  `citationPattern`). `features.graphTrial` gains `seats` + `callPattern`; `features.personas` gains
+  the catalogue keys.
+- **The knowledge-index example meets the whole contract** — `tooling/optional/sync.py --check`
+  (facts line, exits `0/3/4/10/11/12`), `autosync.py` (one entry for every trigger: lock with
+  stale-holder reclaim, embed only within `INDEX_AUTO_LIMIT_KB` and only through `INDEX_EMBED_COMMAND`
+  — no model CLI assumed — status file, exit `20` on a held lock), and `session-sync-hook.js` (the
+  Claude Code session-start trigger, copied never armed). `sync-hook.sh` now runs `autosync.py` on
+  the branches in `BASE_BRANCHES`. New env vars: `INDEX_ROOT`, `INDEX_OUT_DIR`, `INDEX_AUTO_LIMIT_KB`,
+  `INDEX_EMBED_COMMAND`, `INDEX_PENDING_FILE`, `INDEX_SYNC_SKIP`, `INDEX_STALE_LOCK_SECONDS`,
+  `INDEX_PYTHON`, `INDEX_AUTOSYNC_SCRIPT`.
+- **`repo-audit` ships its synthesis seat and its Claude Code fan-out** —
+  `skills-extra/repo-audit/agents/repo-auditor.md` and `audit-workflow.js` (launched only on explicit
+  opt-in; every project value in `args`). The sweep gains the invariant lens.
+
+### Changed
+
+- **`contract-oracle` baselines are shrink-only.** A plain `--write-baseline` prunes resolved entries
+  and refuses while any new finding exists; `--accept "<key>"` carries one by name; `--initial`
+  records everything only when no baseline exists yet. **Upgrading:** a script or CI step that called
+  `--write-baseline` to absorb new drift now exits 1 — name the keys, or use `--initial` on a first
+  baseline.
+- **`unpack` installs personas that ship inside an extra** (`skills-extra/<name>/agents/*.md`) the way
+  it installs `agents/*.md`; `--no-extras` skips them.
+- **Settings validation** checks the new list shapes at load (schemes, kinds, lists; unique names; the
+  wiring kind's `scope`, `optional` and `detail`), so `features.mjs` never reports a profile valid
+  that a script would reject mid-run.
+- **Playbook** gains the `not configured` branch for each new check; `DISCOVERY.md` gains a row per
+  feature; `EXPERIMENTS.md` §2 and §4 describe the instruments that now ship; the claude-code, codex
+  and generic adapters describe the session-start trigger.
+
 ## [0.12.1] — 2026-09-11
 
 ### Fixed

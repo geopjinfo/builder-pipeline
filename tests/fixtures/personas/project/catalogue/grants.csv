@@ -1,0 +1,5 @@
+key,label,domain,Store Manager,Stock Clerk,Auditor (read-only),Night Porter,notes
+stock.read,Read stock levels,stock,1,1,1,,
+stock.adjust,"Adjust stock, with a reason",stock,1,1,,,legacy
+stock.approve,Approve an adjustment,stock,1,,,,
+report.export,Export the stock report,report,1,,1,,

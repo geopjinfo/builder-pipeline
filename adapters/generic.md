@@ -42,7 +42,7 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 | Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>` |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the reviewer may leave only its review file |
 | Protected-path hook | the universal pre-commit guard in `hooks/` (it holds for any agent) |
-| Session-start index refresh | unavailable. The P1 index gate (`node scripts/index-check.mjs`) is the catch |
+| Session-start index refresh | unavailable. The P1 index gate (`node scripts/index-check.mjs`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
 | Subagent spawn depth 1 | the no-nested-run rule, by instruction; a fresh session that cannot dispatch satisfies it by construction |
 | Prompt-cache TTL by replay | unavailable unless your harness exposes cache settings; if it does, the replay method in `adapters/claude-code.md` applies unchanged |
 | Orchestrator model check | `node scripts/orchestrator-check.mjs` prints `unmeasurable here` |

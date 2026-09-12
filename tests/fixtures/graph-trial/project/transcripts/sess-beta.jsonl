@@ -1,0 +1,2 @@
+{"type":"assistant","isSidechain":false,"uuid":"c1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git status"}}]}}
+{"type":"assistant","isSidechain":false,"uuid":"c2","message":{"role":"assistant","content":[{"type":"text","text":"graph: not used — no verdict in the brief"}]}}

@@ -139,7 +139,10 @@ test('the profile template parses, and its only problems are the placeholders an
 
 test('every optional step in the playbook has its "not configured" line', () => {
   const text = flat(read(PLAYBOOK));
-  const optional = ['graph', 'orchestratorModel', 'planSchema', 'builderBatch', 'claims', 'mutation', 'rules', 'findingsSchema', 'reviewTemplate', 'contractOracle', 'fixLane'];
+  const optional = [
+    'graph', 'orchestratorModel', 'planSchema', 'citations', 'builderBatch', 'claims', 'lineCitations', 'wiring', 'mutation', 'rules',
+    'findingsSchema', 'reviewTemplate', 'contractOracle', 'ratchets', 'fixLane', 'decisionIndex', 'instructionBudget',
+  ];
   for (const name of optional) assert.ok(text.includes(`${name}: not configured`), `${PLAYBOOK} has no "${name}: not configured" branch`);
 });
 

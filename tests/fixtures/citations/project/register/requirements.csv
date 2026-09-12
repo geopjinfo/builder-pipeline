@@ -1,0 +1,4 @@
+id,title,status
+STK-001,"Show on-hand stock per location",Verified
+STK-002,"Reorder point per SKU, per location",Verified
+STK-004,Transfer stock between locations,Draft

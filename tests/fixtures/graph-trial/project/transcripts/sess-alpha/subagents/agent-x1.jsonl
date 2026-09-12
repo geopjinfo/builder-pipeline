@@ -1,0 +1,3 @@
+{"type":"assistant","isSidechain":true,"uuid":"x1","message":{"role":"assistant","content":[{"type":"text","text":"graph: 1 calls, 1 useful, 0 dead-end"}]}}
+{"type":"assistant","isSidechain":true,"uuid":"x2","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"x3","message":{"role":"assistant","content":[{"type":"text","text":"Final answer, no return line."}]}}

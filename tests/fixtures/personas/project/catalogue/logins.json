@@ -1,0 +1,4 @@
+{
+  "Store Manager": "`manager@example.test` · scope `Store` — seeded at `test/seed.ts:12`",
+  "Stock Clerk": "`clerk@example.test` · scope `Store` — seeded at `test/seed.ts:18`"
+}

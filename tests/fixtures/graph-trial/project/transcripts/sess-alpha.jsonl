@@ -1,0 +1,7 @@
+{"type":"user","isSidechain":false,"uuid":"a0","message":{"role":"user","content":"write the brief"}}
+{"type":"assistant","isSidechain":false,"uuid":"a1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"idx find \"stock level\""}}]}}
+{"type":"assistant","isSidechain":true,"uuid":"a2","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"idx explain \"Stock\""}}]}}
+{"type":"assistant","isSidechain":false,"uuid":"a3","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"idx query \"stock level\" && idx path \"Stock\" \"Restock\""}}]}}
+{"type":"user","isSidechain":false,"uuid":"a4","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t3","content":"idx find would say more"}]}}
+this line is torn and must be skipped
+{"type":"assistant","isSidechain":false,"uuid":"a5","message":{"role":"assistant","content":[{"type":"text","text":"Brief written.\ngraph: 3 calls, 2 useful, 1 dead-end"}]}}
