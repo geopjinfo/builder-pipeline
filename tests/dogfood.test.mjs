@@ -446,6 +446,12 @@ ${rows}
     assert.match(r.out, /\[LG-6\] .*:: T1 — row has 7 cell\(s\), its header has 6/);
   });
 
+  test('an ESCAPED pipe is a literal, not a cell boundary', () => {
+    // A row that quotes a command carries `|` inside a code span, and markdown spells that literal `\|`.
+    // Splitting on every pipe turned one cell into three and reported the row as ragged; the row was fine.
+    const r = check('| T1 | the guard runs `grep -iE "clock\\|date"` | D-1 | DONE | tests/test_stock.py | |');
+    assert.equal(r.status, 0, r.out);
+  });
   test('a column inserted before Status moves nothing — the rules follow the header', () => {
     const shifted = `# stock-levels — build board
 

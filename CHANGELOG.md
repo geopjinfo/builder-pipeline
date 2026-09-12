@@ -47,6 +47,11 @@ Two upstream fixes (released there as 0.12.2 and 0.12.3) merged into this line, 
   starting at a separator; the longest term wins, so `IN-PROGRESS` and `NOW UNBLOCKED` survive. `DONEISH` and
   `CLOSED — by observation` still fail. The evidence rule follows the claim, which is the half that bites: a row
   whose markup used to fail LG-2 now resolves to DONE and its missing evidence becomes the finding.
+- **An escaped pipe is a literal, not a cell boundary.**
+  Markdown spells a literal `|` inside a table as `|`, which is how a row quoting a command
+  (`grep -iE "clock|date"`) is written. The parser split on every pipe, turning one cell into three and
+  reporting the row as ragged — 62 of one repo’s 80 LG-6 findings were this, and the rows were fine. The
+  split now honours the escape and the cell text has it removed, so a rule reads what a person sees.
 - **The board tooling reads `paths.boards` from §16, and a nested boards directory keeps its root.**
   The same assumption was in four more readers. `board-check-all` walked `tasks/` and crashed with `ENOENT`
   once the boards had moved; `board-render <key>` resolved a bare key against `tasks/`; `board-watch` and the
