@@ -503,13 +503,63 @@ function cmdFeatures() {
 const BOARD_STATUSES = ['PLANNED', 'IN-PROGRESS', 'DONE', 'DROPPED'];
 const REGISTRY_STATUSES = ['DEFERRED', 'NOW UNBLOCKED', 'DONE', 'DROPPED'];
 
-function parseTableRows(md) {
-  // Returns arrays of trimmed cells for pipe-table body rows (skips header + separator rows).
-  return md
-    .split('\n')
-    .filter((l) => l.trim().startsWith('|'))
-    .map((l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
-    .filter((cells) => cells.length >= 4 && !/^[-: ]+$/.test(cells[1] || '-') && !/^(#|Id)$/i.test(cells[0]));
+/**
+ * Pipe tables as `{ headers, rows }`, each row keeping its own cells.
+ *
+ * WHY A TABLE AND NOT A ROW. This used to return bare cell arrays and every rule then read a FIXED
+ * POSITION — status at index 3, evidence at index 4. A ledger whose rows carry one column fewer than
+ * their header does not fail that read; it passes it, against the wrong cell. Observed on a real board
+ * whose `FIX-*` rows omitted the `Cites` cell: the gate reported hundreds of "status not in vocabulary"
+ * violations quoting the EVIDENCE prose, and the actual statuses — the thing the gate exists to check —
+ * were never examined at all. A check whose predicate measures a cell adjacent to its claim is worse
+ * than no check, because its noise reads as the finding.
+ */
+function parseTables(md) {
+  const tables = [];
+  let cur = null;
+  for (const raw of md.split('\n')) {
+    const line = raw.trim();
+    if (!line.startsWith('|')) { cur = null; continue; } // a blank line or prose ends the table
+    const cells = line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    if (cur === null) { cur = { headers: cells.map((h) => h.toLowerCase()), rows: [] }; tables.push(cur); continue; }
+    if (cells.every((c) => /^[-: ]*$/.test(c))) continue; // the header separator
+    cur.rows.push(cells);
+  }
+  return tables;
+}
+
+/**
+ * Where a ledger table keeps its id, status and evidence — BY HEADER NAME, so a column inserted or moved
+ * shifts nothing. A table with no id-and-status pair of headers is not a ledger table (a board's phase
+ * table, a prose table) and is skipped, exactly as the old id-shaped row filter skipped it.
+ */
+function columnsOf(headers) {
+  const find = (re) => headers.findIndex((h) => re.test(h));
+  return { id: find(/^(#|id)$/), status: find(/^status$/), evidence: find(/evidence|test-seed/) };
+}
+
+const isLedgerTable = (cols) => cols.id >= 0 && cols.status >= 0;
+
+/**
+ * Every ledger row in a file, each with the column map of the table it belongs to. A row whose cell count
+ * does not match its own header is reported (LG-6) and NOT read: its cells cannot be mapped to columns, and
+ * reading them anyway is the silent mis-measurement this exists to stop. A ragged row is a real defect in
+ * the board — a missing cell, an unescaped `|` in prose — and it hid behind the positional read for as long
+ * as that read existed.
+ */
+function* ledgerRows(md, file, note) {
+  for (const table of parseTables(md)) {
+    const cols = columnsOf(table.headers);
+    if (!isLedgerTable(cols)) continue;
+    for (const cells of table.rows) {
+      if (cells.length !== table.headers.length) {
+        const id = cells[0] || '-';
+        note(file, id, 'LG-6', `row has ${cells.length} cell(s), its header has ${table.headers.length} [${table.headers.join(' | ')}] — the row was not checked; a missing cell, or an unescaped "|" in prose`);
+        continue;
+      }
+      yield { cells, cols };
+    }
+  }
 }
 
 /** The ledger locations every script agrees on: §16 `paths`, or the installer's defaults when there is no profile. */
@@ -532,8 +582,9 @@ function cmdCheckLedgers() {
     const raw = fs.readFileSync(regPath, 'utf8');
     if (raw.includes('⚠ VERIFY'))
       note(registryFile, '-', 'LG-4', 'unresolved "⚠ VERIFY" flag — resolve it, either way');
-    for (const cells of parseTableRows(raw)) {
-      const [id, , , status] = cells;
+    for (const { cells, cols } of ledgerRows(raw, registryFile, note)) {
+      const id = cells[cols.id];
+      const status = cells[cols.status];
       if (!/^[A-Za-z0-9_.-]+$/.test(id)) continue; // prose/example rows
       if (regIds.has(id)) note(registryFile, id, 'LG-1', 'duplicate registry id');
       regIds.add(id);
@@ -556,8 +607,10 @@ function cmdCheckLedgers() {
   else if (!boards.length) note(boardsDir, '-', 'LG-0', `no boards found under ${boardsDir}/ — an empty input set is not a pass; wire this gate in once the first board exists`);
   for (const b of boards) {
     const rel = `${boardsDir}/${b}`; // forward slashes: the report is what a person cites, on any host
-    for (const cells of parseTableRows(fs.readFileSync(path.join(tasksDir, b), 'utf8'))) {
-      const [id, , , status, evidence] = cells;
+    for (const { cells, cols } of ledgerRows(fs.readFileSync(path.join(tasksDir, b), 'utf8'), rel, note)) {
+      const id = cells[cols.id];
+      const status = cells[cols.status];
+      const evidence = cols.evidence >= 0 ? cells[cols.evidence] : '';
       if (!/^(T|C|IC-|FIX-?)\d+/i.test(id)) continue; // not a task row
       const bare = String(status || '').replace(/\s+\d{4}-\d{2}-\d{2}$/, '');
       const def = bare.match(/^DEFERRED(?:→|->)(.+)$/);
@@ -579,7 +632,7 @@ function cmdCheckLedgers() {
   }
   console.log(`check-ledgers: FAIL — ${problems.length} violation(s):\n`);
   for (const p of problems) console.log(`  [${p.rule}] ${p.file} :: ${p.row} — ${p.msg}`);
-  console.log('\nRules: LG-0 a ledger the gate could not read · LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 DEFERRED→id must exist in registry · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence');
+  console.log('\nRules: LG-0 a ledger the gate could not read · LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 DEFERRED→id must exist in registry · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence · LG-6 a row that does not match its own header');
   process.exit(1);
 }
 

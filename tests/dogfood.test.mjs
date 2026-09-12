@@ -382,3 +382,100 @@ describe('board tooling follows §16 paths', () => {
     assert.match(r.out, /rendered 1 — .*stock-levels/);
   });
 });
+
+/**
+ * Ledger columns are resolved by header name, and a row that does not match its header is refused.
+ *
+ * WHY. Every rule used to read a FIXED POSITION — status at index 3, evidence at index 4. A board whose rows
+ * carry one column fewer than their header does not fail that read; it passes it, against the wrong cell. On a
+ * real board whose FIX-* rows omitted the `Cites` cell the gate reported hundreds of "status not in vocabulary"
+ * violations quoting the evidence prose, while the actual statuses were never examined at all. The noise reads
+ * as the finding, and the check the gate exists to perform silently did not happen.
+ */
+describe('check-ledgers resolves columns by header, not by position', () => {
+  let root;
+  const board = (rows) => `# stock-levels — build board
+
+_Started: 2026-03-02 · Track: FULL · Brief: reorder levels_
+
+## Phases
+
+| Phase | Seat | Status | Artifact | Verdict |
+|---|---|---|---|---|
+| P2 Code | module-builder | IN-PROGRESS | — | — |
+
+## P2 — Code
+
+| # | Task | Cites | Status | Test-seed / evidence | Notes |
+|---|------|-------|--------|----------------------|-------|
+${rows}
+`;
+
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'builder-ledger-cols-'));
+    copyPack(root);
+    const r = run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']);
+    assert.equal(r.status, 0, r.out);
+  });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  const check = (rows) => {
+    write(root, 'tasks/stock-levels.md', board(rows));
+    return run(root, ['builder/cli.js', 'check-ledgers']);
+  };
+
+  test('green: a well-formed board passes, and the phase table is not mistaken for a ledger table', () => {
+    const r = check('| T1 | reorder level per item | D-1 | DONE | tests/test_stock.py | |');
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /PASS — 1 board\(s\)/);
+  });
+
+  test('red: a row missing one cell is LG-6 — refused, not read against the wrong column', () => {
+    // The `Cites` cell is gone, so index 3 is the EVIDENCE cell. The old positional read called that
+    // evidence an out-of-vocabulary status and never looked at DONE at all.
+    const r = check('| FIX-1 | fail-closed was one-directional | DONE | tests/test_grid.py | |');
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /\[LG-6\] tasks\/stock-levels\.md :: FIX-1 — row has 5 cell\(s\), its header has 6/);
+    // And it is reported ONCE, as a shape defect — not as a status violation quoting the evidence.
+    assert.doesNotMatch(r.out, /\[LG-2\]/); // the legend names every rule; only a FINDING line counts
+  });
+
+  test('red: an unescaped pipe in prose makes the row too long, and is caught the same way', () => {
+    const r = check('| T1 | the guard reads a | b as two cells | D-1 | DONE | tests/test_stock.py | |');
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /\[LG-6\] .*:: T1 — row has 7 cell\(s\), its header has 6/);
+  });
+
+  test('a column inserted before Status moves nothing — the rules follow the header', () => {
+    const shifted = `# stock-levels — build board
+
+## P2 — Code
+
+| # | Task | Owner | Cites | Status | Test-seed / evidence |
+|---|------|-------|-------|--------|----------------------|
+| T1 | reorder level per item | ana | D-1 | DONE | tests/test_stock.py |
+| T2 | reorder endpoint | bo | D-1 | DONE | — |
+`;
+    write(root, 'tasks/stock-levels.md', shifted);
+    const r = run(root, ['builder/cli.js', 'check-ledgers']);
+    // T1 is read as DONE with evidence (no LG-2 about "ana" or "D-1"), and T2's missing evidence is the
+    // ONLY finding — proof both columns were located by name at their new positions.
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /\[LG-5\] tasks\/stock-levels\.md :: T2/);
+    assert.doesNotMatch(r.out, /\[LG-2\]|\[LG-6\]/);
+  });
+
+  test('a registry whose rows are ragged is refused too, and its ids are not invented from shifted cells', () => {
+    write(root, 'tasks/stock-levels.md', board('| T1 | reorder level per item | D-1 | DONE | tests/test_stock.py | |'));
+    write(root, 'DEFERRED_TASKS.md', `# Deferred
+
+| Id | Raised by | Task | Status | Dependency | Why blocked | How to resume |
+|----|-----------|------|--------|------------|-------------|---------------|
+| D-1 | stock | wait for the queue | DEFERRED | queue | one line | steps |
+| D-2 | stock | ragged row | DEFERRED | queue | one line |
+`);
+    const r = run(root, ['builder/cli.js', 'check-ledgers']);
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /\[LG-6\] DEFERRED_TASKS\.md :: D-2 — row has 6 cell\(s\), its header has 7/);
+  });
+});
