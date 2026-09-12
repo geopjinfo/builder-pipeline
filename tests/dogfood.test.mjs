@@ -312,7 +312,48 @@ describe('ledgers follow §16 paths, and an empty board set is not a pass', () =
     const r = run(root, ['builder/cli.js', 'verify']);
     assert.match(r.out, new RegExp(`PASS {2}${BOARDS}/README\\.md \\(board rules\\) exists`));
     assert.match(r.out, new RegExp(`PASS {2}${REGISTRY.replace('.', '\\.')} exists`));
+    assert.match(r.out, /PASS {2}no ledger left at a default path that §16 moved/);
     assert.equal(r.status, 0, r.out);
+  });
+
+  /**
+   * The installer no longer creates the twin, but a repo that already ran the buggy upgrade still holds it,
+   * and every checker reads §16 — so all of them pass over it in silence. Fixing the writer does not find
+   * what the writer already wrote.
+   */
+  test('red: a ledger surviving at a default path that §16 moved is a FAIL, named and explained', () => {
+    write(root, 'DECISIONS.md', '# Decision log\n');
+    write(root, 'tasks/README.md', '# Task boards\n');
+    try {
+      const r = run(root, ['builder/cli.js', 'verify']);
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /FAIL {2}left at a default path that §16 moved:/);
+      assert.match(r.out, new RegExp(`tasks/README\\.md \\(paths\\.boards says "${BOARDS}"\\)`));
+      assert.match(r.out, new RegExp(`DECISIONS\\.md \\(paths\\.decisions says "${DECISIONS}"\\)`));
+      assert.match(r.out, /move any content into the §16 copy, then delete it/);
+    } finally {
+      rmSync(join(root, 'DECISIONS.md'));
+      rmSync(join(root, 'tasks'), { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * The other half of the same check: a project that never moved its ledgers keeps them at the defaults,
+   * and must not be accused of holding a twin. A check that fires on the default install is a check the
+   * next adopter switches off.
+   */
+  test('a default install is not accused of a twin', () => {
+    const plain = mkdtempSync(join(tmpdir(), 'builder-ledger-default-'));
+    try {
+      copyPack(plain);
+      writeFileSync(join(plain, 'PIPELINE_PROFILE.md'), readFileSync(SAMPLE_PROFILE, 'utf8'));
+      assert.equal(run(plain, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']).status, 0);
+      const r = run(plain, ['builder/cli.js', 'verify']);
+      assert.ok(existsSync(join(plain, 'tasks', 'README.md')), 'the default install did not put the board rules at the default');
+      assert.match(r.out, /PASS {2}no ledger left at a default path that §16 moved/);
+    } finally {
+      rmSync(plain, { recursive: true, force: true });
+    }
   });
 
   test('red: check-ledgers with zero boards fails with LG-0 and names the directory it looked in', () => {
