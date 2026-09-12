@@ -17,7 +17,7 @@
  * NEVER FAILS THE TOOL CALL. Any error here exits 0 with no output, which leaves the original result in place.
  *
  * Arming: copy to `.claude/hooks/`, then add a `PostToolUse` entry with matcher `Bash` running
- * `node .claude/hooks/bash-output-cap.js`. Arming is a person's deliberate act.
+ * `node .claude/hooks/bash-output-cap.cjs`. Arming is a person's deliberate act.
  */
 'use strict';
 const fs = require('node:fs');

@@ -11,7 +11,7 @@
  *     "hooks": {
  *       "PreToolUse": [{
  *         "matcher": "Edit|Write|NotebookEdit",
- *         "hooks": [{ "type": "command", "command": "node .claude/hooks/protected-paths.js" }]
+ *         "hooks": [{ "type": "command", "command": "node .claude/hooks/protected-paths.cjs" }]
  *       }]
  *     }
  *   }

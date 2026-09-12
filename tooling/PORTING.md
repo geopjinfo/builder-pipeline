@@ -22,7 +22,7 @@ with no dependencies beyond jest:
 | `instruction-trailer-check.mjs` | the default base ref (`origin/main`). Wire it into CI before the gate step: `instruction-trailer-check.mjs <base>` fails an instruction-file change no commit in the range declares with an `instructions-change:` trailer. It requires `./lib/instruction-trailer.cjs` when installed, else the helper beside it |
 
 Not included: a protected-path fence for shell and interpreter writes (harness-specific; the
-Claude Code tool-call fence is `hooks/protected-paths.js`, and the universal backstop is the
+Claude Code tool-call fence is `hooks/protected-paths.cjs`, and the universal backstop is the
 pre-commit guard) and the path-scoped rules content (project constitution, write your own — but DO
 use the pattern: root instruction file under ~200 lines, path-scoped rule files for anything that
 only matters in one directory, and a gate on the line count so it cannot grow back — that gate ships

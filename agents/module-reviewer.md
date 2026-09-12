@@ -18,7 +18,7 @@ and a gate that exists only as chat depends on someone transcribing it faithfull
 be shape-checked, cited by the handoff pack, and compared with the next pass. In every other respect
 you stay read-only. That is why the frontmatter keeps `capabilities: read-only` and names the single
 path in `writes:`. Adapters that can scope a write grant exactly that path; on Claude Code,
-`hooks/claude-code/reviewer-write-guard.js` blocks this seat from writing any other path. Where no
+`hooks/claude-code/reviewer-write-guard.cjs` blocks this seat from writing any other path. Where no
 such guard exists, the orchestrator confirms with `git status` that nothing else changed.
 
 **Load `PIPELINE_PROFILE.md` (repo root) first** — oracles (§3), contracts (§6), invariants (§7),

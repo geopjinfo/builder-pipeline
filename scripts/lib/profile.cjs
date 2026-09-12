@@ -29,7 +29,7 @@
  * Pure over text; `load()` is the only function that touches the filesystem.
  */
 const { existsSync, readFileSync } = require('node:fs');
-const { join } = require('node:path');
+const { dirname, join, resolve } = require('node:path');
 
 const SCHEMA = 2;
 const STATES = ['on', 'off', 'unmeasured', 'experimental-off', 'experimental-on'];
@@ -279,6 +279,24 @@ function parse(text) {
 }
 
 /**
+ * The project root that owns a directory: the nearest ancestor holding `PIPELINE_PROFILE.md` or a `.pipeline/`.
+ * A board's directory is `paths.boards`, which may sit several levels below the root, so "the board's grandparent"
+ * is not the root — it was, in the installer's default layout, and every reader that assumed so lost the run log
+ * and the profile the moment an adopter moved the boards. With nothing marking a root the grandparent stands in,
+ * which keeps a fixture board in a bare temp directory working as before.
+ */
+function rootOf(dir) {
+  let cur = resolve(dir);
+  for (let i = 0; i < 12; i++) {
+    if (existsSync(join(cur, 'PIPELINE_PROFILE.md')) || existsSync(join(cur, '.pipeline'))) return cur;
+    const up = dirname(cur);
+    if (up === cur) break;
+    cur = up;
+  }
+  return resolve(dir, '..');
+}
+
+/**
  * Read `PIPELINE_PROFILE.md` from a project root. No profile, or a profile without the block, yields the defaults
  * and `found: false` — every optional feature is then off and says so.
  */
@@ -307,4 +325,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, feature, merge };
+module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, feature, merge, rootOf };

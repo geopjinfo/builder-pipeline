@@ -192,11 +192,193 @@ describe('adopter dogfood — a Python service with every optional feature off',
       assert.match(agent('security-auditor'), /^tools: Read, Grep, Glob, Bash$/m);
       assert.match(agent('page-keeper'), /^tools: Bash, Read, Artifact$/m);
       assert.match(agent('docs-maintainer'), /^effort: low$/m);
-      for (const hook of ['bash-output-cap.js', 'registry-read-guard.js', 'reviewer-write-guard.js']) assert.ok(existsSync(join(cc, '.claude', 'hooks', hook)), hook);
+      for (const hook of ['bash-output-cap.cjs', 'registry-read-guard.cjs', 'reviewer-write-guard.cjs']) assert.ok(existsSync(join(cc, '.claude', 'hooks', hook)), hook);
       assert.ok(!existsSync(join(cc, '.claude', 'settings.json')), 'the installer armed a hook — that is the human\'s act');
       assert.ok(existsSync(join(cc, 'scripts', 'experimental', 'page-shell.mjs')), 'experimental page shell not installed with --experimental');
     } finally {
       rmSync(cc, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * A host whose package.json says "type": "module".
+ *
+ * WHY. Node decides how to load a .js file from the NEAREST package.json. The pack's own suite ran under a CommonJS
+ * host, so nothing ever proved that cli.js and the hooks survive an ESM host — and they did not: require() threw
+ * at the first line, which for a PreToolUse guard means the guard crashes and the tool call proceeds. A guard that
+ * fails open is the defect this kit exists to prevent. builder/package.json pins the kit to CommonJS, and the hooks
+ * ship as .cjs so the copies installed into the host stay CommonJS wherever they land.
+ */
+describe('adopter dogfood — a host that declares "type": "module"', () => {
+  const HOOKS = ['bash-output-cap.cjs', 'registry-read-guard.cjs', 'reviewer-write-guard.cjs', 'protected-paths.cjs', 'board-render.cjs'];
+  let esm;
+  before(() => {
+    esm = mkdtempSync(join(tmpdir(), 'builder-esm-host-'));
+    write(esm, 'package.json', '{ "name": "esm-host", "type": "module" }\n');
+    copyPack(esm);
+    writeFileSync(join(esm, 'PIPELINE_PROFILE.md'), readFileSync(SAMPLE_PROFILE, 'utf8'));
+  });
+  after(() => rmSync(esm, { recursive: true, force: true }));
+
+  test('the CLI runs and installs the hooks as .cjs', () => {
+    const r = run(esm, ['builder/cli.js', 'unpack', '--tool', 'claude-code', '--no-extras']);
+    assert.equal(r.status, 0, r.out);
+    assert.doesNotMatch(r.out, /require is not defined/);
+    for (const hook of HOOKS) assert.ok(existsSync(join(esm, '.claude', 'hooks', hook)), hook);
+  });
+
+  test('every installed hook runs under the ESM host without throwing', () => {
+    for (const hook of HOOKS) {
+      const r = spawnSync(process.execPath, [join(esm, '.claude', 'hooks', hook)], {
+        cwd: esm, input: '{}', encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: esm },
+      });
+      assert.doesNotMatch(`${r.stderr}`, /ReferenceError|ERR_REQUIRE_ESM|Cannot use import/, `${hook}: ${r.stderr}`);
+      assert.equal(r.status, 0, `${hook} exited ${r.status}: ${r.stderr}`);
+    }
+  });
+
+  test('red: without builder/package.json the same host loads cli.js as an ES module and it fails on require()', () => {
+    const red = mkdtempSync(join(tmpdir(), 'builder-esm-red-'));
+    try {
+      write(red, 'package.json', '{ "name": "esm-host", "type": "module" }\n');
+      copyPack(red);
+      rmSync(join(red, 'builder', 'package.json'));
+      const r = run(red, ['builder/cli.js', 'targets']);
+      assert.notEqual(r.status, 0);
+      assert.match(r.out, /require is not defined/);
+    } finally {
+      rmSync(red, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * The ledgers live where §16 says.
+ *
+ * WHY. The installer places the boards and the registry at its defaults because no profile exists yet. An adopter
+ * whose conventions keep project history under a documentation tree then moves them and records the move in §16 —
+ * and every script honours that, except that `verify` and `check-ledgers` used to look at the defaults. `verify`
+ * failed the one install that followed the profile; `check-ledgers` looped over a directory that was no longer
+ * there and printed PASS over nothing. A gate that finds no input must fail, and say where it looked.
+ */
+describe('ledgers follow §16 paths, and an empty board set is not a pass', () => {
+  const BOARDS = 'docs/history/tasks';
+  const REGISTRY = 'docs/history/DEFERRED_TASKS.md';
+  let root;
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'builder-ledger-paths-'));
+    copyPack(root);
+    const profile = readFileSync(SAMPLE_PROFILE, 'utf8')
+      .replace('"boards": "tasks"', `"boards": "${BOARDS}"`)
+      .replace('"registry": "DEFERRED_TASKS.md"', `"registry": "${REGISTRY}"`);
+    assert.notEqual(profile, readFileSync(SAMPLE_PROFILE, 'utf8'), 'the sample profile no longer carries the default paths this test rewrites');
+    writeFileSync(join(root, 'PIPELINE_PROFILE.md'), profile);
+    const r = run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']);
+    assert.equal(r.status, 0, r.out);
+    // The adopter's move: the board rules and the registry go to the §16 paths, the defaults are gone.
+    mkdirSync(join(root, BOARDS), { recursive: true });
+    cpSync(join(root, 'tasks', 'README.md'), join(root, BOARDS, 'README.md'));
+    cpSync(join(root, 'DEFERRED_TASKS.md'), join(root, REGISTRY));
+    rmSync(join(root, 'tasks'), { recursive: true, force: true });
+    rmSync(join(root, 'DEFERRED_TASKS.md'));
+  });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  test('verify finds the board rules and the registry at the §16 paths', () => {
+    const r = run(root, ['builder/cli.js', 'verify']);
+    assert.match(r.out, new RegExp(`PASS {2}${BOARDS}/README\\.md \\(board rules\\) exists`));
+    assert.match(r.out, new RegExp(`PASS {2}${REGISTRY.replace('.', '\\.')} exists`));
+    assert.equal(r.status, 0, r.out);
+  });
+
+  test('red: check-ledgers with zero boards fails with LG-0 and names the directory it looked in', () => {
+    const r = run(root, ['builder/cli.js', 'check-ledgers']);
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, new RegExp(`\\[LG-0\\] ${BOARDS} :: - — no boards found under ${BOARDS}/`));
+  });
+
+  test('green: a board at the §16 path is read, and its DEFERRED→id resolves against the §16 registry', () => {
+    write(root, `${BOARDS}/stock-levels.md`, BOARD);
+    const r = run(root, ['builder/cli.js', 'check-ledgers']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /PASS — 1 board\(s\)/);
+    // And an unevidenced DONE at that path is still caught — the rules did not move with the paths.
+    write(root, `${BOARDS}/restock.md`, BOARD.replace('| T1 | reorder level per item | D-1 | DONE | `app/stock.py:1` · tests/test_stock.py | |', '| T1 | reorder level per item | D-1 | DONE | — | |'));
+    const red = run(root, ['builder/cli.js', 'check-ledgers']);
+    assert.equal(red.status, 1, red.out);
+    assert.match(red.out, new RegExp(`\\[LG-5\\] ${BOARDS}/restock\\.md :: T1`));
+  });
+
+  test('red: a missing boards directory is LG-0, not a pass over nothing', () => {
+    const bare = mkdtempSync(join(tmpdir(), 'builder-ledger-bare-'));
+    try {
+      copyPack(bare);
+      const r = run(bare, ['builder/cli.js', 'check-ledgers']);
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /\[LG-0\] tasks :: - — boards directory missing — paths\.boards says "tasks"/);
+    } finally {
+      rmSync(bare, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * The board tooling follows §16 paths too — and a nested boards directory keeps its root.
+ *
+ * WHY. `check-ledgers` was not the only reader of the installer's default: `board-check-all` walked
+ * `tasks/` and crashed on ENOENT when the boards had moved; `board-render <key>` resolved a bare key
+ * against `tasks/` and took a board's GRANDPARENT as the repo root, which two levels down is the
+ * wrong `.pipeline` and the wrong profile; `board-watch` and the hook walked `tasks/`.
+ */
+describe('board tooling follows §16 paths', () => {
+  const BOARDS = 'docs/history/tasks';
+  let root;
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'builder-board-paths-'));
+    copyPack(root);
+    writeFileSync(join(root, 'PIPELINE_PROFILE.md'), readFileSync(SAMPLE_PROFILE, 'utf8')
+      .replace('"boards": "tasks"', `"boards": "${BOARDS}"`)
+      .replace('"registry": "DEFERRED_TASKS.md"', '"registry": "docs/history/DEFERRED_TASKS.md"'));
+    const r = run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']);
+    assert.equal(r.status, 0, r.out);
+    mkdirSync(join(root, BOARDS), { recursive: true });
+    rmSync(join(root, 'tasks'), { recursive: true, force: true });
+    write(root, `${BOARDS}/stock-levels.md`, BOARD);
+    write(root, '.pipeline/stock-levels/run.jsonl', '{"t":"2026-03-02T10:00:00Z","type":"run.start","module":"stock-levels","track":"FULL"}\n');
+  });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  test('board-check-all reads the §16 directory, and names it when it is missing', () => {
+    const fixed = run(root, ['scripts/board-check-all.mjs', '--fix']);
+    assert.equal(fixed.status, 0, fixed.out);
+    assert.match(fixed.out, new RegExp(`${BOARDS}/stock-levels\\.md`));
+    const bare = mkdtempSync(join(tmpdir(), 'builder-board-bare-'));
+    try {
+      copyPack(bare);
+      const r = run(bare, ['builder/scripts/board-check-all.mjs']);
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /boards directory missing — paths\.boards says "tasks"/);
+    } finally {
+      rmSync(bare, { recursive: true, force: true });
+    }
+  });
+
+  test('board-render resolves a bare key against §16 and keeps the repo root for a nested board', () => {
+    const r = run(root, ['scripts/board-render.mjs', 'stock-levels']);
+    assert.equal(r.status, 0, r.out);
+    const html = readFileSync(join(root, BOARDS, 'stock-levels.html'), 'utf8');
+    assert.match(html, /reorder level per item/);
+    // The run log under the REPO root's .pipeline was found — the grandparent has none.
+    assert.match(html, /run\.start|FULL/);
+  });
+
+  test('board-watch --once sweeps the §16 directory and re-renders a board its run log has outrun', () => {
+    // A new event after the last render makes the page stale; the watcher must find the board where §16 says.
+    const event = { t: '2026-03-02T11:00:00Z', type: 'step', id: 'S1', seat: 'module-builder', title: 'seed', status: 'DONE' };
+    writeFileSync(join(root, '.pipeline', 'stock-levels', 'run.jsonl'), `${JSON.stringify(event)}\n`, { flag: 'a' });
+    const r = run(root, ['scripts/board-watch.mjs', '--once']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /rendered 1 — .*stock-levels/);
   });
 });
