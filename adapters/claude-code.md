@@ -24,7 +24,7 @@ authority if this table and the CLI ever disagree.
 | `PIPELINE_PROFILE.template.md` | `PIPELINE_PROFILE.md` (repo root, **filled**, §16 included) |
 | `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | `scripts/`, `scripts/lib/` (plain Node, harness-independent) |
 | `hooks/claude-code/*.js` | `.claude/hooks/` — **copied, never registered.** Registering is a person's act (below) |
-| `hooks/protected-paths.js`, `hooks/board-render.js` | `.claude/hooks/` — same rule |
+| `hooks/protected-paths.cjs`, `hooks/board-render.cjs` | `.claude/hooks/` — same rule |
 | `agents/experimental/page-keeper.md` | `.claude/agents/page-keeper.md` — only with `--experimental` |
 | `tooling/experimental/page-shell.{cjs,mjs}` | `scripts/experimental/` — only with `--experimental` |
 
@@ -57,13 +57,13 @@ but without the frontmatter transform.
   "hooks": {
     "PreToolUse": [
       { "matcher": "Read",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/registry-read-guard.js\"" }] },
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/registry-read-guard.cjs\"" }] },
       { "matcher": "Write|Edit|MultiEdit",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/reviewer-write-guard.js\"" }] }
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/reviewer-write-guard.cjs\"" }] }
     ],
     "PostToolUse": [
       { "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-output-cap.js\"" }] }
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-output-cap.cjs\"" }] }
     ]
   }
 }
@@ -101,9 +101,9 @@ launches.
 
 | Hook | Event | What it does | Needs from §16 |
 |---|---|---|---|
-| `bash-output-cap.js` | `PostToolUse` · `Bash` | An output over `features.bashCap.limitBytes` is written whole under `paths.logs`. The context gets every error-shaped line with its line number, the tail, and the log path. The tier runner's output, already a digest, passes through. Never fails the tool call: any error leaves the original output in place | `bashCap` on · `limitBytes` · `paths.logs` |
-| `registry-read-guard.js` | `PreToolUse` · `Read` | Blocks a seat named in `features.registryGuard.seats` from reading the whole registry, and names the row reader instead: `node scripts/ledger-row.mjs registry <ID>`. The orchestrator carries no seat identity in the hook input and keeps Read | `registryGuard` on · `seats` · `paths.registry` · `rowReader` on |
-| `reviewer-write-guard.js` | `PreToolUse` · `Write\|Edit\|MultiEdit` | The reviewer may write exactly one kind of file: its review, `<runs>/<key>/review-pass<n>.md`. Every other write by that seat is blocked. A grant of Write to one file is only a grant if something enforces the one file | `reviewTemplate` on · `paths.runs` |
+| `bash-output-cap.cjs` | `PostToolUse` · `Bash` | An output over `features.bashCap.limitBytes` is written whole under `paths.logs`. The context gets every error-shaped line with its line number, the tail, and the log path. The tier runner's output, already a digest, passes through. Never fails the tool call: any error leaves the original output in place | `bashCap` on · `limitBytes` · `paths.logs` |
+| `registry-read-guard.cjs` | `PreToolUse` · `Read` | Blocks a seat named in `features.registryGuard.seats` from reading the whole registry, and names the row reader instead: `node scripts/ledger-row.mjs registry <ID>`. The orchestrator carries no seat identity in the hook input and keeps Read | `registryGuard` on · `seats` · `paths.registry` · `rowReader` on |
+| `reviewer-write-guard.cjs` | `PreToolUse` · `Write\|Edit\|MultiEdit` | The reviewer may write exactly one kind of file: its review, `<runs>/<key>/review-pass<n>.md`. Every other write by that seat is blocked. A grant of Write to one file is only a grant if something enforces the one file | `reviewTemplate` on · `paths.runs` |
 
 **Where the cap takes effect — probed, not assumed.** A disposable project was driven headless with
 a large payload and a small negative control. In the **main session** the large output was replaced
@@ -130,7 +130,7 @@ other triggers.
 It catches docs that arrive with no commit or merge. Without it, the P1 index gate still refuses a
 stale index.
 
-Belt and braces for the board: `hooks/board-render.js` on `PostToolUse` matching
+Belt and braces for the board: `hooks/board-render.cjs` on `PostToolUse` matching
 `Write|Edit|MultiEdit|Bash` re-renders any stale board after a tool write. It covers the case where
 nobody started the watcher.
 

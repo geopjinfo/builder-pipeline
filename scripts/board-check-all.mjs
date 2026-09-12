@@ -21,17 +21,24 @@
  *   node scripts/board-check-all.mjs --fix     rewrite every stale block, re-render every stale page
  */
 import { createRequire } from 'node:module';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const freshness = require('./lib/board-freshness.cjs');
+const profile = require('./lib/profile.cjs');
 
 const MARKER = '<!-- progress:auto start -->';
-const DIR = 'tasks';
+/** The boards directory is §16 `paths.boards`; `tasks/` only when there is no profile to say otherwise. */
+const DIR = profile.load(process.cwd()).settings.paths?.boards || 'tasks';
 
 const fix = process.argv.includes('--fix');
+
+if (!existsSync(DIR)) {
+  console.error(`board-check-all: boards directory missing — paths.boards says ${JSON.stringify(DIR)}; nothing was checked.`);
+  process.exit(1);
+}
 
 const boards = readdirSync(DIR)
   /**

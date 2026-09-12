@@ -19,8 +19,9 @@
  * something adjacent to its claim is worse than no gate, so the content check below runs too.
  */
 const { existsSync, statSync } = require('node:fs');
-const { basename, dirname, join, resolve } = require('node:path');
+const { basename, dirname, join } = require('node:path');
 const runLog = require('./run-log.cjs');
+const { rootOf } = require('./profile.cjs');
 
 /**
  * @param boardPath path to `tasks/<key>.md`
@@ -28,7 +29,7 @@ const runLog = require('./run-log.cjs');
  */
 function verdict(boardPath) {
   const key = basename(boardPath, '.md');
-  const root = resolve(dirname(boardPath), '..');
+  const root = rootOf(dirname(boardPath)); // §16 boards may be nested; the grandparent is not the root
   const log = join(root, '.pipeline', key, 'run.jsonl');
   const rendered = boardPath.replace(/\.md$/, '.html');
 
