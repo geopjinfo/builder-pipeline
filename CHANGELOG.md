@@ -3,6 +3,31 @@
 All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
 versions independently of any project it is pasted into.
 
+## [0.13.2] — 2026-09-13
+
+### Fixed
+
+- **The installer honours §16 `paths` — it was the last reader that did not.** An adopter who keeps
+  project history elsewhere moves the ledgers and records the move in §16; `verify`, `check-ledgers`
+  and the board tooling all followed, but `unpack` kept copying to its own defaults. Because
+  copy-if-absent asks the DEFAULT destination whether it exists, and at a §16 install it never does,
+  the documented upgrade path — re-run the CLI — re-created a blank board directory, a blank
+  `DEFERRED_TASKS.md` and a blank `DECISIONS.md` at the repo root beside the real ones. Nothing
+  mechanical objected: the checkers read §16 and stayed green while a person, a search or a later
+  script reaching for the root file found an empty ledger wearing the kit's own header, which reads
+  as "nothing decided" with the authority of a real file. The board rules, the session-board
+  template, the registry and the decision log now install at `paths.boards` / `paths.registry` /
+  `paths.decisions`; with no profile the defaults are unchanged. The brief template is not a ledger
+  and stays at `specs/`. Dogfood tests assert both the first install and the re-run; their red twin
+  reverts the installer and shows all three files back at the root.
+- **The pointer block no longer names ledger paths it cannot know.** The agent-instruction block the
+  installer writes told every agent that boards live in `tasks/` and deferrals in
+  `DEFERRED_TASKS.md`, and it is written once and never rewritten — so at a §16 install it named the
+  wrong homes for the life of the repo. It now points at §16 `paths` instead, which cannot go stale.
+- **Profile §11 no longer contradicts §16.** The template's human-readable ledger list hardcoded the
+  same two defaults next to the settings block that makes them configurable; it now asks for the §16
+  values, with a line saying the two must match.
+
 ## [0.13.1] — 2026-09-12
 
 Two upstream fixes (released there as 0.12.2 and 0.12.3) merged into this line, which branched at

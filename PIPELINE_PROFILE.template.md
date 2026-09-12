@@ -113,10 +113,13 @@ must cite *something* stable.)
 
 ## 11. Ledgers
 
-- **Task board:** `tasks/<moduleKey>.md` (format: `templates/task-board.md` from the kit — install
-  its rules as `tasks/README.md`) — the one progress surface
-- **Deferred registry:** `DEFERRED_TASKS.md` at repo root
-- **Decision log:** `<e.g. DECISIONS.md>` — every decision a run takes: what, citation, why, how to reverse
+These three must repeat §16 `paths` exactly — §16 is what every script and the installer read, this
+section is what a person reads, and two homes for one ledger is the failure the registry template names.
+
+- **Task board:** `<§16 paths.boards, e.g. tasks>/<moduleKey>.md` (format: `templates/task-board.md`
+  from the kit — its rules install as `README.md` in that same directory) — the one progress surface
+- **Deferred registry:** `<§16 paths.registry, e.g. DEFERRED_TASKS.md>`
+- **Decision log:** `<§16 paths.decisions, e.g. DECISIONS.md>` — every decision a run takes: what, citation, why, how to reverse
 - **Handoff packs:** `<e.g. handoffs/<date>-<moduleKey>-handoff.md>` — one per run, §A–§F
 - **Run artifacts:** `.pipeline/<moduleKey>/{plan,state,review-pass<n>}.md` + `run.jsonl` (gitignore `.pipeline/`)
 - **Versioning:** `<e.g. semver in package.json + CHANGELOG.md entry per module; who tags>`

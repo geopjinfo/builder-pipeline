@@ -265,25 +265,48 @@ describe('adopter dogfood — a host that declares "type": "module"', () => {
 describe('ledgers follow §16 paths, and an empty board set is not a pass', () => {
   const BOARDS = 'docs/history/tasks';
   const REGISTRY = 'docs/history/DEFERRED_TASKS.md';
+  const DECISIONS = 'docs/history/DECISIONS.md';
   let root;
   before(() => {
     root = mkdtempSync(join(tmpdir(), 'builder-ledger-paths-'));
     copyPack(root);
     const profile = readFileSync(SAMPLE_PROFILE, 'utf8')
       .replace('"boards": "tasks"', `"boards": "${BOARDS}"`)
-      .replace('"registry": "DEFERRED_TASKS.md"', `"registry": "${REGISTRY}"`);
+      .replace('"registry": "DEFERRED_TASKS.md"', `"registry": "${REGISTRY}"`)
+      .replace('"decisions": "DECISIONS.md"', `"decisions": "${DECISIONS}"`);
     assert.notEqual(profile, readFileSync(SAMPLE_PROFILE, 'utf8'), 'the sample profile no longer carries the default paths this test rewrites');
     writeFileSync(join(root, 'PIPELINE_PROFILE.md'), profile);
     const r = run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']);
     assert.equal(r.status, 0, r.out);
-    // The adopter's move: the board rules and the registry go to the §16 paths, the defaults are gone.
-    mkdirSync(join(root, BOARDS), { recursive: true });
-    cpSync(join(root, 'tasks', 'README.md'), join(root, BOARDS, 'README.md'));
-    cpSync(join(root, 'DEFERRED_TASKS.md'), join(root, REGISTRY));
-    rmSync(join(root, 'tasks'), { recursive: true, force: true });
-    rmSync(join(root, 'DEFERRED_TASKS.md'));
   });
   after(() => rmSync(root, { recursive: true, force: true }));
+
+  test('the installer writes the ledgers at the §16 paths, not at its own defaults', () => {
+    assert.ok(existsSync(join(root, BOARDS, 'README.md')), 'the board rules were not installed at paths.boards');
+    assert.ok(existsSync(join(root, BOARDS, '_session-board.template.md')), 'the session-board template was not installed at paths.boards');
+    assert.ok(existsSync(join(root, REGISTRY)), 'the registry was not installed at paths.registry');
+    assert.ok(existsSync(join(root, DECISIONS)), 'the decision log was not installed at paths.decisions');
+    assert.ok(!existsSync(join(root, 'tasks')), 'the installer created the default boards dir beside the §16 one');
+    assert.ok(!existsSync(join(root, 'DEFERRED_TASKS.md')), 'the installer created a registry at the root beside the §16 one');
+    assert.ok(!existsSync(join(root, 'DECISIONS.md')), 'the installer created a decision log at the root beside the §16 one');
+    // Not a ledger, and §16 has no path for it: the brief template stays beside the specs.
+    assert.ok(existsSync(join(root, 'specs', 'module-brief.template.md')));
+  });
+
+  /**
+   * The upgrade path is "re-run the CLI, copy-if-absent adds only new kit files". Copy-if-absent asks
+   * the DEFAULT destinations whether they exist; at a §16 install they never do, so a second unpack used
+   * to install a blank board dir, registry and decision log at the root beside the real ones — a second,
+   * unreconciled truth that every checker read past, because the checkers read §16.
+   */
+  test('re-running unpack (the upgrade path) does not re-create the ledgers at the defaults', () => {
+    const again = run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']);
+    assert.equal(again.status, 0, again.out);
+    assert.ok(!existsSync(join(root, 'tasks', 'README.md')), 'unpack re-created the default boards dir beside the §16 one');
+    assert.ok(!existsSync(join(root, 'DEFERRED_TASKS.md')), 'unpack re-created a blank registry at the root beside the §16 one');
+    assert.ok(!existsSync(join(root, 'DECISIONS.md')), 'unpack re-created a blank decision log at the root beside the §16 one');
+    assert.match(again.out, new RegExp(`skip \\(exists\\): +${REGISTRY.replace('.', '\\.')}`), 'the second run did not recognise the §16 registry as already installed');
+  });
 
   test('verify finds the board rules and the registry at the §16 paths', () => {
     const r = run(root, ['builder/cli.js', 'verify']);

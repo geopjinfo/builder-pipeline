@@ -224,9 +224,10 @@ Module/feature builds go through the multi-agent builder pipeline.
 - **Personas:** ${personas}.
 - **Optional checks:** \`node scripts/features.mjs\` says which are on here; a check that is off prints
   "<feature>: not configured" and is never a pass.
-- **Ledgers:** task boards in \`tasks/\`, deferred work in \`DEFERRED_TASKS.md\`, run artifacts in
-  \`.pipeline/\` (gitignored), one handoff pack per run. The pipeline never merges — it hands
-  MERGE-READY to a human.
+- **Ledgers:** task boards, the deferred registry and the decision log live at the paths in
+  \`PIPELINE_PROFILE.md\` §16 \`paths\` (\`boards\`, \`registry\`, \`decisions\`) — read them there, not
+  from memory; run artifacts in \`.pipeline/\` (gitignored), one handoff pack per run. The pipeline
+  never merges — it hands MERGE-READY to a human.
 - **Utility skills** (if installed — see \`builder/skills-extra/README.md\`): \`status-and-next\`
   to open a session (verify state fresh, pick the next item, emit its brief), \`graphify\` for
   cheap scoped doc/architecture lookups (query the graph before re-reading big docs), \`caveman\`
@@ -290,11 +291,25 @@ function installTool(tool) {
 
 function installCommon() {
   console.log('\n[common] ledgers + profile');
-  copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join('tasks', 'README.md'));
-  copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), 'DEFERRED_TASKS.md');
+  /**
+   * The installer honours §16 `paths` like every other reader — it was the last one that did not.
+   *
+   * WHY. An adopter whose conventions keep history elsewhere moves the ledgers and records the move in §16;
+   * `verify`, `check-ledgers` and the board tooling all followed. The installer kept copying to its OWN
+   * defaults, so the next run of `unpack` — the documented upgrade path — re-created a blank board dir, a
+   * blank registry and a blank decision log at the root, beside the real ones. Nothing mechanical objected:
+   * the checkers read §16 and stayed green while a person, a search or a later script reaching for the root
+   * file found an empty ledger wearing the kit's own header, which reads as "nothing decided" with the
+   * authority of a real file. A ledger has exactly one home. With no profile the defaults stand.
+   *
+   * The brief template is not a ledger — it stays beside the specs, and §16 has no path for it.
+   */
+  const { boards, registry, decisions } = ledgerPaths();
+  copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join(boards, 'README.md'));
+  copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), registry);
   copyIfAbsent(path.join(KIT, 'templates', 'module-brief.md'), path.join('specs', 'module-brief.template.md'));
-  copyIfAbsent(path.join(KIT, 'templates', 'decision-log.md'), 'DECISIONS.md');
-  copyIfAbsent(path.join(KIT, 'templates', 'session-board.md'), path.join('tasks', '_session-board.template.md'));
+  copyIfAbsent(path.join(KIT, 'templates', 'decision-log.md'), decisions);
+  copyIfAbsent(path.join(KIT, 'templates', 'session-board.md'), path.join(boards, '_session-board.template.md'));
   copyIfAbsent(path.join(KIT, 'PIPELINE_PROFILE.template.md'), 'PIPELINE_PROFILE.md');
 
   /**
@@ -614,7 +629,11 @@ function* ledgerRows(md, file, note) {
 function ledgerPaths() {
   const { settings } = profileLib().load(CWD);
   const p = settings?.paths ?? {};
-  return { boards: p.boards || 'tasks', registry: p.registry || 'DEFERRED_TASKS.md' };
+  return {
+    boards: p.boards || 'tasks',
+    registry: p.registry || 'DEFERRED_TASKS.md',
+    decisions: p.decisions || 'DECISIONS.md',
+  };
 }
 
 function cmdCheckLedgers() {
