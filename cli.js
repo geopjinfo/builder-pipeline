@@ -541,6 +541,50 @@ function columnsOf(headers) {
 const isLedgerTable = (cols) => cols.id >= 0 && cols.status >= 0;
 
 /**
+ * The vocabulary term a status cell CLAIMS, or null.
+ *
+ * WHY THIS IS NOT `vocab.includes(cell)`. People write ledgers in markdown, for people: `**DONE**`,
+ * `DONE 2026-09-03`, `DONE (2026-08-26) — CP3 B4`. All three claim DONE, and an exact-match gate failed
+ * all three — 146 findings on one repo's ledgers, of which 131 were emphasis and annotation. A gate that
+ * fails on typography teaches its readers to ignore it, and then the fifteen that were REAL (`OPEN`,
+ * `BUILT`, `CLOSED — by observation`, `needs-ruling`) go unread with the rest.
+ *
+ * The rule is narrow on purpose: emphasis is stripped, then the cell must BEGIN with a vocabulary term
+ * and the remainder must begin with a separator (`—`, `–`, `(`, `[`, `,`, or whitespace). The longest
+ * term wins, so `IN-PROGRESS` is not read as a prefix of nothing and `NOW UNBLOCKED` survives its space.
+ * `DONEISH` and `CLOSED — by observation` still fail, which is the point. What it cannot catch is an
+ * annotation that CONTRADICTS the term (`DONE — pending a ruling`); no parser can, and the exact-match
+ * gate could not either, since it already let a trailing date through.
+ */
+function statusToken(raw, vocab) {
+  let t = stripEmphasis(raw);
+  const terms = [...vocab].sort((a, b) => b.length - a.length);
+  for (const term of terms) {
+    if (!t.toUpperCase().startsWith(term.toUpperCase())) continue;
+    const rest = t.slice(term.length);
+    if (rest === '' || /^[\s(\[,—–]/.test(rest)) return term;
+  }
+  return null;
+}
+
+/** A board status cell with its emphasis removed — what the DEFERRED→<id> form is read from. */
+function unemphasised(raw) {
+  return stripEmphasis(raw);
+}
+
+/**
+ * Markdown emphasis removed from a status cell. Bold markers come off WHEREVER they appear, not only when
+ * they wrap the whole cell: people bold the claim and leave the annotation plain — `**DONE 2026-08-03** —
+ * verified against the mirror` — and a wrap-only strip leaves that cell looking out-of-vocabulary. A lone
+ * `*` or `_` is stripped only when it wraps the whole cell, since either can appear inside prose.
+ */
+function stripEmphasis(raw) {
+  const t = String(raw || '').replace(/\*\*|__/g, '').trim();
+  const m = /^([*_])([\s\S]*)\1$/.exec(t);
+  return (m ? m[2] : t).trim();
+}
+
+/**
  * Every ledger row in a file, each with the column map of the table it belongs to. A row whose cell count
  * does not match its own header is reported (LG-6) and NOT read: its cells cannot be mapped to columns, and
  * reading them anyway is the silent mis-measurement this exists to stop. A ragged row is a real defect in
@@ -588,7 +632,7 @@ function cmdCheckLedgers() {
       if (!/^[A-Za-z0-9_.-]+$/.test(id)) continue; // prose/example rows
       if (regIds.has(id)) note(registryFile, id, 'LG-1', 'duplicate registry id');
       regIds.add(id);
-      if (status && !REGISTRY_STATUSES.includes(status))
+      if (status && !statusToken(status, REGISTRY_STATUSES))
         note(registryFile, id, 'LG-2', `status "${status}" not in registry vocabulary [${REGISTRY_STATUSES.join(', ')}] — out-of-vocabulary rows are silently dropped by anything that counts`);
     }
   }
@@ -612,15 +656,16 @@ function cmdCheckLedgers() {
       const status = cells[cols.status];
       const evidence = cols.evidence >= 0 ? cells[cols.evidence] : '';
       if (!/^(T|C|IC-|FIX-?)\d+/i.test(id)) continue; // not a task row
-      const bare = String(status || '').replace(/\s+\d{4}-\d{2}-\d{2}$/, '');
-      const def = bare.match(/^DEFERRED(?:→|->)(.+)$/);
+      const bare = unemphasised(status);
+      const def = bare.match(/^DEFERRED(?:→|->)\s*`?([^`\s]+)`?/);
+      const term = statusToken(bare, BOARD_STATUSES);
       if (def) {
         const ref = def[1].trim();
         if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in ${registryFile}`);
-      } else if (!BOARD_STATUSES.includes(bare)) {
+      } else if (!term) {
         note(rel, id, 'LG-2', `status "${status}" not in board vocabulary [${BOARD_STATUSES.join(', ')}, DEFERRED→<id>]`);
       }
-      if (bare === 'DONE' && (!evidence || evidence === '—' || evidence === '-' || evidence === ''))
+      if (term === 'DONE' && (!evidence || evidence === '—' || evidence === '-' || evidence === ''))
         note(rel, id, 'LG-5', 'DONE row without named test evidence — an unevidenced DONE is invalid (board rule)');
     }
   }
