@@ -37,6 +37,23 @@ versions independently of any project it is pasted into.
 - **Profile §11 no longer contradicts §16.** The template's human-readable ledger list hardcoded the
   same two defaults next to the settings block that makes them configurable; it now asks for the §16
   values, with a line saying the two must match.
+- **The no-Node fallbacks install the CLI's ledger set, and cannot plant a twin.** `scripts/unpack.sh`
+  and `unpack.ps1` had no test in the suite and had drifted: neither ever learned to install
+  `DECISIONS.md` or the session-board template, so a no-Node adopter received a smaller kit than a Node
+  one and nothing said so. They also cannot read §16 — `/bin/sh` has no guaranteed JSON parser — so at a
+  moved install a re-run copied blank ledgers to the defaults. Rather than pretend to parse the profile,
+  they now treat the ledgers as first-install-only: a profile already present means the ledgers already
+  exist, so copying again could only duplicate. They skip the ledgers there, name the CLI, and still
+  install everything else, so a re-run remains a valid repair. Tested both ways, skipped where there is
+  no POSIX sh.
+
+### Verified, not changed
+
+- Every other §16 path consumer was already correct — `board-check-all`, `board-render`, `board-watch`,
+  the render hook, `fix-rate`, `ledger-row`, `claims-check`, `handoff-pack`, `handoff-check`,
+  `mutation-step` and `line-citations-check` resolve `boards`, `registry`, `decisions`, `handoffs` and
+  `logs` from the profile. The installer was the last blind reader; a sweep confirmed it rather than
+  assuming it.
 
 ## [0.13.1] — 2026-09-12
 
