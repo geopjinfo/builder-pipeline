@@ -49,11 +49,24 @@ case "$TARGET" in
     echo "usage: unpack.sh <claude-code|codex>"; exit 1;;
 esac
 
-# Common ledgers + profile (all harnesses)
-copy "$KIT/templates/task-board.md"         "tasks/README.md"
-copy "$KIT/templates/deferred-registry.md"  "DEFERRED_TASKS.md"
+# Common ledgers + profile (all harnesses).
+#
+# This fallback cannot read §16 `paths` — no JSON parser is guaranteed in /bin/sh — so it installs the
+# ledgers at the kit's defaults, which is right exactly once: on a FIRST install, before a profile exists.
+# A profile already present means the ledgers do too, at the defaults or wherever §16 moved them; copying
+# again could only add a blank twin at the default beside the real one, which every checker reads §16 and
+# passes over in silence. So the ledgers are skipped there, and the CLI — which does read §16 — is named.
 copy "$KIT/templates/module-brief.md"       "specs/module-brief.template.md"
-copy "$KIT/PIPELINE_PROFILE.template.md"    "PIPELINE_PROFILE.md"
+if [ -e PIPELINE_PROFILE.md ]; then
+  echo "skip (profile present): ledgers — this fallback cannot read §16 paths; run 'node builder/cli.js unpack' for"
+  echo "                        any ledger this kit version adds, then 'node builder/cli.js verify'"
+else
+  copy "$KIT/templates/task-board.md"         "tasks/README.md"
+  copy "$KIT/templates/session-board.md"      "tasks/_session-board.template.md"
+  copy "$KIT/templates/deferred-registry.md"  "DEFERRED_TASKS.md"
+  copy "$KIT/templates/decision-log.md"       "DECISIONS.md"
+  copy "$KIT/PIPELINE_PROFILE.template.md"    "PIPELINE_PROFILE.md"
+fi
 
 # Scripts: the board tooling (computed progress bar, its CI gate, the rendered run board + watcher),
 # the checkers, and every library they share. The whole tree is copied, not a hand-kept list: a list

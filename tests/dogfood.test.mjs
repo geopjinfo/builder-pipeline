@@ -636,3 +636,59 @@ describe('check-ledgers reads the status a cell claims, not its markup', () => {
     assert.match(missing.out, /\[LG-3\] .*DEFERRED→D-99 has no matching row/);
   });
 });
+
+/**
+ * The no-Node fallback installs the same ledger set as the CLI, and cannot plant a twin.
+ *
+ * WHY. `scripts/unpack.{sh,ps1}` had no test at all, and drifted: neither learned to install
+ * `DECISIONS.md` or the session-board template, so a no-Node adopter silently received a smaller kit
+ * than a Node one. They also cannot read §16 — /bin/sh has no guaranteed JSON parser — so at a moved
+ * install a re-run would copy blank ledgers to the DEFAULTS beside the real ones: the exact second truth
+ * the CLI was just fixed to stop making. A profile already present means the ledgers already exist
+ * somewhere, so the fallback skips them there and names the CLI, which does read §16.
+ */
+describe('the no-Node fallback: the CLI\'s ledger set, and no twin', { skip: spawnSync('sh', ['-c', 'exit 0']).status !== 0 ? 'no POSIX sh on this machine' : false }, () => {
+  const sh = (cwd) => {
+    const r = spawnSync('sh', ['builder/scripts/unpack.sh', 'codex'], { cwd, encoding: 'utf8' });
+    return { status: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+  };
+  const MOVED = ['tasks/README.md', 'DEFERRED_TASKS.md', 'DECISIONS.md'];
+
+  test('a first install lays down every ledger the CLI does', () => {
+    const root = mkdtempSync(join(tmpdir(), 'builder-fallback-'));
+    try {
+      copyPack(root);
+      const r = sh(root);
+      assert.equal(r.status, 0, r.out);
+      for (const f of [...MOVED, 'tasks/_session-board.template.md', 'PIPELINE_PROFILE.md', 'specs/module-brief.template.md']) {
+        assert.ok(existsSync(join(root, f)), `the fallback did not install ${f} — it has drifted from the CLI's ledger set`);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('re-running it where a profile already exists skips the ledgers instead of planting blank twins', () => {
+    const root = mkdtempSync(join(tmpdir(), 'builder-fallback-moved-'));
+    const HIST = 'history';
+    try {
+      copyPack(root);
+      writeFileSync(join(root, 'PIPELINE_PROFILE.md'), readFileSync(SAMPLE_PROFILE, 'utf8')
+        .replace('"boards": "tasks"', `"boards": "${HIST}/tasks"`)
+        .replace('"registry": "DEFERRED_TASKS.md"', `"registry": "${HIST}/DEFERRED_TASKS.md"`)
+        .replace('"decisions": "DECISIONS.md"', `"decisions": "${HIST}/DECISIONS.md"`));
+      const r = sh(root);
+      assert.equal(r.status, 0, r.out);
+      assert.match(r.out, /skip \(profile present\): ledgers/);
+      assert.match(r.out, /node builder\/cli\.js verify/);
+      for (const f of MOVED) {
+        assert.ok(!existsSync(join(root, f)), `the fallback planted a blank ${f} at the default beside the §16 one`);
+      }
+      // It is not inert: everything that is not a ledger still installs.
+      assert.ok(existsSync(join(root, 'scripts', 'board-check-all.mjs')));
+      assert.ok(existsSync(join(root, 'specs', 'module-brief.template.md')));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

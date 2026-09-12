@@ -49,10 +49,24 @@ else {
     }
 }
 
-Copy-KitFile (Join-Path $Kit 'templates\task-board.md')        'tasks\README.md'
-Copy-KitFile (Join-Path $Kit 'templates\deferred-registry.md') 'DEFERRED_TASKS.md'
+# Common ledgers + profile.
+#
+# Kept deliberately in step with unpack.sh: this fallback installs the ledgers at the kit's defaults,
+# which is right exactly once — on a FIRST install, before a profile exists. A profile already present
+# means the ledgers do too, at the defaults or wherever §16 `paths` moved them; copying again could only
+# add a blank twin at the default beside the real one, which every checker reads §16 and passes over in
+# silence. So the ledgers are skipped there, and the CLI — which does read §16 — is named.
 Copy-KitFile (Join-Path $Kit 'templates\module-brief.md')      'specs\module-brief.template.md'
-Copy-KitFile (Join-Path $Kit 'PIPELINE_PROFILE.template.md')   'PIPELINE_PROFILE.md'
+if (Test-Path 'PIPELINE_PROFILE.md') {
+    Write-Host "skip (profile present): ledgers — this fallback cannot read §16 paths; run 'node builder/cli.js unpack' for"
+    Write-Host "                        any ledger this kit version adds, then 'node builder/cli.js verify'"
+} else {
+    Copy-KitFile (Join-Path $Kit 'templates\task-board.md')        'tasks\README.md'
+    Copy-KitFile (Join-Path $Kit 'templates\session-board.md')     'tasks\_session-board.template.md'
+    Copy-KitFile (Join-Path $Kit 'templates\deferred-registry.md') 'DEFERRED_TASKS.md'
+    Copy-KitFile (Join-Path $Kit 'templates\decision-log.md')      'DECISIONS.md'
+    Copy-KitFile (Join-Path $Kit 'PIPELINE_PROFILE.template.md')   'PIPELINE_PROFILE.md'
+}
 
 # Scripts: the board tooling (computed progress bar, its CI gate, the rendered run board + watcher),
 # the checkers, and every library they share. The whole tree is copied, not a hand-kept list: a list
