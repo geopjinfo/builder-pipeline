@@ -193,5 +193,18 @@ that looped back through the lane**, run `node scripts/fix-rate.mjs <boards>/<ke
 (`node scripts/cost-window.mjs` over the loop-back phases). Otherwise set the feature `off` and
 return to one whole-list re-dispatch with the plan.
 
+**Read the rate against the board before you trust it — it under-counts in one specific way.** The
+predicate only scores a repair when a repair cue sits near the referenced row's **id**. A fix row
+that names the *artifact* it repairs — the spec file, the helper, the constant — rather than the id
+of the row that introduced it scores **zero**, so a board whose real rate is well above baseline can
+report `0.0%`. That is the worst available failure for this metric: it fails toward *keep*, silently,
+on the exact evidence that should have retired the lane. Before any keep/drop call, hand-read the fix
+rows once and ask of each whether it exists because an earlier fix row created the defect. If the two
+answers disagree, the hand count wins and the predicate is the thing to fix first.
+
+**A corollary for the whole file: a measurement that can only fail toward "keep" is not a
+measurement.** Every experiment here is judged by a number; check which way each number fails before
+you let it decide.
+
 **Risk.** A fixer without the plan can fix the cited line and break an invariant the plan stated —
 which shows up exactly as a rising fix-of-fix rate. A lane judged on zero loop-backs is not judged.
