@@ -145,9 +145,18 @@ Put the track in the board header.
 
 Two rules keep this from making things worse:
 
-1. **Any diff touching production source is FULL or ADDITIVE. No exceptions.** In the source
-   project a remediation task went the solo route and shipped with the gate chain red; this is that
-   lesson stated mechanically rather than left to judgement.
+1. **A production-source diff may never go SOLO.** In the source project a remediation task went
+   the solo route and shipped with the gate chain red; this is that lesson stated mechanically
+   rather than left to judgement.
+
+   This rule was first written as *"any diff touching production source is FULL or ADDITIVE, no
+   exceptions"*, and that wording made **FIX** unusable — remediation almost always lands in
+   production source, so every FIX run had to re-interpret the rule before it could start, and a
+   rule each run re-interprets is not a rule. **SOLO is the target.** FIX runs coder, tester, drift,
+   every auditor, the reviewer and the behavioural gate; it skips only the planner, because its
+   entry condition is a *verified* blocker list that has already done the planner's work. If the
+   blocker list turns out not to be verified — if a seat must decide *what to build* rather than fix
+   *what was measured* — rule 2 applies and the run escalates.
 2. **The track is a floor, not a ceiling.** A run may escalate **up** mid-flight
    (SOLO → FIX → ADDITIVE → FULL); nothing may de-escalate. A wrong guess costs a resumed phase,
    never lost coverage. Record the escalation as a board row so the reason survives.
