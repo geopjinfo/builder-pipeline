@@ -210,8 +210,9 @@ reports the model the run actually used, where the harness keeps that record.
    planner is not dispatched on an unrecorded non-zero exit.** A planner reading a stale index is
    how a brief goes wrong while the coder, reading the source file, is right.
 0b. **Deferred sweep (entry)** — read the deferred registry (`<registry>`). Report to the human
-   every open row whose dependency is this module or has already landed. The human rules each
-   candidate **fold-in vs defer-again** (no silent auto-folding). Ruled-in rows go to the planner;
+   every open row whose dependency is this module or has already landed. Each row that rule (1)–(3)
+   of *Fix in-run* does not protect is a fold-in by default; the human rules only the protected
+   ones **fold-in vs defer-again** (no silent auto-folding of those). Ruled-in rows go to the planner;
    every candidate is recorded on the task board as a `C-n` row — `PLANNED` if folded in, `DROPPED`
    with the ruling if not.
 1. **Plan** — dispatch `module-planner`. It writes `<runs>/<key>/plan.md` and returns the path + a
@@ -505,6 +506,31 @@ reports the model the run actually used, where the harness keeps that record.
 7. **Close-out** — see *Finish* below. Do not skip it; it is where fake DONEs are caught, and **P7
    cannot close without the handoff pack**.
 
+## Fix in-run — defer only for one of three reasons
+
+A defect found by ANY seat in a run — tester, an auditor, the reviewer, the ledger audit, a drift
+oracle, the behavioural gate — is **fixed in the same run** when all of these hold: it lives in the
+run's module, its tests, its records, or a shared test spec the run already touched; it needs no new
+permission key or grant; it needs no edit to a fenced area (the platform core, the read-only docs
+mirror, the instruction layer); and it rests on no business rule nobody has stated. It gets a `FIX-n`
+row, a red seed if behavioural, and the loop below. **"Not in the brief's scope" is not a reason to
+defer**, and neither is "its own red seed, not inside a domain build" — a test-only assertion in a
+spec the run is already editing is the run's work.
+
+**A registry row may be filed instead of a fix only for one of three reasons, and the row's
+Dependency cell must name which:** (1) the fix needs the fenced-area unlock; (2) it needs a ruling (a
+new key, a grant, an unstated business rule, two sources in conflict); (3) it needs the documentation
+workspace (the mirror, the tracker). Anything else deferred is an unearned deferral, and the ledger
+audit reports it as such.
+
+**Order at close-out:** the ledger audit runs **BEFORE the reviewer is dispatched** (P7a), so its
+findings join the FIX lane like every other seat's. Run after the verdict it can only produce a delta
+pass — a void pre-cover, a second gates run, a second reviewer dispatch.
+
+**Every brief inherits the module's open registry rows.** The step-0b sweep lists them; each one that
+rule (1)–(3) does not protect is a `C-n` fold-in by default, not a candidate for a human to re-sort.
+The cost this rule removes: one extra pipeline run per small item.
+
 ## Loop-back (gate failure)
 
 On any blocker from the tester, an auditor, or the reviewer (including a requirements
@@ -558,7 +584,8 @@ When **MERGE-READY**:
    Re-read each row's acceptance text: multi-clause criteria joined by `;`/`and` are where partial
    delivery hides — meeting one clause of three is **not** DONE. A row whose evidence fails becomes
    `DEFERRED→<registry-id>` with a new registry row — never a DONE with a caveat in prose. (If the
-   optional `ledger-audit` extra skill is installed, run it scoped to this module here.)
+   optional `ledger-audit` extra skill is installed, run it scoped to this module in P7a, before the
+   reviewer is dispatched — see *Fix in-run*.)
 3. **Update the deferred registry**: (a) add a row for every item this module deferred (blocking
    dependency + how-to-resume); (b) close or flag any row whose dependency this module just
    resolved; (c) bump the registry's `Last reviewed` date. Report rows unblocked + rows added.
