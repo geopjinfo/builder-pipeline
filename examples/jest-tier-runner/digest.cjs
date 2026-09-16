@@ -23,15 +23,35 @@ const MAX_FAILURES_SHOWN = 10;
  * assertion failed — which the FAIL count already said. Taking the first matching line of either
  * kind would always pick the useless one, since the header comes first in every jest message.
  */
-const PREFERENCE = [/^Expected:/, /^Received:/, /^(Error|expect\()/];
+const PREFERENCE = [
+  // Compile/resolve failures first: for a suite that never ran, `error TS2322: …` is the whole
+  // diagnosis, while jest's own `● Test suite failed to run` header repeats what the head said.
+  /error TS\d+/,
+  /Cannot find module/,
+  /^Expected:/,
+  /^Received:/,
+  /^(Error|expect\()/,
+];
+
+/** jest colours its messages; the digest is read in a plain window and in a commit message. */
+const ANSI = new RegExp(String.fromCharCode(27) + String.raw`\[[0-9;]*m`, 'g');
 
 function firstAssertionLine(message = '') {
-  const lines = message.split(NEWLINE).map((candidate) => candidate.trim());
+  const lines = String(message).replace(ANSI, '').split(NEWLINE).map((candidate) => candidate.trim());
   for (const pattern of PREFERENCE) {
     const found = lines.find((candidate) => pattern.test(candidate));
     if (found) return found.slice(0, 160);
   }
   return (lines[0] ?? '').slice(0, 160);
+}
+
+/**
+ * The suite-level failure text. jest's `--json` reporter writes `message`; the programmatic result
+ * object writes `failureMessage`. `run-tier.mjs` reads the JSON file, so reading only the latter
+ * left the digest naming a suite with no reason beside it.
+ */
+function suiteMessage(suite) {
+  return suite.failureMessage ?? suite.message ?? '';
 }
 
 function summarize(result, { logPath }) {
@@ -48,18 +68,41 @@ function summarize(result, { logPath }) {
     }
   }
 
+  /**
+   * A suite that FAILED TO RUN contributes zero tests, so `numFailedTests` cannot see it. Judging the
+   * head on the test count alone printed `PASS — 327/328 suites, 4026/4026 tests` beside jest's own
+   * `Test Suites: 1 failed` — a green head for a run that did not happen, which is the one
+   * thing a governed runner must never say. The suite count is the authority; the test figure stays.
+   */
+  const unrun = (result.testResults ?? []).filter(
+    (suite) =>
+      (suite.status === 'failed' || suiteMessage(suite)) && (suite.assertionResults ?? []).length === 0,
+  );
+
   const head =
-    result.numFailedTests === 0
+    result.numFailedTestSuites === 0 && result.numFailedTests === 0
       ? `PASS — ${result.numPassedTestSuites}/${result.numTotalTestSuites} suites, ${result.numPassedTests}/${result.numTotalTests} tests`
       : `FAIL — ${result.numFailedTestSuites}/${result.numTotalTestSuites} suites red, ${result.numFailedTests}/${result.numTotalTests} tests failed`;
 
+  /**
+   * One budget across both kinds, so the 25-line cap holds when a run has BOTH unrun suites and
+   * failing tests. A suite that did not run is listed first: it is the fact the head used to hide.
+   */
+  const entries = [
+    ...unrun.map((suite) => ({
+      what: `${suite.name} :: suite did not run`,
+      why: firstAssertionLine(suiteMessage(suite)),
+    })),
+    ...failed.map((failure) => ({ what: `${failure.file} :: ${failure.name}`, why: failure.why })),
+  ];
+
   const lines = [head];
-  for (const failure of failed.slice(0, MAX_FAILURES_SHOWN)) {
-    lines.push(`  ${failure.file} :: ${failure.name}`);
-    lines.push(`      ${failure.why}`);
+  for (const entry of entries.slice(0, MAX_FAILURES_SHOWN)) {
+    lines.push(`  ${entry.what}`);
+    lines.push(`      ${entry.why}`);
   }
-  if (failed.length > MAX_FAILURES_SHOWN) {
-    lines.push(`  … ${failed.length - MAX_FAILURES_SHOWN} more failure(s) — see the log`);
+  if (entries.length > MAX_FAILURES_SHOWN) {
+    lines.push(`  … ${entries.length - MAX_FAILURES_SHOWN} more failure(s) — see the log`);
   }
   lines.push(`full log: ${logPath}`);
   return lines.join(NEWLINE);
