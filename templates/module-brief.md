@@ -23,6 +23,11 @@ forbidden doc paths — changes there ride the handoff pack.
 > invariant auditors → docs → reviewer → behavioural gate, gate-fail loop). **Wave/priority:** `<…>`.
 > **Why now / unblocks:** `<one line>`.
 >
+> **`GRANT-ASK: <file>:<line range> — <change>`** — one line per fenced site whose fix is comment/prose-only
+> and already ruled in substance. The ruling party grants or refuses each IN WORDS in its reply; a granted
+> one is applied in-run as its own commit with the comment-only proof quoted; not granted in words = not
+> granted. None → omit.
+>
 > **1. Scope (planner grounds):** requirements `<ids / spec §s>`, tracker row(s) `<id>`.
 > Data: `<schema/tables/collections>`. Confirm fields against `<ERD / data spec>`.
 >
