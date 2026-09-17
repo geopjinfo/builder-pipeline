@@ -522,6 +522,9 @@ Dependency cell must name which:** (1) the fix needs the fenced-area unlock; (2)
 new key, a grant, an unstated business rule, two sources in conflict); (3) it needs the documentation
 workspace (the mirror, the tracker). Anything else deferred is an unearned deferral, and the ledger
 audit reports it as such.
+**A comment-only fix at a fenced, already-ruled site is ASKED, not deferred:** the brief's entry section
+lists it as `GRANT-ASK: <file>:<line range> — <change>`; a grant given in words in the rulings reply is
+applied in-run as its own commit with the comment-only proof quoted; not granted in words = not granted.
 
 **Order at close-out:** the ledger audit runs **BEFORE the reviewer is dispatched** (P7a), so its
 findings join the FIX lane like every other seat's. Run after the verdict it can only produce a delta
@@ -568,6 +571,17 @@ new key, a new board and a **new session**. The orchestrator re-reads its whole 
 turn, so every turn after the run has ended pays for the entire run again: in one adopting project
 most of the orchestrator's spend in a session came after its run had ended. The board and
 `state.md` make resuming cheap; a long session buys nothing.
+
+**The one exception — a late grant on the same branch.** A grant that arrives in the reply to the run's
+OWN handoff is applied on that run's branch, without a new key, only when ALL FIVE hold: (1) the branch
+is not yet merged; (2) the grant is comment/prose-only, names the file and line range, and is given in
+words; (3) the human says so in session, recorded as a decision with its reversal; (4) one commit per
+grant, a registry row it closes moves with its asserting spec in the same commit, currency stamp last,
+gates re-run and quoted with sha; (5) a reviewer delta pass over exactly the new commits returns
+MERGE-READY, boundary checks first (only granted files, zero non-comment lines, no unlock file left).
+Fail any one and it is a new run. This relaxes neither the rule that a no-pipeline change never touches
+source, nor the fenced-area track for a behavioural change. Without it, the fix-in-run rule (which
+exempts fenced sites) plus grants that only arrive after `run.end` guarantee one tail run per run.
 
 When **MERGE-READY**:
 
