@@ -144,6 +144,10 @@ nobody started the watcher.
 - Thread only distilled artifacts (paths, findings lists) between dispatches, per the skill.
 - **The board file is the one progress surface.** Do not mirror rows into the harness's to-do
   tool. A second surface drifts from the first, and nobody reconciles it.
+- **One writer at a time.** Agent calls dispatched in a single message run concurrently, and a row
+  flip is a read-modify-write of the whole board file — so concurrent seats clobber each other.
+  When you dispatch more than one at once, tell each not to touch the board, take their row
+  outcomes from their final messages, and write the rows yourself.
 - **One run per session; stop at `run.end`.** Follow-up work takes a new key, board and session.
 
 ## The orchestrator model is a session setting, so it needs a check

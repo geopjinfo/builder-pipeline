@@ -51,6 +51,16 @@ truth and the only place progress is written. Do not mirror its rows into a harn
 task tracker: every extra surface is one more place for status to disagree, and in one adopting
 project the mirror instructions went unfollowed for whole runs while the board stayed current.
 
+**One writer at a time — the board is a file, not a database.** A seat that flips a row does a
+read-modify-write of the whole markdown file. Two seats running **concurrently** therefore clobber
+each other: in one adopting project two parallel FIX lanes left three stray cells welded to line 1
+of the board, and both lanes detected and repaired it independently — which is luck, not a design.
+So whenever you dispatch **more than one seat at once** (parallel FIX lanes; the four auditors, if
+your project lets auditors write), **the orchestrator becomes the board's only writer**: tell each
+seat in its dispatch NOT to touch the board, have it report its row outcomes in its final message,
+and write the rows yourself between dispatches. A sequential dispatch may keep writing its own
+rows — the rule is about concurrency, not about trust.
+
 ## Context & run discipline
 
 **Never run a test suite bare.** Route every suite through a wrapper that tees the FULL output to a
@@ -549,7 +559,9 @@ misalignment):
    area they name, and dispatch one builder per group carrying ONLY: the `file:line` list, the rule
    each cites, the minimal fix, and the tests to run (`commands.affected`, or the relevant tier) —
    no plan, no board history. Localize → repair → validate. Groups run one after another unless
-   their files are disjoint. Why: loop-backs are a material share of run cost, and a fixer that
+   their files are disjoint — and when they **are** disjoint and run concurrently, the lanes must be
+   told not to write the board at all (see *One writer at a time*): their source files may be
+   disjoint, but the board they both flip rows in is one file and is not. Why: loop-backs are a material share of run cost, and a fixer that
    re-reads the whole plan pays for context the fix does not need. The lane is kept only if the
    fix-of-fix rate does not rise over two runs that used it — record the baseline before the first
    use and judge with `node scripts/fix-rate.mjs <boards>/<key>.md …` (`EXPERIMENTS.md`). Feature

@@ -3,6 +3,20 @@
 All notable changes to the kit. Format: [Keep a Changelog](https://keepachangelog.com); the kit
 versions independently of any project it is pasted into.
 
+## [Unreleased]
+
+### Fixed
+
+- **Parallel seats clobbering the board.** The playbook makes `<boards>/<key>.md` the one progress
+  surface but gave no rule for two seats writing it at once. A row flip is a read-modify-write of
+  the whole file, so concurrently dispatched seats overwrite each other — observed in an adopting
+  project, where two parallel FIX lanes welded three stray status cells onto line 1 of the board and
+  both lanes noticed and repaired it independently. Added *One writer at a time* to
+  `skills/build-module-pipeline.md` and `adapters/claude-code.md`, and cross-referenced it from the
+  narrow-FIX-lane step: when more than one seat is dispatched at once, the orchestrator becomes the
+  board's only writer and seats report row outcomes instead. Sequential dispatches are unaffected —
+  the rule is about concurrency, not trust.
+
 ## [0.13.2] — 2026-09-13
 
 ### Added
