@@ -54,7 +54,26 @@ function suiteMessage(suite) {
   return suite.failureMessage ?? suite.message ?? '';
 }
 
-function summarize(result, { logPath }) {
+/**
+ * Suites `jest --listTests` said the tier holds that jest never reported. `listed` is a whole number
+ * when the corpus was measured, `null` when measuring failed, `undefined` when nobody asked.
+ *
+ * WHY. jest's totals only count suites it scheduled, so a worker that dies can take a suite with it and
+ * leave every figure green — observed in practice: a green head with one suite missing. `--listTests` is
+ * the second source that can see the gap. Measure before trusting the rule on your project: in the
+ * reference project it equals `numTotalTestSuites` exactly, skipped suites included, so the rule is equality.
+ */
+function missingSuites(result, listed) {
+  return Number.isInteger(listed) ? listed - (result.numTotalTestSuites ?? 0) : 0;
+}
+
+/** The run's exit once the corpus is known: a jest exit 0 with a suite missing is not a pass. */
+function corpusExit(result, listed, jestExit) {
+  if (jestExit !== 0) return jestExit;
+  return Number.isInteger(listed) && missingSuites(result, listed) !== 0 ? 1 : 0;
+}
+
+function summarize(result, { logPath, listed }) {
   const failed = [];
   for (const suite of result.testResults ?? []) {
     for (const assertion of suite.assertionResults ?? []) {
@@ -79,10 +98,16 @@ function summarize(result, { logPath }) {
       (suite.status === 'failed' || suiteMessage(suite)) && (suite.assertionResults ?? []).length === 0,
   );
 
-  const head =
+  const missing = missingSuites(result, listed);
+  const measured = Number.isInteger(listed) ? ' (= --listTests)' : '';
+  let head =
     result.numFailedTestSuites === 0 && result.numFailedTests === 0
-      ? `PASS — ${result.numPassedTestSuites}/${result.numTotalTestSuites} suites, ${result.numPassedTests}/${result.numTotalTests} tests`
+      ? `PASS — ${result.numPassedTestSuites}/${result.numTotalTestSuites} suites${measured}, ${result.numPassedTests}/${result.numTotalTests} tests`
       : `FAIL — ${result.numFailedTestSuites}/${result.numTotalTestSuites} suites red, ${result.numFailedTests}/${result.numTotalTests} tests failed`;
+  // The corpus outranks both heads: a run missing a suite is not the run that was asked for.
+  if (missing !== 0) {
+    head = `FAIL — ${Math.abs(missing)} listed suite(s) ${missing > 0 ? 'never reported' : 'reported but not listed'}: jest reported ${result.numTotalTestSuites} of ${listed} (--listTests), ${result.numPassedTests}/${result.numTotalTests} tests`;
+  }
 
   /**
    * One budget across both kinds, so the 25-line cap holds when a run has BOTH unrun suites and
@@ -97,6 +122,7 @@ function summarize(result, { logPath }) {
   ];
 
   const lines = [head];
+  if (listed === null) lines.push('  corpus NOT measured — `jest --listTests` failed; the suite total above is jest\'s own');
   for (const entry of entries.slice(0, MAX_FAILURES_SHOWN)) {
     lines.push(`  ${entry.what}`);
     lines.push(`      ${entry.why}`);
@@ -108,4 +134,4 @@ function summarize(result, { logPath }) {
   return lines.join(NEWLINE);
 }
 
-module.exports = { summarize, MAX_FAILURES_SHOWN };
+module.exports = { summarize, corpusExit, MAX_FAILURES_SHOWN };

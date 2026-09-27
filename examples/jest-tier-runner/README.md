@@ -18,6 +18,12 @@ this example are listed in [`../../tooling/PORTING.md`](../../tooling/PORTING.md
 - The exit code is the test runner's own, so the command composes in a chain like a bare call. A run
   that did not run (lock busy, harness died before producing a result) says so in one line and must
   never print a previous run's result.
+- **The suite total is checked, not trusted.** The runner counts the tier independently (jest:
+  `--listTests --json`, with the run's own selecting arguments) and compares it with the reported suite
+  total. A shortfall is a FAIL with a non-zero exit even when the test runner exited 0 — a worker that
+  dies can take a whole suite with it and leave every reported figure green. A count that could not be
+  taken is said ("corpus NOT measured"), never presented as measured. Measure the rule on your project
+  first: equality held exactly in the reference project, skipped suites included.
 - Why: a raw multi-megabyte suite log read into an orchestrator's context costs tokens on every later
   turn, and pushes the loop-back list into the middle of the window, where it is least likely to be
   acted on. The log is kept; only the digest is spoken.
@@ -37,7 +43,11 @@ this example are listed in [`../../tooling/PORTING.md`](../../tooling/PORTING.md
 - The worker count is the minimum of (cores minus a small reserve), (free memory ÷ memory per
   worker) and a per-tier ceiling. The governor only ever **lowers** the count: raising it makes runs
   slow, flaky and non-comparable across machines. CI pins an explicit override so it stays
-  deterministic.
+  deterministic — and the pin is still bounded by the tier's ceiling (an override above it is clamped
+  and reported), or a single-worker tier ends up running many.
+- A wrapper that wants a smaller pool (a shared remote host, say) passes a **lower-only cap** into the
+  governor (`TEST_WORKER_CAP` in this example), never a test-runner CLI worker flag: the CLI flag
+  replaces the governed answer, so a host with memory for two workers runs the cap's six.
 - Why memory and not load average: load average is not reported on every platform, and an
   oversubscribed tier fails on timeouts, which reads as a regression and is not one.
 

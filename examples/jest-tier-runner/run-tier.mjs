@@ -24,7 +24,7 @@ import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const { acquire, TierBusyError } = require('./lib/tier-lock.cjs');
 const { selectTier } = require('./lib/affected.cjs');
-const { summarize } = require('./lib/digest.cjs');
+const { summarize, corpusExit } = require('./lib/digest.cjs');
 
 const NEWLINE = String.fromCharCode(10);
 const WINDOWS = process.platform === 'win32';
@@ -90,6 +90,8 @@ function changedFiles() {
 
 const resultPath = `logs/${tier}.result.json`;
 const args = ['jest', '--config', CONFIGS[tier], '--json', '--outputFile', resultPath];
+/** The arguments that SELECT suites, shared by the run and the corpus count so both see the same set. */
+const selectArgs = [];
 
 if (wantsAffected) {
   const selection = selectTier(changedFiles());
@@ -98,7 +100,8 @@ if (wantsAffected) {
     process.exit(0);
   }
   if (selection.mode === 'related') {
-    args.push('--findRelatedTests', ...selection.files);
+    selectArgs.push('--findRelatedTests', ...selection.files);
+    args.push(...selectArgs);
     console.log(`AFFECTED — ${selection.reason}`);
   } else {
     console.log(`ESCALATED TO FULL — ${selection.reason}`);
@@ -123,6 +126,7 @@ const logPath = `logs/${tier}-${stamp}.log`;
  * information here; the holder's pid and start time are.
  */
 let held;
+let exitCode = 1;
 try {
   held = acquire(tier);
 } catch (error) {
@@ -153,16 +157,49 @@ try {
   rmSync(resultPath, { force: true });
   const run = spawnSync('npx', args, { encoding: 'utf8', shell: WINDOWS, maxBuffer: MAX_BUFFER });
   writeFileSync(logPath, `${run.stdout ?? ''}${NEWLINE}${run.stderr ?? ''}`);
+  let result;
   try {
-    console.log(summarize(JSON.parse(readFileSync(resultPath, 'utf8')), { logPath }));
+    result = JSON.parse(readFileSync(resultPath, 'utf8'));
   } catch {
+    result = null;
+  }
+  if (result) {
+    // The corpus is measured with the same selecting arguments, so a missing suite cannot hide
+    // behind a green head.
+    const listed = listedSuites();
+    console.log(summarize(result, { logPath, listed }));
+    exitCode = corpusExit(result, listed, run.status ?? 1);
+  } else {
     // jest died before writing a machine-readable result — say so rather than reporting a pass.
     // `run.error` is what distinguishes "the harness killed the child" (ENOBUFS, ETIMEDOUT) from
     // "jest crashed on its own"; printing it turns a mystery exit 1 into a one-line diagnosis.
     const cause = run.error ? ` (${run.error.code ?? run.error.message})` : '';
     console.log(`no machine-readable result — jest exited before writing one${cause}. full log: ${logPath}`);
+    exitCode = run.status ?? 1;
   }
-  process.exit(run.status ?? 1);
 } finally {
   held.release();
+}
+process.exit(exitCode);
+
+/**
+ * How many suites the tier holds, from `jest --listTests --json` with the run's own selecting
+ * arguments; `null` when it cannot be measured (the digest then says so instead of claiming it).
+ */
+function listedSuites() {
+  const list = spawnSync('npx', ['jest', '--config', CONFIGS[tier], '--listTests', '--json', ...selectArgs], {
+    encoding: 'utf8',
+    shell: WINDOWS,
+    maxBuffer: MAX_BUFFER,
+  });
+  const line = String(list.stdout ?? '')
+    .split(/\r?\n/)
+    .reverse()
+    .find((candidate) => candidate.trim().startsWith('['));
+  try {
+    const files = JSON.parse(line ?? '');
+    return list.status === 0 && Array.isArray(files) ? files.length : null;
+  } catch {
+    return null;
+  }
 }
