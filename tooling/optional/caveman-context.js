@@ -3,7 +3,9 @@
  * SessionStart caveman-mode injector (token saver). Optional; Claude Code only.
  *
  * Registered in .claude/settings.json for SessionStart. Caveman is a
- * session-scoped output style (~/.claude/skills/caveman/SKILL.md) that
+ * session-scoped output style (.claude/skills/caveman/SKILL.md — vendor it in the repo,
+ * from the kit's skills-extra/caveman/, so a fresh clone or a new account carries it;
+ * a user-level ~/.claude/skills/caveman copy is then not required) that
  * compresses prose ~65-75% while keeping every technical detail exact.
  * Because it resets each session, this hook re-asserts it automatically so
  * nobody has to type /caveman. Prints the instruction as SessionStart
@@ -21,7 +23,7 @@ const CAVEMAN_LEVEL = 'full'; // team default: lite | full | ultra
 
 const context = [
   `Caveman mode ACTIVE for this repo (intensity: ${CAVEMAN_LEVEL}).`,
-  'Compress every prose response per the caveman skill (~/.claude/skills/caveman/SKILL.md):',
+  'Compress every prose response per the caveman skill (.claude/skills/caveman/SKILL.md, in this repo):',
   'drop articles, filler, pleasantries, hedging; fragments OK; short synonyms.',
   'Keep VERBATIM, never compress: code blocks, commit/PR text, CLI commands,',
   'API/function/symbol names, exact error strings.',
