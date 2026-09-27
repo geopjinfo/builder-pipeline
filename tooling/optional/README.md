@@ -4,9 +4,10 @@
 SessionStart hook that puts every session in compressed "caveman" prose (~75% output-token cut;
 code/CLI/API names/error strings stay verbatim; safety warnings drop to normal prose).
 **Two-part install:** (1) this hook wired in `.claude/settings.json` under `SessionStart`;
-(2) the `caveman` SKILL itself, which lives at USER level (`~/.claude/skills/caveman/`) — copy it
-from the source machine or drop it repo-level under `.claude/skills/`. Without the skill the hook's
-instruction has nothing to point at. Env opt-out and level knob are inside the hook file.
+(2) the `caveman` SKILL itself, vendored repo-level at `.claude/skills/caveman/` (copy it from the
+kit's `skills-extra/caveman/`) — the hook's instruction points there, and a repo-level copy travels
+with every clone and account, where a user-level `~/.claude/skills/caveman/` copy does not. Without
+the skill the hook's instruction has nothing to point at. Env opt-out and level knob are inside the hook file.
 Use it for the main session only: a seat's output is a small share of what it costs, because seats
 mostly pay for what they read.
 
