@@ -245,8 +245,19 @@ function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classi
   const path = lockPath ?? lock?.DEFAULT_LOCK;
   const refuse = (message) => ({ status: 75, output: `BUSY — ${message}`, refused: true });
   const outputOf = (r) => `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  // One check never re-spawns an identical command: claim commands only read, and one check reads one
+  // tree, so the first result stands for every later claim that names it. Several counts drawn from the
+  // same test run otherwise re-ran that run once each. A refusal (busy lock) is never cached — retried.
+  const seen = new Map();
 
   return function run(command, claim = {}) {
+    if (seen.has(command)) return seen.get(command);
+    const result = runOnce(command, claim);
+    if (!result.refused) seen.set(command, result);
+    return result;
+  };
+
+  function runOnce(command, claim) {
     const cls = lock ? classify(command) : 'none';
     if (cls === 'wrapped') {
       const holder = liveHolder(lock, path);
@@ -267,7 +278,7 @@ function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classi
     } finally {
       held?.release();
     }
-  };
+  }
 }
 
 module.exports = { check, citationPattern, referencePattern, ID_SHAPE, DEFAULT_REGISTRY_ID, makeRunner, lockClass, lockInstalled: installedLock !== null };

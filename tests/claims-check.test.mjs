@@ -125,6 +125,21 @@ describe('claims checker — makeRunner', () => {
     assert.deepEqual(check(doc(''), fsProbe, ctx({ claims: [claim], run })), []);
   });
 
+  test('red: two claims naming the same command spawn it once and share its output', () => {
+    let calls = 0;
+    const exec = () => {
+      calls += 1;
+      return { status: 0, stdout: '', stderr: 'Tests:       12 passed, 12 total\n' };
+    };
+    const run = makeRunner({ exec, lock: null });
+    const claims = [
+      { id: 'C1', text: '12 passed', command: 'npx jest', expect: '\\b12 passed' },
+      { id: 'C2', text: '12 total', command: 'npx jest', expect: '\\b12 total' },
+    ];
+    assert.deepEqual(check(doc(''), fsProbe, ctx({ claims, run })), []);
+    assert.equal(calls, 1);
+  });
+
   test('lockClass: direct is tested first over a compound command; npm run tier:<x> is not the wrapper', () => {
     assert.equal(lockClass('npx jest -c test/jest.integration.config.cjs'), 'direct');
     assert.equal(lockClass('npm run test:e2e'), 'direct');
