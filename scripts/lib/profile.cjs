@@ -82,6 +82,13 @@ const FEATURES = {
   },
   advisorBuilder: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
+   * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue
+   * treats as bookkeeping (re-opens nothing) / docs (re-opens no module phase) — see scripts/lib/gate-queue.cjs. */
+  liteSplit: {
+    defaults: { state: 'experimental-off', cap: 4, trigger: 3, ledgers: ['(^|/)CHANGELOG\\.md$'], docsOnly: ['(^|/)README\\.md$'] },
+    requires: [],
+  },
 };
 
 const DEFAULTS = {
