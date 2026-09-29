@@ -10,7 +10,7 @@
  * and is not one. Nothing prevented that before this file; it only stayed rare because a human runs
  * one tier at a time. An orchestrator dispatching background work does not.
  */
-const { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const nodeFs = require('node:fs');
 const { dirname, join } = require('node:path');
 const { tmpdir } = require('node:os');
 
@@ -78,27 +78,115 @@ function holderStillRunning(holder) {
   return Date.now() - startedAt < MAX_PLAUSIBLE_RUN_MS;
 }
 
-function acquire(tier, { lockPath = DEFAULT_LOCK } = {}) {
-  mkdirSync(dirname(lockPath), { recursive: true });
-  if (existsSync(lockPath)) {
-    let holder;
-    try {
-      holder = JSON.parse(readFileSync(lockPath, 'utf8'));
-    } catch {
-      holder = undefined; // a corrupt lock is a dead lock
-    }
-    if (holder && holderStillRunning(holder)) {
-      throw new TierBusyError(
-        `tier "${holder.tier}" is already running (pid ${holder.pid}, since ${holder.startedAt}). ` +
-          `RETRY FIRST — a pid can be REUSED, and a lock whose holder is long gone will say this (see this file's header). ` +
-          `Wait for it, or delete ${lockPath} if you know it is stale.`,
-      );
-    }
-    // A lock whose process is gone must be reclaimable, or one killed run deadlocks the repo.
-    rmSync(lockPath, { force: true });
+function busy(holder, lockPath) {
+  if (!holder) {
+    return new TierBusyError(
+      `a concurrent run took the tier lock first (${lockPath}). ` +
+        `RETRY FIRST — it may already be finished (see this file's header).`,
+    );
   }
-  writeFileSync(lockPath, JSON.stringify({ tier, pid: process.pid, startedAt: new Date().toISOString() }));
-  return { release: () => rmSync(lockPath, { force: true }) };
+  return new TierBusyError(
+    `tier "${holder.tier}" is already running (pid ${holder.pid}, since ${holder.startedAt}). ` +
+      `RETRY FIRST — a pid can be REUSED, and a lock whose holder is long gone will say this (see this file's header). ` +
+      `Wait for it, or delete ${lockPath} if you know it is stale.`,
+  );
+}
+
+/** The raw lock body, or `undefined` if the file is gone. */
+function readBody(fs, lockPath) {
+  try {
+    return fs.readFileSync(lockPath, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+function parseHolder(body) {
+  if (body === undefined) return undefined;
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined; // a corrupt lock is a dead lock
+  }
+}
+
+function readHolder(fs, lockPath) {
+  return parseHolder(readBody(fs, lockPath));
+}
+
+/** O_EXCL create: `true` if this call made the file, `false` if one already existed. */
+function tryCreate(fs, lockPath, body) {
+  try {
+    fs.writeFileSync(lockPath, body, { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    throw error;
+  }
+}
+
+/**
+ * Remove the lock we judged stale WITHOUT deleting one somebody took in
+ * the meantime. A bare rmSync cannot tell: two reclaimers judge the same stale file, the first
+ * replaces it with a live lock, and the second's rmSync deletes that live lock. Instead the file is
+ * RENAMED aside (atomic — only one reclaimer gets any given file) and its body compared with the
+ * body we judged: the same → it was the stale lock, delete it (`true`, go create); different → it is
+ * someone's live lock, put it back with an exclusive create and report busy (`false`). If the path
+ * was re-taken while it was aside, the restore fails and we are busy all the same — the displaced
+ * holder then no longer owns the path (its `release` leaves it, below); that narrow window is not
+ * closed here. A lock that vanished before the rename needs no reclaim (`true`). Windows sharing
+ * errors on the rename (EPERM/EBUSY/EACCES) mean someone has the file open → busy.
+ */
+function reclaimStale(fs, lockPath, judgedBody) {
+  const aside = `${lockPath}.stale.${process.pid}.${Date.now()}`;
+  try {
+    fs.renameSync(lockPath, aside);
+  } catch (error) {
+    if (error.code === 'ENOENT') return true;
+    if (['EPERM', 'EBUSY', 'EACCES'].includes(error.code)) return false;
+    throw error;
+  }
+  const moved = readBody(fs, aside);
+  if (moved === judgedBody) {
+    fs.rmSync(aside, { force: true });
+    return true;
+  }
+  if (moved !== undefined) tryCreate(fs, lockPath, moved); // restore; EEXIST → re-taken → busy anyway
+  fs.rmSync(aside, { force: true });
+  return false;
+}
+
+/**
+ * The create is ATOMIC (`wx` / O_EXCL), not
+ * check-then-write. On EEXIST the holder is re-read — live → busy; stale → `reclaimStale` renames it
+ * aside and deletes it only if it is still the body we judged stale, then ONE more `wx` create; a
+ * second EEXIST (or a reclaim that found a live lock) → busy. `release()` removes the lock only if
+ * its body still names this holder (pid + startedAt) — a read-then-remove, so not atomic, but it no
+ * longer deletes a lock another run took over. `fs` is injectable so a race test can interleave
+ * two acquirers (inject a `renameSync`/`writeFileSync` that runs the rival between the calls).
+ */
+function acquire(tier, { lockPath = DEFAULT_LOCK, fs = nodeFs } = {}) {
+  fs.mkdirSync(dirname(lockPath), { recursive: true });
+  const me = { tier, pid: process.pid, startedAt: new Date().toISOString() };
+  const body = JSON.stringify(me);
+  const held = {
+    release: () => {
+      const current = readHolder(fs, lockPath);
+      if (current && current.pid === me.pid && current.startedAt === me.startedAt) {
+        fs.rmSync(lockPath, { force: true });
+      }
+    },
+  };
+  if (tryCreate(fs, lockPath, body)) return held;
+  const judgedBody = readBody(fs, lockPath);
+  const holder = parseHolder(judgedBody);
+  if (holder && holderStillRunning(holder)) throw busy(holder, lockPath);
+  // A lock whose process is gone must be reclaimable, or one killed run deadlocks the repo.
+  if (judgedBody !== undefined && !reclaimStale(fs, lockPath, judgedBody)) {
+    throw busy(readHolder(fs, lockPath), lockPath);
+  }
+  if (tryCreate(fs, lockPath, body)) return held;
+  throw busy(readHolder(fs, lockPath), lockPath);
 }
 
 module.exports = { holderStillRunning, MAX_PLAUSIBLE_RUN_MS, acquire, TierBusyError, DEFAULT_LOCK };

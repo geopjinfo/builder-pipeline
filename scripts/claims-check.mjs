@@ -13,17 +13,21 @@
  * Settings (PIPELINE_PROFILE.md): paths.boards · paths.runs · paths.handoffs · paths.decisions · paths.registry ·
  * paths.citationRoots (empty → every top-level directory present, except node_modules, .git and dot-directories) ·
  * features.claims.{state, retracted, registryIdPattern}. Claim commands run with BUILDER_NO_BASH_CAP=1 so an
- * output cap cannot truncate the figure being checked.
+ * output cap cannot truncate the figure being checked, and their stdout AND stderr are matched on every exit.
+ *
+ * Tier lock: when `scripts/lib/tier-lock.cjs` is installed (from examples/jest-tier-runner), a claim command that
+ * runs an integration/e2e suite itself takes the machine-wide lock, and one that goes through the tier wrapper is
+ * refused while a live run holds it — a refused claim is a COUNT problem, never a pass. Not installed: claim
+ * commands run unlocked, and the output says so. Rules: `lockClass` / `makeRunner` in scripts/lib/claims-check.cjs.
  *
  * Exit 0 clean (or the feature is off) · 1 problems found · 2 usage or an invalid profile.
  */
-import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
-const { check } = require('./lib/claims-check.cjs');
+const { check, makeRunner, lockInstalled } = require('./lib/claims-check.cjs');
 const profile = require('./lib/profile.cjs');
 
 const loaded = profile.load(process.cwd());
@@ -104,13 +108,8 @@ const fsProbe = {
     return cache.get(p);
   },
 };
-const runCommand = (command) => {
-  try {
-    return { status: 0, output: execSync(command, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15 * 60 * 1000, env: { ...process.env, BUILDER_NO_BASH_CAP: '1' } }) };
-  } catch (e) {
-    return { status: e.status ?? null, output: `${e.stdout ?? ''}${e.stderr ?? ''}` };
-  }
-};
+// stdout + stderr on every exit, and the machine-wide tier lock when one is installed (see the header).
+const runCommand = makeRunner();
 
 const only = flag('--only')?.split(',');
 const problems = check(documents, fsProbe, {
@@ -125,6 +124,7 @@ const problems = check(documents, fsProbe, {
 
 console.log(`claims-check — ${documents.length} document(s), ${claims.length} count claim(s), citation roots: ${roots.join(', ') || 'none'}`);
 console.log(retracted === null ? 'retracted phrases: not configured' : `retracted phrases: ${retracted.length}`);
+if (claims.length > 0) console.log(lockInstalled ? 'tier lock: machine-wide (scripts/lib/tier-lock.cjs)' : 'tier lock: not installed — claim commands run unlocked');
 for (const p of problems) console.log(`  ${p.kind.toUpperCase().padEnd(9)} ${p.where} — ${p.detail}`);
 console.log(problems.length === 0 ? 'claims-check: PASS' : `claims-check: FAIL — ${problems.length} problem(s)`);
 process.exit(problems.length === 0 ? 0 : 1);
