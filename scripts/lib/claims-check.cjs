@@ -19,8 +19,25 @@
  *                 decision workspace or the handoffs folder, a registry id present in the deferred registry, or
  *                 a `handoff §X`. Headings introduce such items and are exempt.
  *
- * Pure over (documents, fs probe, context); `scripts/claims-check.mjs` does the I/O and reads the settings.
+ * `check` is pure over (documents, fs probe, context); `scripts/claims-check.mjs` does the document I/O and reads
+ * the settings. The runner the COUNT check calls is built here by `makeRunner`, with its spawn, lock and command
+ * classifier injectable, so the lock behaviour is testable without a test runner or the machine-wide lock.
  */
+const { spawnSync } = require('node:child_process');
+const { existsSync, readFileSync } = require('node:fs');
+
+/**
+ * The machine-wide tier lock, if the project installed one beside this file (`examples/jest-tier-runner/
+ * tier-lock.cjs` installs as `scripts/lib/tier-lock.cjs`). OPTIONAL: without it there is nothing to serialise
+ * against, so claim commands run unlocked and the CLI says so — the same as before the lock existed. Only a
+ * MISSING module is tolerated; a lock that is installed but fails to load is an error, not a silent downgrade.
+ */
+let installedLock = null;
+try {
+  installedLock = require('./tier-lock.cjs');
+} catch (error) {
+  if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message).includes('tier-lock.cjs'))) throw error;
+}
 
 /**
  * Any id-shaped token — a decision-log id (`D-7`), a registry id (letters, a dash, a `D` and a number), a
@@ -63,7 +80,7 @@ function referencePattern(refRoots) {
  *   registryIdPattern?: string,
  *   retracted?: {phrase:string, retractedBy:string}[] | null,   null = not configured, the check is skipped
  *   claims?: {id:string,text:string,command:string,expect:string}[],
- *   run?(cmd:string): {status:number|null, output:string},
+ *   run?(cmd:string, claim?:object): {status:number|null, output:string, refused?:boolean},
  * }} ctx
  * @returns {{ kind: 'count'|'citation'|'retracted'|'owed', where: string, detail: string }[]}
  */
@@ -87,7 +104,12 @@ function check(documents, fsProbe, ctx = {}) {
       push('count', `claims.jsonl ${claim.id}`, `unparseable expect /${claim.expect}/`);
       continue;
     }
-    const result = ctx.run(claim.command);
+    const result = ctx.run(claim.command, claim);
+    if (result.refused) {
+      // A claim that could not run (the tier lock was held) is never a silent pass, whatever its `expect` matches.
+      push('count', `claims.jsonl ${claim.id}`, `"${claim.text}" — \`${claim.command}\` not run: ${result.output}`);
+      continue;
+    }
     if (!pattern.test(result.output)) {
       const tail = result.output.trim().split(/\r?\n/).slice(-3).join(' ⏎ ').slice(0, 300);
       push('count', `claims.jsonl ${claim.id}`, `"${claim.text}" — \`${claim.command}\` (exit ${result.status}) no longer prints /${claim.expect}/; last lines: ${tail}`);
@@ -155,4 +177,97 @@ function check(documents, fsProbe, ctx = {}) {
   return problems;
 }
 
-module.exports = { check, citationPattern, referencePattern, ID_SHAPE, DEFAULT_REGISTRY_ID };
+/**
+ * Which lock a claim command needs. The default matches the layout `examples/jest-tier-runner` installs; a project
+ * with other script names passes its own `classify` to `makeRunner`.
+ *
+ *   'direct'  — runs a suite that shares the locked resource itself (`jest.integration.config`, `jest.e2e.config`,
+ *               `test:integration`, `test:e2e` — not their sub-scripts such as `test:e2e:drift`). The claim takes
+ *               the lock around the command.
+ *   'wrapped' — goes through the tier wrapper (`run-tier.mjs`, `npm run tier`, `test:affected`,
+ *               `test:integration:affected`), which takes the lock itself, so pre-locking would make it refuse
+ *               itself; the claim is only refused up front while a live holder owns the lock. `npm run tier:<x>`
+ *               is a different script and is not matched.
+ *   'none'    — everything else.
+ *
+ * `direct` is tested FIRST, over the whole command: a compound command (`a && b`, `a ; b`) with a direct segment
+ * is `direct` whatever else it contains, so a wrapped or unrelated segment can never hide an unlocked suite. Its
+ * wrapped segment, if any, then finds the lock held and fails loudly — a failed claim, never an unlocked run.
+ */
+function lockClass(command) {
+  if (/jest\.(?:integration|e2e)\.config|\btest:integration(?![:\w-])|\btest:e2e(?![:\w-])/.test(command)) return 'direct';
+  if (/run-tier\.mjs|\bnpm run tier(?![:\w-])|\btest:affected\b|\btest:integration:affected\b/.test(command)) return 'wrapped';
+  return 'none';
+}
+
+const MAX_BUFFER = 256 * 1024 * 1024;
+
+/**
+ * The default spawn — piped stdio, BOTH streams returned whatever the exit status. Jest prints its `Tests:` summary
+ * to stderr, so a runner that kept only stdout on success made every test-count claim unverifiable. Claim commands
+ * run with BUILDER_NO_BASH_CAP=1 so an output cap cannot truncate the figure being checked.
+ */
+function defaultExec(command) {
+  const r = spawnSync(command, {
+    shell: true,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 15 * 60 * 1000,
+    maxBuffer: MAX_BUFFER,
+    env: { ...process.env, BUILDER_NO_BASH_CAP: '1' },
+  });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: `${r.stderr ?? ''}${r.error ? `\n${r.error.message}` : ''}` };
+}
+
+/** The live holder of the lock at `lockPath`, or null (absent, corrupt, dead or stale). */
+function liveHolder(lock, lockPath) {
+  if (!existsSync(lockPath)) return null;
+  try {
+    const holder = JSON.parse(readFileSync(lockPath, 'utf8'));
+    return lock.holderStillRunning(holder) ? holder : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build the COUNT runner: `run(command, claim) → { status, output, refused? }`. `output` is stdout + stderr on every
+ * exit. With no lock (none installed, or `lock: null`) every command runs unlocked.
+ *
+ * @param {{
+ *   exec?: (cmd:string) => { status:number|null, stdout:string, stderr:string },
+ *   lock?: { acquire: Function, holderStillRunning: Function, TierBusyError: Function, DEFAULT_LOCK: string } | null,
+ *   lockPath?: string,
+ *   classify?: (cmd:string) => 'direct'|'wrapped'|'none',
+ * }} [deps]
+ */
+function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classify = lockClass } = {}) {
+  const path = lockPath ?? lock?.DEFAULT_LOCK;
+  const refuse = (message) => ({ status: 75, output: `BUSY — ${message}`, refused: true });
+  const outputOf = (r) => `${r.stdout ?? ''}${r.stderr ?? ''}`;
+
+  return function run(command, claim = {}) {
+    const cls = lock ? classify(command) : 'none';
+    if (cls === 'wrapped') {
+      const holder = liveHolder(lock, path);
+      if (holder) return refuse(`tier "${holder.tier}" holds the machine-wide lock (pid ${holder.pid}, since ${holder.startedAt}); re-run the claims check when it finishes`);
+    }
+    let held;
+    if (cls === 'direct') {
+      try {
+        held = lock.acquire(`claims:${claim.id ?? '?'}`, { lockPath: path });
+      } catch (error) {
+        if (!(error instanceof lock.TierBusyError)) throw error;
+        return refuse(error.message);
+      }
+    }
+    try {
+      const r = exec(command);
+      return { status: r.status, output: outputOf(r) };
+    } finally {
+      held?.release();
+    }
+  };
+}
+
+module.exports = { check, citationPattern, referencePattern, ID_SHAPE, DEFAULT_REGISTRY_ID, makeRunner, lockClass, lockInstalled: installedLock !== null };

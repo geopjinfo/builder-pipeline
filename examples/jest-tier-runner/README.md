@@ -58,6 +58,10 @@ this example are listed in [`../../tooling/PORTING.md`](../../tooling/PORTING.md
   checkout or worktree is an absent lock, because worktrees on one machine share the resource.
 - A lock whose holder is gone is reclaimable, and a holder older than a plausible run ceiling is
   treated as stale even if its process id now resolves — process ids are reused.
+- The lock is taken with an exclusive create, never check-then-write, so two runs that start
+  together cannot both win. Reclaiming a stale lock must not delete one a rival took in the
+  meantime (rename it aside, compare the body you judged, restore it if it changed), and `release`
+  removes the lock only while it still names the caller.
 
 ## What is in this directory
 

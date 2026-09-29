@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const { check } = require('../scripts/lib/claims-check.cjs');
+const { check, lockClass, makeRunner } = require('../scripts/lib/claims-check.cjs');
 
 // ── pure ────────────────────────────────────────────────────────────────────────────────────────────────────
 const files = {
@@ -108,6 +108,66 @@ describe('claims checker — pure', () => {
     const custom = ctx({ registryIdPattern: 'INV-\\d+', registryText: '| INV-4 | stock-levels | … |' });
     assert.deepEqual(check(doc('owed: INV-4'), fsProbe, custom), []);
     assert.deepEqual(kinds(check(doc('owed: STK-D1'), fsProbe, custom)), ['owed']);
+  });
+});
+
+// ── the COUNT runner: output streams + tier lock ────────────────────────────────────────────────────────────
+describe('claims checker — makeRunner', () => {
+  const tierLock = require('../examples/jest-tier-runner/tier-lock.cjs');
+  const lockDir = mkdtempSync(join(tmpdir(), 'builder-claims-lock-'));
+  after(() => rmSync(lockDir, { recursive: true, force: true }));
+  const lockPath = join(lockDir, 'tier.lock');
+  const ok = (stdout, stderr = '') => () => ({ status: 0, stdout, stderr });
+
+  test('red: a figure printed to stderr on exit 0 is seen (jest prints its Tests: line there)', () => {
+    const run = makeRunner({ exec: ok('', 'Tests:       12 passed, 12 total\n'), lock: null });
+    const claim = { id: 'C1', text: '12 passed', command: 'npx jest', expect: '\\b12 passed' };
+    assert.deepEqual(check(doc(''), fsProbe, ctx({ claims: [claim], run })), []);
+  });
+
+  test('lockClass: direct is tested first over a compound command; npm run tier:<x> is not the wrapper', () => {
+    assert.equal(lockClass('npx jest -c test/jest.integration.config.cjs'), 'direct');
+    assert.equal(lockClass('npm run test:e2e'), 'direct');
+    assert.equal(lockClass('npm run test:e2e:drift'), 'none');
+    assert.equal(lockClass('npm run tier -- integration'), 'wrapped');
+    assert.equal(lockClass('node scripts/run-tier.mjs unit'), 'wrapped');
+    assert.equal(lockClass('npm run tier:remote -- unit'), 'none');
+    assert.equal(lockClass('npm run tier -- unit && npm run test:integration'), 'direct');
+    assert.equal(lockClass('node -e "1"'), 'none');
+  });
+
+  test('a direct command runs under the lock and releases it', () => {
+    let sawLock = false;
+    const run = makeRunner({ lock: tierLock, lockPath, exec: () => ((sawLock = existsSync(lockPath)), { status: 0, stdout: 'ok', stderr: '' }) });
+    assert.deepEqual(run('npm run test:integration', { id: 'C1' }), { status: 0, output: 'ok' });
+    assert.equal(sawLock, true);
+    assert.equal(existsSync(lockPath), false);
+  });
+
+  test('red: while a live run holds the lock, direct and wrapped claims are refused and reported, never passed', () => {
+    const held = tierLock.acquire('integration', { lockPath });
+    try {
+      let ran = 0;
+      const run = makeRunner({ lock: tierLock, lockPath, exec: () => (ran++, { status: 0, stdout: '12 passed', stderr: '' }) });
+      assert.equal(run('npm run test:integration', { id: 'C1' }).refused, true);
+      assert.equal(run('npm run tier -- integration', { id: 'C2' }).refused, true);
+      assert.equal(run('node -e "1"', { id: 'C3' }).refused, undefined); // unrelated commands still run
+      assert.equal(ran, 1);
+      const claim = { id: 'C1', text: '12 passed', command: 'npm run test:integration', expect: '12 passed' };
+      const problems = check(doc(''), fsProbe, ctx({ claims: [claim], run }));
+      assert.deepEqual(kinds(problems), ['count']);
+      assert.match(problems[0].detail, /not run: BUSY/);
+    } finally {
+      held.release();
+    }
+  });
+
+  test('no lock installed (lock: null): every command runs unlocked', () => {
+    let ran = 0;
+    const run = makeRunner({ lock: null, exec: () => (ran++, { status: 0, stdout: 'x', stderr: '' }) });
+    run('npm run test:integration', { id: 'C1' });
+    run('npm run tier -- e2e', { id: 'C2' });
+    assert.equal(ran, 2);
   });
 });
 
