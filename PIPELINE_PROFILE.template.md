@@ -338,7 +338,8 @@ error, because a typo would otherwise switch a check off in silence.
     "graphTrial":       { "state": "experimental-off", "seats": ["orchestrator", "module-planner", "standards-auditor", "invariant-auditor"], "callPattern": null },
     "personas":         { "state": "experimental-off", "catalogue": null, "keyColumn": 0, "labelColumn": 1, "roleColumns": null, "grant": "1", "out": null, "logins": null, "citationPattern": null },
     "advisorBuilder":   { "state": "experimental-off" },
-    "mutationGate":     { "state": "experimental-off" }
+    "mutationGate":     { "state": "experimental-off" },
+    "liteSplit":        { "state": "experimental-off", "cap": 4, "trigger": 3, "ledgers": ["(^|/)CHANGELOG\\.md$"], "docsOnly": ["(^|/)README\\.md$"] }
   }
 }
 ```

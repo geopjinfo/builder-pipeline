@@ -5,6 +5,14 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Split module pipeline (`liteSplit`, experimental).** `build-module-lite` builds one module through the
+  playbook's steps 0–3 and queues it; `build-module-lite-gate-batch` runs every later phase over up to `cap`
+  queued modules, each audited against its own diff. `node scripts/gate-queue.mjs` stamps every finished phase
+  with the sha it was proven at and re-opens it when that module's code moves; bookkeeping and docs-only paths
+  come from the profile. Off by default (EXPERIMENTS.md §8).
+
 ### Fixed
 
 - **Parallel seats clobbering the board.** The playbook makes `<boards>/<key>.md` the one progress

@@ -32,7 +32,9 @@ const path = require('path');
 const KIT = __dirname; // builder/
 const CWD = process.cwd();
 const MARKER = '<!-- builder-kit:pipeline -->';
-const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder'];
+// The two lite skills install with the rest and stay inert until features.liteSplit is enabled (the gate
+// queue refuses otherwise), so installing them changes nothing for a project that never opts in.
+const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch'];
 
 // ---------------------------------------------------------------------------
 // Tool registry. Two install styles:

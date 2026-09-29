@@ -208,3 +208,27 @@ you let it decide.
 
 **Risk.** A fixer without the plan can fix the cited line and break an invariant the plan stated —
 which shows up exactly as a rising fix-of-fix rate. A lane judged on zero loop-backs is not judged.
+
+## 8. Split module pipeline — `liteSplit` (experimental)
+
+**What ships.** Two skills and one script: `build-module-lite` (the playbook's steps 0–3 at full strength,
+plus the free checks, then the module is queued `BUILT-UNGATED` and the run stops), `build-module-lite-gate-batch`
+(every later phase — drift, the four auditors on each module's own diff, docs, ledger audit, review, the
+behavioural gate, the release commit, close-out — over up to `cap` queued modules), and
+`node scripts/gate-queue.mjs`, which records each finished phase with the sha it was proven at and re-opens it
+when that module's code moves afterwards. The bar does not move: nothing merges until the batch closes it `GATED`.
+
+**Opt in.** Set `features.liteSplit.state` to `"experimental-on"`; tune `cap` (hard limit of open modules),
+`trigger` (when to run the batch), and `ledgers` / `docsOnly` (extra path patterns the queue treats as
+bookkeeping, or as docs that re-open no module phase). Off, `gate-queue` refuses and the lite skills do not run.
+
+**Measurement.** Over **one full batch of at least `trigger` modules**, compare against the same number of full
+runs: total orchestrator + seat wall clock (`node scripts/cost-window.mjs`), fix rows per module
+(`node scripts/fix-rate.mjs`), and how many checks `gate-queue status` re-opened after a fix. **Keep** if wall
+clock fell and fix rows per module did not rise; **stop** if late findings forced rework in modules built on top
+of the flawed one more than once per batch. One real module has been through both halves so far — not a batch.
+
+**Risk.** A defect found at the batch is found later than in a full run, so it can force changes in the modules
+built after it; the cap bounds that blast radius. The queue's staleness rule is only as good as its path
+rules: a bookkeeping path the profile does not declare re-opens proven phases (safe, slow), and a code path
+wrongly declared as bookkeeping would keep a stale proof (unsafe) — declare `ledgers` narrowly.
