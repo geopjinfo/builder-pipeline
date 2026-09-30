@@ -37,6 +37,12 @@ this example are listed in [`../../tooling/PORTING.md`](../../tooling/PORTING.md
   through: shared configuration, migrations and schema, seeds, the shared kernel, the test harness or
   its support files, the test-runner configs, the manifests. A false "full" costs minutes; a false
   "related" costs a missed regression, so anything not obviously safe belongs on the escalation list.
+- A tier whose config roots at its own test folder must still **see the source tree**: an import-graph
+  selector only follows files it has indexed, so a source-only diff otherwise selects **0** suites of
+  that tier, silently. Widen the selector's roots to the source root for that run, and pin the tier's
+  test pattern so the widening does not pull in another tier's specs (`relatedArgs` in `affected.cjs`).
+- The changeset includes **untracked** files: a brand-new spec that has not been staged yet is part of
+  the change.
 
 **3. Worker pools are sized from free memory.**
 
