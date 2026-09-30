@@ -55,4 +55,38 @@ function selectTier(changedFiles) {
   return { mode: 'related', files: typescript, reason: `${typescript.length} changed TypeScript file(s)` };
 }
 
-module.exports = { selectTier, FULL_RUN_PATTERNS };
+/**
+ * The jest arguments a `related` selection needs for ONE tier's config, beyond `--findRelatedTests`.
+ *
+ * WHY THIS EXISTS: jest's `--findRelatedTests` silently DROPS every changed path that is not in its
+ * haste map, and the haste map is built from the config's `roots` only. A tier config rooted at its
+ * own test folder (`test/integration/`, say) never has the source tree in its map, so a source-only
+ * diff selects 0 suites of that tier — a green that means nothing. A config whose roots already cover
+ * the source tree (typically unit) is unaffected.
+ *
+ * The fix widens the haste roots with the source root so the import graph can be walked from the
+ * changed file, and pins `testMatch` to the tier's own roots so the widening never turns a colocated
+ * unit spec into a suite of this tier. To reverse: return `[]` here (and accept the 0-suite selections).
+ *
+ * NO `<rootDir>` IN THE OUTPUT: a runner that spawns jest through a shell on Windows has `<` / `>`
+ * read by cmd.exe as redirection. Roots are emitted rootDir-relative (jest resolves CLI roots against
+ * the config's rootDir) and testMatch as `**\/<root>/<pattern>` globs, neither of which cmd.exe mangles.
+ */
+const ROOT_DIR = '<rootDir>';
+const SRC = 'src'; // your source root
+
+const relative = (path) => (path === ROOT_DIR ? '' : path.replace(/^<rootDir>\//, ''));
+
+function relatedArgs(config) {
+  const roots = (config.roots ?? [ROOT_DIR]).map(relative);
+  const coversSrc = roots.some((root) => root === '' || root === SRC || root === '.');
+  if (coversSrc) return [];
+  const pinned = (config.testMatch ?? ['**/*.spec.ts']).flatMap((pattern) =>
+    pattern.startsWith(`${ROOT_DIR}/`)
+      ? [`**/${relative(pattern)}`] // already anchored at a root of its own
+      : roots.map((root) => `**/${root}/${pattern}`),
+  );
+  return ['--roots', ...roots, SRC, '--testMatch', ...pinned];
+}
+
+module.exports = { selectTier, relatedArgs, FULL_RUN_PATTERNS };

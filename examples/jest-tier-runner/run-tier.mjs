@@ -23,7 +23,7 @@ import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const { acquire, TierBusyError } = require('./lib/tier-lock.cjs');
-const { selectTier } = require('./lib/affected.cjs');
+const { selectTier, relatedArgs } = require('./lib/affected.cjs');
 const { summarize, corpusExit } = require('./lib/digest.cjs');
 
 const NEWLINE = String.fromCharCode(10);
@@ -78,9 +78,12 @@ const since = rest.includes('--since') ? rest[rest.indexOf('--since') + 1] : 'ma
 function changedFiles() {
   const committed = execFileSync('git', ['diff', '--name-only', `${since}...HEAD`], { encoding: 'utf8' });
   const working = execFileSync('git', ['diff', '--name-only', 'HEAD'], { encoding: 'utf8' });
+  // A spec or source file not yet `git add`-ed is part of the change too; `git diff` never lists
+  // untracked files, so a brand-new spec was invisible to the selection.
+  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8' });
   return [
     ...new Set(
-      `${committed}${NEWLINE}${working}`
+      `${committed}${NEWLINE}${working}${NEWLINE}${untracked}`
         .split(NEWLINE)
         .map((file) => file.trim())
         .filter(Boolean),
@@ -100,7 +103,9 @@ if (wantsAffected) {
     process.exit(0);
   }
   if (selection.mode === 'related') {
-    selectArgs.push('--findRelatedTests', ...selection.files);
+    // relatedArgs widens a test-folder-rooted config's haste map to the source root — without it jest
+    // drops every source path from --findRelatedTests and a source-only diff selects 0 suites (see affected.cjs).
+    selectArgs.push(...relatedArgs(require(`../${CONFIGS[tier]}`)), '--findRelatedTests', ...selection.files);
     args.push(...selectArgs);
     console.log(`AFFECTED — ${selection.reason}`);
   } else {

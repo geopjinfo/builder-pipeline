@@ -232,3 +232,15 @@ of the flawed one more than once per batch. One real module has been through bot
 built after it; the cap bounds that blast radius. The queue's staleness rule is only as good as its path
 rules: a bookkeeping path the profile does not declare re-opens proven phases (safe, slow), and a code path
 wrongly declared as bookkeeping would keep a stale proof (unsafe) — declare `ledgers` narrowly.
+
+**Known gaps (deferred on purpose, each with a trigger).**
+- *No live page for lite runs or batches.* A full run can project its board to a live page; a lite run and a
+  gate batch have only the markdown board and `gate-queue status`. Build one only when a parallel lane reports
+  it lost track of a lite run — before that, the need is a guess.
+- *The batch is started by hand.* `gate-queue status` says when `trigger` is reached, but nothing starts the
+  batch. Automate only after two hand-run batches have closed cleanly, and give the automatic start the same
+  entry checks as a manual one.
+- *The claims check re-runs every distinct test command a board cites.* On a multi-module batch that can cost
+  most of an hour. The fix is to run each test config at most once per sha, or to accept a tier log already
+  produced at the same sha — with a red test proving a stale log is refused. Do not change the checker while
+  lanes are mid-run on it: that changes the rules under them.
