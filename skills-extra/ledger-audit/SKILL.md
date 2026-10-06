@@ -14,6 +14,25 @@ ledgers).
 Scope: a single module (`ledger-audit <moduleKey>` — cheap; run at every close-out) or the whole
 repo (batch by ledger; accumulate findings into `audits/ledger-audit.md`).
 
+## Run scope — what a close-out audit reads
+
+A pipeline run is audited **once, at close-out, before the final reviewer**. Read only what the run
+touched — the registry, trackers and accumulated audit file grow with every run, and reading them
+whole on every close-out is where this skill's cost goes:
+
+- **Board:** `tasks/<key>.md` — every row.
+- **Registry and trackers:** only the rows the board names (deferral ids, requirement ids), found
+  with `grep -n`. Never read either file whole.
+- **Prose:** only files in the run's `git diff --name-only <base>..HEAD`. Untouched prose is a
+  whole-repo audit's job.
+- **Accumulated findings:** never read `audits/ledger-audit.md` whole — grep for an earlier section
+  on this key and read only that.
+
+Record the audited commit in the section header (`audited-at <short-sha>`). On a re-run before
+merge, audit only rows changed in `git diff <audited-at>..HEAD -- tasks/<key>.md`, rows added since,
+and earlier findings still open. **After merge, do not re-run** unless that diff is non-empty. At run
+scope use one agent, not one per ledger or per check.
+
 ## What to check, per claim
 
 1. **Entailment.** Open the cited evidence (test file, commit, doc). Does the assertion prove
