@@ -43,11 +43,12 @@ process.stdin.on('end', () => {
   } catch (_) { process.exit(0); } // malformed input → don't block
   if (!filePath) process.exit(0);
 
-  const rel = filePath.replace(/\\/g, '/').replace(/^.*?:\//, '/');
+  // A RUN of separators is one separator: a doubled backslash or slash must not hide a protected prefix.
+  const rel = filePath.replace(/[\\/]+/g, '/').replace(/^.*?:\//, '/');
   const grant = process.env[UNLOCK_ENV] || '';
 
   for (const prefix of PROTECTED) {
-    const norm = prefix.replace(/\\/g, '/');
+    const norm = prefix.replace(/[\\/]+/g, '/');
     if (!rel.includes(`/${norm}`) && !rel.startsWith(norm)) continue;
     if (UNLOCKABLE[norm] && grant.split(',').includes(UNLOCKABLE[norm])) process.exit(0);
     console.error(
