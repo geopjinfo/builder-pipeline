@@ -263,3 +263,39 @@ describe('claims checker — CLI on a fixture project', () => {
     assert.equal(run(project()).status, 2);
   });
 });
+
+describe('claims checker — extended checks (UNANCHORED, NAMED), off by default', () => {
+  const testFile = { 'app/test_stock.py': ['def test_reorder_level_doubles_the_minimum():', '    """reorder level is twice the `minimum`"""', '    assert True'] };
+  const probe = { exists: (p) => p in testFile, lines: (p) => testFile[p] ?? null };
+  const board = (status, evidence) =>
+    `| # | Task | Cites | Status | Test-seed / evidence | Notes |\n|---|---|---|---|---|---|\n| T1 | Reorder level | REQ-1 | ${status} | ${evidence} | — |`;
+  const kinds = (status, evidence, extended = true) =>
+    check([{ name: 'tasks/stock-levels.md', text: board(status, evidence) }], probe, { roots: [], refRoots: [], registryText: '', retracted: null, claims: [], run: () => ({ status: 0, output: '' }), extended }).map((p) => p.kind);
+
+  test('without extended, neither check runs even on a row both would flag', () => {
+    assert.deepEqual(kinds('DONE', 'all green 16/16; title "nothing like it"', false), []);
+  });
+  test('red: an unanchored count in DONE evidence', () => {
+    assert.deepEqual(kinds('DONE', 'all green 16/16'), ['unanchored']);
+  });
+  test('a count beside a file, a backticked command, a script name or a logs/ path is anchored', () => {
+    assert.deepEqual(kinds('DONE', '`app/test_stock.py` 3/3'), []);
+    assert.deepEqual(kinds('DONE', '`pytest -q app` 3/3'), []);
+    assert.deepEqual(kinds('DONE', 'test:unit 3/3'), []);
+    assert.deepEqual(kinds('DONE', 'logs/unit.log 3/3'), []);
+  });
+  test('HTTP codes with spaces are not counts, and only DONE rows are read', () => {
+    assert.deepEqual(kinds('DONE', 'answers 404 / 409'), []);
+    assert.deepEqual(kinds('PLANNED', 'aim for 16/16'), []);
+  });
+  test('red: a cited test name absent from every cited file; present, elided or re-quoted it passes', () => {
+    assert.deepEqual(kinds('DONE', "`app/test_stock.py` test 'reorder level is three times the minimum'"), ['named']);
+    assert.deepEqual(kinds('DONE', "`app/test_stock.py` test 'reorder level is twice the minimum'"), []);
+    assert.deepEqual(kinds('DONE', "`app/test_stock.py` test 'reorder level … minimum'"), []);
+    assert.deepEqual(kinds('DONE', "`app/test_stock.py` test 'reorder level … maximum'"), ['named']);
+  });
+  test('a table without an evidence column is skipped', () => {
+    const bare = '| # | Task | Status |\n|---|---|---|\n| T1 | Reorder level 16/16 | DONE |';
+    assert.deepEqual(check([{ name: 'tasks/x.md', text: bare }], probe, { roots: [], refRoots: [], registryText: '', retracted: null, claims: [], run: () => ({}), extended: true }), []);
+  });
+});
