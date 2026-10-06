@@ -8,7 +8,9 @@
  *   node scripts/claims-check.mjs --files <a> <b> … [--claims <claims.jsonl>]
  *       exactly these documents (no claims file unless --claims is given)
  *   --no-run-counts      skip re-running claim commands (citations / retracted / owed only)
- *   --only <kinds>       comma list of count,citation,retracted,owed
+ *   --only <kinds>       comma list of count,citation,retracted,owed,unanchored,named
+ *   --extended           also UNANCHORED + NAMED on DONE board rows (off by default; CLAIMS_EXTENDED=1 does
+ *                        the same, for shells that drop flags passed through a package-manager script)
  *
  * Settings (PIPELINE_PROFILE.md): paths.boards · paths.runs · paths.handoffs · paths.decisions · paths.registry ·
  * paths.citationRoots (empty → every top-level directory present, except node_modules, .git and dot-directories) ·
@@ -120,6 +122,7 @@ const problems = check(documents, fsProbe, {
   retracted,
   claims,
   run: runCommand,
+  extended: argv.includes('--extended') || process.env.CLAIMS_EXTENDED === '1',
 }).filter((p) => !only || only.includes(p.kind));
 
 console.log(`claims-check — ${documents.length} document(s), ${claims.length} count claim(s), citation roots: ${roots.join(', ') || 'none'}`);

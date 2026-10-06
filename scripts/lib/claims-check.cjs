@@ -19,6 +19,21 @@
  *                 decision workspace or the handoffs folder, a registry id present in the deferred registry, or
  *                 a `handoff §X`. Headings introduce such items and are exempt.
  *
+ * Two more, OFF unless `ctx.extended` (`--extended` on the CLI). Both read only rows whose Status cell says
+ * `DONE`, in the evidence cell — the columns are found from each table's header row (a `Status` column and
+ * a column whose header contains `evidence`), so a board table without an evidence column is skipped:
+ *
+ *   5. UNANCHORED a count in the evidence (`16/16`, `12 cases`) with nothing in that cell that could have
+ *                 produced it — no file named, no backticked command, no `script:name`, no `logs/` path.
+ *   6. NAMED      a test name cited in the evidence (`describe 'X'`, `it "X"`, `test 'X'`, `title “X”`) must
+ *                 occur in one of the files the same cell cites; an elided name (`…`) must match every
+ *                 fragment. Compared without quotes/backticks, case-insensitive.
+ *
+ * In the adopting project both were measured over its whole board history before they were switched on:
+ * a few dozen unanchored counts and a handful of cited names that occur nowhere. A first wording of 6 — the
+ * cited test must name the row's requirement id — flagged a third of the correct rows, because test names
+ * there followed board rows, not requirement ids; it was dropped.
+ *
  * `check` is pure over (documents, fs probe, context); `scripts/claims-check.mjs` does the document I/O and reads
  * the settings. The runner the COUNT check calls is built here by `makeRunner`, with its spawn, lock and command
  * classifier injectable, so the lock behaviour is testable without a test runner or the machine-wide lock.
@@ -47,6 +62,23 @@ const ID_SHAPE = /\b[A-Z][A-Z0-9]*-[A-Z]*\d+[a-z]?\b/g;
 const OWED_LINE = /\bNEEDS-RULING\b|\bowed\b/i;
 const HANDOFF_REF = /\bhandoff\s*§[A-F]\b/i;
 const DEFAULT_REGISTRY_ID = '[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?';
+
+// 5. UNANCHORED — `n/m` without spaces (so `404 / 409` is not a count) or `n <noun>`.
+const COUNT_NOUN = String.raw`(?:tests?|cases?|suites?|specs?|assertions?|findings?|routes?|endpoints?|keys?|checks?|scenarios?|probes?|journeys?)`;
+const COUNT = new RegExp(String.raw`\b(\d+\/\d+|\d+\s+${COUNT_NOUN})\b`, 'gi');
+const COUNT_ANCHOR = new RegExp(
+  [
+    String.raw`\b[\w./@{},+-]+\.[A-Za-z]{1,6}\b(?!\.)`, // a file, by path or bare name
+    String.raw`\`[^\`]*\s[^\`]*\``, // a backticked command
+    String.raw`\b[a-z]+:[a-z-]+\b`, // a script name (test:unit, qa:run)
+    String.raw`\blogs\/`,
+  ].join('|'),
+);
+// 6. NAMED
+const NAMED_TEST = /\b(?:describe|it|test|title|case)\s+[`"'“]([^`"'”]{3,160})[`"'”]/g;
+const FILE_REF = /[\w./@+-]+\/[\w./@+-]+\.[A-Za-z]{1,6}\b/g;
+const plain = (s) => s.replace(/[`'"“”]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const cellsOf = (line) => line.split('|').map((s) => s.trim());
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -118,8 +150,18 @@ function check(documents, fsProbe, ctx = {}) {
 
   for (const doc of documents) {
     const lines = doc.text.split(/\r?\n/);
+    let cols = null; // { status, evidence } from the current table's header row
     lines.forEach((line, i) => {
       const where = `${doc.name}:${i + 1}`;
+      if (!/^\s*\|/.test(line)) cols = null;
+      else if (!/^\s*\|?\s*[-:|\s]+\|?\s*$/.test(line)) {
+        const cells = cellsOf(line);
+        const status = cells.findIndex((c) => /^status$/i.test(c));
+        if (status !== -1) {
+          const evidence = cells.findIndex((c) => /evidence/i.test(c));
+          cols = evidence === -1 ? null : { status, evidence };
+        }
+      }
 
       // 2. CITATION
       if (citation) {
@@ -171,6 +213,26 @@ function check(documents, fsProbe, ctx = {}) {
         const ownRowId = ownRow.exec(line)?.groups?.own;
         const resolved = refs.some((p) => fsProbe.exists(p)) || ids.some(inRegistry) || (ownRowId && inRegistry(ownRowId)) || HANDOFF_REF.test(line);
         if (!resolved) push('owed', where, `names no existing decision-workspace or handoff file, registry id or handoff § — "${line.trim().slice(0, 140)}"`);
+      }
+
+      if (!ctx.extended || !cols) return;
+      const cells = cellsOf(line);
+      if (!/^DONE\b/.test(cells[cols.status] ?? '')) return;
+      const evidence = cells[cols.evidence] ?? '';
+
+      // 5. UNANCHORED
+      const counts = [...evidence.replace(/"[^"]*"|“[^”]*”/g, '').matchAll(COUNT)].map((x) => x[1]);
+      if (counts.length && !COUNT_ANCHOR.test(evidence))
+        push('unanchored', where, `${counts.join(', ')} — nothing in the evidence cell could have produced it (no file, command, script or logs/ path)`);
+
+      // 6. NAMED
+      const cited = [...evidence.matchAll(FILE_REF)].map((x) => x[0]).filter((p) => fsProbe.exists(p));
+      if (!cited.length) return;
+      const bodies = cited.map((p) => plain((fsProbe.lines(p) ?? []).join('\n')));
+      for (const n of evidence.matchAll(NAMED_TEST)) {
+        const frags = n[1].split(/…|\.\.\./).map(plain).filter((x) => x.length >= 4);
+        if (frags.length && !bodies.some((b) => frags.every((f) => b.includes(f))))
+          push('named', where, `"${n[1].trim()}" occurs in none of ${cited.join(', ')}`);
       }
     });
   }
