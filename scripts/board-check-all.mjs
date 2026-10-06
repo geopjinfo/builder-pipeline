@@ -19,6 +19,7 @@
  *
  *   node scripts/board-check-all.mjs           check every marked board (exit 1 on any stale)
  *   node scripts/board-check-all.mjs --fix     rewrite every stale block, re-render every stale page
+ *   node scripts/board-check-all.mjs --only <key>   <boards>/<key>.md alone (combines with --fix)
  */
 import { createRequire } from 'node:module';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -40,6 +41,24 @@ if (!existsSync(DIR)) {
   process.exit(1);
 }
 
+/**
+ * `--only <key>` — check `<boards>/<key>.md` alone (the builder hand-back check): a run is
+ * answerable for its own board, not for another lane's half-finished one.
+ */
+const onlyAt = process.argv.indexOf('--only');
+const only = onlyAt === -1 ? null : process.argv[onlyAt + 1];
+if (onlyAt !== -1 && (!only || only.startsWith('--'))) {
+  console.error('usage: node scripts/board-check-all.mjs [--fix] [--only <key>]');
+  process.exit(2);
+}
+const isBoard = (f) =>
+  f.endsWith('.md') && !f.startsWith('_') && f !== 'README.md' && (only === null || f === `${only}.md`);
+
+if (only !== null && !existsSync(join(DIR, `${only}.md`))) {
+  console.error(`board-check-all: no board ${DIR}/${only}.md.`);
+  process.exit(1);
+}
+
 const boards = readdirSync(DIR)
   /**
    * `_template.md` carries the markers as a shape to copy, with no rows to count; `README.md`
@@ -47,11 +66,11 @@ const boards = readdirSync(DIR)
    * them writes a fabricated bar into documentation, which is the exact defect this file exists
    * to stop.
    */
-  .filter((f) => f.endsWith('.md') && !f.startsWith('_') && f !== 'README.md')
+  .filter(isBoard)
   .map((f) => join(DIR, f).replace(/\\/g, '/'))
   .filter((p) => readFileSync(p, 'utf8').includes(MARKER));
 
-if (boards.length === 0) {
+if (boards.length === 0 && only === null) {
   console.error(`board-check-all: no board under ${DIR}/ carries a ${MARKER} block.`);
   process.exit(1);
 }
@@ -76,7 +95,7 @@ for (const board of boards) {
  * the two opt-ins are independent — a board can have a run log and no computed bar.
  */
 const allBoards = readdirSync(DIR)
-  .filter((f) => f.endsWith('.md') && !f.startsWith('_') && f !== 'README.md')
+  .filter(isBoard)
   .map((f) => join(DIR, f).replace(/\\/g, '/'));
 
 const staleRenders = [];
@@ -118,5 +137,7 @@ if (stale.length > 0 && !fix) {
 }
 
 console.log(
-  `\nboard-check-all: PASS — ${boards.length} board(s) checked${fix ? ' (rewritten where stale)' : ''}.`,
+  only === null
+    ? `\nboard-check-all: PASS — ${boards.length} board(s) checked${fix ? ' (rewritten where stale)' : ''}.`
+    : `\nboard-check-all: PASS — ${DIR}/${only}.md (progress block ${boards.length ? 'fresh' : 'absent'}; rendered board fresh or not applicable)${fix ? ' (rewritten where stale)' : ''}.`,
 );
