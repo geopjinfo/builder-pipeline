@@ -112,6 +112,28 @@ agent's id), but the seat still received the raw output. So the cap protects the
 context, where tool output accumulates across the whole run. It does not shrink a seat's context.
 Seats get the same protection by running suites through the tier runner's digest.
 
+**Seats: a pre-run cap (not shipped yet).** A `PreToolUse` hook that returns
+`hookSpecificOutput.updatedInput.command` *is* applied inside a subagent — probed, and it still applies
+with no `permissionDecision` in the output. One adopting project uses that to cap seat output: the hook
+rewrites an allow-listed long-output command (test runners, type-checkers, linters, `git log|diff|show`,
+recursive greps, `find`) so its output goes whole to `paths.logs`, and the seat receives this same digest,
+with the command's own exit code restored. The rules it follows, if you build one before the pack ships it:
+- **Seats only.** Fire only when the hook input carries an agent id. The main session keeps the
+  `PostToolUse` cap above.
+- **Allow-list, not rewrite-all.** Bounded reads (`cat`, `head`, a plain `grep -n`) stay raw. A digest of
+  them only forces a second read of the log.
+- **Never drop an error line.** End the rewritten command with this digest, not a bare `tail`.
+- **No `permissionDecision`.** Return `updatedInput` only. An `allow` would turn the cap into a
+  permission bypass for every allow-listed command.
+- **One cap per call.** Print `PRECAP_MARK` as the first output line and name `bash-precap` in the
+  command. `digest()` passes a marked result through, and `EXEMPT` matches the rewritten command.
+- **Leave alone:** pipes, stdout redirects, heredocs, multi-line commands, backgrounding, `exit`, and
+  interactive programs. Restore the exit code with `(exit $rc)`, not `exit $rc`, because the shell
+  persists between calls.
+
+`BUILDER_NO_BASH_CAP=1` opts a command out of both caps. The `Bash` matcher does not cover other shell
+tools.
+
 The guards read the dispatching seat's name from the hook input, which the harness supplies for
 subagent tool calls. A guard blocks with exit code 2 and says what to do instead.
 
