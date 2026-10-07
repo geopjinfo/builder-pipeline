@@ -87,8 +87,14 @@ before step 0. An `unmeasured` result is not a pass: record it in the state file
 - **Registry rows are filed in P2**, as a board row of their own: a lite run never reaches the full playbook's
   *Finish*, where the registry is normally updated. Do Finish item 3 (a) and (b) here; the lite exit requires
   every `DEFERRED→<id>` board row to have its matching registry row.
-- **Claims check:** `node scripts/claims-check.mjs --run <key>` — call it with `node`; some shells hand `--run`
-  to the package manager instead of the script. An identical command runs once per check.
+- **Claims check:** `node scripts/claims-check.mjs --run <key> --extended` — call it with `node`; some shells hand `--run`
+  to the package manager instead of the script. An identical command runs once per check, so the last hand-back's
+  claims result (below) counts when nothing changed since.
+- **Hand-back check:** after EVERY builder return (each batch and each FIX lane) run the full playbook's *Hand-back
+  check* — `node scripts/claims-check.mjs --run <key> --extended` and `node scripts/board-check-all.mjs --only <key>`.
+  Failures go back to the same builder lane as `FIX-n` rows before the tester; 2 retries, then stop and escalate;
+  a foreign ledger red is logged, not blocking. Record the result line in the FIX row's Notes cell or in the P2
+  evidence below.
 - **Proof rows** (a role × route matrix, a query-count guard, a forced-failure rollback) prove code built in
   earlier rows, so their seed cannot start red: write it, then prove it CAN fail by breaking the code under test
   once, and note `green-first, mutation-proven`.
@@ -97,6 +103,7 @@ before step 0. An `unmeasured` result is not a pass: record it in the state file
 
 Loop-back on a tester defect, and the fix-in-run rule, apply exactly as the full playbook's *Loop-back* and
 *Fix in-run* sections say. A tester defect is fixed **in this run** — never queued for the batch.
+The FIX-lane builder's return runs the hand-back check above before the tester is re-dispatched.
 
 **Decision ids.** Before minting a block of decision ids, search `<decisions>`, the docs, `<boards>` **and
 `<runs>`** of the main checkout **and every worktree**: a block reserved by a running plan lives only in that
@@ -107,7 +114,7 @@ worktree.
 ```bash
 node scripts/gate-queue.mjs add <key> --base <sha the module started from> --dir <module dir> --batch <batch-id>
 node scripts/gate-queue.mjs mark <key> 1  --evidence "<plan check → result line>"
-node scripts/gate-queue.mjs mark <key> 2  --evidence "board <n>/<n> settled; claims check → <result line>"
+node scripts/gate-queue.mjs mark <key> 2  --evidence "board <n>/<n> settled; hand-back check → <result line @sha>"
 node scripts/gate-queue.mjs mark <key> 3  --evidence "<each tier → its totals line>"
 node scripts/gate-queue.mjs mark <key> 3a --evidence "typecheck → <line>; lint → <line>; architecture tier → <line>"
 node scripts/gate-queue.mjs status

@@ -25,8 +25,17 @@ whole on every close-out is where this skill's cost goes:
   with `grep -n`. Never read either file whole.
 - **Prose:** only files in the run's `git diff --name-only <base>..HEAD`. Untouched prose is a
   whole-repo audit's job.
+- **Commits:** the run's commit subjects are a ledger too. `git log --format='%h %s' <base>..HEAD`; for
+  each subject that names a ledger move (a row flipped, a registry id opened/closed, "N rows", a FIX
+  discharged), check it against `git show --stat <sha>` — the subject claims only what that commit carries.
 - **Accumulated findings:** never read `audits/ledger-audit.md` whole — grep for an earlier section
   on this key and read only that.
+
+**Scope limits which claims are audited, not where evidence comes from.** To confirm or refute a scoped
+claim, open any code file, and grep the reference sources — the permission catalogue and the cited decision
+records. **Any role or actor named in scoped prose** ("the reviewer returns the payment", "the accountant
+approves") is checked against the permission catalogue for the key that action needs. Reading a reference
+source is evidence-gathering, not a widening of the run's scope.
 
 Record the audited commit in the section header (`audited-at <short-sha>`). On a re-run before
 merge, audit only rows changed in `git diff <audited-at>..HEAD -- tasks/<key>.md`, rows added since,

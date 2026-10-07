@@ -91,12 +91,12 @@ vocabulary in every auditor's return shape: severity `blocker | warning | nit`; 
 `PASS | PASS-WITH-RULINGS | CHANGES-REQUIRED`. When all four pass: `mark <key> 4`.
 
 **P5 — docs.** Full playbook step 5, including the claims check after it
-(`node scripts/claims-check.mjs --run <key>`). `mark <key> 5`. README and other docs-only files the docs seat
+(`node scripts/claims-check.mjs --run <key> --extended`). `mark <key> 5`. README and other docs-only files the docs seat
 writes do **not** re-open P3/P3a/P4; a change to the published contract does, and step 4 re-proves it. Never
 run a tier while the docs seat is editing the contract in the same tree.
 
 **P7a — ledger audit, before the reviewer** (full playbook *Fix in-run*, order at close-out). Its findings join
-the FIX lane.
+the FIX lane, and that lane's return runs the hand-back check (step 5).
 
 **P6 — review.** Full playbook step 6 — the reviewer gets the module's `base..tip` diff, its plan and the
 structured findings; `node scripts/output-check.mjs review <runs>/<key>/review-pass<n>.md`. `mark <key> 6`.
@@ -124,6 +124,12 @@ Full playbook *Fix in-run* and *Loop-back*, exactly: verified blockers only → 
 module's board → `module-builder` with the list last → always re-run that module's P3 and the drift check. Then
 **`status` decides what else re-runs** — do not re-run by feel and do not skip what it lists. A blocker that
 survives two loops → stop and escalate. A fix that touches two modules is two `FIX-n` rows and re-opens both.
+
+**Hand-back check after every builder return** — every narrow FIX lane, including the P7a ledger-audit lanes —
+before that module's P3 re-run: the full playbook's *Hand-back check* (`claims-check --run <key> --extended`,
+`board-check-all --only <key>`). Failure → back to the same FIX lane as new `FIX-n` rows; 2 retries, then stop and
+escalate; a foreign ledger red (another module's work in progress) is logged, not blocking. Record the result
+line in the FIX row's Notes cell. `gate-queue mark` evidence is unchanged.
 
 ### 6. Close-out — per module, in build order
 
