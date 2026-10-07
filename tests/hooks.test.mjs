@@ -84,6 +84,23 @@ test('reviewer guard: its own review pass is allowed, relative or absolute; othe
   assert.equal(decide(undefined, 'src/items/items.service.ts'), false);
 });
 
+test('reviewer guard red: a review-pass spelling that LANDS elsewhere through a link is blocked', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const project = fs.mkdtempSync(join(os.tmpdir(), 'rwg-'));
+  try {
+    fs.mkdirSync(join(project, '.pipeline'), { recursive: true });
+    fs.mkdirSync(join(project, 'src', 'items'), { recursive: true });
+    fs.symlinkSync(join(project, 'src', 'items'), join(project, '.pipeline', 'k2'), process.platform === 'win32' ? 'junction' : 'dir');
+    const decide = (file_path) => reviewerGuard.decide({ tool_name: 'Write', agent_type: 'module-reviewer', tool_input: { file_path } }, withFeatures({}), { root: project }).block;
+    assert.equal(decide('.pipeline/k2/review-pass1.md'), true);
+    assert.equal(decide('.pipeline/items/review-pass1.md'), false); // control: a real runs folder
+  } finally {
+    fs.unlinkSync(join(project, '.pipeline', 'k2')); // the link itself, never its target
+    rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('reviewer guard: the runs directory comes from paths.runs', () => {
   const settings = withFeatures({}, { runs: 'build/runs' });
   const decide = (file_path) => reviewerGuard.decide({ tool_name: 'Write', agent_type: 'module-reviewer', tool_input: { file_path } }, settings).block;
