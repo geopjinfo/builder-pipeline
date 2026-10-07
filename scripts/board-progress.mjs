@@ -34,6 +34,12 @@ const SETTLED = /^(DONE|DROPPED|DEFERRED→)/;
 const DOING = /^IN-PROGRESS/;
 /** Rows whose first cell looks like an id the board format does not know. Reported, not counted. */
 const unrecognised = [];
+/**
+ * Rows with a Status column that sit under a NON-counted `##` heading. They are counted nowhere,
+ * so the counter SAYS so on stderr (exit code unchanged) instead of skipping them silently;
+ * otherwise the progress block is an unannounced lower bound.
+ */
+const skipped = [];
 
 const USAGE = [
   'usage: node scripts/board-progress.mjs <board.md>          rewrite the progress block',
@@ -66,6 +72,8 @@ const cells = (line) =>
 const batches = [];
 let current = null;
 let statusColumn = -1;
+/** The non-counted `##` heading the cursor is under; null above the first `##`. */
+let skippedHeading = null;
 
 for (const line of lines) {
   const heading = /^##\s+([BP]\d+)\s+—\s+(.+?)(?:\s+·.*)?$/.exec(line);
@@ -77,9 +85,12 @@ for (const line of lines) {
   }
   if (/^##\s/.test(line)) {
     current = null;
+    skippedHeading = line.replace(/^##\s+/, '').trim();
+    statusColumn = -1;
     continue;
   }
-  if (!current || !line.startsWith('|')) continue;
+  if (!line.startsWith('|')) continue;
+  if (!current && skippedHeading === null) continue;
 
   const row = cells(line);
   const headerIndex = row.findIndex((c) => c === 'Status');
@@ -88,6 +99,12 @@ for (const line of lines) {
     continue;
   }
   if (statusColumn === -1) continue;
+  if (!current) {
+    // Under a non-counted heading: named in the report, never counted. Any non-decorative first
+    // cell, not only a recognised id: an oddly-shaped row is the one most likely to be lost twice.
+    if (ROW_ID.test(stripAnnotation(row[0] ?? '')) || !isDecorativeCell(row[0])) skipped.push({ heading: skippedHeading, id: (row[0] ?? '').trim() });
+    continue;
+  }
   if (!ROW_ID.test(stripAnnotation(row[0] ?? ''))) {
     /**
      * An unrecognised id is REPORTED, never silently skipped.
@@ -113,6 +130,12 @@ for (const line of lines) {
   current.total += 1;
   if (SETTLED.test(status)) current.settled += 1;
   else if (DOING.test(status)) current.doing += 1;
+}
+
+if (skipped.length > 0) {
+  console.error(`board-progress: ${skipped.length} table row(s) sit under a non-counted "##" heading, so they are counted NOWHERE (reported, exit unchanged):`);
+  for (const s of skipped) console.error(`  ${s.heading}: "${s.id}"`);
+  console.error('Counted sections are "## B<n> — …" / "## P<n> — …"; re-section these rows to have them counted.');
 }
 
 if (unrecognised.length > 0) {

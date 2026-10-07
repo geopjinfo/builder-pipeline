@@ -79,7 +79,9 @@ board then reports last week's number with this week's authority. `board-progres
 Status column of every counted section and rewrites **only** the block between the markers.
 
 A **counted section** is `## P<n> — <title>` (a build board's phase) or `## B<n> — <title>` (a
-delivery board's batch, one branch per batch). Everything else is prose.
+delivery board's batch, one branch per batch). Everything else is prose. The counter does not
+skip silently: it REPORTS on stderr (exit code unchanged) any table rows with a Status column that
+it skipped under a non-counted `##` heading, so the counts are never an unannounced lower bound.
 
 ```
 node scripts/board-progress.mjs tasks/<board>.md            # rewrite
