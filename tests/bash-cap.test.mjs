@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { digest, EXEMPT, MAX_ERROR_LINES } = require('../scripts/lib/bash-cap.cjs');
+const { digest, EXEMPT, PRECAP_MARK, MAX_ERROR_LINES } = require('../scripts/lib/bash-cap.cjs');
 
 const big = (middle) =>
   [...Array.from({ length: 400 }, (_, i) => `line ${i} ok ${'x'.repeat(20)}`), middle, ...Array.from({ length: 400 }, (_, i) => `after ${i} ${'y'.repeat(20)}`)].join('\n');
@@ -55,4 +55,16 @@ test('the tier runner and explicit opt-outs are exempt; an ordinary command is n
   assert.equal(EXEMPT.test('grep -rn foo .'), false);
   assert.equal(EXEMPT.test('grep -rn run-tier-notes docs'), false);
   assert.equal(EXEMPT.test('echo --no-capture'), false);
+});
+
+test('red: a result a pre-run cap already digested passes through; its rewritten command is exempt', () => {
+  const long = `${PRECAP_MARK} full output -> logs/bash/x.log\n${'line\n'.repeat(5000)}`;
+  assert.deepEqual(digest({ stdout: long }), { capped: false });
+  assert.equal(digest({ stdout: 'line\n'.repeat(5000) }).capped, true);
+  assert.equal(EXEMPT.test(`echo '${PRECAP_MARK} x'; { git log\n} > x.log 2>&1; node scripts/bash-precap-digest.cjs x.log 0`), true);
+});
+
+test('the header names the cap that produced it', () => {
+  assert.match(digest({ stdout: big('x') }).text, /^\[output capped by the bash output cap:/);
+  assert.match(digest({ stdout: big('x') }, { source: 'the pre-run cap' }).text, /^\[output capped by the pre-run cap:/);
 });

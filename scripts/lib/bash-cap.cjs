@@ -25,15 +25,26 @@ const MAX_ERROR_LINES = 200;
 const ERROR_SHAPE =
   /\b(error|errors|failed|failure|failing|exception|fatal|denied|cannot|not found|traceback|panic|refused|timed? ?out|unresolved|stale|red)\b|^\s*(FAIL|ERR!|✕|●)|\bexit(?:ed)? (?:code |with code )?[1-9]\d*\b/i;
 
-/** Commands whose output is already a digest, or that asked not to be capped. */
-const EXEMPT = /(?:^|[\s;&|("'/\\])run-tier\.mjs\b|(?:^|\s)--no-cap\b|\bBUILDER_NO_BASH_CAP=1\b/;
+/**
+ * First line of a result that a pre-run cap (a PreToolUse hook that rewrites the command so its output goes to
+ * a log and only a digest comes back) already digested. The post-run cap passes such a result through: one cap
+ * per call, never two.
+ */
+const PRECAP_MARK = '# bash-precap:';
+
+/**
+ * Commands whose output is already a digest, or that asked not to be capped: the tier runner, `--no-cap`,
+ * `BUILDER_NO_BASH_CAP=1`, and a command a pre-run cap already rewrote (it names `bash-precap`).
+ */
+const EXEMPT = /(?:^|[\s;&|("'/\\])run-tier\.mjs\b|(?:^|\s)--no-cap\b|\bBUILDER_NO_BASH_CAP=1\b|\bbash-precap\b/;
 
 /**
  * @param {{ stdout?: string, stderr?: string }} output
- * @param {{ limit?: number, logPath?: string }} [options]
+ * @param {{ limit?: number, logPath?: string, source?: string }} [options]  `source` names the cap in the header
  * @returns {{ capped: false } | { capped: true, text: string, bytes: number, lines: number, errorLines: number }}
  */
-function digest({ stdout = '', stderr = '' } = {}, { limit = LIMIT_BYTES, logPath = '<log>' } = {}) {
+function digest({ stdout = '', stderr = '' } = {}, { limit = LIMIT_BYTES, logPath = '<log>', source = 'the bash output cap' } = {}) {
+  if (stdout.startsWith(PRECAP_MARK)) return { capped: false };
   const full = stderr ? `${stdout}\n[stderr]\n${stderr}` : stdout;
   const bytes = Buffer.byteLength(full, 'utf8');
   if (bytes <= limit) return { capped: false };
@@ -46,7 +57,7 @@ function digest({ stdout = '', stderr = '' } = {}, { limit = LIMIT_BYTES, logPat
   }
   const shown = errors.slice(0, MAX_ERROR_LINES);
   const text = [
-    `[output capped by the bash output cap: ${bytes} bytes, ${lines.length} lines — full output: ${logPath}]`,
+    `[output capped by ${source}: ${bytes} bytes, ${lines.length} lines — full output: ${logPath}]`,
     errors.length === 0
       ? '[no error-shaped line before the tail]'
       : `[${errors.length} error-shaped line(s) before the tail${errors.length > MAX_ERROR_LINES ? ` — first ${MAX_ERROR_LINES} shown, the rest are in the log` : ', all shown'}]`,
@@ -57,4 +68,4 @@ function digest({ stdout = '', stderr = '' } = {}, { limit = LIMIT_BYTES, logPat
   return { capped: true, text, bytes, lines: lines.length, errorLines: errors.length };
 }
 
-module.exports = { digest, EXEMPT, ERROR_SHAPE, LIMIT_BYTES, TAIL_LINES, MAX_ERROR_LINES };
+module.exports = { digest, EXEMPT, PRECAP_MARK, ERROR_SHAPE, LIMIT_BYTES, TAIL_LINES, MAX_ERROR_LINES };
