@@ -28,6 +28,27 @@ const REVIEWER = 'module-reviewer';
 const norm = (p) => path.posix.normalize(String(p ?? '').replace(/\\/g, '/'));
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Real path of `p` (may not exist yet: realpath of the deepest existing ancestor + the rest; a dangling link is followed). */
+function realTarget(p, hops = 0) {
+  const tail = [];
+  for (let head = path.resolve(p); ;) {
+    const st = fs.lstatSync(head, { throwIfNoEntry: false });
+    if (st) {
+      try { return path.join(fs.realpathSync.native(head), ...tail); } catch (e) {
+        if (!st.isSymbolicLink() || (e.code !== 'ENOENT' && e.code !== 'ENOTDIR')) throw e;
+        if (hops >= 8) throw Object.assign(new Error('link loop'), { code: 'ELOOP' });
+        return realTarget(path.join(path.resolve(path.dirname(head), fs.readlinkSync(head)), ...tail), hops + 1);
+      }
+    }
+    const up = path.dirname(head);
+    if (up === head) return path.resolve(p);
+    tail.unshift(path.basename(head));
+    head = up;
+  }
+}
+/** `p`'s real path relative to `root`'s real path (forward slashes); throws when undecidable. */
+const realRel = (p, root) => path.relative(realTarget(root), realTarget(p)).replace(/\\/g, '/');
+
 /**
  * @param {object} input     the hook input (`tool_name`, `tool_input`, `agent_type`, `cwd`, …)
  * @param {object} settings  merged pipeline settings
@@ -45,7 +66,14 @@ function decide(input, settings, { root = null } = {}) {
 
   const runs = norm(settings?.paths?.runs ?? '.pipeline').replace(/^\.\//, '').replace(/\/$/, '');
   const allowed = new RegExp(`(?:^|/)${escape(runs)}/(?!\\.\\.?/)[^/]+/review-pass\\d+\\.md$`, 'i');
-  if (target && !target.split('/').includes('..') && allowed.test(target)) return { block: false };
+  if (target && !target.split('/').includes('..') && allowed.test(target)) {
+    // The spelling is the review file; it must also LAND there. A link under the runs folder (a junction
+    // `<runs>/k2` → module code) would otherwise carry the one write anywhere. Undecidable → refused.
+    let landed = null;
+    try { landed = realRel(path.resolve(root || process.cwd(), String(raw)), root || process.cwd()); } catch { landed = null; }
+    if (landed !== null && !landed.split('/').includes('..') && allowed.test(landed)) return { block: false };
+    target = `${target} (lands on ${landed ?? 'a path that cannot be resolved'})`;
+  }
 
   return {
     block: true,
