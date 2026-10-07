@@ -340,7 +340,7 @@ reports the model the run actually used, where the harness keeps that record.
    `{ "id", "text", "command", "expect" }`. Then:
 
    ```
-   node scripts/claims-check.mjs --run <key>
+   node scripts/claims-check.mjs --run <key> --extended
    ```
 
    It re-runs each count, holds every `file:line` citation (and `file:line «anchor»`) under
@@ -349,7 +349,27 @@ reports the model the run actually used, where the harness keeps that record.
    handoff §. Non-zero → the problems go back to the builder as `FIX-n` rows **now**, not to the
    reviewer later: in one adopting project 44% of loop-back fixes were false records (stale counts,
    drifted citations, ownerless notes), and they drove most review re-loops. Log the result as a
-   `gate` event; feature off → `claims: not configured` in `state.md`.
+   `gate` event; feature off → `claims: not configured` in `state.md`. `--extended` adds two checks on
+   `DONE` rows: **UNANCHORED** (a count in the evidence cell with no file, script, command or log path
+   that could have produced it) and **NAMED** (a cited test name that occurs in none of the spec files
+   the same cell cites). The bare CLI keeps them off unless asked.
+
+   **Hand-back check — after EVERY `module-builder` return (each P2 batch and every FIX-lane return),
+   before the next seat is dispatched.** From the run's worktree:
+
+   ```
+   node scripts/claims-check.mjs --run <key> --extended
+   node scripts/board-check-all.mjs --only <key>
+   ```
+
+   plus the project's ledger-integrity specs by file, if it has any — no tier lock, no database, never
+   a full tier. A failure → paste ONLY the failing lines back to the SAME builder lane as `FIX-n` rows
+   (`PLANNED`, Cites = the check) and re-dispatch that lane now — not the tester, not an auditor.
+   **Cap: 2 retries per hand-back**; a third failure stops the run (park it, raise it with the human,
+   `state.md`), like *Loop-back* step 4. A ledger-spec red that names nothing the run touched (another
+   lane's work in progress) does not block: log it and go on. Record each hand-back as ONE `gate`
+   event (`gate: handback`, the result, `retry <n>/2`). The P2 claims check above is then the last
+   hand-back's claims result.
 
    Two more free checks at the same point, each a `gate` event, each failure a `FIX-n` row now:
 
@@ -446,7 +466,7 @@ reports the model the run actually used, where the harness keeps that record.
    verdict **is** a pass.
 5. **Docs** — dispatch `docs-maintainer` (profile §10 scope). Docs findings are not a code gate,
    but a missing required annotation (e.g. the authZ key on an API operation) is.
-   **End of P5 — run the claims check again** (`node scripts/claims-check.mjs --run <key>`), and
+   **End of P5 — run the claims check again** (`node scripts/claims-check.mjs --run <key> --extended`), and
    `node scripts/line-citations-check.mjs`, before the reviewer is dispatched: P3–P5 wrote counts and
    citations of their own.
 6. **Review** — dispatch `module-reviewer` with the diff ref, `plan.md`, and the structured
@@ -567,6 +587,11 @@ misalignment):
    use and judge with `node scripts/fix-rate.mjs <boards>/<key>.md …` (`EXPERIMENTS.md`). Feature
    off → one builder dispatch with the plan path, the board path and the whole list, and record
    `fixLane: not configured`.
+
+   **Every FIX-lane builder return runs the *Hand-back check* (P2) first.** A failure goes straight
+   back to the SAME FIX lane as new `FIX-n` rows, before step 3 dispatches anything; 2 retries, then
+   escalate; a foreign ledger red is logged, not blocking. This includes the FIX lanes opened by the
+   ledger audit — the lane that writes record rows is the one most likely to leave a record defect behind.
 3. Re-run the affected phases (always Test **and 3b drift** — both are cheap, and a fix is exactly
    when a declared effect silently disappears; always the claims, line-citation and wiring checks;
    re-run an auditor only if
