@@ -99,10 +99,12 @@ builder/
 │                                    check-ledgers · check-targets
 ├── 📄 PIPELINE_PROFILE.template.md ← the ONE per-project file; §16 = pipeline settings (JSON)
 ├── 🤖 agents/                    ← 9 generic personas + experimental/ (page-keeper)
-├── 📜 skills/                    ← 4 recipes (pipeline · scaffold · readiness-check · setup)
+├── 📜 skills/                    ← recipes (pipeline · lite split · scaffold · readiness-check ·
+│                                    setup) + the batch orchestrator above them (opt-in)
 │                                    + references/ (index query block, review template)
 ├── 🧾 templates/                 ← ledger formats (module brief · task board · session board ·
-│                                    deferred registry · decision log · developer-guide generator)
+│                                    deferred registry · decision log · developer-guide generator ·
+│                                    orchestrator plan + worker brief)
 ├── 🎁 skills-extra/              ← optional utilities: caveman · graphify · ledger-audit ·
 │                                    e2e-harness · qa-audit · repo-audit · adr
 ├── 🛡️ hooks/                     ← universal guards + claude-code/ (output cap · registry read
@@ -115,7 +117,8 @@ builder/
 │                                    output-check · handoff-pack / handoff-check · ledger-row ·
 │                                    decision-index · wiring-check · instruction-budget ·
 │                                    ratchet-refresh · fix-rate · seat-peaks · cost-window ·
-│                                    contract-oracle · rules-module · mutation-step + lib/
+│                                    contract-oracle · rules-module · mutation-step · orch (batch
+│                                    orchestrator: lanes, seats, merge queue, credit lane) + lib/
 ├── 🔮 oracles/                   ← contract-oracle adapters (OpenAPI 3)
 ├── 📐 examples/                  ← ast-grep rules with fixtures · wiring/ (seam kinds for a
 │                                    TypeScript DI service) · jest-tier-runner/ (one tier runner for

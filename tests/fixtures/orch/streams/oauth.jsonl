@@ -1,0 +1,6 @@
+{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup","session_id":"s-1"}
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"none","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
+{"_stub":"sleep","ms":1500}
+{"_stub":"model_call"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"RESULT: PASS hello","total_cost_usd":0.0075,"permission_denials":[]}

@@ -1,0 +1,4 @@
+{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup","session_id":"s-1"}
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Read the board.\n\nRESULT: PASS row 1 checked (tasks/k1.md:3)"}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"Read the board.\n\nRESULT: PASS row 1 checked (tasks/k1.md:3)","total_cost_usd":0.0075,"permission_denials":[]}

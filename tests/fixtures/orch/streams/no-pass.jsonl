@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"I looked at it and it seems fine.","total_cost_usd":0.002,"permission_denials":[]}

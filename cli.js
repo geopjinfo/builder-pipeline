@@ -34,7 +34,9 @@ const CWD = process.cwd();
 const MARKER = '<!-- builder-kit:pipeline -->';
 // The two lite skills install with the rest and stay inert until features.liteSplit is enabled (the gate
 // queue refuses otherwise), so installing them changes nothing for a project that never opts in.
-const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch'];
+// The batch orchestrator skill installs the same way and stays inert until features.orchestrator is on (scripts/orch.mjs
+// prints 'orchestrator: not configured' otherwise).
+const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator'];
 
 // ---------------------------------------------------------------------------
 // Tool registry. Two install styles:
@@ -310,6 +312,8 @@ function installCommon() {
   copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join(boards, 'README.md'));
   copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), registry);
   copyIfAbsent(path.join(KIT, 'templates', 'module-brief.md'), path.join('specs', 'module-brief.template.md'));
+  copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-plan.md'), path.join('specs', 'orchestrator-plan.template.md'));
+  copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-worker-brief.md'), path.join('specs', 'orchestrator-worker-brief.template.md'));
   copyIfAbsent(path.join(KIT, 'templates', 'decision-log.md'), decisions);
   copyIfAbsent(path.join(KIT, 'templates', 'session-board.md'), path.join(boards, '_session-board.template.md'));
   copyIfAbsent(path.join(KIT, 'PIPELINE_PROFILE.template.md'), 'PIPELINE_PROFILE.md');

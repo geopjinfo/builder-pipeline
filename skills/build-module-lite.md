@@ -17,6 +17,10 @@ that batch closes it `GATED`.
 `liteSplit: experimental — not enabled` and refuses; run the full pipeline instead. Enabled on purpose, its
 measurement is owed (EXPERIMENTS.md).
 
+**Who runs it.** A person's session, or a lane worker of the batch orchestrator ([`orchestrator`](orchestrator.md))
+whose lane dispatch is `lite` (`features.orchestrator.standardPipeline: "lite"`). Either way the module lands in the
+gate queue and nothing merges until the gate batch closes it.
+
 **This file restates nothing it can point at.** Every step below names the full playbook's step; read that step
 there and do it exactly as written, except where a line here says otherwise. One source of instructions is
 how the two halves stay equivalent — a copy would drift.

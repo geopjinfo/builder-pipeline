@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
+{"_stub":"stderr","text":"API Error: 400 Your credit balance is too low to access the API.\n"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":0,"result":"API Error: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the API.\"}}","total_cost_usd":0,"permission_denials":[]}
+{"_stub":"exit","code":1}

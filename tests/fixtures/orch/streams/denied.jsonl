@@ -1,0 +1,7 @@
+{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup","session_id":"s-1"}
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"npm ls"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Permission to use Bash has been denied because the session runs in dontAsk mode."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"false"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"Exit code 1"}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"RESULT: FAIL npm ls was denied","total_cost_usd":0.004,"permission_denials":[]}

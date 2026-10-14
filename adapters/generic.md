@@ -48,6 +48,7 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 | Orchestrator model check | `node scripts/orchestrator-check.mjs` prints `unmeasurable here` |
 | Per-seat cost accounting | em-dashes in the agents table; set `features.costAccounting` to `off` so the board says so |
 | Live page · Workflow-driven runs · advisor A/B | unavailable |
+| Batch orchestrator (`orchestrator`, `scripts/orch.mjs`) | runs as is: plain Node over git, with every seat action a command template you fill for this harness (`launchCommand`, `stateCommand`, `stopCommand`, `usageCommand`). A primary-seat pipeline lane is its own session. The credit worker adapter ships for Claude Code only — keep `credit.enabled` false here until one exists for this harness |
 | Language server plugin | unavailable as part of the pipeline |
 
 ## Scaling down (see DESIGN.md for the full rationale)
