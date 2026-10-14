@@ -152,3 +152,9 @@ back to step 4. When every module is `GATED`, append `run.end` to every module's
 Report per module the full playbook's *Finish* summary, plus the batch lines: modules `GATED` in build order,
 versions assigned, FIX rows per module, which checks re-ran because `status` re-opened them. The merge of
 `lite/<batch-id>` into the integration branch follows the project's own merge rule, as for a full run.
+
+**Worktree cleanup.** Do not remove the batch worktree yourself: the merge has not happened yet. Whoever merges
+`lite/<batch-id>` runs `node scripts/worktree-sweep.mjs --apply` from the primary checkout afterwards (the full
+playbook's *Finish* item 8): it removes the worktree once it is merged, clean and idle, backs up its gitignored
+evidence first, unlinks the `node_modules` junction safely and keeps the branch. `worktreeSweep: not configured`
+→ the manual fallback in that item.

@@ -9,8 +9,8 @@
  * builder fixed them in another full dispatch. Four checks, each mechanical:
  *
  *   1. COUNT      every claim in `<runs>/<key>/claims.jsonl` ({ id, text, command, expect }) is re-run and its
- *                 output must match `expect` (a regex). A figure is a claim about a command's output, so the
- *                 command is kept beside it and run again.
+ *                 output must match `expect` (a regex; a bare number must be a whole output line). A figure is
+ *                 a claim about a command's output, so the command is kept beside it and run again.
  *   2. CITATION   every `file:NN` (or `NN-MM`) under a citation root points at a file that exists and has that
  *                 line; a citation carrying an anchor — `file:NN «snippet»` — must find the snippet within two
  *                 lines of NN. Line numbers drift; an anchor says what the line was.
@@ -131,7 +131,10 @@ function check(documents, fsProbe, ctx = {}) {
   for (const claim of ctx.claims ?? []) {
     let pattern;
     try {
-      pattern = new RegExp(claim.expect, 'm');
+      // A bare-number expect is a whole output line. Unanchored, "1" matched any digit — a date inside a
+      // "No such file or directory" error for a vanished evidence log, or the "1" in "10".
+      const bareNumber = /^\s*\d+\s*$/.test(String(claim.expect));
+      pattern = bareNumber ? new RegExp(`^\\s*${String(claim.expect).trim()}\\s*$`, 'm') : new RegExp(claim.expect, 'm');
     } catch {
       push('count', `claims.jsonl ${claim.id}`, `unparseable expect /${claim.expect}/`);
       continue;

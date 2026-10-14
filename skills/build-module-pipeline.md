@@ -691,3 +691,19 @@ When **MERGE-READY**:
    rendered board with the markdown board, then stop the watcher. The pipeline does not merge, push,
    or open PRs — the human reviews MERGE-READY, merges, and tags per profile §13. Do not claim done
    until the reviewer's verdict is MERGE-READY with evidence. Then end the session.
+8. **Worktree cleanup — after the merge, by whoever merges.** Leave the run's worktree in place: the
+   merge has not happened when the run ends. Whoever merges it runs, from the primary checkout,
+
+   ```
+   node scripts/worktree-sweep.mjs            # dry run: KEEP / SWEEP per worktree, with every reason
+   node scripts/worktree-sweep.mjs --apply
+   ```
+
+   It removes a worktree only once it is merged into `features.worktreeSweep.target`, clean (untracked
+   files included), idle, unlocked, not reserved, named by no running process and held by no
+   `holdCommand`; it copies the worktree's gitignored evidence (`backupDirs`) out first, unlinks a
+   `node_modules` junction without entering it, removes with plain `git worktree remove` (never
+   `--force`) and keeps the branch. Never remove a worktree by hand — a recursive delete through a
+   `node_modules` junction empties the primary's. `worktreeSweep: not configured` → remove finished
+   worktrees with `git worktree remove <path>` (no `--force`) after unlinking any `node_modules`
+   link, and copy out the run folder and logs first.

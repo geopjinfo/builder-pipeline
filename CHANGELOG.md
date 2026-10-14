@@ -7,6 +7,18 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **`node scripts/worktree-sweep.mjs` (`features.worktreeSweep`, off by default).** Runs isolate concurrent writers
+  in their own git worktrees, and nothing removed them after the merge, so dead checkouts piled up, each holding
+  gitignored evidence a hand-typed recursive delete would destroy (and a delete through a `node_modules` junction
+  empties the primary's). The sweep removes a worktree only when it is merged into `target`, clean including
+  untracked files, unlocked, not `reserved`, inside the optional name `prefix`, idle for `idleHours`, named by no
+  running process and held by no `holdCommand` (the project's own "something still needs it" check; a failing
+  check holds, as does a process check that cannot run). It copies `backupDirs` out to
+  `<logs>/backups/worktrees-<date>/` first, unlinks a `node_modules` link without entering it, runs plain
+  `git worktree remove` (never `--force`), prunes, and keeps the branch. Dry run unless `--apply`. The full
+  playbook's *Finish* gains item 8 and the gate batch's *Finish* a cleanup paragraph: whoever merges runs it;
+  the run never removes its own worktree. `worktreeSweep: not configured` names the manual fallback.
+
 - **Split module pipeline (`liteSplit`, experimental).** `build-module-lite` builds one module through the
   playbook's steps 0–3 and queues it; `build-module-lite-gate-batch` runs every later phase over up to `cap`
   queued modules, each audited against its own diff. `node scripts/gate-queue.mjs` stamps every finished phase
@@ -14,6 +26,13 @@ versions independently of any project it is pasted into.
   come from the profile. Off by default (EXPERIMENTS.md §8).
 
 ### Fixed
+
+- **Claims check: a bare-number `expect` must be a whole output line.** Unanchored, `"1"` matched any digit in
+  the output, including a date inside a "No such file or directory" error for a vanished evidence log, or the
+  "1" in "10", so a dead claim passed. A number-only `expect` is now anchored to a full line; any other `expect`
+  is unchanged.
+- **Tier runner warns when the running Node is not the one `.nvmrc` declares** (exact `x.y.z` only), since CI runs
+  that one and a local result on another Node may not reproduce there. Warning only; exit unchanged.
 
 - **Parallel seats clobbering the board.** The playbook makes `<boards>/<key>.md` the one progress
   surface but gave no rule for two seats writing it at once. A row flip is a read-modify-write of

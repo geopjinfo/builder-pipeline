@@ -89,6 +89,12 @@ const FEATURES = {
     defaults: { state: 'experimental-off', cap: 4, trigger: 3, ledgers: ['(^|/)CHANGELOG\\.md$'], docsOnly: ['(^|/)README\\.md$'] },
     requires: [],
   },
+  /* Removes finished git worktrees after their branch merged — scripts/worktree-sweep.mjs. `holdCommand` is the
+   * project's own "something still needs this worktree" check (null = none). */
+  worktreeSweep: {
+    defaults: { state: 'off', target: null, idleHours: 6, prefix: null, reserved: [], backupDirs: ['logs', '.pipeline'], holdCommand: null },
+    requires: ['target'],
+  },
 };
 
 const DEFAULTS = {
@@ -245,6 +251,20 @@ function validate(settings) {
       if (!isObject(e) || typeof e.name !== 'string') continue;
       if (seen.has(e.name)) errors.push(`features.${name}.${key}: the name "${e.name}" is used twice — names must be unique`);
       seen.add(e.name);
+    }
+  }
+  const sweep = settings.features?.worktreeSweep;
+  if (isObject(sweep)) {
+    for (const k of ['reserved', 'backupDirs']) {
+      const v = sweep[k];
+      if (v !== undefined && (!Array.isArray(v) || v.some((s) => typeof s !== 'string' || !s))) errors.push(`features.worktreeSweep.${k}: an array of non-empty strings`);
+    }
+    if (sweep.idleHours !== undefined && !(typeof sweep.idleHours === 'number' && Number.isFinite(sweep.idleHours) && sweep.idleHours >= 0)) {
+      errors.push('features.worktreeSweep.idleHours: a number >= 0');
+    }
+    const hold = sweep.holdCommand;
+    if (hold !== undefined && hold !== null && (typeof hold !== 'string' || !hold.includes('{path}'))) {
+      errors.push('features.worktreeSweep.holdCommand: null, or a command containing {path}');
     }
   }
   const budget = settings.features?.instructionBudget?.maxLines;
