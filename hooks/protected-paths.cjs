@@ -42,7 +42,10 @@
  *               changes into (the hook itself resolves against its own cwd), and changing INTO a protected
  *               folder before a write, a link or code is refused outright (reading after it is not);
  *      code     an interpreter (node, python, …), a heredoc, or the PowerShell tool: a path-shaped operand that is
- *               protected by spelling or by landing is refused — the Read tool is the route for reading.
+ *               protected by spelling or by landing is refused — the Read tool is the route for reading. A DATA
+ *               heredoc body (`cat >> notes.md <<'EOF'`, `git commit -F - <<'EOF'`) and a read-only pipeline are
+ *               not code: naming a protected path there is not writing it (see mentionScope below);
+ *  - This file itself: it defines the protected set, so it is protected whenever anything is (`BUILDER_UNLOCK=fence`).
  *  - Hard links: a write to an EXISTING file with more than one hard link is refused. There is no link to follow,
  *    so whether the same bytes also live under a protected path cannot be told — it fails CLOSED.
  * Not seen, stated plainly: a path an interpreter builds at runtime; a `cd` whose operand cannot be placed
@@ -73,10 +76,28 @@ const fwd = (p) => String(p).replace(/[\\/]+/g, '/');
 const DISCARD = /^(\/dev\/null|nul|\$null)$/i;
 const RUNS_CODE = /(^|[\s;|&(])(python3?|node|deno|bun|perl|ruby|php|pwsh|powershell)([\s.]|$)|<<-?\s*['"]?[A-Za-z_]+/i;
 
+/**
+ * THE FENCE FENCES ITS OWN DEFINITION. This file holds PROTECTED and the rules that read it; unfenced, one write
+ * could empty the list and every later call would be judged against the emptied set — a fence that certifies its
+ * own removal. So whenever anything is protected, this file is too, by where a write LANDS (its real path, so a
+ * copy elsewhere is not it and a link to it is): file tools, shell writes, code naming it, a link to it or to a
+ * folder holding it. `BUILDER_UNLOCK=fence` opens it for a deliberate change, as a human grant.
+ */
+const SELF_TAG = '(this hook)';
+const SELF_UNLOCK = 'fence';
+function selfPath() {
+  try {
+    return fs.realpathSync.native(__filename);
+  } catch (_) {
+    return path.resolve(__filename);
+  }
+}
+
 /** The fence configuration: the filled PROTECTED list plus any BUILDER_PROTECTED additions. */
 function config(env = process.env, cwd = process.cwd()) {
   const extra = String(env.BUILDER_PROTECTED || '').split(',').map((s) => s.trim()).filter(Boolean);
   return {
+    self: selfPath(),
     prefixes: [...new Set([...PROTECTED, ...extra].map((p) => fwd(p).replace(/^\.\//, '')))],
     unlockable: Object.fromEntries(Object.entries(UNLOCKABLE).map(([k, v]) => [fwd(k), v])),
     grant: String(env[UNLOCK_ENV] || ''),
@@ -155,6 +176,7 @@ function fenceOf(target, ctx, cwd = ctx.cwd) {
   } catch (e) {
     return spelled ? { prefix: spelled, why: `cannot be resolved (${e.code || e.message}); this fails closed` } : null;
   }
+  if (ctx.self && fold(real) === fold(ctx.self)) return { prefix: SELF_TAG, why: 'this file defines the protected set' };
   if (spelled) return spelled;
   const rel = relToRoot(real, ctx);
   if (rel === null) return null;
@@ -162,7 +184,9 @@ function fenceOf(target, ctx, cwd = ctx.cwd) {
 }
 
 const prefixOf = (hit) => (hit && typeof hit === 'object' ? hit.prefix : hit);
-const isOpen = (prefix, ctx) => !!ctx.unlockable[prefix] && ctx.grant.split(',').map((s) => s.trim()).includes(ctx.unlockable[prefix]);
+const grants = (ctx) => ctx.grant.split(',').map((s) => s.trim());
+const isOpen = (prefix, ctx) =>
+  prefix === SELF_TAG ? grants(ctx).includes(SELF_UNLOCK) : !!ctx.unlockable[prefix] && grants(ctx).includes(ctx.unlockable[prefix]);
 
 /** An existing FILE with more than one hard link (0 otherwise, or when it cannot be stat'ed). */
 function hardLinks(target, ctx, cwd = ctx.cwd) {
@@ -296,6 +320,7 @@ function linkOperandFence(tok, ctx, cwd = ctx.cwd) {
     return code ? null : closed(`cannot be resolved (${e.code})`);
   }
   const bare = real.replace(/[\\/]+$/, '');
+  if (ctx.self && fold(ctx.self).startsWith(fold(bare + path.sep))) return { prefix: SELF_TAG, why: `${fwd(bare)} holds this hook, which defines the protected set` };
   const root = rootOf(ctx);
   if (fold(root + path.sep).startsWith(fold(bare + path.sep))) return { prefix: ctx.prefixes[0], why: `${fwd(bare)} is the project root or a folder above it` };
   const rel = relToRoot(bare, ctx);
@@ -306,6 +331,13 @@ function linkOperandFence(tok, ctx, cwd = ctx.cwd) {
 
 /** Path-shaped operands of a code-running command (≤ 40), judged by spelling, landing, and under each cd. */
 function codeOperandFence(command, dirs, ctx) {
+  // A protected spelling ANYWHERE in the code's text (an assignment `P=src/core/x`, a string built in pieces next
+  // to it): code that names the path is refused; nobody tries to recognise the write.
+  const text = fwd(command);
+  for (const p of ctx.prefixes) {
+    const at = new RegExp(`(^|[^\\w.-])${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).exec(text);
+    if (at) return { hit: p, tok: `${p}… (named in the code)` };
+  }
   let n = 0;
   for (const tok of operandsOf(command)) {
     if (n >= 40) break;
@@ -321,6 +353,197 @@ function codeOperandFence(command, dirs, ctx) {
   return null;
 }
 
+/**
+ * WHICH TEXT the code rule reads. Reading all of it refused READ-ONLY commands that merely NAMED a protected path
+ * next to a heredoc or an interpreter: notes appended with `cat >> notes.md <<'EOF'` that mention a protected
+ * folder, a commit message on stdin (`git commit -F - <<'EOF'`) naming one, `node scan.js && grep -c x docs/a.md`.
+ * Two things are left out of the reading, and nothing else:
+ *   1. the BODY of a heredoc that is pure DATA — its delimiter quoted (or a body with no `$`, backtick or
+ *      backslash, so nothing in it expands), consumed by `cat >[>] FILE` or `git commit|tag … -F -`, alone in its
+ *      pipeline. A `cat` body is read again whenever anything in the command could RUN the file it wrote (an
+ *      interpreter, a shell, `source`, `.`, `xargs`, `eval`, `iex`, `Start-Process`, a PowerShell `&` call);
+ *   2. a pipeline whose every stage is a READ-ONLY verb with no redirect and no writing option.
+ * The write TARGETS are untouched: `cat > FILE <<'EOF'` is still judged at FILE, by spelling and by landing. Link
+ * creation and the cd-into rule still read the whole command. POSIX shell text only (the PowerShell tool keeps the
+ * whole-text reading). Anything the lexer does not fully understand — `$(`, a backtick, `$'…'`, `(`/`)`, a comment,
+ * a line continuation, an unterminated quote or heredoc — returns the whole text: it fails CLOSED.
+ */
+const READ_ONLY = /^(?:cat|ls|grep|egrep|fgrep|wc|head|tail|test|\[|stat|diff|echo|pwd|true|git[ \t]+(?:log|show|diff|status|blame|ls-files|grep|rev-parse|cat-file))(?=[ \t]|$)/;
+const READ_ONLY_WRITES = /(?:^|[\s'"])(?:--output\b|--open-files-in-pager\b|-O)/;
+const HEREDOC_OP = String.raw`<<-?[ \t]*(?:'\w+'|"\w+"|\\\w+|\w+)`;
+const REDIRECT_TARGET = String.raw`(?:'[^']*'|"[^"]*"|[^\s'"<>|;&]+)`;
+const DATA_CAT = new RegExp(String.raw`^cat[ \t]+(?:>>?[ \t]*${REDIRECT_TARGET}[ \t]+${HEREDOC_OP}|${HEREDOC_OP}[ \t]+>>?[ \t]*${REDIRECT_TARGET})$`);
+const DATA_GIT = new RegExp(String.raw`^git[ \t]+(?:commit|tag)(?:[ \t]+[\w.\/:@+=-]+)*?[ \t]+(?:-F[ \t]*-|--file(?:=|[ \t]+)-)(?:[ \t]+[\w.\/:@+=-]+)*[ \t]+${HEREDOC_OP}$`);
+const RUNNER = /(^|[\s;|&(])(python3?|node|deno|bun|perl|ruby|php|pwsh|powershell|bash|sh|zsh|dash|ksh|cmd|source|xargs|eval|iex|invoke-expression|start-process|npx|tsx|ts-node)([\s.]|$)|(^|[\s;|&])\.[ \t]+\S|(^|[\s;|(])&(?![&>])[ \t]/i;
+
+/** Quote-aware split into pipelines + heredoc bodies; null = not understood (the caller fails closed). */
+function splitShell(s) {
+  const stmts = [];
+  const docs = [];
+  let raw = '';
+  let bare = ''; // `raw` with every quoted character blanked, so a quoted `>` is not a redirect
+  let state = 'N';
+  let pending = [];
+  let i = 0;
+  const end = (sep) => {
+    stmts.push({ raw, bare, sep, docs: [] });
+    raw = '';
+    bare = '';
+  };
+  const add = (r, b = r) => {
+    raw += r;
+    bare += b;
+  };
+  while (i < s.length) {
+    const c = s[i];
+    const n = s[i + 1];
+    if (state === 'S') {
+      add(c, c === "'" ? c : '_');
+      if (c === "'") state = 'N';
+      i += 1;
+      continue;
+    }
+    if (state === 'D') {
+      if (c === '`' || (c === '$' && n === '(')) return null;
+      if (c === '\\') {
+        add(s.slice(i, i + 2), '__');
+        i += 2;
+        continue;
+      }
+      add(c, c === '"' ? c : '_');
+      if (c === '"') state = 'N';
+      i += 1;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      state = c === "'" ? 'S' : 'D';
+      add(c);
+      i += 1;
+      continue;
+    }
+    if (c === '`' || c === '(' || c === ')' || (c === '$' && (n === '(' || n === "'"))) return null;
+    if (c === '\\') {
+      if (n === undefined || n === '\n' || n === '\r') return null;
+      add(s.slice(i, i + 2), '__');
+      i += 2;
+      continue;
+    }
+    if (c === '#' && (i === 0 || /[\s;&|]/.test(s[i - 1]))) return null;
+    if (c === '<' && n === '<') {
+      if (s[i + 2] === '<') {
+        add('<<<'); // a here-STRING: its word stays ordinary text
+        i += 3;
+        continue;
+      }
+      const m = /^<<(-?)[ \t]*(?:'([A-Za-z_]\w*)'|"([A-Za-z_]\w*)"|\\([A-Za-z_]\w*)|([A-Za-z_]\w*))/.exec(s.slice(i));
+      if (!m) return null;
+      pending.push({ delim: m[2] || m[3] || m[4] || m[5], strip: m[1] === '-', quoted: !m[5], stmt: stmts.length });
+      add(m[0]);
+      i += m[0].length;
+      continue;
+    }
+    if (c === '\n' || c === '\r') {
+      if (c === '\r' && n === '\n') i += 1;
+      end('\n');
+      i += 1;
+      for (const h of pending) {
+        const start = i;
+        for (;;) {
+          if (i >= s.length) return null; // unterminated heredoc
+          let e = s.indexOf('\n', i);
+          if (e < 0) e = s.length;
+          let line = s.slice(i, e).replace(/\r$/, '');
+          if (h.strip) line = line.replace(/^\t+/, '');
+          const next = Math.min(e + 1, s.length);
+          if (line === h.delim) {
+            h.body = s.slice(start, i);
+            i = next;
+            break;
+          }
+          i = next;
+        }
+        docs.push(h);
+      }
+      pending = [];
+      continue;
+    }
+    if (c === ';') {
+      end(';');
+      i += 1;
+      continue;
+    }
+    if (c === '&') {
+      if (n === '&') {
+        end('&&');
+        i += 2;
+        continue;
+      }
+      if (s[i - 1] === '>' || s[i - 1] === '<' || n === '>') {
+        add(c); // 2>&1, &>, >&
+        i += 1;
+        continue;
+      }
+      end('&');
+      i += 1;
+      continue;
+    }
+    if (c === '|') {
+      if (n === '|') {
+        end('||');
+        i += 2;
+        continue;
+      }
+      end('|');
+      i += 1;
+      continue;
+    }
+    add(c);
+    i += 1;
+  }
+  if (state !== 'N' || pending.length) return null;
+  end('');
+  for (const h of docs) stmts[h.stmt].docs.push(h);
+  const pipes = [];
+  let cur = [];
+  for (const st of stmts) {
+    cur.push(st);
+    if (st.sep !== '|') {
+      pipes.push(cur);
+      cur = [];
+    }
+  }
+  for (const pipe of pipes) {
+    for (const st of pipe) {
+      const t = st.raw.trim();
+      for (const h of st.docs) {
+        const literal = h.quoted || !/[$`\\]/.test(h.body);
+        h.kind = !literal || pipe.length !== 1 || st.docs.length !== 1 ? null : DATA_CAT.test(t) ? 'cat' : DATA_GIT.test(t) ? 'git' : null;
+      }
+    }
+  }
+  const readOnly = (st) => {
+    const t = st.raw.trim();
+    const sinkless = st.bare.replace(/(^|\s)\d?>[ \t]*\/dev\/null(?=\s|$)/g, '$1').replace(/(^|\s)2>&1(?=\s|$)/g, '$1');
+    return st.docs.length === 0 && !/[<>]/.test(sinkless) && READ_ONLY.test(t) && !READ_ONLY_WRITES.test(t);
+  };
+  return {
+    pipes: pipes.map((p) => ({ text: p.map((st) => st.raw).join(' | '), readOnly: p.some((st) => st.raw.trim()) && p.every((st) => !st.raw.trim() || readOnly(st)) })),
+    docs,
+  };
+}
+
+/** The text the code rule reads: '' when nothing but data and read-only pipelines carried the trigger. */
+function mentionScope(command) {
+  const split = splitShell(command);
+  if (!split) return command; // not understood: the whole text (fails CLOSED)
+  const kept = split.pipes.filter((p) => !p.readOnly).map((p) => p.text).join('\n');
+  const notData = split.docs.filter((h) => !h.kind);
+  const runs = RUNNER.test(kept);
+  if (!runs && notData.length === 0) return '';
+  const catBodies = runs ? split.docs.filter((h) => h.kind === 'cat').map((h) => h.body) : [];
+  return [kept, ...notData.map((h) => h.body), ...catBodies].join('\n');
+}
+
 // ──────────────────────────────────────────────────────────────── decide
 const blocked = (reason) => ({ block: true, reason });
 function deny(hit, what, ctx) {
@@ -330,7 +553,11 @@ function deny(hit, what, ctx) {
   return blocked(
     `BLOCKED: ${what} reaches the protected path "${prefix}"${why} (PIPELINE_PROFILE.md §4). ` +
       'A write is judged by where it lands. This is a boundary event — stop and ask the human. ' +
-      (ctx.unlockable[prefix] ? `(Unlockable via ${UNLOCK_ENV}=${ctx.unlockable[prefix]} — human grant only.)` : ''),
+      (prefix === SELF_TAG
+        ? `(Unlockable via ${UNLOCK_ENV}=${SELF_UNLOCK} — human grant only.)`
+        : ctx.unlockable[prefix]
+          ? `(Unlockable via ${UNLOCK_ENV}=${ctx.unlockable[prefix]} — human grant only.)`
+          : ''),
   );
 }
 
@@ -379,8 +606,9 @@ function decideShell(command, isPowerShell, ctx) {
       }
     }
   }
-  if (runsCode) {
-    const via = codeOperandFence(command, dirs, ctx);
+  const scope = isPowerShell ? command : mentionScope(command); // data heredoc bodies and read-only pipelines are not code
+  if (runsCode && scope) {
+    const via = codeOperandFence(scope, dirs, ctx);
     if (via) {
       const r = deny(via.hit, `this ${tool} command runs code naming ${via.tok}, which`, ctx);
       if (r) return { ...r, reason: `${r.reason} Read with the Read tool, or put the code in a script that names no protected path.` };
@@ -409,7 +637,7 @@ function decide(input, ctx = config()) {
   return { block: false };
 }
 
-module.exports = { decide, config, linkStatements, statementHead, cdDirsOf, shellWriteTargets, fenceOf, realTarget, resolveTarget };
+module.exports = { decide, config, mentionScope, splitShell, SELF_UNLOCK, linkStatements, statementHead, cdDirsOf, shellWriteTargets, fenceOf, realTarget, resolveTarget };
 
 if (require.main === module) {
   let input = '';

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -86,5 +87,24 @@ describe('instruction-trailer-check — a throwaway git repository', { skip }, (
     const r = run(join(scripts, 'instruction-trailer-check.mjs'), base);
     assert.equal(r.status, 0, out(r));
     assert.equal(r.stdout.trim(), 'instruction-trailer-check: PASS — the ./lib helper answered');
+  });
+});
+
+describe('the fence fences its own definition', () => {
+  const { verdict, INSTRUCTION_DIFF } = createRequire(import.meta.url)(join(exampleDir, 'instruction-trailer.cjs'));
+  const DEF = 'scripts/lib/instruction-trailer.cjs';
+
+  test('red: an undeclared change to the file that defines the set is flagged, naming it', () => {
+    const r = verdict({ changedFiles: [DEF], commitMessages: ['chore: tidy'] });
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /scripts\/lib\/instruction-trailer\.cjs/);
+    assert.equal(verdict({ changedFiles: [DEF.replace(/\//g, '\\')], commitMessages: ['chore: tidy'] }).ok, false); // a Windows spelling too
+  });
+
+  test('green: declared, it passes; near-miss names stay outside the set', () => {
+    assert.equal(verdict({ changedFiles: [DEF], commitMessages: ['x\n\ninstructions-change: widen the set'] }).ok, true);
+    for (const near of ['scripts/lib/instruction-trailer.cjs.bak', 'scripts/lib/other.cjs', 'scripts/instruction-trailer-check.mjs']) {
+      assert.equal(INSTRUCTION_DIFF.test(near), false, near);
+    }
   });
 });
