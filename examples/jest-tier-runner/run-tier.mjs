@@ -48,6 +48,20 @@ const CONFIGS = {
 const [tier, ...rest] = process.argv.slice(2);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
+/*
+ * Say so when this machine's Node is not the one `.nvmrc` declares — CI (and any remote runner) uses that one,
+ * so a local result on another Node may not reproduce there. A warning only; no `.nvmrc`, or one naming a
+ * range or alias rather than an exact x.y.z, declares nothing to compare.
+ */
+{
+  let nvmrc = '';
+  try { nvmrc = readFileSync('.nvmrc', 'utf8'); } catch { /* no .nvmrc: nothing declared */ }
+  const declared = nvmrc.trim().replace(/^v/, '');
+  if (/^\d+\.\d+\.\d+$/.test(declared) && declared !== process.versions.node) {
+    console.log(`WARN node ${process.versions.node} here, .nvmrc declares ${declared} — results may differ from CI`);
+  }
+}
+
 /**
  * `gates` is not a jest tier, but a gate chain — many chained sub-commands, each printing its own
  * output — is typically one of the largest context sinks a project has, often megabytes per run.

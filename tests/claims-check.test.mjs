@@ -42,6 +42,13 @@ describe('claims checker — pure', () => {
     assert.deepEqual(kinds(check(doc(''), fsProbe, ctx({ claims: [{ ...claim, expect: '(' }] }))), ['count']);
   });
 
+  test('red: a bare-number expect must be a whole output line, not any digit in the output', () => {
+    const claim = { id: 'C1', text: '1 row', command: 'count rows', expect: '1' };
+    const missing = () => ({ status: 1, output: "cat: logs/2026-10-14.log: No such file or directory\n10" });
+    assert.deepEqual(kinds(check(doc(''), fsProbe, ctx({ claims: [claim], run: missing }))), ['count']);
+    assert.deepEqual(check(doc(''), fsProbe, ctx({ claims: [claim], run: () => ({ status: 0, output: 'rows:\n 1 \n' }) })), []);
+  });
+
   test('red: a drifted anchor — the snippet is no longer within two lines; small drift is tolerated', () => {
     assert.deepEqual(kinds(check(doc('see `app/stock.py:9 «def reorder_level»`'), fsProbe, ctx())), ['citation']);
     assert.deepEqual(check(doc('see `app/stock.py:3 «def reorder_level»`'), fsProbe, ctx()), []);
