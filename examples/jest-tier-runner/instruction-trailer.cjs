@@ -9,8 +9,13 @@
  * instruction layer must be DECLARED — some commit in the range carries an `instructions-change:`
  * trailer naming why. Detection where prevention can't be total; the local hook catches mistakes,
  * CI remains the full enforcer.
+ *
+ * THIS FILE IS IN THE SET IT DEFINES. Unfenced, one edit could empty the pattern, and the check — which runs the
+ * branch's own copy of this file — would then certify its own removal. So the installed path of this file
+ * (`scripts/lib/instruction-trailer.cjs`, per the README) is part of `INSTRUCTION_DIFF`: a change to the definition is
+ * an instruction change and must be declared like one. If you install it elsewhere, change that alternative too.
  */
-const INSTRUCTION_DIFF = /^(CLAUDE\.md|AGENTS\.md|\.claude\/(rules|agents|skills|hooks|settings[^/]*\.json))(\/|$)/;
+const INSTRUCTION_DIFF = /^(CLAUDE\.md|AGENTS\.md|\.claude\/(rules|agents|skills|hooks|settings[^/]*\.json)|scripts\/lib\/instruction-trailer\.cjs)(\/|$)/;
 const TRAILER = /^instructions-change:\s*\S+/m;
 
 /** Pure verdict over (changed files, commit messages). */

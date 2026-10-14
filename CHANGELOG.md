@@ -7,6 +7,15 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **The fence fences its own definition.** `hooks/protected-paths.cjs` holds the protected list and the rules that
+  read it. If it were unfenced, one write could empty the list, and every later call would be judged against the
+  emptied set. So whenever anything is protected, the hook's own file is protected too. It is judged by where a
+  write lands (its real path) across every route: file tools, shell writes, code naming it, and a link to it or to
+  the folder holding it. `BUILDER_UNLOCK=fence` opens it, as a human grant. The CI half,
+  `examples/jest-tier-runner/instruction-trailer.cjs`, now counts its own installed path
+  (`scripts/lib/instruction-trailer.cjs`) as an instruction file. An undeclared change to the definition fails the
+  trailer check like any other instruction change.
+
 - **`hooks/protected-paths.cjs` guards the shell route and closes the link bypasses.** The hook used to judge
   only the file tools, so a shell redirect, a `cd` into a folder before a relative write, or a link made with
   any shell command walked past it. It now also judges Bash and PowerShell calls: the accidental write shapes
@@ -69,6 +78,20 @@ versions independently of any project it is pasted into.
   come from the profile. Off by default (EXPERIMENTS.md §8).
 
 ### Fixed
+
+- **Naming a protected path is not writing it.** The hook's code rule read the whole command, so read-only work
+  was refused when it merely named a protected path next to a heredoc or an interpreter. Two examples are notes
+  appended with `cat >> notes.md <<'EOF'`, and a commit message on stdin (`git commit -F - <<'EOF'`). The rule now
+  leaves out two things, and only these:
+  - the body of a DATA heredoc: its delimiter is quoted or nothing in it expands, and it is consumed by
+    `cat >[>] FILE` or `git commit|tag -F -`, alone in its pipeline;
+  - a pipeline made only of read-only verbs, with no redirect and no option that writes.
+  A `cat` body is still read whenever anything in the command could run the file it wrote: an interpreter, a
+  shell, `source`, `.`, `xargs`, `eval`, `iex`, `Start-Process`, or a PowerShell `&` call. Write targets are still
+  judged, by spelling and by where they land. Link creation and the cd-into rule still read the whole command.
+  The PowerShell tool keeps the whole-text reading. Anything the lexer does not understand also falls back to the
+  whole text, so it fails closed. The code rule now also refuses a protected spelling anywhere in the code's text,
+  for example an assignment `P=src/core/x`, not only as a separate operand.
 
 - **Claims check: a bare-number `expect` must be a whole output line.** Unanchored, `"1"` matched any digit in
   the output, including a date inside a "No such file or directory" error for a vanished evidence log, or the

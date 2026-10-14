@@ -26,8 +26,10 @@ const bsl = (p) => p.replace(/\//g, '\\');
 const lab = mkdtempSync(join(tmpdir(), 'fence-'));
 const proj = join(lab, 'proj'); // the fake project
 const out = join(lab, 'out'); //   outside the project: the links live here
-for (const d of ['.git', 'src/core/kernel', 'src/feature', 'docs', 'notes']) mkdirSync(join(proj, d), { recursive: true });
+for (const d of ['.git', 'src/core/kernel', 'src/feature', 'docs', 'notes', '.claude/hooks']) mkdirSync(join(proj, d), { recursive: true });
 writeFileSync(join(proj, 'src/core/kernel/k.ts'), 'x');
+const SELF = join(proj, '.claude', 'hooks', 'protected-paths.cjs'); // the fake project's installed copy of the hook
+writeFileSync(SELF, '// the fence definition\n');
 mkdirSync(out);
 const made = [];
 let linkError = '';
@@ -45,6 +47,7 @@ link(join(out, 'dg2'), join(proj, 'src', 'core', 'not-yet')); // dangling, throu
 link(join(out, 'dg1'), join(out, 'dg2'));
 link(join(out, 'loopA'), join(out, 'loopB'));
 link(join(out, 'loopB'), join(out, 'loopA'));
+link(join(out, 'h'), join(proj, '.claude', 'hooks')); // a name with no hook spelling, onto the folder holding the hook
 const hard = join(proj, 'src', 'feature', 'k.ts'); // a HARD link in feature code to a protected file
 let hardError = '';
 try {
@@ -214,6 +217,92 @@ describe('creating a link into a protected folder', () => {
   test('red: an unlock grant opens only its own prefix, on the shell route too', () => {
     assert.equal(blocks(sh(`ln -s ${P}/src/core ${O}/n`), { grant: 'core' }), false);
     assert.equal(blocks(sh(`ln -s ${P}/docs ${O}/n`), { grant: 'core' }), true);
+  });
+});
+
+describe('naming a protected path is not writing it — data heredocs and read-only pipelines', () => {
+  const GREEN = [
+    ['notes appended through a data heredoc whose body names a protected path (and the word node)', `cat >> notes/n.md <<'EOF'\nthe kernel lives in src/core/kernel/k.ts; run node scripts/x.js\nEOF`],
+    ['an unquoted delimiter whose body cannot expand', `cat >> notes/n.md <<EOF\nnames src/core and docs/a.md\nEOF`],
+    ['a commit message on stdin naming a protected file', `git commit -q -F - <<'EOF'\nchore: tighten src/core/kernel/k.ts\nEOF`],
+    ['an interpreter that names nothing, then a read-only grep of a protected file', 'node -e "console.log(1)" && grep -c TDD docs/a.md'],
+    ['a data heredoc body naming a protected path through a link', `cat >> notes/n.md <<'EOF'\nthe link ${O}/j/kernel/k.ts\nEOF`],
+    ['a read-only pipeline next to a heredoc', `cat docs/a.md | wc -l; cat >> notes/n.md <<'EOF'\nok\nEOF`],
+  ];
+  for (const [label, command] of GREEN) {
+    test(`green: ${label}`, () => assert.equal(blocks(sh(command)), false, command));
+  }
+
+  test('red: code or a non-data heredoc naming a protected path is still refused', () => {
+    for (const command of [
+      `python - <<'PY'\nopen('src/core/kernel/k.ts','w').write('x')\nPY`, // a reader that runs it, not a data consumer
+      `cat > s.py <<'EOF'\nopen('src/core/x.ts','w')\nEOF\npython s.py`, // the file just written is run
+      `cat > s.sh <<'EOF'\necho x > src/core/x.ts\nEOF\nbash s.sh`, // a shell is a runner too
+      `cat > s.sh <<'EOF'\necho x > src/core/x.ts\nEOF\n. ./s.sh`, // and dot-sourcing
+      `git apply <<'P'\n--- a/src/core/x.ts\n+++ b/src/core/x.ts\nP`, // not a data consumer
+      `cat <<'EOF' | sh\necho x > src/core/x.ts\nEOF`, // body piped on
+      `cat > n.md <<EOF\n$(python -c "open('src/core/x.ts','w')")\nEOF`, // unquoted and expanding
+      'cat src/core/kernel/k.ts | node -', // a read-only verb feeding an interpreter
+      'P=src/core/x.ts; node w.js $P', // an assignment is not read-only
+      'ls docs > list.txt; node w.js docs/list.txt', // a redirected read is not read-only
+      'git log --output=src/core/x.ts; node -e 1', // a read verb's writing option
+      `cat > s.py <<'EOF'\nopen('${O}/j/x.ts','w')\nEOF\npython s.py`, // through a link, then run
+    ]) assert.equal(blocks(sh(command)), true, command);
+  });
+
+  test('red: the lexer fails CLOSED — a quote or a comment hiding a heredoc keeps the whole-text reading', () => {
+    assert.ok(blocks(sh(`echo "a && cat > f <<'X'\n" ; git apply <<'P'\n--- a/src/core/y.ts\nP\nX`)));
+    assert.ok(blocks(sh(`# cat > f <<'X'\ngit apply <<'P'\nsrc/core/y.ts\nP\nX`)));
+  });
+
+  test('red: the write TARGET of a data heredoc is still judged — by spelling, by landing, unplaceable', () => {
+    assert.ok(blocks(sh(`cat > src/core/x.ts <<'EOF'\nx\nEOF`)));
+    assert.ok(blocks(sh(`cat >> ${O}/j/x.ts <<'EOF'\nx\nEOF`)));
+    assert.ok(blocks(sh(`cat > ${P}/docs/x.md <<'EOF'\nx\nEOF`)));
+  });
+
+  test('red: the PowerShell tool keeps the whole-text reading', () => {
+    assert.ok(blocks(ps('Get-Content docs/a.md')));
+  });
+
+  test('the scope reader: what it leaves out, and that it fails closed', () => {
+    assert.equal(guard.mentionScope(`cat >> n.md <<'EOF'\nsrc/core\nEOF`), '');
+    assert.equal(guard.mentionScope('grep -c x docs/a.md'), '');
+    const closed = `echo $(cat docs/a.md)`;
+    assert.equal(guard.mentionScope(closed), closed);
+  });
+});
+
+describe('the fence fences its own definition', () => {
+  const own = (over = {}) => ({ self: SELF, ...over });
+
+  test('red: a write to the hook, through a link to its folder, a shell write, code naming it, or a link to it is refused', () => {
+    for (const payload of [
+      write(slash(SELF)),
+      write(`${O}/h/protected-paths.cjs`), // by landing: the spelling names no hook
+      sh(`echo "const PROTECTED = []" > ${slash(SELF)}`),
+      sh(`node -e "require('fs').writeFileSync('${slash(SELF)}','')"`),
+      sh(`ln -s ${P}/.claude/hooks ${O}/n`), // a link to the folder holding it
+      sh(`ln ${slash(SELF)} ${O}/hl.cjs`), // a hard link to it
+    ]) {
+      const r = ask(payload, own());
+      assert.equal(r.block, true, JSON.stringify(payload));
+      assert.match(r.reason, /this (file|hook)|defines the protected set/);
+    }
+  });
+
+  test('green: the fence grant opens it; another prefix\'s grant does not; a copy elsewhere is not it; reading is not writing', () => {
+    assert.equal(blocks(write(slash(SELF)), own({ grant: 'fence' })), false);
+    assert.equal(blocks(write(slash(SELF)), own({ grant: 'core' })), true);
+    assert.equal(blocks(write(`${O}/protected-paths.cjs`), own()), false);
+    assert.equal(blocks(sh(`cat ${slash(SELF)}`), own()), false);
+    assert.equal(blocks(write(slash(SELF)), own({ prefixes: [] })), false); // nothing protected: nothing to fence
+  });
+
+  test('red: the shipped hook protects its own file when anything is protected', () => {
+    const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(write(HOOK)), cwd: proj, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: proj, BUILDER_UNLOCK: '', BUILDER_PROTECTED: 'docs/' } });
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /BUILDER_UNLOCK=fence/);
   });
 });
 
