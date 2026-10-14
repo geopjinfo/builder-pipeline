@@ -37,6 +37,17 @@ How to run them:
 - Records go where the profile puts them: the board `<boards>/<key>.md`, decisions in `<decisions>`, deferrals in
   `<registry>`, questions to the human through the profile's channel (§13).
 
+## Seats the orchestrator runs on credit (fill or delete)
+<For each gate-queue key: "P4 auditors: run by the orchestrator on the credit lane (`orch credit-audit`); do NOT
+dispatch them. When the gate queue reaches P4 OWED and `<runs>/<key>/findings-*.json` are not all present, stop with
+`RESULT: PASS WAIT-P4 <key> @ <sha>`; the orchestrator runs them, marks P4 and resumes you." Add the same line for the
+P3 module-tester if the orchestrator routed it (`--tester`). If a FIX of yours re-opens P4, stop again with WAIT-P4.>
+
+## Version at release
+Your release step takes the next free version above the target branch's at commit time. Parallel lanes may take the
+same number: the ORCHESTRATOR re-versions at merge time if yours was taken (version files, changelog heading,
+generated files that carry it — one commit). Do not hold a version back or guess ahead.
+
 ## Rules
 The project's instruction file and `PIPELINE_PROFILE.md` apply in full. Never invent an oracle entry (profile §3).
 A track is a floor (the playbook's track rules).

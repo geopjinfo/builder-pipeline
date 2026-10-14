@@ -86,6 +86,11 @@ four stale audits.
 For each open module, **one module at a time**, oldest first — module 2's auditors must read a tree in which
 module 1's fixes have already landed:
 
+**P4 on credit, when orchestrated.** When this batch runs as a batch-orchestrator lane whose brief says the P4 seats
+run on credit, do NOT dispatch them. When P4 is `OWED` and any `<runs>/<key>/findings-<seat>.json` is missing, write
+`RESULT: PASS WAIT-P4 <key> @ <sha>` and stop. The orchestrator runs `orch credit-audit`, checks the findings, marks
+P4 and resumes you. If one of your FIX rows later re-opens P4, stop with `WAIT-P4` again. Otherwise:
+
 **P4 — four auditors.** Full playbook step 4, exactly — the one difference: **the diff range is the module's
 own.** Every auditor's dispatch carries `DIFF-RANGE: <base>..<tip>` from the queue, and the findings check runs
 with `--diff-base <base>`. The auditor seats are read-only: each RETURNS its findings in its final message;

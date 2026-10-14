@@ -7,6 +7,24 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Batch orchestrator gaps, found in a first real orchestrated batch.**
+  - **`orch credit-audit <run> --key K --worktree W [--tester] [--dry]`** (behind `credit.enabled`). It turns the
+    P4 auditor seats of one gate-queue key, and with `--tester` the P3 tester, into credit jobs. Each job is built
+    from the queue's own base..tip and changed files. Ledger paths, from the gate queue's own ledger rules, are left
+    out of the auditors' scope. Seat models come from `models.strong` (standards, security, invariant, tester) and
+    `models.mid` (vuln). A credit worker cannot run `git diff <range>`, so each brief lists the files to read.
+  - **A WAIT-P4 protocol.** The worker-brief template, the gate-batch skill and the orchestrator skill carry it: a
+    lane stops with `RESULT: PASS WAIT-P4 <key> @ <sha>`, and the orchestrator runs the seats, checks the findings,
+    marks P4 and resumes the lane.
+  - **`orch release-stale [--apply]`.** It lists the claims held by a paused run, a MERGED or FAILED lane, or a
+    missing run, which block new claims on the same files. It releases them only with `--apply`. A live run's claim
+    is never stale.
+  - **Version at merge.** The skill and the brief template give the orchestrator the re-version rule for two
+    parallel lanes that claimed the same version.
+  - **Test slot.** The orchestrator skill now states plainly that it owns the machine's test slot and the merge
+    order.
+  - **`digest --check <plan>`** is tested in both argument orders.
+
 - **The fence fences its own definition.** `hooks/protected-paths.cjs` holds the protected list and the rules that
   read it. If it were unfenced, one write could empty the list, and every later call would be judged against the
   emptied set. So whenever anything is protected, the hook's own file is protected too. It is judged by where a
