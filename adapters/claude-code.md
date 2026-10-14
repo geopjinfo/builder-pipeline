@@ -25,7 +25,7 @@ authority if this table and the CLI ever disagree.
 | `PIPELINE_PROFILE.template.md` | `PIPELINE_PROFILE.md` (repo root, **filled**, §16 included) |
 | `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | `scripts/`, `scripts/lib/` (plain Node, harness-independent) |
 | `hooks/claude-code/*.js` | `.claude/hooks/` — **copied, never registered.** Registering is a person's act (below) |
-| `hooks/protected-paths.cjs`, `hooks/board-render.cjs` | `.claude/hooks/` — same rule |
+| `hooks/protected-paths.cjs`, `hooks/board-render.cjs` | `.claude/hooks/` — same rule. Register `protected-paths.cjs` on `PreToolUse` with the matcher `Edit\|Write\|MultiEdit\|NotebookEdit\|Bash\|PowerShell` (its header has the snippet): a matcher without `Bash`/`PowerShell` leaves the shell route unguarded, and one without `NotebookEdit` leaves notebook writes unguarded |
 | `agents/experimental/page-keeper.md` | `.claude/agents/page-keeper.md` — only with `--experimental` |
 | `tooling/experimental/page-shell.{cjs,mjs}` | `scripts/experimental/` — only with `--experimental` |
 

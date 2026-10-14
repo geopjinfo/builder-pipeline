@@ -7,6 +7,23 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **`hooks/protected-paths.cjs` guards the shell route and closes the link bypasses.** The hook used to judge
+  only the file tools, so a shell redirect, a `cd` into a folder before a relative write, or a link made with
+  any shell command walked past it. It now also judges Bash and PowerShell calls: the accidental write shapes
+  (`>`/`>>`, `tee`, `mv`/`cp`, `sed -i`), each by spelling and by where it lands; creating a link whose operand
+  is protected, lies in a protected folder or contains one (the project root, a parent folder). Link makers are
+  recognised after a statement lead (`X=1 ln`, `{ ln …; }`, `if`/`then`, `time`/`nohup`/`xargs`/`eval`, `$( )`,
+  backticks, `cmd /c`, `bash -c`, PowerShell assignment, cast, module-qualified `New-Item`,
+  `Start-Process cmd -ArgumentList '/c mklink …'`), and so are the link-shaped `subst`, `New-PSDrive`, `ndr` and
+  `mount`. An operand that cannot be placed fails closed. A relative write, link operand or interpreter operand
+  after `cd`/`pushd`/`Set-Location` is judged where the `cd` went, and changing into a protected folder before a
+  write, a link or code is refused (reading after it is not). Code naming a protected path, through a link or
+  in a nested string, is refused. A write to an existing file with more than one hard link fails closed on every
+  route, and `NotebookEdit` (`notebook_path`) is judged like `Write`. The settings snippet's matcher names every
+  route; `BUILDER_PROTECTED` can add prefixes and never remove one. The fence is still the profile's `PROTECTED`
+  list; nothing is hard-coded. Tests run against a fake project in a temp lab and remove each link without
+  recursing through it.
+
 - **The batch orchestrator — `node scripts/orch.mjs` + `skills/orchestrator.md` (`features.orchestrator`, off by
   default).** A layer above the pipeline that turns a multi-row plan into a batch: `digest` reads a plan artifact in
   any shape (table, bullets, HTML) and marks every cell it inferred `⚠ CONFIRM` and every unused line Unmapped;
