@@ -11,6 +11,10 @@ validation commands, same fix-in-run rule, same loop-back, same close-out. The o
 several modules at once, and each is named below. Everything else: read the full playbook's step and do exactly
 that.
 
+**Who runs it.** A person's session, or the batch orchestrator ([`orchestrator`](orchestrator.md)) once its `lite`
+lanes have queued their modules — as one more lane, in its own worktree. The batch's branch then merges through
+`orch merge` like any other lane: one at a time, gates first.
+
 ## How it knows what to check — the queue
 
 `<boards>/_gate-queue.md` is the record; `node scripts/gate-queue.mjs` is its only writer. Before every decision:

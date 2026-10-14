@@ -17,7 +17,8 @@ authority if this table and the CLI ever disagree.
 | `agents/*.md` (9) | `.claude/agents/*.md`. **Frontmatter transformed at install:** the neutral `capabilities` / `tier` / `effort` become Claude Code's `tools` / `model` / `effort` (read-only → no Edit/Write; strong → opus, mid → sonnet unless `--models` says otherwise) |
 | `skills/build-module-pipeline.md` | `.claude/skills/build-module-pipeline/SKILL.md` |
 | `skills/references/*.md` (graph query block, review template) | beside the pipeline skill, `.claude/skills/build-module-pipeline/references/` |
-| `skills/scaffold-module.md` · `module-readiness-check.md` · `setup-builder.md` | `.claude/skills/<name>/SKILL.md` |
+| `skills/scaffold-module.md` · `module-readiness-check.md` · `setup-builder.md` · `orchestrator.md` | `.claude/skills/<name>/SKILL.md` |
+| `templates/orchestrator-plan.md` · `orchestrator-worker-brief.md` | `specs/orchestrator-plan.template.md` · `specs/orchestrator-worker-brief.template.md` |
 | `templates/task-board.md` | `tasks/README.md` |
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |
 | `templates/module-brief.md` | `specs/module-brief.template.md` (or your briefs dir) |
@@ -208,6 +209,52 @@ fills the agents table from the transcripts Claude Code writes, never from a sea
 Instruments that read the same records: `node scripts/cost-window.mjs` (spend over a time window,
 for before/after comparisons), `node scripts/seat-peaks.mjs` (per-dispatch peak context, which is
 how the builder-batch setting is judged).
+
+## The batch orchestrator on Claude Code (feature `orchestrator`)
+
+`scripts/orch.mjs` is plain Node and harness-neutral: everything seat-specific is a command template in
+`features.orchestrator`. The values below are what one adopting project runs on Claude Code; check each against
+your CLI version before relying on it.
+
+- **Two plan accounts on one machine.** The second account keeps its own config dir: set
+  `secondaryConfigDir` (for example `.claude-secondary`, under your home) and log in once with
+  `CLAUDE_CONFIG_DIR` pointing at it. Every child process must start with **every inherited `CLAUDE*` variable
+  removed** — an inherited one makes the child a nested session of the one that launched it.
+- **`launchCommand`** starts a secondary-seat worker: an interactive `claude` session in the lane worktree, with
+  `CLAUDE_CONFIG_DIR` set to the secondary dir, `CLAUDE*` cleared, any API key removed from its environment, the
+  permission mode your project uses (never a bypass mode), and a first message pointing at `{brief}` and `{result}`.
+  Keep it in a small script beside your other tooling and reference the script from the template. A folder the
+  account has never opened shows a trust prompt nobody is there to answer: open each lane folder once by hand, or
+  reuse long-lived lane folders (list them in `features.worktreeSweep.reserved`).
+- **`stateCommand`** reports one word for a session. The secondary account keeps its own session registry, so the
+  orchestrating session's own messaging cannot reach a secondary worker by name; read `claude agents --json --all`
+  under the secondary config dir and print the session's state (`working`, `done`, `idle`, `blocked`, `failed`,
+  `stopped`). Without it, `orch watch` still finishes on the result file and stalls on the clock.
+- **`stopCommand`**: `claude stop {session}` under the secondary config dir.
+- **`usageCommand`**: `claude -p "/usage"` under the seat's config dir is a local command (no model turn) whose
+  output carries "N% used" lines; the highest is recorded.
+- **Primary-seat pipeline lanes.** With spawn depth 1 a sub-agent cannot dispatch the pipeline's seats, so a
+  primary-seat lane that runs a pipeline is its own session on the primary account; only a SOLO lane runs as a
+  sub-agent of the orchestrating session.
+- **Shells.** In Windows PowerShell, `npm run x -- --flag` can drop the flags: call `node scripts/orch.mjs …`
+  directly. A version manager that swaps Node may also drop the globally installed CLI; reinstall it per Node
+  version.
+
+**The credit worker** (`credit.worker: "claude-code"`, `scripts/lib/orch-worker-claude-code.cjs`) runs
+`claude -p --output-format stream-json --verbose` with the prompt on stdin, `--permission-mode dontAsk` and an exact
+allow list, `--strict-mcp-config`, `--setting-sources project` (your repo's hooks and fences still apply; user and
+local settings do not), `--no-session-persistence` and a per-job `--max-budget-usd`. Never `--bare`: it would skip
+the repo's own fence hooks. It runs in a clean guard config dir under your home (`credit.guardDir`, default
+`.claude-credit-worker`); a guard dir holding user memory, plugins or MCP servers is refused.
+
+- **The key comes from the shell, never from the pack.** Start `orch credit-run` in a shell whose profile exports
+  `ANTHROPIC_API_KEY` (and keep that export out of your interactive sessions, or every interactive `claude` bills
+  the credit). The worker's first stream event must say `apiKeySource` is that key; a plan-account fallback must
+  say `none`, and is stopped before any model call when it would bill the key.
+- **Model floor.** `models.strong` / `models.mid` are matched as substrings of `--model`, so a family name
+  (`opus`, `sonnet`) works for both short and full ids.
+- **Test hooks.** `BUILDER_CREDIT_WORKER_BIN` points the lane at a stub binary (the pack's tests use
+  `tests/fixtures/orch/stub-worker.cjs`); it must be an absolute path to an existing file.
 
 ## Experimental (installed only with `unpack --experimental`)
 

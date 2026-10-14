@@ -13,6 +13,13 @@ caps it wherever the harness exposes the setting (Claude Code: spawn depth 1 —
 not rest on what the harness allows; it rests on the run — see *The pipeline never starts another
 pipeline* below.
 
+**Who runs this playbook.** A person's session, for one module; or a lane worker dispatched by the batch
+orchestrator ([`orchestrator`](orchestrator.md), feature `orchestrator`), which splits a multi-row plan into lanes
+and runs this playbook once per row in each lane's own worktree and branch. The playbook is the same either way: a
+lane worker's brief (`templates/orchestrator-worker-brief.md`) names its rows, owned files and result path, and the
+batch orchestrator — not the run — owns the merge order. `orchestrator: not configured` → one run per module, by
+hand, as below.
+
 **Load `PIPELINE_PROFILE.md` (repo root) first.** Its prose sections define this project's oracles,
 protected paths, contracts, gates and ledgers; its §16 `pipeline-settings` block holds the commands,
 paths, models and optional features every step below reads. Every rule that says "per profile"

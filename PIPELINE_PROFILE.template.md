@@ -340,7 +340,8 @@ error, because a typo would otherwise switch a check off in silence.
     "advisorBuilder":   { "state": "experimental-off" },
     "mutationGate":     { "state": "experimental-off" },
     "liteSplit":        { "state": "experimental-off", "cap": 4, "trigger": 3, "ledgers": ["(^|/)CHANGELOG\\.md$"], "docsOnly": ["(^|/)README\\.md$"] },
-    "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null }
+    "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
+    "orchestrator":     { "state": "off", "target": null, "seats": ["primary"], "limits": { "secondary": 80, "primary": 60 }, "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "credit": { "enabled": false, "dailyCapUsd": null } }
   }
 }
 ```

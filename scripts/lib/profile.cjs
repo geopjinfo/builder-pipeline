@@ -95,6 +95,60 @@ const FEATURES = {
     defaults: { state: 'off', target: null, idleHours: 6, prefix: null, reserved: [], backupDirs: ['logs', '.pipeline'], holdCommand: null },
     requires: ['target'],
   },
+  /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
+   * disjoint lanes, places each lane on a seat (`seats`: a secondary-account terminal worker and/or a sub-agent of
+   * the orchestrating session, each under its usage `limits` percent), merges finished lanes one at a time into
+   * `target` through `gates`, and — only with `credit.enabled` — runs credit jobs on an API credit balance with the
+   * guards in scripts/lib/orch-credit.cjs. Every command template is the project's own; null means "not available
+   * here" and the step says so. */
+  orchestrator: {
+    defaults: {
+      state: 'off',
+      target: null,
+      branchPrefix: 'orch/',
+      worktreePrefix: null,
+      maxLanes: 2,
+      smallEnabled: false,
+      standardPipeline: 'full',
+      hot: ['CHANGELOG.md', 'package.json', 'package-lock.json', '.gitignore'],
+      sourceRoots: ['src/'],
+      riskPaths: { migration: [], platform: [], permission: [] },
+      modulePattern: null,
+      modulesDir: null,
+      stallMinutes: 90,
+      usageStaleMinutes: 30,
+      seats: ['primary'],
+      limits: { secondary: 80, primary: 60 },
+      secondaryConfigDir: null,
+      usageCommand: null,
+      launchCommand: null,
+      stateCommand: null,
+      stopCommand: null,
+      gates: null,
+      integration: true,
+      linkDirs: [],
+      linkGuard: [],
+      preflight: [],
+      tests: { mode: 'local', local: null, remote: null },
+      credit: {
+        enabled: false,
+        worker: 'claude-code',
+        dailyCapUsd: null,
+        periodBudgetUsd: null,
+        renewDay: 1,
+        tzOffsetMinutes: 0,
+        reserveUsd: 0,
+        lapses: false,
+        fallback: ['secondary', 'primary'],
+        commands: ['git status', 'git diff', 'git diff --stat', 'git log --oneline -20'],
+        seatCommands: {},
+        forbidden: ['**/package.json', '**/package-lock.json', '**/npm-shrinkwrap.json', '**/yarn.lock', '**/pnpm-lock.yaml'],
+        testRoots: ['test/', 'tests/'],
+        guardDir: null,
+      },
+    },
+    requires: ['target'],
+  },
 };
 
 const DEFAULTS = {
@@ -267,6 +321,7 @@ function validate(settings) {
       errors.push('features.worktreeSweep.holdCommand: null, or a command containing {path}');
     }
   }
+  errors.push(...validateOrchestrator(settings, badRegex));
   const budget = settings.features?.instructionBudget?.maxLines;
   if (budget !== undefined && budget !== null && !(Number.isInteger(budget) && budget > 0)) errors.push('features.instructionBudget.maxLines: a positive integer');
   if (settings.features?.orchestratorModel && ACTIVE.has(settings.features.orchestratorModel.state) && !settings.models?.orchestrator) {
@@ -274,6 +329,122 @@ function validate(settings) {
   }
   for (const [path, value] of strings(settings, '')) {
     if (PLACEHOLDER.test(value)) errors.push(`${path}: unfilled placeholder "${value.slice(0, 80)}"`);
+  }
+  return errors;
+}
+
+/**
+ * features.orchestrator — the shapes a run would otherwise only reject after lanes were launched. Shapes are
+ * checked in any state (a typo waits for the day someone switches it on); requirements only while it is active.
+ */
+function validateOrchestrator(settings, badRegex) {
+  const errors = [];
+  const o = settings.features?.orchestrator;
+  if (!isObject(o)) return errors;
+  const at = (k) => `features.orchestrator.${k}`;
+  const strList = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && s);
+  const active = ACTIVE.has(o.state);
+  for (const k of ['hot', 'sourceRoots', 'linkDirs', 'linkGuard']) if (o[k] !== undefined && !strList(o[k])) errors.push(`${at(k)}: an array of non-empty strings`);
+  if (o.riskPaths !== undefined) {
+    if (!isObject(o.riskPaths)) errors.push(`${at('riskPaths')}: { "migration": [globs], "platform": [globs], "permission": [globs] }`);
+    else {
+      for (const [k, v] of Object.entries(o.riskPaths)) {
+        if (!['migration', 'platform', 'permission'].includes(k)) errors.push(`${at(`riskPaths.${k}`)}: unknown — migration | platform | permission`);
+        else if (!strList(v)) errors.push(`${at(`riskPaths.${k}`)}: an array of globs`);
+      }
+    }
+  }
+  if (o.modulePattern !== undefined && o.modulePattern !== null) {
+    const why = typeof o.modulePattern === 'string' ? badRegex(o.modulePattern) : 'not a string';
+    if (why) errors.push(`${at('modulePattern')}: not a valid regular expression — ${why}`);
+    else if (!/\((?!\?)/.test(o.modulePattern)) errors.push(`${at('modulePattern')}: needs one capture group (the module name)`);
+  }
+  const positive = (k, int = false) => {
+    const v = o[k];
+    if (v !== undefined && !(typeof v === 'number' && Number.isFinite(v) && v > 0 && (!int || Number.isInteger(v)))) errors.push(`${at(k)}: a ${int ? 'positive integer' : 'number > 0'}`);
+  };
+  positive('maxLanes', true);
+  positive('stallMinutes');
+  positive('usageStaleMinutes');
+  if (o.standardPipeline !== undefined && !['full', 'lite'].includes(o.standardPipeline)) errors.push(`${at('standardPipeline')}: "full" or "lite"`);
+  if (active && o.standardPipeline === 'lite' && !ACTIVE.has(settings.features?.liteSplit?.state)) {
+    errors.push(`${at('standardPipeline')}: "lite" needs features.liteSplit enabled — the lite lanes queue into its gate batch`);
+  }
+  const seats = o.seats;
+  if (seats !== undefined) {
+    if (!Array.isArray(seats) || seats.length === 0 || seats.some((s) => !['primary', 'secondary'].includes(s)) || new Set(seats).size !== seats.length) {
+      errors.push(`${at('seats')}: a non-empty list of "secondary" and/or "primary", each once, in placement order`);
+    }
+  }
+  if (o.limits !== undefined) {
+    if (!isObject(o.limits)) errors.push(`${at('limits')}: { "secondary": pct, "primary": pct }`);
+    else for (const [k, v] of Object.entries(o.limits)) if (!['primary', 'secondary'].includes(k) || !(typeof v === 'number' && v > 0 && v <= 100)) errors.push(`${at(`limits.${k}`)}: a seat name with a percentage in (0, 100]`);
+  }
+  const template = (k, needs) => {
+    const v = o[k];
+    if (v === undefined || v === null) return;
+    if (typeof v !== 'string' || !v.trim()) return errors.push(`${at(k)}: null, or a command`);
+    for (const n of needs) if (!v.includes(`{${n}}`)) errors.push(`${at(k)}: must contain {${n}}`);
+  };
+  template('usageCommand', ['seat']);
+  template('stateCommand', ['session']);
+  template('stopCommand', ['session']);
+  template('launchCommand', ['brief']);
+  template('gates', []);
+  for (const k of ['branchPrefix', 'worktreePrefix', 'secondaryConfigDir', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
+  if (active && Array.isArray(seats) && seats.includes('secondary') && !o.launchCommand) {
+    errors.push(`${at('launchCommand')}: required while "secondary" is a seat — it is how a secondary-seat lane starts (or drop "secondary" from seats)`);
+  }
+  if (o.preflight !== undefined) {
+    if (!Array.isArray(o.preflight)) errors.push(`${at('preflight')}: an array of { "name", "command", "tests"? }`);
+    else {
+      const names = new Set();
+      o.preflight.forEach((c, i) => {
+        if (!isObject(c) || typeof c.name !== 'string' || !c.name || typeof c.command !== 'string' || !c.command) return errors.push(`${at(`preflight[${i}]`)}: { "name", "command" } — non-empty strings`);
+        if (c.tests !== undefined && !['local', 'remote'].includes(c.tests)) errors.push(`${at(`preflight[${i}].tests`)}: "local" or "remote"`);
+        if (names.has(c.name)) errors.push(`${at('preflight')}: the name "${c.name}" is used twice`);
+        names.add(c.name);
+      });
+    }
+  }
+  const tests = o.tests;
+  if (tests !== undefined) {
+    if (!isObject(tests)) errors.push(`${at('tests')}: { "mode", "local", "remote" }`);
+    else {
+      if (!['local', 'remote'].includes(tests.mode)) errors.push(`${at('tests.mode')}: "local" or "remote"`);
+      for (const k of ['local', 'remote']) if (tests[k] !== undefined && tests[k] !== null && (typeof tests[k] !== 'string' || !tests[k].includes('{tier}'))) errors.push(`${at(`tests.${k}`)}: null, or a command containing {tier}`);
+      if (tests.mode === 'remote' && !tests.remote) errors.push(`${at('tests.remote')}: required while tests.mode is "remote"`);
+    }
+  }
+  const c = o.credit;
+  if (c !== undefined) {
+    if (!isObject(c)) return [...errors, `${at('credit')}: an object`];
+    if (typeof c.enabled !== 'boolean') errors.push(`${at('credit.enabled')}: true or false`);
+    if (c.worker !== 'claude-code') errors.push(`${at('credit.worker')}: "claude-code" (the one worker adapter shipped)`);
+    for (const k of ['commands', 'forbidden', 'testRoots']) if (c[k] !== undefined && !strList(c[k]) && !(Array.isArray(c[k]) && c[k].length === 0)) errors.push(`${at(`credit.${k}`)}: an array of non-empty strings`);
+    if (c.commands !== undefined && Array.isArray(c.commands) && c.commands.some((x) => typeof x === 'string' && /[*]/.test(x))) errors.push(`${at('credit.commands')}: whole named commands only — no wildcards`);
+    if (c.fallback !== undefined && (!Array.isArray(c.fallback) || c.fallback.some((a) => !['secondary', 'primary'].includes(a)) || new Set(c.fallback).size !== c.fallback.length)) {
+      errors.push(`${at('credit.fallback')}: a list of "secondary" and/or "primary", each once ([] = credit only)`);
+    }
+    if (c.seatCommands !== undefined && (!isObject(c.seatCommands) || Object.values(c.seatCommands).some((v) => !strList(v) || v.some((x) => /[*]/.test(x))))) {
+      errors.push(`${at('credit.seatCommands')}: { "<kind>": ["whole named command", …] }`);
+    }
+    const money = (k, { nullable }) => {
+      const v = c[k];
+      if (v === null || v === undefined) return nullable ? null : errors.push(`${at(`credit.${k}`)}: required while the credit lane is enabled`);
+      if (!(typeof v === 'number' && Number.isFinite(v) && v >= 0)) errors.push(`${at(`credit.${k}`)}: a number >= 0`);
+      return null;
+    };
+    if (c.renewDay !== undefined && !(Number.isInteger(c.renewDay) && c.renewDay >= 1 && c.renewDay <= 28)) errors.push(`${at('credit.renewDay')}: a whole day 1-28`);
+    if (c.tzOffsetMinutes !== undefined && !(Number.isInteger(c.tzOffsetMinutes) && Math.abs(c.tzOffsetMinutes) <= 14 * 60)) errors.push(`${at('credit.tzOffsetMinutes')}: whole minutes within ±840`);
+    if (active && c.enabled === true) {
+      money('dailyCapUsd', { nullable: false });
+      if (typeof c.dailyCapUsd === 'number' && !(c.dailyCapUsd > 0)) errors.push(`${at('credit.dailyCapUsd')}: must be > 0 (0 would read as "no cap" to one reader and "spend nothing" to another)`);
+      money('periodBudgetUsd', { nullable: true });
+      money('reserveUsd', { nullable: true });
+      if (Array.isArray(c.fallback) && c.fallback.includes('secondary') && !o.secondaryConfigDir) errors.push(`${at('secondaryConfigDir')}: required while the credit fallback names "secondary"`);
+      if (!settings.models?.strong && !settings.models?.mid) errors.push('models.strong / models.mid: at least one is required while the credit lane is enabled — the model floor is checked against them');
+    }
   }
   return errors;
 }

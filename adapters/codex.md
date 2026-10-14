@@ -84,6 +84,7 @@ If it is not running, the page is only as fresh as the last explicit
 | Orchestrator model check | `node scripts/orchestrator-check.mjs` prints `unmeasurable here`: no transcript it can read |
 | Per-seat cost accounting (`costAccounting`, `seat-peaks`, `cost-window`) | unavailable. The agents table renders em-dashes (see below) |
 | Live page · Workflow-driven runs · advisor A/B | unavailable |
+| Batch orchestrator (`orchestrator`, `scripts/orch.mjs`) | runs as is: plain Node over git, with every seat action a command template you fill for this harness (`launchCommand`, `stateCommand`, `stopCommand`, `usageCommand`). A primary-seat pipeline lane is its own session. The credit worker adapter ships for Claude Code only — keep `credit.enabled` false here until one exists for this harness |
 | Language server plugin | unavailable as a plugin; any editor integration you run yourself is outside the pipeline |
 
 Codex keeps no per-dispatch usage records of the shape the accounting reader expects, so the

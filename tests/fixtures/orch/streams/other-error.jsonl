@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
+{"_stub":"stderr","text":"API Error: 529 Overloaded\n"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":0,"result":"API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}","total_cost_usd":0.001,"permission_denials":[]}
+{"_stub":"exit","code":1}

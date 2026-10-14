@@ -7,6 +7,32 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **The batch orchestrator — `node scripts/orch.mjs` + `skills/orchestrator.md` (`features.orchestrator`, off by
+  default).** A layer above the pipeline that turns a multi-row plan into a batch: `digest` reads a plan artifact in
+  any shape (table, bullets, HTML) and marks every cell it inferred `⚠ CONFIRM` and every unused line Unmapped;
+  `split` refuses while a CONFIRM is open, then gives each row a risk class, a level, a track and a dispatch by rule
+  (Full → the full pipeline, Micro → one SOLO agent, Standard → `standardPipeline`, full or lite; a hint raises,
+  never lowers) and groups rows that share no owned file into lanes, hot files left to the merge queue. Nothing
+  launches before the human approves the split. Each lane is placed on a seat — a terminal worker on a secondary
+  account, or the primary account — by fresh usage readings under per-seat `limits` (the first lane may start
+  unmeasured; both full is `USAGE-HOLD`). Claims keep lanes of different runs apart; a run lease keeps two
+  orchestrating sessions apart; `orch watch` / `orch wait` replace polling; a finish without a result file, or with a
+  changed git config or hook, is a stall, and a stalled or failed lane is pinned by snapshot refs before anything
+  else touches it. `orch merge` merges one lane at a time: built on `orch/integration` from the target's current
+  tip, gated there with hooks disabled, the target moved by compare-and-swap only on green (an ff-only command
+  handed back when the target is checked out). Preflight runs the project's own checks — none configured, or one
+  red, is one lane. A 429 halves the lane count globally and backs off with bounded jitter. With
+  `credit.enabled`, bounded jobs (code reading, record fixes, docs, sweeps, the tester and auditor seats) run on a
+  headless API-credit worker under mechanical guards: building, planning and reviewing seats refused; a model floor
+  from `models.strong` / `models.mid`; an exact allow list; the key source checked before any model call; tracked,
+  untracked and gitignored changes held to the job's scope; git integrity hashed around the run; a `RESULT: PASS`
+  line required; per-day and per-period caps; a fallback down `credit.fallback` for account faults only; and a
+  review hold that `orch merge` honours. Every seat action is a project command template, so the core is
+  harness-neutral; the Claude Code values and the credit worker adapter are in `adapters/claude-code.md` and
+  `scripts/lib/orch-worker-claude-code.cjs`. Plan and worker-brief templates install under `specs/`; the pipeline,
+  lite and gate-batch skills say when a lane worker runs them. `orchestrator: not configured` → one run per module,
+  by hand.
+
 - **`node scripts/worktree-sweep.mjs` (`features.worktreeSweep`, off by default).** Runs isolate concurrent writers
   in their own git worktrees, and nothing removed them after the merge, so dead checkouts piled up, each holding
   gitignored evidence a hand-typed recursive delete would destroy (and a delete through a `node_modules` junction

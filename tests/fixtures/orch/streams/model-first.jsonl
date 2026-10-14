@@ -1,0 +1,4 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t0","name":"Read","input":{"file_path":"a.txt"}}]}}
+{"_stub":"sleep","ms":1500}
+{"_stub":"model_call"}
+{"type":"system","subtype":"init","session_id":"s-1","tools":["Read","Grep","Glob","Edit","Write","Bash"],"mcp_servers":[],"model":"stub-model","permissionMode":"dontAsk","apiKeySource":"ANTHROPIC_API_KEY","_synthetic":"SYNTHETIC fixture shaped on the headless stream-json format"}
