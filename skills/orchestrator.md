@@ -92,8 +92,17 @@ For each `LAUNCH <lane>` line, in order:
   answer — name the prompt from the session's last lines, stop it, fix the cause in the brief or the launcher,
   relaunch. On a second stall move the lane to the other seat and tell the human. A stalled or failed lane's work is
   pinned by snapshot refs (`orch snapshots <run>`) before anything else touches it.
-- **A worker reports `READY: <tiers> @ <sha>`**; the heavy tiers are yours, through the merge (§6). `status` and
-  `next` print where they run (`orch set tests local|remote`; remote only when the human says).
+- **A worker reports `READY: <tiers> @ <sha>`**; the heavy tiers are yours, through the merge (§6). **You own this
+  machine's test slot and the merge order** — no other session is asked: run one heavy local tier at a time, and
+  never start one while a merge's gates run. `status` and `next` print where the tiers run (`orch set tests
+  local|remote`; remote only when the human says).
+- **A worker reports `WAIT-P4 <key> @ <sha>`** (only with `credit.enabled`, when its brief routed the P4 auditors to
+  credit): `orch credit-audit <run> --key <key> --worktree <lane worktree>` (add `--tester` when the brief routed P3
+  too; `--dry` lists the jobs first). It builds each seat's job from the gate queue's own range and changed files, on
+  `models.strong` / `models.mid`. Start the credit queue (§5), check every `<runs>/<key>/findings-<seat>.json` with
+  `node scripts/output-check.mjs findings … --diff-base <queue base>`, mark P4 in the gate queue, and resume the worker.
+  Account faults fall back on their own; a job fault (findings that fail the check) you re-run, or hand the seat back
+  to the worker.
 - **One writer at a time** applies to the run's records: lane workers write their own boards; you write the run's
   decision rows and nothing in a lane's worktree.
 
@@ -126,6 +135,13 @@ Building, planning, reviewing and orchestrating stay on the plan accounts; the l
   `gates` there, and moves `target` by compare-and-swap only on green — never the release branch unless the profile
   makes it the target. Exit 12: the target is checked out somewhere; run the printed `git merge --ff-only`, then
   merge again.
+- **Version at merge.** Lanes release in parallel, so two can claim the same next version. Before merging a lane
+  whose version is not above the target's, re-version it in its worktree: the project's version files, the
+  changelog heading, and any generated file that carries the version, in one commit. Then merge it and record the
+  decision.
+- **Stale claims.** A claim held by a paused run, by a MERGED or FAILED lane, or by a run that no longer exists blocks
+  new claims on the same files. `orch release-stale` lists them. `--apply` frees them only after you have confirmed
+  that the new lane owns the same work; record that in the decision log. A live run's claim is never stale.
 - **Exit 4 = conflict or target moved.** A heads-up file is written; send the human its path. Brief the lane worker:
   merge the target into its branch in its own worktree, keep both sides' planned work, re-run its tiers,
   `orch enqueue` again.

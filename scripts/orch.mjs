@@ -36,6 +36,8 @@
  *   pause | stop | resume              ALL runs: pause = no launches, no merges; stop = pause + stopCommand per live lane
  *   set tests [local|remote]           where the heavy tiers run (no value prints it)
  *   ratelimit [show|hit|clean] [--planned N] | snapshots [run]
+ *   release-stale [--apply]            claims held by a paused run, a MERGED/FAILED lane or a missing run (they block new
+ *                                     claims on the same files); --apply releases them once the new lane owns that work
  * Merge
  *   enqueue <run> <lane>
  *   merge <run> --slot-ok [--gates "<cmd>"] [--repo P] [--integration-wt D] [--direct]
@@ -46,6 +48,9 @@
  *   credit                             the meter: period, spend across all worktrees, today against the daily cap
  *   credit-review <run> <task> --by W [--reject "<why>" | --reverted]
  *   set workers [off|credit]           the workers switch (no value prints it)
+ *   credit-audit <run> --key K --worktree W [--tester] [--seats a,b] [--budget 3] [--dry]
+ *                                     the P4 auditor seats (and with --tester the P3 tester) of gate-queue key K as credit
+ *                                     jobs, built from the queue's base..tip and changed files; models from models.strong/mid
  *
  * Off → "orchestrator: not configured", exit 0.
  * Exit codes: 0 ok · 1 error · 2 usage · 3 refused (claim overlap, lock busy, paused, lease) · 4 merge conflict or
@@ -63,6 +68,7 @@ const profile = require('./lib/profile.cjs');
 const store = require('./lib/orch-store.cjs');
 const planLib = require('./lib/orch-plan.cjs');
 const digestLib = require('./lib/orch-digest.cjs');
+const creditAudit = require('./lib/orch-credit-audit.cjs');
 const claims = require('./lib/orch-claims.cjs');
 const state = require('./lib/orch-state.cjs');
 const merge = require('./lib/orch-merge.cjs');
@@ -73,7 +79,7 @@ const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
-const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume']);
+const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry']);
 const argv = process.argv.slice(2);
 const cmd = argv.shift();
 const flags = {};
@@ -95,7 +101,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = 'usage: node scripts/orch.mjs <digest|split|init|approve|preflight|claim|release|claims|gate-launch|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review> … (header of scripts/orch.mjs)';
+const USAGE = 'usage: node scripts/orch.mjs <digest|split|init|approve|preflight|claim|release|claims|gate-launch|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)';
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -206,6 +212,58 @@ try {
     lease.check(root(), pos[0], flags.holder);
   }
   switch (cmd) {
+    case 'release-stale': {
+      // A claim held by a PAUSED run, by a lane already MERGED or FAILED, or by a run that no longer exists blocks new
+      // claims on the same files. List them; release only with --apply. A live run's claim is never stale.
+      const stale = [];
+      for (const c of claims.list(root())) {
+        let why = null;
+        try {
+          const s = state.load(root(), c.runId);
+          const l = s.lanes[c.lane];
+          if (s.paused) why = 'run paused';
+          else if (!l) why = 'lane not in its run';
+          else if (['MERGED', 'FAILED'].includes(l.status)) why = `lane ${l.status}`;
+        } catch {
+          why = 'run not found';
+        }
+        if (why) stale.push({ ...c, why });
+      }
+      for (const c of stale) console.log(`STALE ${c.runId}/${c.lane} ${c.pattern}${c.hot ? ' (hot)' : ''} — ${c.why}`);
+      if (!flags.apply) {
+        console.log(`${stale.length} stale claim(s) · dry run (add --apply to release, once the new lane owns the same work)`);
+        break;
+      }
+      let n = 0;
+      for (const k of [...new Set(stale.map((c) => `${c.runId}\t${c.lane}`))]) {
+        const [runId, lane] = k.split('\t');
+        n += claims.release(root(), { runId, lane });
+      }
+      console.log(`released ${n} stale claim(s)`);
+      break;
+    }
+    case 'credit-audit': {
+      // The P4 auditor seats (and with --tester the P3 tester) of one gate-queue key, prepared as credit jobs.
+      if (!creditOn()) creditOff();
+      const [run] = pos;
+      if (!run || !flags.key || flags.key === true || !flags.worktree || flags.worktree === true) {
+        die(2, 'usage: credit-audit <run> --key <gate-queue key> --worktree <lane worktree> [--tester] [--seats a,b] [--budget USD] [--dry]');
+      }
+      const jobs = creditAudit.plan(path.resolve(flags.worktree), flags.key, { tester: !!flags.tester, settings, ...(flags.seats ? { seats: String(flags.seats).split(',').map((s) => s.trim()).filter(Boolean) } : {}) });
+      for (const j of jobs) {
+        if (flags.dry) {
+          console.log(`DRY ${run}/${j.task} · ${j.kind} · ${j.model} · scope ${j.scope.join(', ')}`);
+          continue;
+        }
+        const r = credit.prepare(
+          { run, task: j.task, key: flags.key, kind: j.kind, scope: j.scope, worktree: flags.worktree, model: j.model, budgetUsd: Number(flags.budget || 3) },
+          { root: credit.creditRoot(process.env, path.resolve(flags.worktree)), brief: j.brief, ctx: creditCtx() },
+        );
+        console.log(`PREPARED ${run}/${j.task} · ${j.kind} · ${j.model} in ${r.dir}`);
+      }
+      if (!flags.dry) console.log(`start the queue from ${path.resolve(flags.worktree)}, in a shell that supplies the API key: node scripts/orch.mjs credit-run --all-queued`);
+      break;
+    }
     case 'digest': {
       if (!pos[0]) die(2, 'usage: digest <artifact.md|.html> [--out plan.md] [--run R] [--title T]  ·  digest --check <plan.md>');
       if (flags.check) {
