@@ -5,8 +5,22 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-10-22
+
 ### Added
 
+- **`upgrade` — taking a newer release over an older install.** `node builder/cli.js upgrade --tool <t> [--dry-run]`
+  walks unpack's own source→destination mapping, so the two sets cannot drift. A kit-owned file (personas, skills and
+  references, playbooks, hooks, scripts and scripts/lib, oracle adapters, experimental tooling, utility skills) whose
+  content differs from the pack is overwritten after a copy to `.builder/backup-<UTC stamp>/<same path>`; a missing
+  one is added. Project-owned files — `PIPELINE_PROFILE.md`, the boards and their rules, the registry, the decision
+  log, the brief templates, `.gitignore` — are never touched once they exist. The pointer block now closes with
+  `<!-- /builder-kit:pipeline -->` and is re-wired only between its markers; a block from an older release is
+  recognised by its fixed shape and anything else is reported `kept (by hand)`. One line per file (updated / added /
+  unchanged / kept-project-owned) and a summary; `--dry-run` writes nothing. Re-running `unpack` stays copy-if-absent.
+  UNPACK.md § Upgrading an existing install; the `setup-builder` skill's upgrade mode runs it.
+- **`node builder/cli.js --version`.** `package.json` `version` is the kit's one version source; a pack test holds it
+  equal to the newest released heading here.
 - **Orchestrator hardening from a second orchestrated batch.**
   - **Credit queue.** `--queue <worktree>` on credit-prep, credit-audit, credit-run and credit-review (a worktree of
     this repo only — its spend must be visible to the cap guard); the printed launcher names the queue a job is
