@@ -5,6 +5,8 @@
  *
  *   add <key> --base <sha> [--tip <sha>] [--branch <b>] [--board <path>] [--dir <module dir>] [--batch <id>]
  *       → queues a lite-built module; files = `git diff --name-only base..tip`. Exit 3 at the cap.
+ *   retip <key> --tip <sha>   → re-records the tip and base..tip files after a FIX moved the code; the new tip
+ *       must descend from the base and from the recorded tip (lanes merge, never rebase). GATED keys are refused.
  *   mark <key|batch> <phase> --evidence "<command → result line>" [--sha <sha>]   (sha defaults to HEAD)
  *   status   → OWED and still-valid DONE lines at HEAD (stale DONEs re-opened). Exit 0 nothing owed · 10 owed.
  *   close <key>  → BUILT-UNGATED → GATED; exit 2 while anything is owed.
@@ -21,7 +23,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { delimiter, isAbsolute, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const q = require('./lib/gate-queue.cjs');
@@ -43,9 +45,36 @@ const flag = (name) => {
 };
 const positional = rest.filter((a, i) => !a.startsWith('--') && !(i > 0 && rest[i - 1].startsWith('--')));
 
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
-const resolve = (ref) => git('rev-parse', ref);
-const diff = (from, to) => git('diff', '--name-only', `${from}..${to}`).split(/\r?\n/).filter(Boolean);
+// git from an ABSOLUTE PATH entry: on Windows a bare spawn tries the cwd first, and retip/add run inside lane
+// checkouts a worker could have written a `git` into (the rule `whichAbs` in scripts/lib/orch-credit.cjs states).
+function whichAbs(name) {
+  const exts = process.platform === 'win32' ? ['.exe', '.com'] : [''];
+  for (const d of String(process.env.PATH || process.env.Path || '').split(delimiter).filter((p) => p && isAbsolute(p))) {
+    for (const x of exts) {
+      const f = join(d, name + x);
+      if (existsSync(f)) return f;
+    }
+  }
+  return null;
+}
+const GIT = whichAbs('git');
+const gitExe = () => GIT || fail('refused: no git executable on an absolute PATH entry');
+const git = (...args) => execFileSync(gitExe(), args, { encoding: 'utf8' }).trim();
+// A ref from argv or from the ledger that starts with '-' would be read by git as an option.
+const safeRef = (ref) => {
+  if (!ref || /^-/.test(String(ref))) throw new Error(`refused: bad ref ${JSON.stringify(ref)}`);
+  return String(ref);
+};
+const resolve = (ref) => git('rev-parse', '--verify', '--end-of-options', `${safeRef(ref)}^{commit}`);
+const diff = (from, to) => git('diff', '--name-only', `${safeRef(from)}..${safeRef(to)}`).split(/\r?\n/).filter(Boolean);
+const descends = (ancestor, tip) => {
+  try {
+    execFileSync(gitExe(), ['merge-base', '--is-ancestor', safeRef(ancestor), tip], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const load = () => (existsSync(FILE) ? q.parse(readFileSync(FILE, 'utf8')) : q.empty(cfg.cap));
 const save = (s) => writeFileSync(FILE, q.serialize(s, { trigger: cfg.trigger }));
@@ -75,6 +104,18 @@ try {
       });
       save(s);
       console.log(`gate-queue: ${key} queued BUILT-UNGATED (${base.slice(0, 8)}..${tip.slice(0, 8)}, ${s.modules.at(-1).files.length} files)`);
+      break;
+    }
+    case 'retip': {
+      // A FIX moved the code after `add`; re-record the range the credit auditors and the gate batch read.
+      const [key] = positional;
+      const tip = flag('tip') ? resolve(flag('tip')) : fail('retip needs --tip <sha>');
+      const s0 = load();
+      const m = s0.modules.find((x) => x.key === key);
+      const s = q.retip(s0, key, { tip, files: m ? diff(m.base, tip) : [], ancestry: m ? { fromBase: descends(m.base, tip), fromTip: descends(m.tip, tip) } : undefined });
+      save(s);
+      const n = s.modules.find((x) => x.key === key);
+      console.log(`gate-queue: ${key} retipped ${String(m.tip).slice(0, 8)} → ${tip.slice(0, 8)} (${n.files.length} files)`);
       break;
     }
     case 'mark': {
@@ -135,7 +176,7 @@ try {
       break;
     }
     default:
-      fail('usage: gate-queue <add|mark|status|close|board|reset> … (see the header of scripts/gate-queue.mjs)');
+      fail('usage: gate-queue <add|retip|mark|status|close|board|reset> … (see the header of scripts/gate-queue.mjs)');
   }
 } catch (e) {
   fail(e.message, /cap/.test(e.message) ? 3 : 1);

@@ -96,6 +96,25 @@ function mark(state, key, phase, { sha, evidence }) {
   return s;
 }
 
+/**
+ * A FIX after `add` moves the code, and whatever reads the RECORDED tip (the credit auditors, the gate batch) would
+ * audit the stale range until the JSON was edited by hand. `retip` re-records tip + base..tip files; the phase stamps
+ * stay (each carries its own sha, and `owed()` re-opens what the new commits touched). Lanes merge, never rebase: a
+ * new tip descends from the base and from the recorded tip (`ancestry`, computed by the CLI from git).
+ */
+function retip(state, key, { tip, files, ancestry }) {
+  const s = clone(state);
+  if (!tip) throw new Error('retip: --tip <sha> is required');
+  const m = s.modules.find((x) => x.key === key);
+  if (!m) throw new Error(`retip: ${key} is not queued`);
+  if (m.status === 'GATED') throw new Error(`retip: ${key} is GATED — its range is history`);
+  if (ancestry && !ancestry.fromBase) throw new Error(`retip: ${tip} does not descend from the base ${m.base} — not this key's history`);
+  if (ancestry && !ancestry.fromTip) throw new Error(`retip: ${tip} does not descend from the recorded tip ${m.tip} — a rebased or side branch is not this key's history`);
+  m.tip = tip;
+  m.files = [...(files ?? [])].sort();
+  return s;
+}
+
 const ORDER = [...LITE_PHASES, '3b', ...GATE_PHASES];
 const order = (p) => (ORDER.includes(p) ? ORDER.indexOf(p) : 99);
 
@@ -249,5 +268,5 @@ function parse(text) {
 
 module.exports = {
   LITE_PHASES, GATE_PHASES, BATCH_CHECKS, BATCH, DEFAULT_CAP, DEFAULT_TRIGGER, PHASE_NAMES,
-  config, empty, add, mark, owed, done, close, reset, board, serialize, parse,
+  config, empty, add, retip, mark, owed, done, close, reset, board, serialize, parse,
 };
