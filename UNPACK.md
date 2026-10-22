@@ -58,7 +58,8 @@ opencode, generic — comma-separated, or `all`.
 It places personas/skills for each chosen tool, wires a marker-guarded pointer block into that
 tool's instruction file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/` / …), installs
 the ledgers, the scripts and a blank `PIPELINE_PROFILE.md`, and the optional utility skills
-(`--no-extras` to skip). It never overwrites existing files; `--dry-run` previews every
+(`--no-extras` to skip). It never overwrites existing files (to take a newer release over an older
+install, see [Upgrading an existing install](#upgrading-an-existing-install)); `--dry-run` previews every
 destination; `verify` checks the result. Add **`--experimental`** only to install the experimental
 items (the live page keeper and shell, among others). Each has its measurement in
 [`EXPERIMENTS.md`](EXPERIMENTS.md), and installing one does not switch it on: its §16 state stays
@@ -69,6 +70,51 @@ project's own docs — the kit never imports its source project's rules.
 
 The rest of this file is the manual/agent-driven equivalent, and the wiring detail the CLI can't
 do for you (model tiers, hooks, judgement calls).
+
+## Upgrading an existing install
+
+Re-running `unpack` over an install from an older release is **not** an upgrade: copy-if-absent
+adds the files that are new and keeps every file the new release *changed*, so new scripts end up
+driven by old personas and old skills. Use `upgrade` instead. Extract the new release archive over
+`builder/` (run `node builder/tests/run.mjs` on it), then from the target repo root:
+
+```
+node builder/cli.js --version
+node builder/cli.js upgrade --tool <your-agent> --dry-run
+node builder/cli.js upgrade --tool <your-agent>
+```
+
+Pass the same `--tool`, `--models`, `--no-extras` and `--experimental` you gave the original
+`unpack` — `upgrade` walks unpack's own source→destination mapping, so it refreshes exactly the
+files those flags install, and a different `--models` rewrites every persona's `model:` line.
+
+| Owner | Files | What `upgrade` does |
+|---|---|---|
+| **Kit** | personas (`.claude/agents/` or `.builder/personas/`), skills + references, playbooks, hooks, `scripts/` + `scripts/lib/`, oracle adapters, experimental tooling, utility skills | overwrites a file whose content differs from the pack (line endings ignored), adds a missing one |
+| **Project** | `PIPELINE_PROFILE.md`, the boards dir (incl. its `README.md` rules and session-board template), the registry, the decision log, the `specs/*.template.md` briefs, `.gitignore` | never touched once it exists; added only if missing — at its §16 `paths` location |
+| **Shared** | the instruction file (`CLAUDE.md` / `AGENTS.md` / …) | only the text between `<!-- builder-kit:pipeline -->` and `<!-- /builder-kit:pipeline -->` is replaced, and only when it changed; everything around it stays byte-for-byte |
+
+Blocks written before 0.14.0 have no end marker; `upgrade` recognises their fixed shape (heading,
+one paragraph, one bullet list) and adds the end marker. A marked block it cannot recognise is left
+as it is and reported `kept (by hand)`.
+
+Every file it overwrites is first copied to `.builder/backup-<UTC stamp>/<same path>`. Each file
+gets one line — `updated`, `added`, `unchanged` or `kept-project-owned` — then a summary.
+`--dry-run` prints the same lines (`would be updated` / `would be added`) and writes nothing, not
+even the backup directory.
+
+Then:
+
+1. Read `builder/CHANGELOG.md` from your old version up. Project-owned files are never rewritten,
+   so a change to the board rules or the brief templates reaches you only if you diff them against
+   `builder/templates/` yourself.
+2. `node builder/cli.js verify`
+3. `node builder/cli.js features` — a setting the new release added is off / `not configured` until
+   §16 sets it.
+4. Look over the diff, commit, and delete `.builder/backup-*` once satisfied (it is not ignored).
+
+A kit-owned file you edited locally is overwritten too — its edit survives only in the backup.
+Carry a local change in the profile, not in a persona (see *Customization guardrails* below).
 
 ## Step 0 — inventory the target repo (agent: do this first, read-only)
 

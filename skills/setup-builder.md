@@ -22,8 +22,11 @@ points — batch everything else.
 - Record how many lines `git status --porcelain` prints (setup doesn't require clean; the number
   goes in the final report so the human can separate kit files from their own edits).
 - **Upgrade mode:** if `PIPELINE_PROFILE.md` already exists and is filled, this is a re-verify/
-  upgrade run. Run the CLI (copy-if-absent adds only new kit files; changed kit files are never
-  overwritten, so list them from the kit's `CHANGELOG.md` for the human to diff), then:
+  upgrade run. Run `node builder/cli.js upgrade --tool <targets> --dry-run`, show the human its
+  `updated` / `added` lines, and on a yes run it without `--dry-run` (kit-owned files are refreshed
+  after a backup to `.builder/backup-<stamp>/`; the profile, ledgers and the text around the pointer
+  block are never touched — `builder/UNPACK.md` § Upgrading an existing install). Name the
+  `CHANGELOG.md` entries since the old version, then:
   - if the profile has **no §16 `pipeline-settings` block**, run Phase 3 for §16 only;
   - otherwise skip Phase 3 and jump to Phase 5.
 
