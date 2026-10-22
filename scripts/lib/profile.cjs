@@ -41,7 +41,7 @@ const ACTIVE = new Set(['on', 'unmeasured', 'experimental-on']);
  */
 const FEATURES = {
   graph: { defaults: { state: 'off', check: null, sync: null, syncFree: null, autoLimitKb: 300 }, requires: ['check'] },
-  claims: { defaults: { state: 'on', retracted: null, registryIdPattern: '[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?' }, requires: [] },
+  claims: { defaults: { state: 'on', retracted: null, registryIdPattern: '[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?', jestBatch: null }, requires: [] },
   planSchema: {
     defaults: { state: 'on', sections: ['Track', 'Context', 'Tasks', 'BLOCKERS'], tables: {}, taskColumns: ['Task', 'Cites', 'Test-seed'], oracle: null },
     requires: ['sections'],
@@ -228,6 +228,10 @@ function validate(settings) {
   if (oracle !== null && oracle !== undefined) {
     const bad = !isObject(oracle) || ['table', 'column', 'source', 'keyColumn'].some((k) => typeof oracle[k] !== 'string' || !oracle[k]);
     if (bad) errors.push('features.planSchema.oracle: null, or { "table", "column", "source", "keyColumn" } — all non-empty strings');
+  }
+  const jestBatch = settings.features?.claims?.jestBatch;
+  if (jestBatch !== null && jestBatch !== undefined && (!isObject(jestBatch) || typeof jestBatch.cacheDir !== 'string' || !jestBatch.cacheDir)) {
+    errors.push('features.claims.jestBatch: null, or { "cacheDir": "<folder for the per-config result logs>" }');
   }
   const tracker = settings.features?.handoffPack?.tracker;
   if (tracker !== null && tracker !== undefined) {
