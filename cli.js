@@ -9,6 +9,8 @@
  *   node builder/cli.js unpack --tool claude-code,codex
  *   node builder/cli.js unpack --tool all [--dry-run] [--no-extras] [--experimental]
  *   node builder/cli.js unpack --tool claude-code --models strong=opus,mid=haiku
+ *   node builder/cli.js upgrade --tool claude-code [--dry-run]   (an install from an older kit release)
+ *   node builder/cli.js --version
  *   node builder/cli.js targets
  *   node builder/cli.js verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
  *   node builder/cli.js features         (which optional checks are on, off, unmeasured or experimental)
@@ -23,6 +25,13 @@
  * Safe by design: copy-if-absent (never overwrites), pointer blocks are appended once
  * (marker-guarded), --dry-run previews everything, hooks are copied but never armed. The kit itself is
  * inert until you run this.
+ *
+ * `upgrade` walks the SAME source→destination mapping as `unpack` (one code path, so the two sets cannot
+ * drift). Kit-owned files — personas, skills, references, hooks, scripts, scripts/lib, oracles, tooling —
+ * are overwritten when their content differs from the pack, after a copy goes to
+ * .builder/backup-<UTC stamp>/<same path>. Project-owned files — PIPELINE_PROFILE.md, the boards, the
+ * registry, the decision log, the brief templates — are never touched once they exist. The pointer block is
+ * re-wired only between its markers, so the user's own text around it is left byte-for-byte.
  */
 'use strict';
 
@@ -32,6 +41,11 @@ const path = require('path');
 const KIT = __dirname; // builder/
 const CWD = process.cwd();
 const MARKER = '<!-- builder-kit:pipeline -->';
+// Closes the pointer block so `upgrade` can replace exactly what the kit wrote. Blocks written before 0.14.0
+// have no end marker; pointerSpan() recognises their fixed shape instead.
+const MARKER_END = '<!-- /builder-kit:pipeline -->';
+/** The kit's version has ONE home, package.json; `--version`, the CHANGELOG test and the release tag agree with it. */
+const VERSION = require('./package.json').version;
 // The two lite skills install with the rest and stay inert until features.liteSplit is enabled (the gate
 // queue refuses otherwise), so installing them changes nothing for a project that never opts in.
 // The batch orchestrator skill installs the same way and stays inert until features.orchestrator is on (scripts/orch.mjs
@@ -64,35 +78,129 @@ let NO_EXTRAS = false;
 let EXPERIMENTAL = false;
 const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
 
-function copyIfAbsent(src, dst) {
-  const abs = path.join(CWD, dst);
-  if (fs.existsSync(abs)) return log('skip (exists):', dst);
-  if (!DRY) {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.copyFileSync(src, abs);
-  }
-  log(DRY ? 'would install:' : 'installed:', dst);
+/**
+ * 'unpack' (copy-if-absent) or 'upgrade'. Both modes walk the same installTool()/installCommon() calls; only
+ * place() and the pointer helpers branch on it, so the set of files an upgrade refreshes is, by construction,
+ * the set unpack installs.
+ */
+let MODE = 'unpack';
+const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0 } };
+
+function upgradeLog(status, dst, note = '') {
+  UPGRADE.counts[status]++;
+  const tag = DRY && (status === 'updated' || status === 'added') ? `would be ${status}:` : `${status}:`;
+  console.log(`${tag.padEnd(24)}${dst}${note ? `  (${note})` : ''}`);
 }
 
-function writeIfAbsent(dst, content) {
-  const abs = path.join(CWD, dst);
-  if (fs.existsSync(abs)) return log('skip (exists):', dst);
-  if (!DRY) {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, content);
-  }
-  log(DRY ? 'would install:' : 'installed:', dst);
+/** Line endings are not content: a checkout with autocrlf must not read every kit file as "changed". */
+const sameText = (a, b) => a.toString('utf8').replace(/\r\n/g, '\n') === b.toString('utf8').replace(/\r\n/g, '\n');
+
+function writeFile(abs, content) {
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, content);
 }
 
-function appendPointerOnce(dst, block) {
+/** Copies the CURRENT file to .builder/backup-<stamp>/<dst> before an upgrade overwrites it. */
+function backup(dst) {
+  if (DRY) return;
+  const to = path.join(CWD, '.builder', `backup-${UPGRADE.stamp}`, dst);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.copyFileSync(path.join(CWD, dst), to);
+}
+
+/**
+ * The one place a file lands. `owner` is 'kit' (the pack's own code and prose: refreshed by upgrade) or
+ * 'project' (seeded once, then the project's: never touched again by either mode).
+ */
+function place(dst, produce, owner) {
+  const abs = path.join(CWD, dst);
+  const exists = fs.existsSync(abs);
+  if (MODE !== 'upgrade') {
+    if (exists) return log('skip (exists):', dst);
+    if (!DRY) writeFile(abs, produce());
+    return log(DRY ? 'would install:' : 'installed:', dst);
+  }
+  // Two tools can map one source to one destination (codex + opencode share .builder/): report it once.
+  if (UPGRADE.seen.has(dst)) return;
+  UPGRADE.seen.add(dst);
+  if (!exists) {
+    if (!DRY) writeFile(abs, produce());
+    return upgradeLog('added', dst);
+  }
+  if (owner === 'project') return upgradeLog('kept-project-owned', dst);
+  const next = Buffer.from(produce());
+  if (sameText(fs.readFileSync(abs), next)) return upgradeLog('unchanged', dst);
+  backup(dst);
+  if (!DRY) writeFile(abs, next);
+  upgradeLog('updated', dst);
+}
+
+function copyIfAbsent(src, dst, owner = 'kit') {
+  place(dst, () => fs.readFileSync(src), owner);
+}
+
+/**
+ * Where the kit's pointer block sits in an instruction file: `{ start, end }` character offsets, or null when
+ * there is no marker, or `{ unrecognised: true }` when there is one but the block is not a shape the kit wrote.
+ *
+ * A block from 0.14.0 on runs from MARKER to MARKER_END. An older block has no end marker, but every release
+ * wrote the same shape: MARKER, the `## Builder pipeline` heading, one paragraph, then a bullet list whose
+ * continuation lines are indented — so the block ends at the last line of that list. Anything else is left
+ * alone and reported, because guessing where a user's text starts is how their text gets deleted.
+ */
+function pointerSpan(text) {
+  const start = text.indexOf(MARKER);
+  if (start === -1) return null;
+  const close = text.indexOf(MARKER_END, start);
+  if (close !== -1) return { start, end: close + MARKER_END.length };
+  const lines = text.slice(start).split('\n');
+  if (!/^## Builder pipeline\b/.test((lines[1] || '').replace(/\r$/, ''))) return { unrecognised: true };
+  let i = 2;
+  while (i < lines.length && !/^- /.test(lines[i])) {
+    if (/^#/.test(lines[i])) return { unrecognised: true };
+    i++;
+  }
+  if (i === lines.length) return { unrecognised: true };
+  while (i + 1 < lines.length && /^(- |  +\S)/.test(lines[i + 1])) i++;
+  const len = lines.slice(0, i + 1).join('\n').replace(/\r$/, '').length;
+  return { start, end: start + len };
+}
+
+/**
+ * The pointer block in an instruction file the user also writes in. Unpack appends it once. Upgrade replaces
+ * only what lies between the markers, and only when that differs — the text around it is the user's.
+ */
+function wirePointer(dst, block, wholeFile) {
   const abs = path.join(CWD, dst);
   const existing = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null;
-  if (existing !== null && existing.includes(MARKER)) return log('skip (wired):', dst);
-  if (!DRY) {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, (existing ? existing.replace(/\s*$/, '\n\n') : '') + block + '\n');
+  if (MODE !== 'upgrade') {
+    if (wholeFile) return place(dst, () => block + '\n', 'kit');
+    if (existing !== null && existing.includes(MARKER)) return log('skip (wired):', dst);
+    if (!DRY) writeFile(abs, (existing ? existing.replace(/\s*$/, '\n\n') : '') + block + '\n');
+    return log(DRY ? 'would wire:' : 'wired:', dst);
   }
-  log(DRY ? 'would wire:' : 'wired:', dst);
+  if (UPGRADE.seen.has(dst)) return;
+  UPGRADE.seen.add(dst);
+  if (existing === null) {
+    if (!DRY) writeFile(abs, block + '\n');
+    return upgradeLog('added', dst, 'pointer block');
+  }
+  if (!existing.includes(MARKER)) {
+    if (wholeFile) return upgradeLog('kept (by hand)', dst, 'file exists without the kit marker — add the block yourself');
+    backup(dst);
+    if (!DRY) writeFile(abs, existing.replace(/\s*$/, '\n\n') + block + '\n');
+    return upgradeLog('added', dst, 'pointer block appended');
+  }
+  // A whole-file pointer (a rules file the kit owns outright) carries frontmatter before the marker; only the
+  // marked part is compared and replaced either way.
+  const fresh = block.slice(block.indexOf(MARKER));
+  const span = pointerSpan(existing);
+  if (span.unrecognised) return upgradeLog('kept (by hand)', dst, 'pointer block not in a shape the kit wrote — replace it by hand from `unpack --dry-run`');
+  const current = existing.slice(span.start, span.end);
+  if (sameText(Buffer.from(current), Buffer.from(fresh))) return upgradeLog('unchanged', dst, 'pointer block');
+  backup(dst);
+  if (!DRY) writeFile(abs, existing.slice(0, span.start) + fresh + existing.slice(span.end));
+  upgradeLog('updated', dst, 'pointer block only');
 }
 
 /** Files under a kit directory, recursively, as paths relative to that directory. Missing dir → none. */
@@ -169,13 +277,7 @@ function toClaudeAgent(content) {
 }
 
 function copyTransformed(src, dst, fn) {
-  const abs = path.join(CWD, dst);
-  if (fs.existsSync(abs)) return log('skip (exists):', dst);
-  if (!DRY) {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, fn(fs.readFileSync(src, 'utf8')));
-  }
-  log(DRY ? 'would install:' : 'installed:', dst);
+  place(dst, () => fn(fs.readFileSync(src, 'utf8')), 'kit');
 }
 
 function copyDirIfAbsent(srcDir, dstDir, skipTop = []) {
@@ -235,7 +337,8 @@ Module/feature builds go through the multi-agent builder pipeline.
 - **Utility skills** (if installed — see \`builder/skills-extra/README.md\`): \`status-and-next\`
   to open a session (verify state fresh, pick the next item, emit its brief), \`graphify\` for
   cheap scoped doc/architecture lookups (query the graph before re-reading big docs), \`caveman\`
-  for compressed replies, \`ledger-audit\` for periodic unearned-status sweeps of the ledgers.`;
+  for compressed replies, \`ledger-audit\` for periodic unearned-status sweeps of the ledgers.
+${MARKER_END}`;
   if (TOOLS[tool].mdc) {
     return `---
 description: Builder pipeline — how module builds run in this repo
@@ -289,8 +392,7 @@ function installTool(tool) {
       else copyIfAbsent(src, path.join('.builder', 'personas', file));
     }
   }
-  if (t.mdc) writeIfAbsent(t.pointer, pointerBlock(tool));
-  else appendPointerOnce(t.pointer, pointerBlock(tool));
+  wirePointer(t.pointer, pointerBlock(tool), Boolean(t.mdc));
 }
 
 function installCommon() {
@@ -309,14 +411,20 @@ function installCommon() {
    * The brief template is not a ledger — it stays beside the specs, and §16 has no path for it.
    */
   const { boards, registry, decisions } = ledgerPaths();
-  copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join(boards, 'README.md'));
-  copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), registry);
-  copyIfAbsent(path.join(KIT, 'templates', 'module-brief.md'), path.join('specs', 'module-brief.template.md'));
-  copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-plan.md'), path.join('specs', 'orchestrator-plan.template.md'));
-  copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-worker-brief.md'), path.join('specs', 'orchestrator-worker-brief.template.md'));
-  copyIfAbsent(path.join(KIT, 'templates', 'decision-log.md'), decisions);
-  copyIfAbsent(path.join(KIT, 'templates', 'session-board.md'), path.join(boards, '_session-board.template.md'));
-  copyIfAbsent(path.join(KIT, 'PIPELINE_PROFILE.template.md'), 'PIPELINE_PROFILE.md');
+  /**
+   * Project-owned from the moment they land: the ledgers fill with the project's rows, the profile with its
+   * answers, and the board rules and brief templates are the documented place to tune. `upgrade` adds one that
+   * is missing and never rewrites one that exists — compare against builder/templates/ by hand if wanted.
+   */
+  const own = 'project';
+  copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join(boards, 'README.md'), own);
+  copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), registry, own);
+  copyIfAbsent(path.join(KIT, 'templates', 'module-brief.md'), path.join('specs', 'module-brief.template.md'), own);
+  copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-plan.md'), path.join('specs', 'orchestrator-plan.template.md'), own);
+  copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-worker-brief.md'), path.join('specs', 'orchestrator-worker-brief.template.md'), own);
+  copyIfAbsent(path.join(KIT, 'templates', 'decision-log.md'), decisions, own);
+  copyIfAbsent(path.join(KIT, 'templates', 'session-board.md'), path.join(boards, '_session-board.template.md'), own);
+  copyIfAbsent(path.join(KIT, 'PIPELINE_PROFILE.template.md'), 'PIPELINE_PROFILE.md', own);
 
   /**
    * The scripts, not just the rules they enforce.
@@ -348,10 +456,13 @@ function installCommon() {
 
   const gi = path.join(CWD, '.gitignore');
   const has = fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8'));
-  if (has) log('skip (exists):', '.gitignore (.pipeline/)');
-  else {
+  if (has) {
+    if (MODE === 'upgrade') upgradeLog('kept-project-owned', '.gitignore', '.pipeline/ already listed');
+    else log('skip (exists):', '.gitignore (.pipeline/)');
+  } else {
     if (!DRY) fs.appendFileSync(gi, `${fs.existsSync(gi) ? '\n' : ''}.pipeline/\n`);
-    log(DRY ? 'would append:' : 'appended:', '.gitignore (.pipeline/)');
+    if (MODE === 'upgrade') upgradeLog('added', '.gitignore', '.pipeline/ line appended');
+    else log(DRY ? 'would append:' : 'appended:', '.gitignore (.pipeline/)');
   }
 }
 
@@ -429,6 +540,31 @@ function cmdUnpack(tools) {
   3. See which optional checks are on: node builder/cli.js features
   4. Write a brief from specs/module-brief.template.md and start:
      "Build the <X> module through the pipeline."`);
+}
+
+/**
+ * Brings an install from an older kit release level with this one. Unpack alone cannot: copy-if-absent adds
+ * new files but keeps every CHANGED old persona, skill and script, so new tooling ends up driven by old prose.
+ */
+function cmdUpgrade(tools) {
+  if (!fs.existsSync(path.join(KIT, 'agents'))) die('kit incomplete: builder/agents/ not found next to cli.js');
+  if (path.relative(CWD, KIT) === '') die('run from the TARGET repo root, not from inside builder/');
+  const installed = ['PIPELINE_PROFILE.md', path.join('.claude', 'agents'), path.join('.builder', 'personas')].some((p) => fs.existsSync(path.join(CWD, p)));
+  if (!installed) die('nothing to upgrade here (no PIPELINE_PROFILE.md, .claude/agents/ or .builder/personas/) — run unpack first');
+  MODE = 'upgrade';
+  UPGRADE.stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  console.log(`builder kit ${VERSION} — upgrade${DRY ? ' (dry run: nothing is written)' : ''}`);
+  for (const tool of tools) installTool(tool);
+  installCommon();
+  const c = UPGRADE.counts;
+  const backups = path.join('.builder', `backup-${UPGRADE.stamp}`);
+  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}.`);
+  if (c.updated > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
+  console.log(`Next steps:
+  1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
+     (PIPELINE_PROFILE.md, the board rules, the brief templates) against builder/ by hand where it matters.
+  2. node builder/cli.js verify
+  3. node builder/cli.js features   — settings this release added default to off / not configured until §16 sets them.`);
 }
 
 function cmdTargets() {
@@ -748,14 +884,17 @@ function main() {
   NO_EXTRAS = argv.includes('--no-extras');
   EXPERIMENTAL = argv.includes('--experimental');
 
+  if (cmd === '--version' || cmd === '-v' || cmd === 'version') return console.log(VERSION);
   if (cmd === 'targets') return cmdTargets();
   if (cmd === 'verify') return cmdVerify();
   if (cmd === 'features') return cmdFeatures();
   if (cmd === 'check-ledgers') return cmdCheckLedgers();
   if (cmd === 'check-targets') return cmdCheckTargets();
-  if (cmd !== 'unpack') {
-    console.log('usage: node builder/cli.js <unpack|targets|verify|features|check-ledgers|check-targets> [--tool <list|all>] [--dry-run] [--no-extras] [--experimental]');
+  if (cmd !== 'unpack' && cmd !== 'upgrade') {
+    console.log(`builder kit ${VERSION}`);
+    console.log('usage: node builder/cli.js <unpack|upgrade|targets|verify|features|check-ledgers|check-targets|--version> [--tool <list|all>] [--dry-run] [--no-extras] [--experimental]');
     console.log('       node builder/cli.js unpack --tool claude-code,codex');
+    console.log('       node builder/cli.js upgrade --tool claude-code --dry-run   (pass the same --tool/--models/--no-extras/--experimental as the original unpack)');
     process.exit(cmd ? 1 : 0);
   }
 
@@ -770,12 +909,13 @@ function main() {
   }
 
   const i = argv.indexOf('--tool');
-  if (i === -1 || !argv[i + 1]) die("unpack requires --tool (see 'targets' for the list, or use 'all')");
+  if (i === -1 || !argv[i + 1]) die(`${cmd} requires --tool (see 'targets' for the list, or use 'all')`);
   let tools = argv[i + 1].split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
   if (tools.includes('all')) tools = Object.keys(TOOLS).filter((k) => k !== 'generic');
   const unknown = tools.filter((t) => !TOOLS[t]);
   if (unknown.length) die(`unknown tool(s): ${unknown.join(', ')} — run 'node builder/cli.js targets'`);
-  cmdUnpack([...new Set(tools)]);
+  if (cmd === 'upgrade') cmdUpgrade([...new Set(tools)]);
+  else cmdUnpack([...new Set(tools)]);
 }
 
 main();
