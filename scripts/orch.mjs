@@ -13,7 +13,9 @@
  *   split <plan.md> [--out lanes.json] [--max-lanes N --measured <file>]
  *                                     risk → level → track → dispatch per row, disjoint lanes; refused while a
  *                                     CONFIRM is open. More lanes than features.orchestrator.maxLanes needs a file
- *                                     of measured runs
+ *                                     of measured runs. With features.orchestrator.capacity, --measured alone reads
+ *                                     the cap from the file's last "<seat> <n>%" (under → laneCap, else
+ *                                     defaultLanes); --max-lanes still wins (a whole number; above laneCap warns)
  *   init <run> --lanes <lanes.json> [--mode parallel|single] [--repo P]
  *   approve <run> --by <who>          the human approved the split and the levels
  * Lanes
@@ -22,7 +24,15 @@
  *   gate-launch <run> <lane> [--resume]
  *                                     before a secondary-seat launch: refuses a lane `next` does not say to launch,
  *                                     or one placed on the primary seat; records the git config/hooks baseline;
- *                                     prints the lane's paths and the filled launchCommand
+ *                                     prints the lane's paths and the filled launchCommand. --resume also takes the
+ *                                     WAIT-P4 lane `next` offers SELF-AUDIT for, when a lane slot is free. Refused
+ *                                     while a linkDirs entry of the lane worktree is a link and the brief names a
+ *                                     reinstall step (link-guard)
+ *   link-guard <folder> [--brief <file>]
+ *                                     0 no linked dir · 4 a linkDirs entry is a link (never reinstall there) ·
+ *                                     3 a link + a brief naming any reinstall step (unlink it yourself first)
+ *   launch-id <launch.log>            the session id a background-launch log names — the COPY id when a resume with
+ *                                     flags started one (Claude Code); exit 1 while none is there yet
  *   set <run> <lane> key=value…       e.g. status=LAUNCHED seat=secondary sessionId=<id>
  *   notice <run> <lane> [--progress]  a worker's finish notice (finish without a result file = STALLED)
  *   watch <run> <lane> [--every 20] [--max-min N]
@@ -30,6 +40,8 @@
  *                                     its session stops working (0 DONE · 7 stalled). Run it in the background
  *   usage <run> <seat> <pct> | usage-read <run> [secondary|primary|all]
  *   status [run] [--split] [--json] | next <run>
+ *                                     next also prints ADD-LANES (capacity), SELF-AUDIT <lane> (a WAIT-P4 lane while
+ *                                     the credit lane is busy with other work) and CREDIT-FILL (spend behind pace)
  *   wait <run> [--timeout 110] [--from N]   block until the run logs an event (exit 0) or the timeout (exit 9)
  *   lease <run> --holder <name> [--ttl 300]  take/renew the run lease; another holder's live lease → exit 3
  *     --holder <name> on claim|set|approve|enqueue|merge|notice: refused (exit 3) while another holder's lease is live
@@ -44,9 +56,13 @@
  *                                     one lane at a time into features.orchestrator.target through the gates
  * Credit lane (only with features.orchestrator.credit.enabled)
  *   credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget 0.50] [--allow-missing]
- *   credit-run <run> <task> | credit-run --all-queued      run in a shell that supplies the API key
+ *               [--queue <worktree>]  the queue the job goes into (default: the job worktree's own)
+ *   credit-run <run> <task> [--rerun [--queue-only] [--cleared-by <who>]] | credit-run --all-queued   [--queue <worktree>]
+ *                                     run in a shell that supplies the API key; --queue = that worktree's queue (a
+ *                                     worktree of this repo). A finished job runs again only with --rerun, which
+ *                                     moves its verdict aside (the meter keeps it)
  *   credit                             the meter: period, spend across all worktrees, today against the daily cap
- *   credit-review <run> <task> --by W [--reject "<why>" | --reverted]
+ *   credit-review <run> <task> --by W [--reject "<why>" | --reverted] [--verdict <file>] [--queue <worktree>]
  *   set workers [off|credit]           the workers switch (no value prints it)
  *   credit-audit <run> --key K --worktree W [--tester] [--seats a,b] [--budget 3] [--dry]
  *                                     the P4 auditor seats (and with --tester the P3 tester) of gate-queue key K as credit
@@ -79,7 +95,7 @@ const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
-const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry']);
+const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry', 'rerun', 'queue-only']);
 const argv = process.argv.slice(2);
 const cmd = argv.shift();
 const flags = {};
@@ -101,7 +117,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = 'usage: node scripts/orch.mjs <digest|split|init|approve|preflight|claim|release|claims|gate-launch|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)';
+const USAGE = 'usage: node scripts/orch.mjs <digest|split|init|approve|preflight|claim|release|claims|gate-launch|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)';
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -141,6 +157,20 @@ const creditOff = () => {
   process.exit(0);
 };
 const gatesCmd = () => flags.gates || cfg.gates || (tierCmd && (settings.commands.tiers || []).includes('gates') ? tierCmd.split('{tier}').join('gates') : null);
+// `--queue <worktree>` names the queue a credit command reads or writes (a worktree of this repo)
+const queueFlag = () => (flags.queue && flags.queue !== true ? flags.queue : undefined);
+const creditQueueRoot = (fallback = () => credit.creditRoot()) => (queueFlag() ? credit.queueRootOf(queueFlag()) : fallback());
+
+/** The link guard over a folder: { lines, code } — 0 nothing linked · 4 a link (warn) · 3 a link + a brief naming a reinstall. */
+function linkGuardOf(folder, briefText = '') {
+  const found = pre.linkGuard(folder, cfg.linkDirs || []).filter((g) => g.linked);
+  if (!found.length) return { code: 0, lines: [] };
+  const names = found.map((g) => g.name);
+  if (briefText && pre.briefAsksReinstall(briefText, names)) {
+    return { code: 3, lines: found.map((g) => `REFUSED: the brief names a reinstall step in ${path.resolve(folder)}, whose ${g.name} is a link to ${g.target || '(dangling)'} — a reinstall there deletes THROUGH it; unlink it yourself before the launch (${pre.unlinkCommand(g.link)}), then launch again — no brief wording exempts`) };
+  }
+  return { code: 4, lines: found.map((g) => `WARN: ${g.link} is a link to ${g.target || '(dangling)'} — never reinstall there (unlink first: ${pre.unlinkCommand(g.link)})`) };
+}
 
 function creditLines() {
   if (!creditOn()) return null;
@@ -247,8 +277,9 @@ try {
       if (!creditOn()) creditOff();
       const [run] = pos;
       if (!run || !flags.key || flags.key === true || !flags.worktree || flags.worktree === true) {
-        die(2, 'usage: credit-audit <run> --key <gate-queue key> --worktree <lane worktree> [--tester] [--seats a,b] [--budget USD] [--dry]');
+        die(2, 'usage: credit-audit <run> --key <gate-queue key> --worktree <lane worktree> [--queue <worktree>] [--tester] [--seats a,b] [--budget USD] [--dry]');
       }
+      const qRoot = creditQueueRoot(() => credit.creditRoot(process.env, path.resolve(flags.worktree)));
       const jobs = creditAudit.plan(path.resolve(flags.worktree), flags.key, { tester: !!flags.tester, settings, ...(flags.seats ? { seats: String(flags.seats).split(',').map((s) => s.trim()).filter(Boolean) } : {}) });
       for (const j of jobs) {
         if (flags.dry) {
@@ -257,11 +288,11 @@ try {
         }
         const r = credit.prepare(
           { run, task: j.task, key: flags.key, kind: j.kind, scope: j.scope, worktree: flags.worktree, model: j.model, budgetUsd: Number(flags.budget || 3) },
-          { root: credit.creditRoot(process.env, path.resolve(flags.worktree)), brief: j.brief, ctx: creditCtx() },
+          { root: qRoot, brief: j.brief, ctx: creditCtx() },
         );
         console.log(`PREPARED ${run}/${j.task} · ${j.kind} · ${j.model} in ${r.dir}`);
       }
-      if (!flags.dry) console.log(`start the queue from ${path.resolve(flags.worktree)}, in a shell that supplies the API key: node scripts/orch.mjs credit-run --all-queued`);
+      if (!flags.dry) console.log(`start the queue: ${credit.launcherCommand({ queue: queueFlag() || path.resolve(flags.worktree) })}`);
       break;
     }
     case 'digest': {
@@ -309,12 +340,22 @@ try {
     case 'split': {
       if (!pos[0]) die(2, 'usage: split <plan.md> [--out lanes.json] [--max-lanes N --measured <file>]');
       let maxLanes = cfg.maxLanes;
+      const capacity = state.capacityOf(cfg.capacity);
       if (flags['max-lanes']) {
         if (!flags.measured || !fs.existsSync(flags.measured)) die(3, `refused: more lanes than ${cfg.maxLanes} needs --measured <file> holding measured runs (test host + account usage) that carried the load`);
         maxLanes = Number(flags['max-lanes']);
+        if (!Number.isInteger(maxLanes) || maxLanes < 1) die(2, `refused: --max-lanes must be a whole number ≥ 1, got ${JSON.stringify(flags['max-lanes'])}`);
+        if (capacity && maxLanes > capacity.laneCap) console.error(`WARN: ${maxLanes} lanes is above the capacity lane cap of ${capacity.laneCap} (features.orchestrator.capacity)`);
+      } else if (flags.measured && capacity) {
+        // the standing capacity policy, read from the measured file's last reading for the capacity seat
+        if (!fs.existsSync(flags.measured)) die(3, `refused: --measured ${flags.measured} does not exist`);
+        const m = state.measuredLanes(fs.readFileSync(flags.measured, 'utf8'), cfg.capacity, cfg.maxLanes);
+        maxLanes = m.maxLanes;
+        console.error(m.pct === null ? `lanes ≤${maxLanes}: no "${m.seat} <n>%" figure in ${flags.measured}` : `lanes ≤${maxLanes}: measured ${m.seat} ${m.pct}% ${m.pct < capacity.underPct ? '<' : '≥'} ${capacity.underPct}% (${flags.measured})`);
       }
       const hot = [...cfg.hot, settings.paths.registry, `${settings.paths.boards}/_gate-queue.md`];
       const res = planLib.split(fs.readFileSync(pos[0], 'utf8'), { ...cfg, hot, maxLanes });
+      res.plan = { ...res.plan, file: path.resolve(pos[0]) }; // init keeps it; ADD-LANES names it
       const bad = planLib.laneOverlaps(res.lanes);
       if (bad.length) die(3, `internal: lanes overlap: ${bad.join('; ')}`);
       if (flags.out) {
@@ -336,6 +377,7 @@ try {
       const s = state.init(root(), run, res, {
         repo, target: cfg.target, worktreeBase: path.dirname(repo), worktreePrefix: cfg.worktreePrefix || `${path.basename(repo)}-wt-`, branchPrefix: cfg.branchPrefix,
         preflightMode: flags.mode === 'parallel' ? 'parallel' : 'single', seats: cfg.seats, limits: cfg.limits, stallMinutes: cfg.stallMinutes, usageStaleMinutes: cfg.usageStaleMinutes,
+        capacity: cfg.capacity, credit: creditOn(),
       });
       console.log(`run ${run}: ${Object.keys(s.lanes).length} lanes, state ${path.join(store.runDir(root(), run), 'state.json')}`);
       break;
@@ -392,9 +434,32 @@ try {
       const acts = state.nextActions(root(), s);
       const resume = !!flags.resume;
       const ok = resume
-        ? ['PAUSED', 'STALLED', 'LAUNCHED'].includes(l.status) && !acts[0].startsWith('PAUSED') && s.approved
+        ? (['PAUSED', 'STALLED', 'LAUNCHED'].includes(l.status) || state.isWaitP4(l)) && !acts[0].startsWith('PAUSED') && s.approved
         : l.status === 'CLAIMED' && acts.some((a) => a.startsWith(`LAUNCH ${lane}:`));
       if (!ok) die(3, `REFUSED launch ${run}/${lane} (status ${l.status}): ${acts.join(' | ')}`);
+      if (resume && l.status === 'DONE') {
+        // only the lane `next` actually offers SELF-AUDIT for (else its seats would run twice), and the resumed lane
+        // takes a slot — counted the way `next` counts them: no resume under a 429 hold, the cap is the 429-halved one,
+        // and a lane waiting to launch already holds a slot
+        if (!acts.some((a) => a.startsWith(`SELF-AUDIT ${lane}:`))) die(3, `REFUSED launch ${run}/${lane} (status DONE, WAIT-P4): next offers no SELF-AUDIT for it — ${acts.join(' | ')}`);
+        const rl = ratelimit.laneCap(ratelimit.load(root()), Date.now());
+        if (rl && rl.holdUntil) die(3, `REFUSED launch ${run}/${lane}: 429 back-off until ${rl.holdUntil} — no new sessions`);
+        const capLanes = rl ? Math.min(s.maxLanes, rl.lanes) : s.maxLanes;
+        const live = Object.values(s.lanes).filter((x) => ['LAUNCHED', 'STALLED', 'PAUSED', 'PLANNED', 'CLAIMED'].includes(x.status)).length;
+        if (live >= capLanes) die(3, `REFUSED launch ${run}/${lane}: no free lane slot (${live} of ${capLanes} live)`);
+      }
+      // a linked dependency dir in the lane worktree + a brief naming a reinstall: the reinstall would delete THROUGH it
+      if (l.worktree && fs.existsSync(l.worktree)) {
+        let briefText = '';
+        try {
+          briefText = fs.readFileSync(l.brief, 'utf8');
+        } catch {
+          /* no brief yet */
+        }
+        const g = linkGuardOf(l.worktree, briefText);
+        for (const line of g.lines) console.error(line);
+        if (g.code === 3) process.exit(3);
+      }
       if (!resume && acts.some((a) => a.startsWith(`LAUNCH ${lane}:`) && / on primary \(/.test(a))) die(3, `REFUSED launch ${run}/${lane}: placed on the primary seat — start it on the primary account (a sub-agent for a solo lane, its own session for a pipeline lane), not with the secondary launcher`);
       if (!l.integrity) state.integrityBaseline(root(), run, lane); // a resume keeps the first baseline: a change from an earlier attempt is never laundered
       const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch };
@@ -435,19 +500,50 @@ try {
       out(state.setLane(root(), run, lane, patch));
       break;
     }
+    case 'link-guard': {
+      // reads only: exit 0 no linked dir (or none configured) · 4 a link (WARN) · 3 a link + a brief naming a reinstall
+      if (!pos[0]) die(2, 'usage: link-guard <folder> [--brief <file>]');
+      if (!(cfg.linkDirs || []).length) {
+        console.log('link-guard: no linkDirs configured (features.orchestrator.linkDirs) — nothing to check');
+        break;
+      }
+      const g = linkGuardOf(pos[0], flags.brief && flags.brief !== true ? fs.readFileSync(flags.brief, 'utf8') : '');
+      if (!g.code) console.log(`OK: no linked ${cfg.linkDirs.join(', ')} in ${path.resolve(pos[0])}`);
+      for (const line of g.lines) console.log(line);
+      process.exit(g.code);
+    }
+    case 'launch-id': {
+      // the id a background-launch log names — the copy's when a resume with flags started one (Claude Code adapter)
+      if (!pos[0]) die(2, 'usage: launch-id <launch.log>');
+      const cc = require('./lib/orch-worker-claude-code.cjs');
+      let id = null;
+      try {
+        id = cc.launchSessionId(cc.readLaunchLog(pos[0]));
+      } catch {
+        /* not written yet */
+      }
+      if (!id) process.exit(1);
+      console.log(id);
+      break;
+    }
     case 'notice': {
       const r = state.notice(root(), pos[0], pos[1], flags.progress ? 'progress' : 'finish');
       console.log(`${pos[1]} → ${r.status}${r.resultLine ? ` · ${r.resultLine}` : ''}`);
       break;
     }
-    case 'usage':
+    case 'usage': {
       if (pos.length < 3) die(2, 'usage: usage <run> <secondary|primary> <pct>');
-      state.recordUsage(root(), pos[0], pos[1], pos[2]);
-      console.log(`usage ${pos[1]}=${pos[2]}%`);
+      const seat = String(pos[1]).toLowerCase(); // a seat name in any case is that seat, never another one
+      state.recordUsage(root(), pos[0], seat, pos[2]);
+      console.log(`usage ${seat}=${pos[2]}%`);
       break;
+    }
     case 'usage-read': {
       const s = state.load(root(), pos[0]);
-      const seats = !pos[1] || pos[1] === 'all' ? s.seats : [pos[1]];
+      const want = String(pos[1] || 'all').toLowerCase();
+      const seats = want === 'all' ? s.seats : [want];
+      // an unknown seat is refused BEFORE anything is read — it must never be read as another seat and recorded
+      for (const seat of seats) if (!state.SEATS.includes(seat)) die(2, `refused: unknown seat ${JSON.stringify(pos[1])} (${state.SEATS.join('|')}|all)`);
       for (const seat of seats) {
         const u = pre.readUsage(seat, cfg.usageCommand);
         state.recordUsage(root(), pos[0], seat, u.pct);
@@ -547,6 +643,7 @@ try {
       const r = merge.mergeNext(root(), pos[0], {
         repo: flags.repo, slotOk: !!flags['slot-ok'], gatesCmd: gatesCmd(), integration: flags.direct ? false : cfg.integration !== false,
         integrationWorktree: flags['integration-wt'] ? path.resolve(flags['integration-wt']) : undefined, linkDirs: cfg.linkDirs, linkGuard: cfg.linkGuard,
+        mechanical: cfg.mechanical,
       });
       for (const d of r.deps || []) console.log(d);
       if (r.ok) {
@@ -616,33 +713,55 @@ try {
       if (!creditOn()) creditOff();
       const [run, task] = pos;
       if (!run || !task || !flags.key || !flags.kind || !flags.scope || !flags.worktree || !flags.brief || !flags.model) {
-        die(2, 'usage: credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget USD] [--allow-missing]');
+        die(2, 'usage: credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget USD] [--allow-missing] [--queue <worktree>]');
       }
+      const qRoot = creditQueueRoot(() => credit.creditRoot(process.env, path.resolve(flags.worktree)));
       const r = credit.prepare(
         { run, task, key: flags.key, kind: flags.kind, scope: String(flags.scope).split(',').map((s) => s.trim()).filter(Boolean), worktree: flags.worktree, model: flags.model, budgetUsd: Number(flags.budget || 0.5) },
-        { root: credit.creditRoot(process.env, path.resolve(flags.worktree)), brief: fs.readFileSync(flags.brief, 'utf8'), allowMissing: !!flags['allow-missing'], ctx: creditCtx() },
+        { root: qRoot, brief: fs.readFileSync(flags.brief, 'utf8'), allowMissing: !!flags['allow-missing'], ctx: creditCtx() },
       );
-      console.log(`PREPARED ${run}/${task} in ${r.dir}\n  run it from ${path.resolve(flags.worktree)}, in a shell that supplies the API key: ${r.command}  (or credit-run --all-queued)`);
+      // the launcher of the queue the job IS in
+      const q = queueFlag() || path.resolve(flags.worktree);
+      console.log(`PREPARED ${run}/${task} in ${r.dir}\n  start the queue: ${credit.launcherCommand({ queue: q })}\n  (or this job alone: ${r.command} --queue ${q})`);
       break;
     }
     case 'credit-run': {
       if (!creditOn()) creditOff();
-      const croot = credit.creditRoot();
-      const common = { root: croot, cwd: process.cwd(), env: process.env, rateRoot: root(), credit: cfg.credit, secondaryConfigDir: cfg.secondaryConfigDir };
+      const croot = creditQueueRoot();
+      const common = { root: croot, cwd: process.cwd(), env: process.env, rateRoot: root(), credit: cfg.credit, secondaryConfigDir: cfg.secondaryConfigDir, ctx: creditCtx() };
       if (flags['all-queued']) {
         const noneHere = credit.queuedTasks(croot).length === 0;
         const q = await credit.runQueue({ ...common, report: (line) => console.log(line) });
         console.log(q.summary);
         if (noneHere) {
           const other = credit.queuedElsewhere({ root: croot });
-          if (other.length) console.log(`QUEUE: 0 here; queued in ${other.map((o) => `${o.worktree} (${o.count})`).join(', ')}`);
+          if (other.length) console.log(`QUEUE: 0 here; queued in ${other.map((o) => `${o.worktree} (${o.count})`).join(', ')} — credit-run --all-queued --queue <worktree>`);
         }
         process.exit(q.exit);
       }
       const [run, task] = pos;
-      if (!run || !task) die(2, 'usage: credit-run <run> <task> | credit-run --all-queued');
+      if (!run || !task) die(2, 'usage: credit-run <run> <task> [--rerun [--queue-only] [--cleared-by <who>]] [--queue <worktree>] | credit-run --all-queued [--queue <worktree>]');
       const loc = credit.locateTask({ run, task, root: croot });
-      if (!loc.here) die(2, `no credit task ${run}/${task} in ${loc.checkout}; queued in: ${loc.elsewhere.length ? loc.elsewhere.join(', ') : 'no other worktree'}`);
+      if (!loc.here) die(2, `no credit task ${run}/${task} in ${queueFlag() ? `the queue of ${path.resolve(queueFlag())}` : loc.checkout}; queued in: ${loc.elsewhere.length ? loc.elsewhere.join(', ') : 'no other worktree'}`);
+      const vFile = path.join(credit.taskDir(croot, run, task), 'verdict.json');
+      if (flags.rerun) {
+        // the old verdict moves aside; the meter keeps counting it
+        const rq = credit.requeue({ root: croot, run, task, ...(flags['cleared-by'] && flags['cleared-by'] !== true ? { clearedBy: flags['cleared-by'] } : {}) });
+        console.log(`RERUN ${run}/${task}: verdict.json → ${rq.verdictTo}${rq.moved.length > 1 ? ` (+${rq.moved.length - 1} run file(s) moved beside it)` : ''}`);
+        if (flags['queue-only']) {
+          console.log(`  queued again — start the queue: ${credit.launcherCommand({ queue: queueFlag() })}`);
+          break;
+        }
+      } else if (fs.existsSync(vFile)) {
+        // running over a verdict would drop its cost from the meter
+        let st = '?';
+        try {
+          st = JSON.parse(fs.readFileSync(vFile, 'utf8')).status;
+        } catch {
+          /* unreadable */
+        }
+        die(3, `refused: ${run}/${task} already has a verdict (${st}) — credit-run ${run} ${task} --rerun to run it again`);
+      }
       const t = JSON.parse(fs.readFileSync(path.join(credit.taskDir(croot, run, task), 'task.json'), 'utf8'));
       const fb = { rateLimitRetries: 0, creditOut: false, secondaryOut: false };
       const r = await credit.runWithFallback({
@@ -663,8 +782,11 @@ try {
     case 'credit-review': {
       if (!creditOn()) creditOff();
       const [run, task] = pos;
-      if (!run || !task) die(2, 'usage: credit-review <run> <task> --by <who> [--reject "<why>" | --reverted]');
-      const v = credit.signReview({ root: credit.creditRoot(), run, task, by: flags.by === true ? undefined : flags.by, reject: flags.reject, reverted: !!flags.reverted });
+      if (!run || !task) die(2, 'usage: credit-review <run> <task> --by <who> [--reject "<why>" | --reverted] [--verdict <file>] [--queue <worktree>]');
+      const v = credit.signReview({
+        root: creditQueueRoot(), run, task, by: flags.by === true ? undefined : flags.by, reject: flags.reject, reverted: !!flags.reverted,
+        ...(flags.verdict && flags.verdict !== true ? { verdict: flags.verdict } : {}), // a moved verdict file that still holds the lane
+      });
       if (v.review === 'REVERTED') console.log(`REVERTED ${run}/${task} by ${v.revertedBy} — its changes are gone; the lane may merge`);
       else console.log(`${v.review} ${run}/${task} by ${v.reviewedBy}${v.rejectReason ? ` — ${v.rejectReason}; revert its changes (${(v.changed || []).join(', ')}), then --reverted, before the lane merges` : ''}`);
       break;

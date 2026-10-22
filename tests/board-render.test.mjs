@@ -221,3 +221,15 @@ test('CLI: --json with --out and --transcripts, a plain render, and a bad --limi
   const bad = spawnSync(process.execPath, [script, board, '--json', '--limit', 'lots', '--transcripts', transcripts], { encoding: 'utf8' });
   assert.equal(bad.status, 1);
 });
+
+test('CLI: rows under a non-counted "##" heading are named on the page, so a lower bound announces itself', (t) => {
+  const dir = workspace(t);
+  const board = join(dir, 'tasks', 'sample.md');
+  const page = join(dir, 'tasks', 'sample.html');
+  assert.equal(spawnSync(process.execPath, [script, board, '--transcripts', transcripts], { encoding: 'utf8' }).status, 0);
+  assert.doesNotMatch(readFileSync(page, 'utf8'), /non-counted/, 'positive control: the sample board has none');
+  writeFileSync(board, `${readFileSync(board, 'utf8')}\n## Parking lot\n\n| # | Task | Status |\n|---|---|---|\n| T99 | filed under prose | PLANNED |\n`);
+  const html = spawnSync(process.execPath, [script, board, '--transcripts', transcripts], { encoding: 'utf8' });
+  assert.equal(html.status, 0, html.stderr);
+  assert.match(readFileSync(page, 'utf8'), /1 board row\(s\) sit under a non-counted "##" heading<\/b> — counted nowhere, so the figures above are a lower bound: Parking lot: "T99"/);
+});

@@ -163,7 +163,36 @@ function resolveBin(envIn = process.env) {
   throw new Error('refused: no claude executable on an absolute PATH entry');
 }
 
+/**
+ * The session id a background-launch log names (`claude --bg …`, used by a secondary-seat launchCommand script).
+ * `--resume <id>` WITH flags starts a COPY and prints a note that the old session keeps its own saved options and the
+ * flags started a copy as <new> (the id may wrap to the next line), before or after `backgrounded · <new> · <name>`.
+ * Taking the first id recorded the OLD session, whose `done` stalled the lane at once. Order: the copy id, else the
+ * backgrounded id, else a full uuid. A log that shows the note but not yet its copy id is not ready (null) — the old
+ * id is never returned. Check the wording against your CLI version.
+ */
+function launchSessionId(text) {
+  const t = String(text || '');
+  const id = String.raw`([0-9a-f]{8}(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?)(?![0-9a-f])`;
+  const copy = new RegExp(String.raw`started a copy as\s+${id}`).exec(t);
+  if (copy) return copy[1];
+  const bg = new RegExp(String.raw`backgrounded\W+${id}`).exec(t);
+  if (bg) return bg[1];
+  if (/keeps its own saved options/.test(t)) return null;
+  const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.exec(t);
+  return uuid ? uuid[0] : null;
+}
+
+/** A launch log as text: PowerShell's `*>` writes UTF-16LE with a BOM; anything else is read as UTF-8. */
+function readLaunchLog(file) {
+  const b = fs.readFileSync(file);
+  if (b[0] === 0xff && b[1] === 0xfe) return b.subarray(2).toString('utf16le');
+  if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return b.subarray(3).toString('utf8');
+  return b.toString('utf8');
+}
+
 module.exports = {
   NAME, API_KEY_VAR, KEY_SOURCE, CONFIG_GLOBS, DEFAULT_GUARD_DIR,
   settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, denials, resolveBin,
+  launchSessionId, readLaunchLog,
 };

@@ -50,6 +50,14 @@ test('a row under an undeclared series is reported, never counted and never drop
   assert.equal(board.totals.total, 1);
 });
 
+test('a Status-table row under a non-counted "##" heading is returned as uncounted, named and never counted', () => {
+  const extra = '\n## Notes\n\n| # | Task | Status |\n|---|---|---|\n| T9 | A row filed under prose | PLANNED |\n| odd one | no id at all | DONE |\n';
+  const board = parseBoard(`${bare}${extra}`);
+  assert.deepEqual(board.uncounted, [{ heading: 'Notes', id: 'T9' }, { heading: 'Notes', id: 'odd one' }]);
+  assert.equal(board.totals.total, parseBoard(bare).totals.total, 'the totals are unchanged');
+  assert.deepEqual(parseBoard(sample).uncounted, [], 'positive control: the sample board files every row under a counted heading');
+});
+
 test('Todo, Definition of Done and Modules & endpoints are parsed verbatim', () => {
   const board = parseBoard(sample);
   assert.deepEqual(board.todo, [

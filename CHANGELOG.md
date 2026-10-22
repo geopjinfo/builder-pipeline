@@ -7,6 +7,60 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Orchestrator hardening from a second orchestrated batch.**
+  - **Credit queue.** `--queue <worktree>` on credit-prep, credit-audit, credit-run and credit-review (a worktree of
+    this repo only — its spend must be visible to the cap guard); the printed launcher names the queue a job is
+    really in. A queue lists every refusal with its reason and no longer counts a refused job as run. Read-only kinds
+    run before writing kinds, and a dirty-tree refusal names the credit job whose verdict left the files. One runner
+    per queue (`runner.lock`) and one job per target worktree (a lock in the orch store), both by exclusive create
+    with dead holders taken over under a guard lock.
+  - **Hard caps across runners.** A running credit job reserves its budget (`running.json`); the cap check and the
+    reservation are one step under a machine-wide lock, re-run before every 429 retry. A skipped retry moves the
+    rate-limited verdict aside, so the job really stays queued. A negative cost counts as unreported, never as
+    negative spend. `runTask` validates `task.json` again at run time, and every path checks the task id rule.
+  - **Re-runs keep the meter.** `credit-run <run> <task> --rerun [--queue-only] [--cleared-by <who>]` moves the
+    finished verdict aside (`verdict.prev-<stamp>.json`); the meter, the review hold and `credit-review --verdict`
+    read every verdict file. Running a finished job without `--rerun` is refused. After FAILED-INTEGRITY or
+    FAILED-SCOPE, a re-run needs `--cleared-by`.
+  - **Review hold fails closed.** `orch merge` reads every queue of the repo for jobs that target the lane, and
+    refuses a lane whose worktree folder is gone or a run that records no repo.
+  - **`features.orchestrator.mechanical`** (off by default): `orch merge` resolves the hot ledger files itself from
+    the three blobs, in the new `scripts/lib/orch-merge-resolve.cjs`. Version manifests take the lane's bump on top of
+    the target, a changelog is merged as a union of sections (the lane's re-versioned with a note), JSON is merged by
+    key, and append-only ledgers by line. This holds even when git merged two same-version bumps "cleanly". Any other
+    conflict still stops, and the heads-up names both sets. Every merge git call runs git from an absolute PATH
+    entry.
+  - **`features.orchestrator.capacity`** (off by default): a standing lane policy. `next` prints `ADD-LANES` while
+    the capacity seat is freshly measured under its percentage, and `split --measured <file>` sizes the split from
+    the file's last reading. `BUILDER_ORCH_LANE_CAP` overrides the cap. `--max-lanes` must be a whole number and
+    warns above the cap. The run keeps its plan file.
+  - **`SELF-AUDIT <lane>`.** A WAIT-P4 lane is told to run its own seats while the credit lane is busy with other
+    work and holds no seat job of the lane's own (`creditBusy`). `gate-launch --resume` accepts it only where `next`
+    offers it and a lane slot is free (429 hold and the halved cap included).
+  - **`CREDIT-FILL`** replaces `CREDIT-UNDERUSED`. It says how far behind pace the spend is and names light jobs to
+    queue, including the gate queue's keys whose P5 docs are owed.
+  - **`orch link-guard <folder> [--brief <file>]`**, also run by `gate-launch`. When a `linkDirs` entry of a lane
+    worktree is a link, a brief that names any reinstall step is refused. That covers every npm install alias, yarn
+    and pnpm, a recursive delete of the dir, and `git clean -x`. A reinstall there would delete through the link into
+    the shared install, and no brief wording exempts it. The scan is linear on long lines.
+  - **`orch launch-id <log>`** (Claude Code adapter): the session id a background launch logs, taking the copy id when
+    a resume with flags started one. `usage` and `usage-read` take a seat name in any case and refuse an unknown seat
+    before reading anything.
+  - **`gate-queue retip <key> --tip <sha>`** re-records a key's range after a FIX. The new tip must descend from the
+    base and from the recorded tip, and a GATED key is refused. Refs that start with `-` are refused, and git runs from
+    an absolute PATH entry.
+- **`features.claims.jestBatch`** (off by default): claims-check runs each jest config once per sha and rebuilds
+  each claim's summary from the files its own patterns select. It reuses a passing result logged at the same sha on
+  a clean tree. Failures are never logged; a malformed or other-sha log is refused; a busy lock falls back to the
+  claim's own command.
+- **Findings and review checks.** A findings location may carry any extension or be a dotfile, and a `..` segment is
+  refused. A blocker under `PASS-WITH-RULINGS` is refused like one under `PASS`.
+- **The live board names its uncounted rows.** `board-parse` returns the Status-table rows that sit under a
+  non-counted `##` heading (the rule `board-progress` already reported on stderr), and the rendered page names them,
+  so a board whose figures are a lower bound says so.
+- **Merge vocabulary.** A merged row is In review in every record; Reviewed is the human's sign-off only (task-board
+  template, orchestrator skill).
+
 - **Batch orchestrator gaps, found in a first real orchestrated batch.**
   - **`orch credit-audit <run> --key K --worktree W [--tester] [--dry]`** (behind `credit.enabled`). It turns the
     P4 auditor seats of one gate-queue key, and with `--tester` the P3 tester, into credit jobs. Each job is built

@@ -104,6 +104,119 @@ function readUsage(seat, usageCommand, { cwd = process.cwd() } = {}) {
   return { pct: Math.max(...pcts), lines: lines.map((l) => l.trim()) };
 }
 
+// --------------------------------------------------------------------------------------------- link guard
+/**
+ * LINK GUARD (features.orchestrator.linkDirs). A lane worktree whose dependency directory is a link (a junction or
+ * symlink to the primary checkout's install) shares that install with every lane. A reinstall there — `npm ci`,
+ * a recursive delete of the directory — deletes THROUGH the link and empties the install every lane shares. Reads
+ * only (lstat / realpath); never removes, follows into or recreates anything. Returns one entry per linked dir.
+ */
+function linkGuard(folder, linkDirs = []) {
+  const out = [];
+  for (const name of linkDirs) {
+    const link = path.join(path.resolve(folder), name);
+    let st;
+    try {
+      st = fs.lstatSync(link);
+    } catch (_) {
+      out.push({ name, link, linked: false, missing: true });
+      continue;
+    }
+    if (!st.isSymbolicLink()) {
+      out.push({ name, link, linked: false, missing: false });
+      continue;
+    }
+    let target = null;
+    try {
+      target = fs.realpathSync(link);
+    } catch (_) {
+      /* dangling */
+    }
+    out.push({ name, link, linked: true, missing: false, target });
+  }
+  return out;
+}
+
+/** The command that removes the LINK itself (never what it points at). */
+const unlinkCommand = (link) => (process.platform === 'win32' ? `cmd /c rmdir "${link}"` : `rm "${link}"`);
+
+// Every npm install alias, the ci-test ones, and the npm commands that rewrite the install THROUGH a link (update, prune,
+// uninstall, dedupe, rebuild) — fail closed.
+const NPM_VERBS = new Set(['ci', 'ic', 'clean-install', 'install-clean', 'isntall-clean', 'install', 'instal', 'insta', 'inst', 'ins', 'in', 'isnt', 'isnta', 'isntal', 'isntall', 'i', 'it', 'install-test',
+  'cit', 'sit', 'clean-install-test', 'install-ci-test', 'add', 'update', 'up', 'upgrade', 'udpate', 'prune', 'uninstall', 'un', 'remove', 'rm', 'r', 'unlink', 'dedupe', 'ddp', 'rebuild', 'rb']);
+// A step counts as negated only with the negation RIGHT before it (at most run/use/do/ever between); "Don't forget:
+// npm ci" still counts the step — fail closed.
+const NEGATED_BEFORE = /\b(never|not|don't|no)\b(?:\s+(?:run|use|do|ever))?[\s`'"*]*$/i;
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Offsets of every reinstall / recursive-delete step in `text`, negated ones dropped: an npm install verb (any alias
+ * or flag order, `npm.cmd`, `npx npm`), `yarn` / `yarn install|add` / `pnpm i|install|add`, a line naming a linked
+ * dir with any delete word and any recursive switch, `rimraf`, and `git clean -x` (it removes ignored trees). Every
+ * scan is linear per line (capped windows) — a long one-line brief cannot make it backtrack.
+ */
+function reinstallAt(t, linkDirs = ['node_modules']) {
+  const out = [];
+  const negated = (i) => {
+    const st = Math.max(0, i - 49);
+    let w = t.slice(st, i);
+    const nl = w.lastIndexOf('\n');
+    if (nl >= 0) w = w.slice(nl + 1);
+    else if (st > 0) w = w.replace(/^[a-z0-9_]*/i, ''); // a window cut mid-word never reads its tail as a negation
+    return NEGATED_BEFORE.test(w);
+  };
+  for (const m of t.matchAll(/(?<![a-z0-9])npm(?:\.cmd)?(?![a-z0-9])/gi)) {
+    const from = m.index + m[0].length;
+    const rest = t.slice(from, from + 400);
+    const cut = !rest.includes('\n') && from + 400 < t.length;
+    const toks = rest.split(/\n/)[0].split(/[\s&|;>]+/).map((x) => x.replace(/^[^\w-]+/, '')).filter(Boolean);
+    if (cut) toks.pop(); // the last token may be cut mid-word
+    let decided = false;
+    for (let k = 0; k < toks.length; k++) {
+      const verb = (/^[a-z][a-z-]*/i.exec(toks[k]) || [''])[0].toLowerCase();
+      if (/^-/.test(toks[k])) {
+        const nx = toks[k + 1] && (/^[a-z][a-z-]*/i.exec(toks[k + 1]) || [''])[0].toLowerCase();
+        if (!toks[k].includes('=') && toks[k + 1] && !/^-/.test(toks[k + 1]) && !NPM_VERBS.has(nx)) k++;
+        continue;
+      }
+      if (NPM_VERBS.has(verb) && !negated(m.index)) out.push(m.index);
+      decided = true;
+      break;
+    }
+    if (!decided && cut && !negated(m.index)) out.push(m.index); // the cap cut the line before a verb: fail closed
+  }
+  for (const m of t.matchAll(/\byarn\b(?:\s+(?:install|add)\b|\s*(?=$|[`'";&|\n]))|\bpnpm\s+(?:i|install|add)\b/gim)) if (!negated(m.index)) out.push(m.index);
+  const dirs = new RegExp(linkDirs.map(escapeRe).join('|') || '(?!)', 'i');
+  let lineStart = 0;
+  for (const line of t.split('\n')) {
+    const at = (re) => {
+      for (const m of line.matchAll(new RegExp(re.source, 'gi'))) if (!negated(lineStart + m.index)) return lineStart + m.index;
+      return -1;
+    };
+    const hits = [];
+    if (dirs.test(line)) {
+      if (/(?:^|[\s'"`(])--?[a-z]*r[a-z]*(?![a-z0-9])|\/s(?![a-z0-9])/i.test(line)) hits.push(at(/(?<![a-z0-9])(?:rm|ri|rmdir|rd|del|erase|Remove-Item)(?![a-z0-9])/));
+      hits.push(at(/(?<![a-z0-9])rimraf(?![a-z0-9])/));
+    }
+    const g = at(/(?<![a-z0-9])git(?![a-z0-9])/);
+    if (g >= 0) {
+      const after = line.slice(g - lineStart);
+      const clean = after.search(/(?<![a-z0-9])clean(?![a-z0-9])/i);
+      if (clean > 0 && /(?:^|[\s'"`])-[a-z]*x/i.test(after.slice(clean))) hits.push(g);
+    }
+    for (const h of hits) if (h >= 0 && !negated(h)) out.push(h);
+    lineStart += line.length + 1;
+  }
+  return out.sort((x, y) => x - y);
+}
+
+/**
+ * A brief "asks for a reinstall" when it names any reinstall step. No brief wording exempts it: rounds of clause
+ * splitting, word windows and negation lists each left an escape in one adopting project. The orchestrator unlinks the
+ * linked dir ITSELF before the launch (the guard then reads no link).
+ */
+const briefAsksReinstall = (text, linkDirs) => reinstallAt(String(text).replace(/[‘’ʼ]/g, "'"), linkDirs).length > 0;
+
 const SESSION_STATES = ['working', 'done', 'idle', 'blocked', 'failed', 'stopped', 'missing'];
 
 /** Run stateCommand for a session: the first word of its output, or 'unknown'. */
@@ -114,4 +227,7 @@ function sessionState(session, stateCommand, { cwd = process.cwd() } = {}) {
   return SESSION_STATES.includes(word) ? { state: word } : { state: 'unknown', detail: (r.out || r.err).slice(0, 160) };
 }
 
-module.exports = { TEST_MODES, testsFile, testsMode, testsIsDefault, setTests, testsCommand, testsLine, preflight, readUsage, sessionState, fill, run, SESSION_STATES };
+module.exports = {
+  TEST_MODES, testsFile, testsMode, testsIsDefault, setTests, testsCommand, testsLine, preflight, readUsage, sessionState, fill, run, SESSION_STATES,
+  linkGuard, unlinkCommand, reinstallAt, briefAsksReinstall,
+};

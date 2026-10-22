@@ -461,3 +461,175 @@ describe('review before merge', () => {
     assert.equal(verdict.review, 'NOT-NEEDED');
   });
 });
+
+describe('re-runs keep the meter, and the review hold reads every verdict file', () => {
+  test('red: a finished job is never run again without --rerun; --rerun moves the verdict aside, the meter counts both', () => {
+    const r = rig();
+    const first = prepAndRun(r, 'complete.jsonl');
+    assert.equal(first.run.status, 0, first.run.out);
+    const again = cli(r, 'complete.jsonl', ['credit-run', 'c1', 't1']);
+    assert.equal(again.status, 3, again.out);
+    assert.match(again.out, /already has a verdict \(COMPLETE\) — credit-run c1 t1 --rerun/);
+    const rerun = cli(r, 'complete.jsonl', ['credit-run', 'c1', 't1', '--rerun']);
+    assert.equal(rerun.status, 0, rerun.out);
+    assert.match(rerun.stdout, /RERUN c1\/t1: verdict\.json → verdict\.prev-\d{8}T\d{6}Z\.json/);
+    const files = credit.verdictFiles(first.dir).map((f) => f.live);
+    assert.deepEqual(files.sort(), [false, true]);
+    const meter = cli(r, 'complete.jsonl', ['credit']);
+    assert.match(meter.stdout, /\(2 jobs\)/, meter.out);
+  });
+
+  test('red: --rerun is refused while the review is PENDING or REJECTED, and after FAILED-SCOPE until --cleared-by names who cleared it', () => {
+    const root = tmp('rq');
+    const dir = join(root, 'runs', 'c1', 't1');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'task.json'), '{}');
+    for (const review of ['PENDING', 'REJECTED']) {
+      writeFileSync(join(dir, 'verdict.json'), JSON.stringify({ status: 'COMPLETE', review }));
+      assert.throws(() => credit.requeue({ root, run: 'c1', task: 't1' }), new RegExp(`review is ${review}`));
+    }
+    writeFileSync(join(dir, 'verdict.json'), JSON.stringify({ status: 'FAILED-SCOPE', review: 'NOT-NEEDED' }));
+    assert.throws(() => credit.requeue({ root, run: 'c1', task: 't1' }), /ended FAILED-SCOPE .* --cleared-by/);
+    const ok = credit.requeue({ root, run: 'c1', task: 't1', clearedBy: 'lead', now: new Date('2026-10-15T06:15:00Z') });
+    assert.equal(ok.verdictTo, 'verdict.prev-20261015T061500Z.json');
+    assert.equal(JSON.parse(readFileSync(join(dir, ok.verdictTo), 'utf8')).clearedBy, 'lead');
+    assert.equal(existsSync(join(dir, 'verdict.json')), false);
+    assert.throws(() => credit.requeue({ root, run: 'c1', task: 't1' }), /already queued/);
+  });
+
+  test('red: a task id outside the id rule never reaches the file system; a bad verdict file name is refused', () => {
+    assert.throws(() => credit.taskDir(tmp('id'), 'c1', '../x'), /bad task id/);
+    assert.throws(() => credit.signReview({ root: tmp('sv'), run: 'c1', task: 't1', by: 'me', verdict: '../verdict.json' }), /bad verdict file/);
+  });
+
+  test('a moved verdict still PENDING is listed and signed with --verdict', () => {
+    const root = tmp('mv');
+    const dir = join(root, 'runs', 'c1', 't1');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'task.json'), '{}');
+    writeFileSync(join(dir, 'verdict.pass1.json'), JSON.stringify({ review: 'PENDING', changed: ['a.md'] }));
+    const p = credit.pendingReviews(root);
+    assert.deepEqual(p.map((x) => x.verdict), ['verdict.pass1.json']);
+    assert.match(credit.reviewLine(p), /c1\/t1 \(verdict\.pass1\.json\)/);
+    assert.equal(credit.signReview({ root, run: 'c1', task: 't1', by: 'me', verdict: 'verdict.pass1.json' }).review, 'PASSED');
+    assert.deepEqual(credit.pendingReviews(root), []);
+  });
+});
+
+describe('the queue: order, refusals, one runner, reservations', () => {
+  const job = (root, id, kind, at) => {
+    const d = join(root, 'runs', 'q1', id);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, 'task.json'), JSON.stringify({ task: id, kind, budgetUsd: 0.5 }));
+    utimesSync(join(d, 'task.json'), at, at);
+    return d;
+  };
+
+  test('read-only kinds run first, writing kinds last, creation order inside each group', () => {
+    const root = tmp('ord');
+    const t0 = Date.now() / 1000 - 100;
+    job(root, 'w1', 'docs', t0);
+    job(root, 'r1', 'code-reading', t0 + 1);
+    job(root, 'w2', 'module-tester', t0 + 2);
+    job(root, 'r2', 'standards-auditor', t0 + 3);
+    assert.deepEqual(credit.runOrder(credit.queuedTasks(root)).map((q) => q.task), ['r1', 'r2', 'w1', 'w2']);
+  });
+
+  test('red: a refused job is listed with its reason and not counted as run (exit 3); a second runner on the queue is refused', async () => {
+    const root = tmp('ref');
+    const t0 = Date.now() / 1000 - 100;
+    job(root, 'ok', 'code-reading', t0);
+    job(root, 'no', 'code-reading', t0 + 1);
+    const runOne = ({ task, account }) => (task === 'no' ? Promise.reject(new Error('refused: worktree x is dirty')) : Promise.resolve({ status: 'COMPLETE', exit: 0, account, failure: null, costUsd: 0.1, resultLine: 'RESULT: PASS' }));
+    const q = await credit.runQueue({ root, cwd: root, env: {}, now: () => new Date('2026-10-13T08:00:00Z'), runOne, rateRoot: tmp('rl'), credit: CREDIT() });
+    assert.equal(q.exit, 3);
+    assert.deepEqual(q.ran.map((x) => x.id), ['q1/ok']);
+    assert.match(q.summary, /QUEUE: 1 run, 1 COMPLETE, 0 skipped, 0 not started · 1 refused\n {2}REFUSED q1\/no: refused: worktree x is dirty/);
+    assert.equal(existsSync(join(root, 'runner.lock')), false, 'the runner lock is released');
+    writeFileSync(join(root, 'runner.lock'), JSON.stringify({ pid: process.pid }));
+    await assert.rejects(credit.runQueue({ root, cwd: root, env: {}, runOne, rateRoot: tmp('rl'), credit: CREDIT() }), /a credit runner \(pid \d+\) is already running/);
+    writeFileSync(join(root, 'runner.lock'), JSON.stringify({ pid: 2147483646 }));
+    const taken = await credit.runQueue({ root, cwd: root, env: {}, now: () => new Date('2026-10-13T08:00:00Z'), runOne, rateRoot: tmp('rl'), credit: CREDIT() });
+    assert.equal(taken.exit, 3, 'a dead holder is taken over (positive control: the queue ran)');
+  });
+
+  test('red: a running job reserves its budget — a second runner sees the allowance minus it; a dead or plan-account reservation counts nothing', () => {
+    const root = tmp('res');
+    const d = job(root, 'run', 'code-reading', Date.now() / 1000);
+    const date = new Date('2026-10-13T08:00:00Z');
+    const before = credit.spendDown(root, date, CREDIT(), root).allowance;
+    writeFileSync(join(d, 'running.json'), JSON.stringify({ pid: process.pid, budgetUsd: 20, account: 'credit' }));
+    assert.equal(credit.spendDown(root, date, CREDIT(), root).allowance, before - 20);
+    writeFileSync(join(d, 'running.json'), JSON.stringify({ pid: 2147483646, budgetUsd: 20, account: 'credit' }));
+    assert.equal(credit.reservedUsd({ root, cwd: root }), 0);
+    writeFileSync(join(d, 'running.json'), JSON.stringify({ pid: process.pid, budgetUsd: 20, account: 'secondary' }));
+    assert.equal(credit.reservedUsd({ root, cwd: root }), 0);
+  });
+
+  test('red: a negative cost in a verdict is unreported, never negative spend', () => {
+    const root = tmp('neg');
+    mkdirSync(join(root, 'runs', 'c0', 'x1'), { recursive: true });
+    writeFileSync(join(root, 'runs', 'c0', 'x1', 'verdict.json'), JSON.stringify({ costUsd: -50, finishedAt: '2026-10-13T06:00:00.000Z' }));
+    const s = credit.spendDown(root, new Date('2026-10-13T08:00:00Z'), CREDIT(), root);
+    assert.deepEqual([s.todaySpent, s.unreported.length], [0, 1]);
+  });
+
+  test('red: one credit job per target worktree — a live holder refuses, a dead one is taken over', () => {
+    const env = { BUILDER_ORCH_DIR: tmp('tl') };
+    const wt = tmp('target');
+    const f = credit.takeTargetLock(env, wt, 'c1/t1');
+    assert.throws(() => credit.takeTargetLock(env, wt, 'c1/t2'), /another credit job \(c1\/t1, pid \d+\) is running/);
+    writeFileSync(f, JSON.stringify({ pid: 2147483646, job: 'old' }));
+    assert.equal(credit.takeTargetLock(env, wt, 'c1/t3'), f);
+    assert.match(readFileSync(f, 'utf8'), /c1\/t3/);
+  });
+});
+
+describe('who left the worktree dirty, the queue a job is in, and when the credit lane is busy', () => {
+  test('a dirty refusal names the credit job whose verdict (live or moved aside) changed those files', () => {
+    const root = tmp('dirt');
+    const wt = tmp('wt');
+    const d = join(root, 'runs', 'c1', 'tester');
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, 'task.json'), JSON.stringify({ worktree: wt }));
+    writeFileSync(join(d, 'verdict.prev-20261015T000000Z.json'), JSON.stringify({ review: 'PASSED', changed: ['test/a.spec.ts'] }));
+    assert.match(credit.dirtLeftBy(root, wt, ['?? test/a.spec.ts']), /left by credit job c1\/tester \[verdict\.prev-20261015T000000Z\.json\] \(review PASSED: test\/a\.spec\.ts\)/);
+    assert.equal(credit.dirtLeftBy(root, wt, ['?? other.ts']), '');
+  });
+
+  test('red: --queue must be a worktree of this repository', () => {
+    const { repo } = scratchRepo();
+    const other = scratchRepo().repo;
+    assert.equal(credit.queueRootOf(repo, repo), join(repo, '.pipeline', 'credit'));
+    assert.throws(() => credit.queueRootOf(other, repo), /not a worktree of this repository/);
+    assert.throws(() => credit.queueRootOf(join(repo, 'nope'), repo), /does not exist/);
+  });
+
+  test('creditBusy: busy on another worktree\'s queued work; never while the lane has a seat job of its own (queued, or since its result)', () => {
+    const { dir, repo } = scratchRepo();
+    git(repo, 'worktree', 'add', '-q', '-b', 'lane-a', join(dir, 'lane-a'), 'dev');
+    const laneA = join(dir, 'lane-a');
+    const put = (wt, id, kind, target) => {
+      const d = join(wt, '.pipeline', 'credit', 'runs', 'c1', id);
+      mkdirSync(d, { recursive: true });
+      writeFileSync(join(d, 'task.json'), JSON.stringify({ kind, worktree: target }));
+      return d;
+    };
+    assert.equal(credit.creditBusy({ cwd: repo, laneWorktree: laneA }), null);
+    put(repo, 'other', 'docs', join(dir, 'lane-b'));
+    assert.match(credit.creditBusy({ cwd: repo, laneWorktree: laneA }), /1 job\(s\) queued for another worktree/);
+    const own = put(laneA, 'own-docs', 'docs', laneA);
+    assert.match(credit.creditBusy({ cwd: repo, laneWorktree: laneA }), /queued for another worktree/, 'a docs job of its own runs no seat');
+    const seat = put(laneA, 'own-seat', 'security-auditor', laneA);
+    assert.equal(credit.creditBusy({ cwd: repo, laneWorktree: laneA }), null);
+    writeFileSync(join(seat, 'verdict.json'), '{}');
+    assert.match(credit.creditBusy({ cwd: repo, laneWorktree: laneA }), /queued for another worktree/);
+    assert.equal(credit.creditBusy({ cwd: repo, laneWorktree: laneA, since: new Date(Date.now() - 60000).toISOString() }), null, 'a seat job prepared since the result, even finished');
+    writeFileSync(join(own, 'verdict.json'), '{}');
+  });
+
+  test('CREDIT-FILL names how far behind and what to queue, for a lapsing budget', () => {
+    const st = { cfg: { lapses: true }, left: 150, budget: 200, spent: 10, elapsed: 0.5, daysLeft: 15, label: { last: '2026-11-21' }, fillCandidates: ['P5 docs of k1 (docs)'] };
+    assert.equal(credit.pressureLine(st), 'CREDIT-FILL: queue light jobs (code-reading, record-fixes, docs, sweeps, vuln-auditor) — $90.00 behind pace ($150.00 left, 15 day(s) to renewal): P5 docs of k1 (docs)');
+  });
+});

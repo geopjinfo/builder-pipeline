@@ -225,7 +225,11 @@ your CLI version before relying on it.
   permission mode your project uses (never a bypass mode), and a first message pointing at `{brief}` and `{result}`.
   Keep it in a small script beside your other tooling and reference the script from the template. A folder the
   account has never opened shows a trust prompt nobody is there to answer: open each lane folder once by hand, or
-  reuse long-lived lane folders (list them in `features.worktreeSweep.reserved`).
+  reuse long-lived lane folders (list them in `features.worktreeSweep.reserved`). A background launch
+  (`claude --bg`) logs its session id; record it with `node scripts/orch.mjs launch-id <log>`, never the first id in
+  the log: `--resume <id>` with flags starts a COPY and names the old session first, and the old session's `done`
+  would stall the lane at once (exit 1 while the copy id is not in the log yet). It reads UTF-16 logs too
+  (PowerShell's `*>`).
 - **`stateCommand`** reports one word for a session. The secondary account keeps its own session registry, so the
   orchestrating session's own messaging cannot reach a secondary worker by name; read `claude agents --json --all`
   under the secondary config dir and print the session's state (`working`, `done`, `idle`, `blocked`, `failed`,

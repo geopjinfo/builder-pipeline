@@ -128,6 +128,8 @@ const FEATURES = {
       integration: true,
       linkDirs: [],
       linkGuard: [],
+      mechanical: null,
+      capacity: null,
       preflight: [],
       tests: { mode: 'local', local: null, remote: null },
       credit: {
@@ -367,6 +369,29 @@ function validateOrchestrator(settings, badRegex) {
     const v = o[k];
     if (v !== undefined && !(typeof v === 'number' && Number.isFinite(v) && v > 0 && (!int || Number.isInteger(v)))) errors.push(`${at(k)}: a ${int ? 'positive integer' : 'number > 0'}`);
   };
+  if (o.mechanical !== undefined && o.mechanical !== null) {
+    const kinds = ['semver', 'changelog', 'json', 'union'];
+    if (!isObject(o.mechanical)) errors.push(`${at('mechanical')}: null, or { "semver": [files], "changelog": [files], "json": [files], "union": [files] }`);
+    else {
+      const seen = new Set();
+      for (const [k, v] of Object.entries(o.mechanical)) {
+        if (!kinds.includes(k)) errors.push(`${at(`mechanical.${k}`)}: unknown — ${kinds.join(' | ')}`);
+        else if (!strList(v)) errors.push(`${at(`mechanical.${k}`)}: an array of repo-relative file paths`);
+        else for (const f of v) seen.has(f) ? errors.push(`${at('mechanical')}: ${f} is listed under two kinds`) : seen.add(f);
+      }
+    }
+  }
+  if (o.capacity !== undefined && o.capacity !== null) {
+    const c = o.capacity;
+    const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (!isObject(c)) errors.push(`${at('capacity')}: null, or { "laneCap": n, "seat": "secondary"|"primary", "underPct": pct, "defaultLanes": n }`);
+    else {
+      if (!int(c.laneCap, 1, 16)) errors.push(`${at('capacity.laneCap')}: a whole number of lanes, 1–16`);
+      if (c.seat !== undefined && !['secondary', 'primary'].includes(c.seat)) errors.push(`${at('capacity.seat')}: "secondary" or "primary"`);
+      if (c.underPct !== undefined && !(typeof c.underPct === 'number' && c.underPct > 0 && c.underPct <= 100)) errors.push(`${at('capacity.underPct')}: a percentage in (0, 100]`);
+      if (c.defaultLanes !== undefined && !int(c.defaultLanes, 1, 16)) errors.push(`${at('capacity.defaultLanes')}: a whole number of lanes, 1–16`);
+    }
+  }
   positive('maxLanes', true);
   positive('stallMinutes');
   positive('usageStaleMinutes');
