@@ -129,6 +129,25 @@ describe('gate queue — what is checked, what is owed', () => {
   });
 });
 
+describe('gate queue — retip after a FIX', () => {
+  test('re-records tip and files, keeps the phase stamps', () => {
+    const s = q.retip(alpha(), 'alpha', { tip: 'a2', files: ['src/alpha/alpha.controller.ts', 'src/alpha/alpha.service.ts'], ancestry: { fromBase: true, fromTip: true } });
+    const m = s.modules[0];
+    assert.equal(m.tip, 'a2');
+    assert.deepEqual(m.files, ['src/alpha/alpha.controller.ts', 'src/alpha/alpha.service.ts']);
+    assert.equal(m.phases['1'].sha, 'a1');
+  });
+  test('refuses no tip, an unknown key, a GATED key, and a tip off the key\'s history', () => {
+    assert.throws(() => q.retip(alpha(), 'alpha', { tip: '' }), /--tip <sha> is required/);
+    assert.throws(() => q.retip(alpha(), 'beta', { tip: 'a2' }), /beta is not queued/);
+    const gated = JSON.parse(JSON.stringify(alpha()));
+    gated.modules[0].status = 'GATED';
+    assert.throws(() => q.retip(gated, 'alpha', { tip: 'a2' }), /GATED/);
+    assert.throws(() => q.retip(alpha(), 'alpha', { tip: 'z9', ancestry: { fromBase: false, fromTip: true } }), /does not descend from the base/);
+    assert.throws(() => q.retip(alpha(), 'alpha', { tip: 'z9', ancestry: { fromBase: true, fromTip: false } }), /rebased or side branch/);
+  });
+});
+
 describe('gate queue — the feature is opt-in', () => {
   test('liteSplit ships experimental-off, and the loader knows its keys', () => {
     const f = profile.feature(profile.DEFAULTS, 'liteSplit');
