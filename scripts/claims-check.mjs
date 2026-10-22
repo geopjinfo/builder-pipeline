@@ -14,7 +14,7 @@
  *
  * Settings (PIPELINE_PROFILE.md): paths.boards · paths.runs · paths.handoffs · paths.decisions · paths.registry ·
  * paths.citationRoots (empty → every top-level directory present, except node_modules, .git and dot-directories) ·
- * features.claims.{state, retracted, registryIdPattern}. Claim commands run with BUILDER_NO_BASH_CAP=1 so an
+ * features.claims.{state, retracted, registryIdPattern, jestBatch}. Claim commands run with BUILDER_NO_BASH_CAP=1 so an
  * output cap cannot truncate the figure being checked, and their stdout AND stderr are matched on every exit.
  *
  * Tier lock: when `scripts/lib/tier-lock.cjs` is installed (from examples/jest-tier-runner), a claim command that
@@ -110,8 +110,11 @@ const fsProbe = {
     return cache.get(p);
   },
 };
-// stdout + stderr on every exit, and the machine-wide tier lock when one is installed (see the header).
-const runCommand = makeRunner();
+// stdout + stderr on every exit, and the machine-wide tier lock when one is installed (see the header). With
+// features.claims.jestBatch, plain jest claims run once per config, and a config's passing result logged at this
+// sha on a clean tree is reused, not re-run.
+const runCommand = makeRunner({ batch: feature.config.jestBatch ? { cacheDir: feature.config.jestBatch.cacheDir } : null });
+const batched = runCommand.prime(claims);
 
 const only = flag('--only')?.split(',');
 const problems = check(documents, fsProbe, {
@@ -127,6 +130,7 @@ const problems = check(documents, fsProbe, {
 
 console.log(`claims-check — ${documents.length} document(s), ${claims.length} count claim(s), citation roots: ${roots.join(', ') || 'none'}`);
 console.log(retracted === null ? 'retracted phrases: not configured' : `retracted phrases: ${retracted.length}`);
+if (batched?.claims) console.log(`jest batch: ${batched.claims} claim(s) from ${batched.runs} jest run(s) + ${batched.fromLog} from a same-sha log`);
 if (claims.length > 0) console.log(lockInstalled ? 'tier lock: machine-wide (scripts/lib/tier-lock.cjs)' : 'tier lock: not installed — claim commands run unlocked');
 for (const p of problems) console.log(`  ${p.kind.toUpperCase().padEnd(9)} ${p.where} — ${p.detail}`);
 console.log(problems.length === 0 ? 'claims-check: PASS' : `claims-check: FAIL — ${problems.length} problem(s)`);

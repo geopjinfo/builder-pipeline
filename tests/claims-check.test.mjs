@@ -306,3 +306,118 @@ describe('claims checker — extended checks (UNANCHORED, NAMED), off by default
     assert.deepEqual(check([{ name: 'tasks/x.md', text: bare }], probe, { roots: [], refRoots: [], registryText: '', retracted: null, claims: [], run: () => ({}), extended: true }), []);
   });
 });
+
+// ── jest batch (features.claims.jestBatch) ──────────────────────────────────────────────────────────────────
+describe('claims checker — jest batch', () => {
+  const { plainJest, makeGit } = require('../scripts/lib/claims-check.cjs');
+  const dirs = [];
+  after(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+  const tmp = () => {
+    const d = mkdtempSync(join(tmpdir(), 'claims-batch-'));
+    dirs.push(d);
+    return d;
+  };
+  const abs = (p) => join(process.cwd(), p).replace(/\\/g, '/');
+  /** A fake jest: answers a batch command by writing --json output for the given per-file results. */
+  const fakeJest = (byFile, log) => (command) => {
+    log.push(command);
+    const out = /--outputFile=(\S+)/.exec(command)?.[1];
+    if (!out) return { status: 0, stdout: 'single run', stderr: '' };
+    const testResults = Object.entries(byFile)
+      .filter(([f]) => command.split(' ').some((t) => !t.startsWith('-') && t !== 'npx' && t !== 'jest' && new RegExp(t, 'i').test(abs(f))))
+      .map(([f, r]) => ({ name: abs(f), status: r.failed ? 'failed' : 'passed', message: r.failed ? 'boom' : '', assertionResults: [...Array(r.passed ?? 0).fill({ status: 'passed' }), ...Array(r.failed ?? 0).fill({ status: 'failed' })] }));
+    writeFileSync(out, JSON.stringify({ testResults }));
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  const git = (sha = 'abc123', clean = true) => ({ head: () => sha, clean: () => clean });
+
+  test('plainJest accepts only the plain shape', () => {
+    assert.deepEqual(plainJest('npx jest -c jest.integration.config.cjs --runInBand test/a 2>&1'), { config: 'jest.integration.config.cjs', patterns: ['test/a'], runInBand: true });
+    assert.equal(plainJest('npx jest test/a').config, '(default)');
+    for (const bad of ['npx jest -t name test/a', 'npx jest test/a && echo x', 'npx jest "test/a"', 'npx jest --config= test/a', 'npx jest -c -i test/a', 'npx jest test/a#x', 'npx jest test\\a', 'npx jest %X%', 'npm test']) {
+      assert.equal(plainJest(bad), null, bad);
+    }
+  });
+
+  test('two claims on one config run jest once, each answered from its own files', () => {
+    const log = [];
+    const run = makeRunner({ lock: null, exec: fakeJest({ 'test/a.spec.ts': { passed: 3 }, 'test/b.spec.ts': { passed: 2 } }, log), batch: { cacheDir: tmp(), git: git() } });
+    const claims = [
+      { id: 'c1', command: 'npx jest test/a' },
+      { id: 'c2', command: 'npx jest test/b' },
+    ];
+    const stats = run.prime(claims);
+    assert.deepEqual(stats, { claims: 2, runs: 1, fromLog: 0 });
+    assert.equal(log.length, 1);
+    assert.match(run('npx jest test/a').output, /^Tests: +3 passed, 3 total$/m);
+    assert.match(run('npx jest test/b').output, /^Test Suites: 1 passed, 1 total$/m);
+    assert.equal(log.length, 1, 'answered from the batch, not re-run');
+  });
+
+  test('a passing result is reused at the same sha on a clean tree; another sha or a dirty tree re-runs', () => {
+    const cacheDir = tmp();
+    const byFile = { 'test/a.spec.ts': { passed: 3 } };
+    const claims = [{ id: 'c1', command: 'npx jest test/a' }];
+    const log1 = [];
+    makeRunner({ lock: null, exec: fakeJest(byFile, log1), batch: { cacheDir, git: git('s1') } }).prime(claims);
+    const log2 = [];
+    const again = makeRunner({ lock: null, exec: fakeJest(byFile, log2), batch: { cacheDir, git: git('s1') } });
+    assert.deepEqual(again.prime(claims), { claims: 1, runs: 0, fromLog: 1 });
+    assert.equal(log2.length, 0);
+    const log3 = [];
+    makeRunner({ lock: null, exec: fakeJest(byFile, log3), batch: { cacheDir, git: git('s2') } }).prime(claims);
+    assert.equal(log3.length, 1, 'another sha refuses the log');
+    const log4 = [];
+    makeRunner({ lock: null, exec: fakeJest(byFile, log4), batch: { cacheDir, git: git('s1', false) } }).prime(claims);
+    assert.equal(log4.length, 1, 'a dirty tree never reads the log');
+  });
+
+  test('a failing file is never logged, so it re-runs at the same sha', () => {
+    const cacheDir = tmp();
+    const byFile = { 'test/a.spec.ts': { passed: 1, failed: 1 } };
+    const claims = [{ id: 'c1', command: 'npx jest test/a' }];
+    const first = makeRunner({ lock: null, exec: fakeJest(byFile, []), batch: { cacheDir, git: git() } });
+    first.prime(claims);
+    assert.match(first('npx jest test/a').output, /^FAIL /m);
+    const log = [];
+    makeRunner({ lock: null, exec: fakeJest(byFile, log), batch: { cacheDir, git: git() } }).prime(claims);
+    assert.equal(log.length, 1);
+  });
+
+  test('a malformed log is refused, never thrown on', () => {
+    const cacheDir = tmp();
+    writeFileSync(join(cacheDir, '_default_.json'), JSON.stringify({ sha: 'abc123', config: '(default)', patterns: ['test/a'], results: { x: { status: 'passed' } } }));
+    const log = [];
+    makeRunner({ lock: null, exec: fakeJest({ 'test/a.spec.ts': { passed: 1 } }, log), batch: { cacheDir, git: git() } }).prime([{ id: 'c1', command: 'npx jest test/a' }]);
+    assert.equal(log.length, 1);
+  });
+
+  test('a claim selecting no file, and an unbatchable claim, run their own command', () => {
+    const log = [];
+    const run = makeRunner({ lock: null, exec: fakeJest({ 'test/a.spec.ts': { passed: 1 } }, log), batch: { cacheDir: tmp(), git: git() } });
+    run.prime([{ id: 'c1', command: 'npx jest test/zzz' }, { id: 'c2', command: 'npx jest -t x test/a' }]);
+    assert.equal(run('npx jest test/zzz').output, 'single run');
+    assert.equal(run('npx jest -t x test/a').output, 'single run');
+  });
+
+  test('without batch, prime is a no-op and every claim runs alone', () => {
+    const log = [];
+    const run = makeRunner({ lock: null, exec: fakeJest({}, log) });
+    assert.equal(run.prime([{ id: 'c1', command: 'npx jest test/a' }]), null);
+    assert.equal(log.length, 0);
+  });
+
+  test('makeGit reads a real repository', () => {
+    const d = tmp();
+    const g = (...a) => spawnSync('git', a, { cwd: d, encoding: 'utf8' });
+    g('init', '-q');
+    writeFileSync(join(d, 'f.txt'), 'x');
+    g('add', '.');
+    g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'x');
+    const real = makeGit(d);
+    assert.match(real.head(), /^[0-9a-f]{40}$/);
+    assert.equal(real.clean(), true);
+    appendFileSync(join(d, 'f.txt'), 'y');
+    assert.equal(real.clean(), false);
+  });
+});

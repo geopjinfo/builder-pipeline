@@ -168,3 +168,6 @@ Building, planning, reviewing and orchestrating stay on the plan accounts; the l
 - **Close-out.** When `next` says `RUN COMPLETE`, every lane merged: confirm each lane's board reached its own
   close-out, sweep the worktrees, record the batch result in the decision log, and hand the human one summary —
   lanes, rows, merge shas, decisions taken, open questions.
+- **Merged is "In review", never "Reviewed".** A merged row is In review in every merge record, hand-back and
+  tracker handoff row. Reviewed is the human's sign-off only: the orchestrator, its workers and the reviewer seat
+  never write it — a MERGE-READY verdict is agent review, not human review.

@@ -78,8 +78,15 @@ describe('findings', () => {
     assert.ok(checkFindings(findings, { ...ctx, exists: () => false }).some((e) => /the file does not exist/.test(e)));
   });
 
-  test('red: PASS over a blocker', () => {
+  test('a location may have any extension or be a dotfile; a ".." segment is refused', () => {
+    const at = (location) => checkFindings({ ...findings, findings: [{ ...findings.findings[0], location }] }, { ...ctx, exists: () => true });
+    for (const ok of ['scripts/launch.ps1:48', 'media/clip.mp4:1', '.gitignore:3', 'app/stock.test.mjs:10-12']) assert.deepEqual(at(ok), [], ok);
+    for (const bad of ['../outside.py:1', 'app/../x.py:1', 'the stock service:3']) assert.ok(at(bad).some((e) => /must be file:line/.test(e)), bad);
+  });
+
+  test('red: PASS or PASS-WITH-RULINGS over a blocker', () => {
     assert.ok(checkFindings({ ...findings, verdict: 'PASS' }, ctx).includes('verdict PASS with a blocker finding'));
+    assert.ok(checkFindings({ ...findings, verdict: 'PASS-WITH-RULINGS' }, ctx).includes('verdict PASS-WITH-RULINGS with a blocker finding'));
     assert.deepEqual(checkFindings({ ...findings, verdict: 'PASS-WITH-RULINGS', findings: [{ ...findings.findings[0], severity: 'warning' }] }, ctx), []);
   });
 

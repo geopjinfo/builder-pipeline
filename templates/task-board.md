@@ -156,6 +156,11 @@ record. A later event with the same id amends the earlier one on the page.
 
 - **Statuses:** `PLANNED` · `IN-PROGRESS` · `DONE` · `DEFERRED→<registry-id>` · `DROPPED`
   (reason in Notes).
+- **Merge vocabulary:** a merged row is **In review** — in this board's Notes, in a merge record, in
+  a hand-back and in any tracker handoff row. **Reviewed** is the human's sign-off only: no agent,
+  script, reviewer verdict or MERGE-READY writes it — a MERGE-READY verdict is agent review, not
+  human review. Where a tracker is owned outside this repo, a merge owes it a handoff row saying
+  "In review", never an edit from here.
 - **Row kinds:** `T-n` from the plan's `## Tasks` · `C-n` candidates copied from the deferred
   registry at pipeline entry · `IC-n` invariant candidates carried from the module digest · `FIX-n`
   appended from verified loop-back blocker lists. **Rows have exactly these four authors** — nobody

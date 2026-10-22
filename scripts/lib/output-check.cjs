@@ -83,7 +83,8 @@ function checkPlan(text, schema = {}) {
 
 const SEVERITIES = new Set(['blocker', 'warning', 'nit']);
 const VERDICTS = new Set(['PASS', 'CHANGES-REQUIRED', 'PASS-WITH-RULINGS']);
-const LOCATION = /^[\w./@+-]+\.[A-Za-z]{1,6}:\d+(?:-\d+)?$/;
+// any extension, digits too (.ps1, .mp4), and dotfiles (.gitignore); a path, never prose (no spaces)
+const LOCATION = /^(?:[\w.@+-]+\/)*[\w@+-]*\.[\w.-]+:\d+(?:-\d+)?$/;
 
 /**
  * @param {unknown} data  a parsed findings JSON file
@@ -105,10 +106,11 @@ function checkFindings(data, ctx = {}) {
     if (f?.id && ids.has(f.id)) errors.push(`${at}.id: duplicate`);
     ids.add(f?.id);
     if (f?.severity && !SEVERITIES.has(f.severity)) errors.push(`${at}.severity: one of blocker | warning | nit`);
-    if (f?.location && !LOCATION.test(f.location)) errors.push(`${at}.location: must be file:line, got "${f.location}"`);
+    if (f?.location && (!LOCATION.test(f.location) || /(^|\/)\.\.(\/|$)/.test(f.location))) errors.push(`${at}.location: must be file:line, got "${f.location}"`);
     else if (f?.location && ctx.exists && !ctx.exists(f.location.replace(/:\d+(?:-\d+)?$/, ''))) errors.push(`${at}.location: ${f.location} — the file does not exist`);
   });
-  if (data.verdict === 'PASS' && data.findings.some((f) => f?.severity === 'blocker')) errors.push('verdict PASS with a blocker finding');
+  // PASS-WITH-RULINGS is a pass (the reviewer persona says so) — a blocker under it is the same contradiction
+  if ((data.verdict === 'PASS' || data.verdict === 'PASS-WITH-RULINGS') && data.findings.some((f) => f?.severity === 'blocker')) errors.push(`verdict ${data.verdict} with a blocker finding`);
   if (data.filesTouched !== undefined) {
     if (!Array.isArray(data.filesTouched)) errors.push('filesTouched: array');
     else if (ctx.diffFiles) {
@@ -143,7 +145,7 @@ function checkReview(text) {
     .split('\n')
     .filter((l) => /^###\s/.test(l))
     .forEach((l) => {
-      if (!/\b(BLOCKER|WARNING|NIT)\b/.test(l) || !/[\w./-]+\.[A-Za-z]{1,6}:\d+/.test(l)) errors.push(`finding heading needs a severity and a file:line — "${l.trim().slice(0, 100)}"`);
+      if (!/\b(BLOCKER|WARNING|NIT)\b/.test(l) || !/[\w./-]+\.[\w-]+:\d+/.test(l)) errors.push(`finding heading needs a severity and a file:line — "${l.trim().slice(0, 100)}"`);
     });
   if (verdict?.[1] === 'MERGE-READY' && /^###\s.*\bBLOCKER\b/m.test(findings)) errors.push('MERGE-READY with a BLOCKER finding');
   return errors;

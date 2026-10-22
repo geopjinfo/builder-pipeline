@@ -10,7 +10,9 @@
  *
  *   1. COUNT      every claim in `<runs>/<key>/claims.jsonl` ({ id, text, command, expect }) is re-run and its
  *                 output must match `expect` (a regex; a bare number must be a whole output line). A figure is
- *                 a claim about a command's output, so the command is kept beside it and run again.
+ *                 a claim about a command's output, so the command is kept beside it and run again — except
+ *                 that, with `features.claims.jestBatch` set, a plain jest claim is run in one batch per config,
+ *                 or answered from a PASSING result this checker logged at the same sha on a clean tree.
  *   2. CITATION   every `file:NN` (or `NN-MM`) under a citation root points at a file that exists and has that
  *                 line; a citation carrying an anchor — `file:NN «snippet»` — must find the snippet within two
  *                 lines of NN. Line numbers drift; an anchor says what the line was.
@@ -39,7 +41,8 @@
  * classifier injectable, so the lock behaviour is testable without a test runner or the machine-wide lock.
  */
 const { spawnSync } = require('node:child_process');
-const { existsSync, readFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { join, relative } = require('node:path');
 
 /**
  * The machine-wide tier lock, if the project installed one beside this file (`examples/jest-tier-runner/
@@ -128,6 +131,8 @@ function check(documents, fsProbe, ctx = {}) {
   const inRegistry = (id) => new RegExp(`\\|\\s*~?~?${escape(id)}~?~?\\s*\\|`).test(registryText);
 
   // 1. COUNT
+  // A batching runner sees every claim first, so each jest config runs once (see `makeRunner`).
+  ctx.run?.prime?.(ctx.claims ?? []);
   for (const claim of ctx.claims ?? []) {
     let pattern;
     try {
@@ -296,17 +301,117 @@ function liveHolder(lock, lockPath) {
 }
 
 /**
+ * A claim jest can batch: `npx jest [-c|--config <cfg>|--config=<cfg>] [--runInBand|-i] <pattern…> [2>&1]` and
+ * nothing else (no `-t`, no other flag, no quoting, no compound). Returns `{ config, patterns, runInBand }` or null.
+ * No config is `DEFAULT_CONFIG`: the batch then passes no `-c`, and jest picks its own config as it would have.
+ */
+const DEFAULT_CONFIG = '(default)';
+function plainJest(command) {
+  const text = String(command).trim().replace(/\s+2>&1$/, '');
+  // POSIX and cmd.exe (% ^) shell syntax; `#` would comment out every later pattern of the rebuilt batch command;
+  // a backslash is a regex escape as often as a path separator, so it is never rewritten — the claim runs alone.
+  if (/["'`;&|<>$()%^#\\]/.test(text)) return null;
+  const tokens = text.split(/\s+/);
+  if (tokens[0] !== 'npx' || tokens[1] !== 'jest') return null;
+  let config = DEFAULT_CONFIG;
+  let runInBand = false;
+  const patterns = [];
+  for (let i = 2; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    if (t === '-c' || t === '--config') {
+      config = tokens[(i += 1)];
+      if (!config || config.startsWith('-')) return null;
+    } else if (t.startsWith('--config=')) {
+      config = t.slice('--config='.length);
+      if (!config || config.startsWith('-')) return null; // the same guard as the spaced form
+    } else if (t === '--runInBand' || t === '-i') runInBand = true;
+    else if (t.startsWith('-')) return null;
+    else patterns.push(t);
+  }
+  return patterns.length ? { config: config.replace(/^\.\//, ''), patterns, runInBand } : null;
+}
+
+/** Jest's own selection rule: a pattern is a case-insensitive regex over the test file's absolute path. */
+function selects(pattern, file) {
+  try {
+    return new RegExp(pattern, 'i').test(file);
+  } catch {
+    return false;
+  }
+}
+
+/** Per-file results from jest's `--json` output: `{ [absolute path, '/'-separated]: { status, message, counts } }`. */
+function resultsOf(json) {
+  const results = {};
+  for (const t of json.testResults ?? []) {
+    const counts = { failed: 0, skipped: 0, todo: 0, passed: 0 };
+    for (const a of t.assertionResults ?? []) {
+      if (a.status === 'passed' || a.status === 'failed' || a.status === 'todo') counts[a.status] += 1;
+      else counts.skipped += 1; // pending / skipped / disabled — jest's summary says "skipped"
+    }
+    results[String(t.name).replace(/\\/g, '/')] = { status: t.status === 'failed' ? 'failed' : 'passed', message: t.message ?? '', counts };
+  }
+  return results;
+}
+
+/** The output a claim's own jest run would have ended with: FAIL/PASS lines, failure text, and jest's summary lines. */
+function render(picked, header) {
+  const sum = { failed: 0, skipped: 0, todo: 0, passed: 0 };
+  const suites = { failed: 0, skipped: 0, passed: 0 };
+  const lines = [header];
+  for (const [file, r] of picked) {
+    for (const k of Object.keys(sum)) sum[k] += r.counts[k];
+    const failed = r.status === 'failed' || r.counts.failed > 0;
+    const skipped = !failed && r.counts.passed === 0 && r.counts.skipped + r.counts.todo > 0;
+    suites[failed ? 'failed' : skipped ? 'skipped' : 'passed'] += 1;
+    lines.push(`${failed ? 'FAIL' : 'PASS'} ${relative(process.cwd(), file).replace(/\\/g, '/')}`);
+    if (failed && r.message) lines.push(r.message);
+  }
+  const list = (parts, total) => [...parts.filter(([n]) => n > 0).map(([n, w]) => `${n} ${w}`), `${total} total`].join(', ');
+  lines.push(`Test Suites: ${list([[suites.failed, 'failed'], [suites.skipped, 'skipped'], [suites.passed, 'passed']], picked.length)}`);
+  const total = sum.failed + sum.skipped + sum.todo + sum.passed;
+  lines.push(`Tests:       ${list([[sum.failed, 'failed'], [sum.skipped, 'skipped'], [sum.todo, 'todo'], [sum.passed, 'passed']], total)}`);
+  return { status: suites.failed > 0 ? 1 : 0, output: `${lines.join('\n')}\n` };
+}
+
+/** The real sha/clean predicate over the checkout at `cwd`. */
+const makeGit = (cwd = process.cwd()) => ({
+  head() {
+    const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : null;
+  },
+  /**
+   * Clean = nothing tracked or untracked-unignored changed: specs may read the boards and the registry, so any
+   * change can move a count. Ignored state (dependencies, env files, a generated client, a database) is NOT seen.
+   */
+  clean() {
+    const r = spawnSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' });
+    return r.status === 0 && r.stdout.trim() === '';
+  },
+});
+
+/**
  * Build the COUNT runner: `run(command, claim) → { status, output, refused? }`. `output` is stdout + stderr on every
  * exit. With no lock (none installed, or `lock: null`) every command runs unlocked.
+ *
+ * `batch` (`features.claims.jestBatch`; off when null): `run.prime(claims)` — called by `check` before the first
+ * claim — groups every `plainJest` claim by config and runs each config ONCE (`--json`), over the union of the
+ * group's patterns; each claim's output is rebuilt from the files its own patterns select. The PASSING per-file
+ * result is kept in one flat file per config, `<cacheDir>/<config with each run of characters outside [\w.-] as
+ * _>.json`, with the sha it ran at and the patterns it ran, and a later check reuses it only when that sha is HEAD
+ * and the tree is clean — a log from another sha is refused, and only patterns not yet run are spawned. A failure
+ * is never logged, so it is re-run next time. Whatever cannot be batched (no JSON, a claim selecting no file, a
+ * busy lock) runs its own command as before.
  *
  * @param {{
  *   exec?: (cmd:string) => { status:number|null, stdout:string, stderr:string },
  *   lock?: { acquire: Function, holderStillRunning: Function, TierBusyError: Function, DEFAULT_LOCK: string } | null,
  *   lockPath?: string,
  *   classify?: (cmd:string) => 'direct'|'wrapped'|'none',
+ *   batch?: { cacheDir: string, git?: { head(): string|null, clean(): boolean } } | null,
  * }} [deps]
  */
-function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classify = lockClass } = {}) {
+function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classify = lockClass, batch = null } = {}) {
   const path = lockPath ?? lock?.DEFAULT_LOCK;
   const refuse = (message) => ({ status: 75, output: `BUSY — ${message}`, refused: true });
   const outputOf = (r) => `${r.stdout ?? ''}${r.stderr ?? ''}`;
@@ -314,13 +419,89 @@ function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classi
   // tree, so the first result stands for every later claim that names it. Several counts drawn from the
   // same test run otherwise re-ran that run once each. A refusal (busy lock) is never cached — retried.
   const seen = new Map();
+  /** Results `prime` produced for whole claim commands (batched, or from a same-sha log). */
+  const primed = new Map();
 
-  return function run(command, claim = {}) {
+  function run(command, claim = {}) {
+    if (primed.has(command)) return primed.get(command);
     if (seen.has(command)) return seen.get(command);
     const result = runOnce(command, claim);
     if (!result.refused) seen.set(command, result);
     return result;
-  };
+  }
+  // One runner serves one check: the first prime decides, a second call (the CLI primes to print its line) is a no-op.
+  let primedStats;
+  run.prime = (claims) => (primedStats ??= batch ? prime(claims) : null);
+  return run;
+
+  function prime(claims) {
+    const stats = { claims: 0, runs: 0, fromLog: 0 };
+    const groups = new Map();
+    for (const c of claims) {
+      const p = plainJest(c.command);
+      if (!p) continue;
+      const g = groups.get(p.config) ?? { patterns: new Set(), runInBand: false, commands: new Map() };
+      p.patterns.forEach((x) => g.patterns.add(x));
+      g.runInBand ||= p.runInBand;
+      g.commands.set(c.command, p);
+      groups.set(p.config, g);
+    }
+    if (!groups.size) return stats;
+    const git = batch.git ?? makeGit();
+    const sha = git.head();
+    const useLog = Boolean(sha) && git.clean();
+    for (const [config, g] of groups) {
+      const logPath = join(batch.cacheDir, `${config.replace(/[^\w.-]+/g, '_')}.json`);
+      // Asked again per group: an earlier group's long run may have outlived the sha.
+      const logged = useLog && git.head() === sha && git.clean() ? readLog(logPath, config, sha) : null;
+      const results = { ...(logged?.results ?? {}) };
+      const done = new Set(logged?.patterns ?? []);
+      const todo = [...g.patterns].filter((p) => !done.has(p));
+      let fresh = false;
+      if (todo.length) {
+        const r = runBatch(config, todo, g.runInBand, logPath);
+        // A busy lock is not kept for the group: each claim then asks for itself, refused while the holder lives
+        // (a loud COUNT problem) and run once it has gone, as the unbatched path does.
+        if (r.refused) continue;
+        stats.runs += 1;
+        if (r.results) {
+          Object.assign(results, r.results);
+          todo.forEach((p) => done.add(p));
+          fresh = true;
+          // Re-checked after the run: a commit or an edit while jest ran makes the result no sha's.
+          if (useLog && git.head() === sha && git.clean()) writeLog(logPath, { sha, config, ...passingOnly([...done], results) });
+        }
+      }
+      const header = `claims-check batch — ${config} @ ${sha ?? 'no sha'} (${logged && !fresh ? 'same-sha log' : logged ? 'same-sha log + one run' : 'one run'})`;
+      for (const [command, p] of g.commands) {
+        if (!p.patterns.every((x) => done.has(x))) continue;
+        const picked = Object.entries(results).filter(([file]) => p.patterns.some((x) => selects(x, file)));
+        if (!picked.length) continue; // jest would print "No tests found": let the claim's own command say so
+        primed.set(command, render(picked, header));
+        stats.claims += 1;
+        if (logged && p.patterns.every((x) => logged.patterns.includes(x))) stats.fromLog += 1;
+      }
+    }
+    return stats;
+  }
+
+  function runBatch(config, patterns, runInBand, logPath) {
+    mkdirSync(batch.cacheDir, { recursive: true });
+    const outFile = `${logPath.replace(/\.json$/, '')}.${process.pid}.out.json`;
+    const configArg = config === DEFAULT_CONFIG ? '' : ` -c ${config}`;
+    const command = `npx jest${configArg}${runInBand ? ' --runInBand' : ''} --json --outputFile=${outFile} ${patterns.join(' ')}`;
+    try {
+      const r = runOnce(command, { id: `batch ${config}` });
+      if (r.refused) return r;
+      try {
+        return { results: resultsOf(JSON.parse(readFileSync(outFile, 'utf8'))) };
+      } catch {
+        return { results: null }; // jest wrote no JSON: every claim of the group runs its own command
+      }
+    } finally {
+      rmSync(outFile, { force: true });
+    }
+  }
 
   function runOnce(command, claim) {
     const cls = lock ? classify(command) : 'none';
@@ -346,4 +527,36 @@ function makeRunner({ exec = defaultExec, lock = installedLock, lockPath, classi
   }
 }
 
-module.exports = { check, citationPattern, referencePattern, ID_SHAPE, DEFAULT_REGISTRY_ID, makeRunner, lockClass, lockInstalled: installedLock !== null };
+/**
+ * Only a pattern whose every selected file PASSED is logged, with those files — and a pattern that selected no file
+ * is not a pass. A failure (a real defect, or a flaky or unreachable dependency) is never replayed: the next check
+ * at the same sha runs it again.
+ */
+function passingOnly(patterns, results) {
+  const passed = (r) => r.status === 'passed' && r.counts.failed === 0;
+  const kept = patterns.filter((p) => {
+    const mine = Object.entries(results).filter(([file]) => selects(p, file));
+    return mine.length > 0 && mine.every(([, r]) => passed(r));
+  });
+  const files = Object.entries(results).filter(([file]) => kept.some((p) => selects(p, file)));
+  return { patterns: kept, results: Object.fromEntries(files) };
+}
+
+/** A per-config result log, or null unless it was written at `sha` for `config` with well-formed entries. */
+function readLog(logPath, config, sha) {
+  try {
+    const body = JSON.parse(readFileSync(logPath, 'utf8'));
+    if (!(body && body.sha === sha && body.config === config && Array.isArray(body.patterns) && body.results)) return null;
+    // Every entry must have the shape render() reads, or the log is refused — never thrown on.
+    const counted = (c) => c && ['failed', 'skipped', 'todo', 'passed'].every((k) => Number.isInteger(c[k]));
+    return Object.values(body.results).every((r) => r && typeof r.status === 'string' && counted(r.counts)) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLog(logPath, body) {
+  writeFileSync(logPath, JSON.stringify({ ...body, writtenAt: new Date().toISOString() }));
+}
+
+module.exports = { check, citationPattern, referencePattern, ID_SHAPE, DEFAULT_REGISTRY_ID, makeRunner, lockClass, plainJest, makeGit, lockInstalled: installedLock !== null };
