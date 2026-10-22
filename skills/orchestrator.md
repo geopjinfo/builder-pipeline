@@ -55,7 +55,8 @@ the full pipeline; record-only with no production-source file → **Micro** → 
 `features.orchestrator.standardPipeline` (full, or lite). Your one judgement: **raise** a level when the plan
 under-flags a row — add a `level` hint and re-split. Never lower one. **Lanes start at `maxLanes`**; raise them only
 with `split --max-lanes N --measured <file>`, the file holding measured runs that show the test host and the accounts
-carried the load.
+carried the load. With a standing `features.orchestrator.capacity` policy, `split --measured <file>` alone sizes the
+split from the file's last reading for the capacity seat.
 
 ## 3. Place and launch a lane
 
@@ -63,7 +64,12 @@ For each `LAUNCH <lane>` line, in order:
 
 1. `orch claim <run> <lane>` — exit 3 means another live lane holds one of its files: do not launch; re-split, or
    wait for the holder to merge.
-2. Create the lane worktree on the lane branch, cut from `target`, and install what its tiers need.
+2. Create the lane worktree on the lane branch, cut from `target`, and install what its tiers need. If a
+   `linkDirs` entry (an installed dependency tree) is linked from the primary checkout instead, never let the lane
+   reinstall there: a reinstall deletes THROUGH the link and empties the install every lane shares.
+   `orch link-guard <worktree> --brief <file>` says so (exit 4 a link · 3 a link and a brief naming any reinstall
+   step — `gate-launch` refuses that lane); unlink it yourself with the command it prints before the launch. No brief
+   wording exempts it.
 3. Write the brief from the worker-brief template into the lane's `brief` path: its rows, its files, its dispatch,
    the rules, the done-test, the result path. Pointers, never pasted docs.
 4. **Place it where `next` says** (`on secondary` / `on primary`). Placement follows `features.orchestrator.seats`
@@ -73,7 +79,9 @@ For each `LAUNCH <lane>` line, in order:
    - **Secondary seat — a terminal worker on the second account.** `orch gate-launch <run> <lane>` refuses a lane
      `next` does not say to launch and records the git config/hooks baseline; run the `launch` command it prints,
      then `orch set <run> <lane> status=LAUNCHED seat=secondary sessionId=<id>`, then start
-     `orch watch <run> <lane>` **in the background** — its exit is the finish notice (0 DONE · 7 stall).
+     `orch watch <run> <lane>` **in the background** — its exit is the finish notice (0 DONE · 7 stall). Take the
+     session id from the launch log with `orch launch-id <log>` (Claude Code): a resume with flags starts a COPY,
+     and the first id in the log is the old session, whose `done` would stall the lane at once.
    - **Primary seat.** A SOLO lane: dispatch a sub-agent with the brief pointer; it writes its details to the result
      path and returns one line. A pipeline lane (full or lite) needs a session of its own on the primary account —
      seats never dispatch, so a sub-agent cannot run a pipeline's seats. Then
@@ -102,7 +110,14 @@ For each `LAUNCH <lane>` line, in order:
   `models.strong` / `models.mid`. Start the credit queue (§5), check every `<runs>/<key>/findings-<seat>.json` with
   `node scripts/output-check.mjs findings … --diff-base <queue base>`, mark P4 in the gate queue, and resume the worker.
   Account faults fall back on their own; a job fault (findings that fail the check) you re-run, or hand the seat back
-  to the worker.
+  to the worker. If a FIX moved the lane's code after `gate-queue add`, `node scripts/gate-queue.mjs retip <key> --tip
+  <sha>` first — the credit jobs read the queue's RECORDED range.
+- **`SELF-AUDIT <lane>`** (instead of ENQUEUE): the lane is at WAIT-P4 but the credit lane is busy with other work and
+  holds no seat job of the lane's own. Resume the worker to run its owed seats itself:
+  `orch gate-launch <run> <lane> --resume` (refused unless `next` offers SELF-AUDIT for it and a lane slot is free).
+- **`ADD-LANES`** (only with `features.orchestrator.capacity`): the capacity seat is freshly measured under its
+  percentage and fewer than `laneCap` lanes are live. Pull that many rows from the run's plan into a new split for the
+  human's OK; never start lanes the human has not approved.
 - **One writer at a time** applies to the run's records: lane workers write their own boards; you write the run's
   decision rows and nothing in a lane's worktree.
 
@@ -117,16 +132,25 @@ Building, planning, reviewing and orchestrating stay on the plan accounts; the l
    roots, and a brief citing a file absent from the worktree (copy gitignored files in first, or `--allow-missing`
    when the job creates it).
 2. Start the queue **in a shell that supplies the API key** (the adapter names how): `orch credit-run --all-queued`
-   from the lane worktree. Never read, print or set the key yourself.
-3. Read the verdict line. Job faults — a denied action, a change outside scope, a git config or hook change, no
-   `RESULT: PASS` — never fall back: fix the brief. Account faults — over a cap, credit out, an API error, a 429 —
-   fall back down `credit.fallback` (secondary, then primary) on their own.
+   from the lane worktree, or from anywhere with `--queue <worktree>` (a worktree of this repo; the prep command
+   prints the exact line). One runner per queue; one job per target worktree at a time, whichever queue it came
+   from. Read-only kinds run first, writing kinds last. Never read, print or set the key yourself.
+3. Read the verdict line, and every `REFUSED <job>: <reason>` the queue summary lists. Job faults — a denied action,
+   a change outside scope, a git config or hook change, no `RESULT: PASS` — never fall back: fix the brief. Account
+   faults — over a cap, credit out, an API error, a 429 — fall back down `credit.fallback` (secondary, then primary)
+   on their own. A dirty-tree refusal names the credit job whose verdict left the files: review and commit (or
+   revert) that diff first.
+   - **Re-run a finished job** only with `orch credit-run <run> <task> --rerun [--queue-only]`: the old verdict moves
+     aside and the meter keeps it. Refused while its review is PENDING or REJECTED; after FAILED-INTEGRITY or
+     FAILED-SCOPE, restore git config/hooks and remove the stray files first, then add `--cleared-by <you>`.
 4. **Review before merge.** A job that changed files is `REVIEW PENDING` (`status`, `next` and `credit` list it).
    Read its diff against the evidence rules in its prompt, then `orch credit-review <run> <task> --by <you>`, or
-   `--reject "<why>"`; a rejected job's changes are reverted, then `--reverted`. `orch merge` refuses a lane holding
-   a pending or rejected job.
-5. `orch credit` is the meter (period, spend across every worktree, today against `dailyCapUsd`); `orch set workers
-   off` stops every credit start.
+   `--reject "<why>"`; a rejected job's changes are reverted, then `--reverted`. A moved-aside verdict that still
+   holds the lane is signed with `--verdict <file>`. `orch merge` refuses a lane holding a pending or rejected job in
+   any queue of the repo, and a lane whose worktree folder is gone (its hold cannot be read).
+5. `orch credit` is the meter (period, spend across every worktree, moved-aside verdicts included, running jobs'
+   budgets reserved; today against `dailyCapUsd`); `orch set workers off` stops every credit start. For a lapsing
+   budget, `CREDIT-FILL` says how far behind pace the spend is and names light jobs to queue.
 
 ## 6. Merge, conflicts, records
 
@@ -138,7 +162,9 @@ Building, planning, reviewing and orchestrating stay on the plan accounts; the l
 - **Version at merge.** Lanes release in parallel, so two can claim the same next version. Before merging a lane
   whose version is not above the target's, re-version it in its worktree: the project's version files, the
   changelog heading, and any generated file that carries the version, in one commit. Then merge it and record the
-  decision.
+  decision. With `features.orchestrator.mechanical` set, `orch merge` does this itself for the files it names: the
+  lane's bump is applied on top of the target, its changelog section re-versioned with a note line, JSON manifests
+  merged by key and append-only ledgers by line; any other conflict still stops, and the heads-up names both sets.
 - **Stale claims.** A claim held by a paused run, by a MERGED or FAILED lane, or by a run that no longer exists blocks
   new claims on the same files. `orch release-stale` lists them. `--apply` frees them only after you have confirmed
   that the new lane owns the same work; record that in the decision log. A live run's claim is never stale.

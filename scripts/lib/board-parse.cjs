@@ -79,9 +79,15 @@ function parsePhases(lines) {
 function parseSections(lines) {
   const sections = [];
   const unrecognised = [];
+  // A Status-table row under any OTHER `##` heading is counted nowhere; it is RETURNED, by the same rule
+  // `board-progress.mjs` reports on stderr, so the renderer names it: a rendered board that is a lower bound
+  // announces itself instead of dropping rows silently.
+  const uncounted = [];
   let current = null;
   let columns = null;
   let statusColumn = -1;
+  /** The non-counted `##` heading the cursor is under; null above the first `##` (as board-progress). */
+  let uncountedHeading = null;
 
   for (const line of lines) {
     const heading = /^##\s+([BP]\d+)\s+—\s+(.+?)(?:\s+·.*)?$/.exec(line);
@@ -94,19 +100,29 @@ function parseSections(lines) {
     }
     if (/^##\s/.test(line)) {
       current = null;
+      uncountedHeading = line.replace(/^##\s+/, '').trim();
+      statusColumn = -1;
       continue;
     }
-    if (!current || !line.startsWith('|') || isSeparator(line)) continue;
+    if (!line.startsWith('|') || isSeparator(line)) continue;
+    if (!current && uncountedHeading === null) continue;
 
     const row = cells(line);
     const headerIndex = row.findIndex((c) => c === 'Status');
     if (headerIndex !== -1) {
       statusColumn = headerIndex;
-      columns = row;
-      current.columns = row;
+      if (current) {
+        columns = row;
+        current.columns = row;
+      }
       continue;
     }
     if (statusColumn === -1) continue;
+    if (!current) {
+      // any non-decorative first cell, not only a known row id — board-progress.mjs's rule
+      if (ROW_ID.test(stripAnnotation(row[0] ?? '')) || !isDecorativeCell(row[0])) uncounted.push({ heading: uncountedHeading, id: (row[0] ?? '').trim() });
+      continue;
+    }
 
     const id = stripAnnotation(row[0] ?? '');
     if (!ROW_ID.test(id)) {
@@ -123,7 +139,7 @@ function parseSections(lines) {
     });
   }
 
-  return { sections, unrecognised, columns };
+  return { sections, unrecognised, uncounted, columns };
 }
 
 /** `## Deferred this cycle` — bullet rows, each carrying the registry id that owns the deferral. */
@@ -181,7 +197,7 @@ function parseNamedTable(lines, heading) {
 /** Parse a board's markdown source. Pure — no filesystem, so the tests can hold a fixture. */
 function parseBoard(source) {
   const lines = source.split(/\r?\n/);
-  const { sections, unrecognised } = parseSections(lines);
+  const { sections, unrecognised, uncounted } = parseSections(lines);
   const totals = sections.reduce(
     (acc, s) => {
       for (const r of s.rows) {
@@ -203,6 +219,7 @@ function parseBoard(source) {
     dod: parseNamedTable(lines, /^##\s+Definition of Done\b/i),
     modules: parseNamedTable(lines, /^##\s+Modules (?:&|and) endpoints\b/i),
     unrecognised,
+    uncounted,
     totals,
     source,
   };

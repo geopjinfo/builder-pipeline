@@ -279,3 +279,75 @@ describe('preflight and the tests switch', () => {
     assert.match(r.stdout, /MODE single/);
   });
 });
+
+describe('capacity policy and SELF-AUDIT (features.orchestrator.capacity, the credit lane busy)', () => {
+  const CAP = { laneCap: 4, seat: 'secondary', underPct: 50, defaultLanes: 2 };
+  const fresh = (root, run, pct) => state.recordUsage(root, run, 'secondary', pct);
+  const runWith = (n, opts = {}) => {
+    const { root } = project();
+    state.init(root, 'cp', { ...lanes(n), plan: { title: 'p', file: '/plans/p.plan.md' } }, { preflightMode: 'parallel', seats: ['secondary', 'primary'], ...opts });
+    state.approve(root, 'cp', 'lead');
+    return root;
+  };
+
+  test('measuredLanes reads the last "<seat> <n>%" figure: under → laneCap, else defaultLanes; none → defaultLanes', () => {
+    assert.deepEqual(state.measuredLanes('secondary 70%\nsecondary: 31%', CAP), { maxLanes: 4, pct: 31, seat: 'secondary' });
+    assert.equal(state.measuredLanes('secondary 31%\nsecondary = 55 %', CAP).maxLanes, 2);
+    assert.deepEqual(state.measuredLanes('nothing here', CAP), { maxLanes: 2, pct: null, seat: 'secondary' });
+    assert.equal(state.measuredLanes('secondary 10%', null, 3).maxLanes, 3, 'no capacity policy: the fallback');
+  });
+
+  test('BUILDER_ORCH_LANE_CAP overrides laneCap only with a whole number 1–16', () => {
+    assert.equal(state.capacityOf(CAP, { BUILDER_ORCH_LANE_CAP: '6' }).laneCap, 6);
+    for (const v of ['0', '17', '2.5', 'x', '']) assert.equal(state.capacityOf(CAP, { BUILDER_ORCH_LANE_CAP: v }).laneCap, 4, v);
+    assert.equal(state.capacityOf(null), null);
+  });
+
+  test('ADD-LANES while the seat is fresh under its percentage; waiting lanes hold slots; none in single-lane, over it, or with no policy', () => {
+    const root = runWith(1, { capacity: CAP });
+    fresh(root, 'cp', 20);
+    const acts = state.nextActions(root, state.load(root, 'cp'));
+    assert.ok(acts.includes('ADD-LANES: secondary at 20% — pull 3 row(s) from /plans/p.plan.md (0 of cap 4 lanes live)'), acts.join('\n'));
+    fresh(root, 'cp', 60);
+    assert.equal(state.nextActions(root, state.load(root, 'cp')).some((a) => a.startsWith('ADD-LANES')), false);
+    const single = runWith(1, { capacity: CAP, preflightMode: 'single' });
+    fresh(single, 'cp', 20);
+    assert.equal(state.nextActions(single, state.load(single, 'cp')).some((a) => a.startsWith('ADD-LANES')), false);
+    const off = runWith(1);
+    fresh(off, 'cp', 20);
+    assert.equal(state.nextActions(off, state.load(off, 'cp')).some((a) => a.startsWith('ADD-LANES')), false);
+    const four = runWith(4, { capacity: CAP });
+    fresh(four, 'cp', 20);
+    assert.equal(state.nextActions(four, state.load(four, 'cp')).some((a) => a.startsWith('ADD-LANES')), false, 'four lanes waiting already hold the four slots');
+  });
+
+  test('a WAIT-P4 lane gets SELF-AUDIT while the credit lane is busy, ENQUEUE otherwise; a run without the credit lane never asks', () => {
+    const root = runWith(1, { credit: true });
+    state.setLane(root, 'cp', 'l1', { status: 'DONE', resultLine: 'RESULT: PASS WAIT-P4 k1 @ abc', worktree: '/wt/l1' });
+    const s = state.load(root, 'cp');
+    assert.ok(state.isWaitP4(s.lanes.l1));
+    const seen = [];
+    const busy = (wt, since) => (seen.push([wt, since]), 'runner busy');
+    assert.match(state.nextActions(root, s, Date.now(), { creditBusy: busy }).join('\n'), /SELF-AUDIT l1: credit busy — resume the worker to run its owed seats itself \(runner busy\); gate-launch cp l1 --resume/);
+    assert.equal(seen[0][0], '/wt/l1');
+    assert.ok(seen[0][1], 'asked with the lane result time');
+    assert.match(state.nextActions(root, s, Date.now(), { creditBusy: () => null }).join('\n'), /ENQUEUE l1: done — "RESULT: PASS WAIT-P4/);
+    const plain = runWith(1);
+    state.setLane(plain, 'cp', 'l1', { status: 'DONE', resultLine: 'RESULT: PASS WAIT-P4 k1 @ abc' });
+    assert.match(state.nextActions(plain, state.load(plain, 'cp')).join('\n'), /ENQUEUE l1/);
+  });
+});
+
+describe('gate-launch --resume of a WAIT-P4 lane', () => {
+  test('red: refused unless next offers SELF-AUDIT for it — the credit lane not busy means its seats run there, not twice', () => {
+    const { dir, root } = project({ seats: ['secondary', 'primary'], launchCommand: 'echo {brief}' });
+    state.init(root, 'wp', lanes(1), { preflightMode: 'parallel', seats: ['secondary', 'primary'], credit: true, repo: dir });
+    state.approve(root, 'wp', 'lead');
+    state.setLane(root, 'wp', 'l1', { status: 'DONE', resultLine: 'RESULT: PASS WAIT-P4 k1 @ abc', worktree: join(dir, 'no-such-lane') });
+    const p = orch(dir, root, ['gate-launch', 'wp', 'l1', '--resume']);
+    assert.equal(p.status, 3, p.out);
+    assert.match(p.out, /next offers no SELF-AUDIT for it — ENQUEUE l1/);
+    const done = orch(dir, root, ['gate-launch', 'wp', 'l1']);
+    assert.equal(done.status, 3, 'positive control: a DONE lane is never a plain launch either');
+  });
+});

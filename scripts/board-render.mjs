@@ -576,6 +576,13 @@ function renderPage({ board, log, usage, boardPath, key, orch = null, declared =
           .map((u) => `${esc(u.section)}: "${esc(u.id)}"`)
           .join(', ')}.</p>`
       : '';
+  // rows under a non-counted `##` heading — named, never counted (the same rule board-progress reports)
+  const uncounted =
+    (board.uncounted || []).length > 0
+      ? `<p class="empty uncounted"><b>${board.uncounted.length} board row(s) sit under a non-counted "##" heading</b> — counted nowhere, so the figures above are a lower bound: ${board.uncounted
+          .map((u) => `${esc(u.heading)}: "${esc(u.id)}"`)
+          .join(', ')}.</p>`
+      : '';
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -590,6 +597,7 @@ function renderPage({ board, log, usage, boardPath, key, orch = null, declared =
 <p class="lede">${esc(lede)}</p>
 <div class="meter"><i style="width:${pct}%"></i></div>
 ${unrecognised}
+${uncounted}
 ${renderRun(board, log, seats, orch, declared)}
 ${renderCeiling(log)}
 ${renderGates(log)}

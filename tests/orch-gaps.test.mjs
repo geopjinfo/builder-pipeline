@@ -8,7 +8,7 @@
  * Every guard has a red case.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -143,5 +143,80 @@ describe('digest --check, in both argument orders', () => {
       assert.equal(r.status, 0, r.out);
       assert.match(r.stdout, /1 row\(s\) · 0 still ⚠ CONFIRM/);
     }
+  });
+});
+
+describe('the link guard: a reinstall in a lane whose dependency dir is a link', () => {
+  const pre = require('../scripts/lib/orch-preflight.cjs');
+  const asks = (t) => pre.briefAsksReinstall(t, ['node_modules']);
+
+  test('every install spelling and recursive delete counts; a negation right before it does not; no wording exempts', () => {
+    for (const t of ['run `npm ci` first', 'npm --prefix . ci', 'npx npm install', 'npm.cmd i', 'then **npm ci**', 'yarn', 'pnpm install', 'rm -rf node_modules', 'Remove-Item node_modules -Recurse -Force', 'rmdir /s /q node_modules', 'rimraf node_modules', 'git clean -fdx', "Don't forget: npm ci", 'rmdir node_modules then npm ci']) {
+      assert.equal(asks(t), true, t);
+    }
+    for (const t of ['never run npm ci here', 'do not npm install', 'npm test', 'npm run build', 'the node_modules folder is shared', '']) assert.equal(asks(t), false, t);
+  });
+
+  test('the scan stays linear on a long one-line brief', () => {
+    const t0 = Date.now();
+    asks(`${'rm node_modules '.repeat(3000)}`);
+    asks(`npm ${'--x '.repeat(5000)}`);
+    assert.ok(Date.now() - t0 < 2000, `took ${Date.now() - t0} ms`);
+  });
+
+  test('linkGuard reads only: a real dir, a missing one and a link are told apart; the CLI exits 0 / 4 / 3', () => {
+    const { dir, repo } = scratchRepo({ profile: profileText({ orchestrator: { linkDirs: ['node_modules'] } }) });
+    const root = join(dir, 'orch');
+    const lane = join(dir, 'lane');
+    mkdirSync(lane);
+    assert.deepEqual(pre.linkGuard(lane, ['node_modules']).map((g) => [g.linked, g.missing]), [[false, true]]);
+    assert.equal(orch(repo, root, ['link-guard', lane]).status, 0);
+    const shared = join(repo, 'node_modules');
+    mkdirSync(shared);
+    symlinkSync(shared, join(lane, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(pre.linkGuard(lane, ['node_modules'])[0].linked, true);
+    const warn = orch(repo, root, ['link-guard', lane]);
+    assert.equal(warn.status, 4, warn.out);
+    assert.match(warn.stdout, /WARN: .*node_modules is a link to .* never reinstall there \(unlink first: /);
+    const brief = join(dir, 'brief.md');
+    writeFileSync(brief, 'Install deps: npm ci (a real install, not a link).\n');
+    const refused = orch(repo, root, ['link-guard', lane, '--brief', brief]);
+    assert.equal(refused.status, 3, refused.out);
+    assert.match(refused.stdout, /REFUSED: the brief names a reinstall step .* no brief wording exempts/);
+    assert.ok(existsSync(join(shared)), 'nothing was removed');
+  });
+});
+
+describe('launch ids and seat names', () => {
+  test('launch-id takes the COPY id a resume with flags prints, never the old one; UTF-16 logs are read', () => {
+    const cc = require('../scripts/lib/orch-worker-claude-code.cjs');
+    const oldId = '11111111-1111-1111-1111-111111111111';
+    const newId = '22222222-2222-2222-2222-222222222222';
+    assert.equal(cc.launchSessionId(`resuming ${oldId}\nnote: background session ${oldId} keeps its own saved options, so the flags you passed started a copy as\n${newId}`), newId);
+    assert.equal(cc.launchSessionId(`backgrounded · abcdef12 · lane-1`), 'abcdef12');
+    assert.equal(cc.launchSessionId(`note: background session ${oldId} keeps its own saved options`), null, 'the old id is never returned');
+    const dir = tmp('lid');
+    const f = join(dir, 'launch.log');
+    writeFileSync(f, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`backgrounded · ${newId} · x`, 'utf16le')]));
+    assert.equal(cc.launchSessionId(cc.readLaunchLog(f)), newId);
+    const { repo } = scratchRepo();
+    const p = orch(repo, join(dir, 'orch'), ['launch-id', f]);
+    assert.deepEqual([p.status, p.stdout.trim()], [0, newId]);
+    writeFileSync(f, 'starting…');
+    assert.equal(orch(repo, join(dir, 'orch'), ['launch-id', f]).status, 1);
+  });
+
+  test('red: usage-read refuses an unknown seat before reading anything; a seat in another case is that seat', () => {
+    const { dir, repo } = scratchRepo({ profile: profileText({ orchestrator: { seats: ['secondary', 'primary'], launchCommand: 'echo {brief}', usageCommand: 'node -e "console.log(\'7% used {seat}\')"' } }) });
+    const root = join(dir, 'orch');
+    const lanesFile = join(dir, 'lanes.json');
+    writeFileSync(lanesFile, JSON.stringify({ maxLanes: 1, rows: [], lanes: [] }));
+    assert.equal(orch(repo, root, ['init', 'u1', '--lanes', lanesFile]).status, 0);
+    const bad = orch(repo, root, ['usage-read', 'u1', 'b']);
+    assert.equal(bad.status, 2, bad.out);
+    assert.match(bad.out, /unknown seat "b"/);
+    const ok = orch(repo, root, ['usage-read', 'u1', 'SECONDARY']);
+    assert.equal(ok.status, 0, ok.out);
+    assert.equal(state.load(root, 'u1').usage.secondary.pct, 7);
   });
 });

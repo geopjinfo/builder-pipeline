@@ -19,7 +19,9 @@
  *
  * INTEGRATION mode (default) — no checkout of the target is touched:
  *   1. the merge is built on `orch/integration`: a --no-ff merge commit of the lane onto the target's CURRENT tip
- *      (git merge-tree + commit-tree); the integration ref moves by compare-and-swap. A conflict → heads-up
+ *      (git merge-tree + commit-tree); the integration ref moves by compare-and-swap. A conflict in a hot ledger file
+ *      `mechanical` covers is resolved from the three blobs (orch-merge-resolve.cjs); any other conflict → heads-up
+ *      naming both sets
  *   2. gates run in a detached integration worktree checked out at that merge commit; directories in `linkDirs`
  *      (e.g. an installed dependency tree) are linked from the repo checkout first — refused when the tip changes a
  *      `linkGuard` file (a shared install would be the wrong one)
@@ -30,7 +32,8 @@
  *
  * Every stop (heads-up, gates red, target moved) pins the lane with snapshot refs. Every git command here runs with
  * `-c core.hooksPath=<an empty temp dir>`: a hook a worker planted (or changed) never runs inside the merge. A lane
- * whose worktree holds a credit job not yet signed off is refused (orch-credit.cjs review hold).
+ * holding a credit job not yet signed off — in its own queue or in any other queue of the repo — is refused
+ * (orch-credit.cjs review hold), and so is a lane whose worktree folder is gone (its hold cannot be read).
  *
  * NEVER: reset, push, force, branch or worktree delete, history rewrite, dropping a lane's commits.
  */
@@ -41,6 +44,7 @@ const { spawnSync } = require('child_process');
 const { withLock, runDir } = require('./orch-store.cjs');
 const state = require('./orch-state.cjs');
 const claims = require('./orch-claims.cjs');
+const resolver = require('./orch-merge-resolve.cjs');
 
 let noHooksDir = null;
 /** An empty directory made for this process; used as core.hooksPath so no hook can run. */
@@ -49,8 +53,16 @@ function emptyHooksDir() {
   return noHooksDir;
 }
 const gitArgv = (args) => ['-c', `core.hooksPath=${emptyHooksDir()}`, ...args];
+// git from an ABSOLUTE PATH entry, never a bare name: on Windows a bare spawn tries the cwd first, and the cwd here is a
+// lane or integration worktree a worker could have planted a git executable in.
+let gitBin = null;
+const gitExe = () => {
+  gitBin = gitBin || require('./orch-credit.cjs').whichAbs('git');
+  if (!gitBin) throw new Error('refused: no git executable on an absolute PATH entry');
+  return gitBin;
+};
 const git = (cwd, args) => {
-  const r = spawnSync('git', gitArgv(args), { cwd, encoding: 'utf8' });
+  const r = spawnSync(gitExe(), gitArgv(args), { cwd, encoding: 'utf8' });
   return { code: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
 };
 
@@ -115,7 +127,11 @@ function mergeNext(root, runId, opts) {
     const ctx = { root, runId, lane, l: s.lanes[lane], repo: opts.repo || s.repo, target: s.target };
     if (!ctx.target) throw new Error('refused: the run has no target branch (features.orchestrator.target)');
     const { mergeBlockers } = require('./orch-credit.cjs');
-    const held = ctx.l && ctx.l.worktree && fs.existsSync(ctx.l.worktree) ? mergeBlockers(ctx.l.worktree) : [];
+    // Fail closed: a lane whose worktree folder is gone lost its own (gitignored) credit queue with it, so its review
+    // hold cannot be read — refuse, never merge past it. The other queues are read from the repo.
+    if (ctx.l && ctx.l.worktree && !fs.existsSync(ctx.l.worktree)) throw new Error(`refused: lane ${lane} worktree ${ctx.l.worktree} is gone — its own credit queue went with it, so its review hold cannot be read; restore the worktree (or record the hold by hand) before orch merge`);
+    if (ctx.l && ctx.l.worktree && !ctx.repo) throw new Error(`refused: run ${runId} records no repo — the credit review hold cannot be read across the queues; pass --repo`);
+    const held = ctx.l && ctx.l.worktree ? mergeBlockers(ctx.l.worktree, undefined, ctx.repo) : [];
     if (held.length) {
       throw new Error(`refused: lane ${lane} holds credit job(s) not signed off — ${held.join('; ')}; read each diff, then orch credit-review <run> <task> --by <you> [--reject "<why>"] (a REJECTED job's changes must be reverted and marked --reverted)`);
     }
@@ -208,19 +224,61 @@ function worktreeOf(repo, branch) {
   return null;
 }
 
-function buildIntegration(repo, base, l, runId) {
+/**
+ * The --no-ff merge commit of the lane onto `base`, written to the integration ref. A conflict in a file
+ * `mechanical` covers is resolved from the three blobs (orch-merge-resolve.cjs); any other conflict returns
+ * { files, unresolved, unresolvedWhy, mechanical } so the heads-up names both sets.
+ */
+function buildIntegration(repo, base, l, runId, mechanical = null) {
   const laneTip = refSha(repo, `refs/heads/${l.branch}`);
   if (!laneTip) throw new Error(`refused: lane branch ${l.branch} not found`);
   const dry = git(repo, ['merge-tree', '--write-tree', '--name-only', '--no-messages', base, laneTip]);
-  if (dry.code === 1) return { files: dry.out.split(/\r?\n/).slice(1).filter(Boolean) };
-  if (dry.code !== 0) throw new Error(`git merge-tree failed: ${dry.err}`);
-  const tree = dry.out.split(/\r?\n/)[0];
+  if (dry.code !== 0 && dry.code !== 1) throw new Error(`git merge-tree failed: ${dry.err}`);
+  const conflicted = dry.code === 1 ? dry.out.split(/\r?\n/).slice(1).filter(Boolean) : [];
+  let tree = dry.out.split(/\r?\n/)[0];
+  let mech = [];
+  if (mechanical || conflicted.length) {
+    const mb = git(repo, ['merge-base', base, laneTip]).out;
+    const sides = { base: mb, ours: base, theirs: laneTip };
+    const blob = (side, f) => {
+      const r = spawnSync(gitExe(), gitArgv(['show', `${sides[side]}:${f}`]), { cwd: repo, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+      return r.status === 0 ? r.stdout : null;
+    };
+    const res = resolver.resolve(conflicted, blob, mechanical, { gitBin: gitExe() });
+    mech = Object.keys(res.resolved);
+    if (res.unresolved.length) return { files: conflicted, unresolved: res.unresolved.map((u) => u.file), unresolvedWhy: res.unresolved, mechanical: mech };
+    if (mech.length) tree = rewriteTree(repo, tree, res.resolved);
+  }
   const c = git(repo, ['commit-tree', tree, '-p', base, '-p', laneTip, '-m', `merge(${l.name}): ${l.rows.join(', ')} [orchestrator ${runId}]`]);
   if (c.code !== 0) throw new Error(`git commit-tree failed: ${c.err}`);
   const old = refSha(repo, `refs/heads/${INTEGRATION_BRANCH}`);
   const u = git(repo, ['update-ref', `refs/heads/${INTEGRATION_BRANCH}`, c.out, old || ZERO_SHA]);
   if (u.code !== 0) throw new Error(`refused: ${INTEGRATION_BRANCH} moved while it was being rebuilt: ${u.err}`);
-  return { sha: c.out, previous: old };
+  return { sha: c.out, previous: old, resolved: mech };
+}
+
+/** `tree` with each `files` path replaced by its resolved text — through a private index file, no checkout touched. */
+function rewriteTree(repo, tree, files) {
+  const index = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'orch-idx-')), 'index');
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  const run = (args, input) => {
+    const r = spawnSync(gitExe(), gitArgv(args), { cwd: repo, encoding: 'utf8', env, ...(input !== undefined ? { input } : {}) });
+    if (r.status !== 0) throw new Error(`git ${args[0]} failed: ${(r.stderr || '').trim()}`);
+    return (r.stdout || '').trim();
+  };
+  run(['read-tree', tree]);
+  for (const [f, text] of Object.entries(files)) {
+    const sha = run(['hash-object', '-w', '--stdin'], text);
+    run(['update-index', '--add', '--cacheinfo', `100644,${sha},${f}`]);
+  }
+  const out = run(['write-tree']);
+  try {
+    fs.unlinkSync(index);
+    fs.rmdirSync(path.dirname(index));
+  } catch (_) {
+    /* tmp */
+  }
+  return out;
 }
 
 function checkoutIntegration(repo, wt, sha) {
@@ -300,10 +358,12 @@ function mergeIntegration(ctx, opts) {
   const base = refSha(repo, `refs/heads/${target}`);
   if (!base) throw new Error(`refused: target branch ${target} not found in ${repo}`);
 
-  const built = buildIntegration(repo, base, l, runId);
+  const built = buildIntegration(repo, base, l, runId, opts.mechanical || null);
   if (built.files) {
     state.setLane(root, runId, lane, { status: 'MERGING' });
-    return stop(root, runId, lane, { stage: 'dry-merge', files: built.files, detail: `git merge-tree ${target} ${l.branch} reports conflicts` });
+    // name the exact sets: what still needs a person, and what was resolvable mechanically
+    const sets = opts.mechanical && built.unresolved ? ` — not mechanical: ${built.unresolvedWhy.map((u) => `${u.file} (${u.why})`).join(', ')}; resolvable mechanically: ${built.mechanical.join(', ') || 'none'}` : '';
+    return stop(root, runId, lane, { stage: 'dry-merge', files: built.files, detail: `git merge-tree ${target} ${l.branch} reports conflicts${sets}` });
   }
   const resolved = path.resolve(repo);
   const wt = opts.integrationWorktree || path.join(path.dirname(resolved), `${path.basename(resolved)}-orch-integration`);
@@ -330,4 +390,4 @@ function mergeIntegration(ctx, opts) {
   return withDeps(merged(root, runId, lane, built.sha, g.log));
 }
 
-module.exports = { enqueue, mergeNext, worktreeOf, gitArgv, emptyHooksDir, provisionLinks, INTEGRATION_BRANCH };
+module.exports = { enqueue, mergeNext, worktreeOf, gitArgv, emptyHooksDir, provisionLinks, buildIntegration, INTEGRATION_BRANCH };

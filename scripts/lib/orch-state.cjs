@@ -17,6 +17,16 @@
  * needs headroom of its own. The first lane may start on the first seat unmeasured; any later placement needs a
  * reading younger than `usageStaleMinutes`. When every seat is full: USAGE-HOLD, nothing launches.
  * Credit jobs are placed by the credit lane, not here (orch-credit.cjs).
+ *
+ * CAPACITY (features.orchestrator.capacity; null = off). A standing lane policy instead of a per-run guess: while the
+ * capacity seat (default secondary) is freshly measured under `underPct`, keep up to `laneCap` lanes live — `next`
+ * prints ADD-LANES with how many rows to pull from the run's plan — and `split --measured <file>` sizes the split
+ * from the file's last "<seat> <n>%" reading (under → laneCap, else defaultLanes). `BUILDER_ORCH_LANE_CAP` (a whole
+ * number 1–16) overrides laneCap for the process that reads it.
+ *
+ * SELF-AUDIT. A lane that stopped with `RESULT: PASS WAIT-P4 …` hands its seats to the credit lane. While the credit
+ * lane is busy with other work (orch-credit.cjs creditBusy) and holds no seat job of the lane's own, `next` says
+ * SELF-AUDIT instead of ENQUEUE: resume the worker to run those seats itself (`gate-launch --resume`).
  */
 const fs = require('fs');
 const path = require('path');
@@ -52,12 +62,13 @@ function load(root, runId) {
 /**
  * Create a run from a split result. Refuses to overwrite an existing run (resume it instead).
  * opts: repo, target, worktreeBase, worktreePrefix, branchPrefix, preflightMode, seats, limits, stallMinutes,
- * usageStaleMinutes.
+ * usageStaleMinutes, capacity (features.orchestrator.capacity), credit (the credit lane is enabled).
  */
 function init(root, runId, splitResult, opts = {}) {
   const {
     repo = null, target = null, worktreeBase = null, worktreePrefix = 'wt-', branchPrefix = 'orch/', preflightMode = 'single',
     seats = DEFAULTS.seats, limits = DEFAULTS.limits, stallMinutes = DEFAULTS.stallMinutes, usageStaleMinutes = DEFAULTS.usageStaleMinutes,
+    capacity = null, credit = false,
   } = opts;
   const file = stateFile(root, runId);
   if (fs.existsSync(file)) throw new Error(`run "${runId}" already exists — resume it, never re-init`);
@@ -80,6 +91,10 @@ function init(root, runId, splitResult, opts = {}) {
     plannedMaxLanes: splitResult.maxLanes ?? 2,
     maxLanes: preflightMode === 'parallel' ? (splitResult.maxLanes ?? 2) : 1,
     seats: [...seats], limits: { ...DEFAULTS.limits, ...limits }, usageStaleMinutes,
+    ...(capacity ? { capacity: { ...capacity } } : {}),
+    ...(credit ? { credit: true } : {}), // the run uses the credit lane: a WAIT-P4 lane may be offered SELF-AUDIT
+    // the plan the lanes came from, so ADD-LANES can say where to pull the next rows
+    ...(splitResult.plan && (splitResult.plan.file || splitResult.plan.title) ? { plan: { file: splitResult.plan.file || null, title: splitResult.plan.title || null } } : {}),
     usage: {}, mergeQueue: [],
     rows: splitResult.rows, lanes,
   };
@@ -246,8 +261,59 @@ function placement(s, at = Date.now(), running = 0) {
   return { seat: null, why: `USAGE-HOLD: ${full.join(' and ')} — no new lanes` };
 }
 
-/** Deterministic next steps from state + clock. Nothing here remembers anything a killed session knew. */
-function nextActions(root, s, at = Date.now()) {
+/** `BUILDER_ORCH_LANE_CAP`: a whole number 1–16 overrides the capacity lane cap; unset or invalid → null (no override). */
+function envLaneCap(v) {
+  const n = Number(v);
+  return v !== undefined && v !== null && v !== '' && Number.isInteger(n) && n >= 1 && n <= 16 ? n : null;
+}
+
+/** The capacity policy in force: the run's (or the profile's) features.orchestrator.capacity, env override applied. */
+function capacityOf(capacity, env = process.env) {
+  if (!capacity || !capacity.laneCap) return null;
+  return {
+    laneCap: envLaneCap(env.BUILDER_ORCH_LANE_CAP) || capacity.laneCap,
+    seat: capacity.seat || 'secondary',
+    underPct: capacity.underPct ?? 50,
+    defaultLanes: capacity.defaultLanes ?? null,
+  };
+}
+
+/**
+ * The split cap a measured file supports — the LAST "<seat> <n>%" figure it holds (the file is appended to, latest
+ * reading last). Under `underPct` → laneCap; at/over it, or no figure → defaultLanes (else `fallback`).
+ */
+function measuredLanes(text, capacity, fallback = 2) {
+  const c = capacityOf(capacity);
+  if (!c) return { maxLanes: fallback, pct: null, seat: null };
+  const seat = c.seat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const all = [...String(text).matchAll(new RegExp(String.raw`\b${seat}\b\s*[=:]?\s*(\d+(?:\.\d+)?)\s*%`, 'gi'))];
+  const low = c.defaultLanes || fallback;
+  if (!all.length) return { maxLanes: low, pct: null, seat: c.seat };
+  const pct = Number(all[all.length - 1][1]);
+  return { maxLanes: pct < c.underPct ? c.laneCap : low, pct, seat: c.seat };
+}
+
+/** A lane that stopped at WAIT-P4: its seats are owed to the credit lane. */
+const isWaitP4 = (l) => l.status === 'DONE' && /^RESULT: PASS WAIT-P4\b/.test(l.resultLine || '');
+
+/** Default credit-busy probe: the credit lib's view from the run's repo; a fault reads as not busy (no new line). */
+function defaultCreditBusy(s) {
+  return (laneWorktree, since) => {
+    try {
+      return require('./orch-credit.cjs').creditBusy({ cwd: s.repo || process.cwd(), laneWorktree, since });
+    } catch (_) {
+      return null;
+    }
+  };
+}
+
+/**
+ * Deterministic next steps from state + clock. Nothing here remembers anything a killed session knew.
+ * `opts.creditBusy(laneWorktree, since)` → a reason string while the credit lane is busy for that lane, else null
+ * (tests inject it; the default asks orch-credit.cjs, and only when the run uses the credit lane).
+ */
+function nextActions(root, s, at = Date.now(), opts = {}) {
+  const creditBusy = opts.creditBusy || (s.credit ? defaultCreditBusy(s) : () => null);
   const acts = [];
   const lanes = Object.entries(s.lanes);
   const paused = s.paused || fs.existsSync(pauseFile(root));
@@ -261,7 +327,11 @@ function nextActions(root, s, at = Date.now()) {
     if (l.status === 'STOPPED-CONFLICT') acts.push(`HEADS-UP ${k}: merge conflict on ${(l.conflictFiles || []).join(', ')} — see ${l.headsUp}; refresh the lane, re-run gates, re-enqueue`);
     if (l.status === 'FAILED') acts.push(`FIX ${k}: gates red (log ${l.gatesLog || '?'}) — send the lane a FIX pointer, then re-enqueue`);
     if (l.status === 'PAUSED') acts.push(paused ? `HOLD ${k}: paused (session ${l.sessionId})` : `RELAUNCH ${k}: resume session ${l.sessionId}`);
-    if (l.status === 'DONE') acts.push(`ENQUEUE ${k}: done — "${l.resultLine}"`);
+    if (l.status === 'DONE') {
+      // a WAIT-P4 lane while the credit lane is busy with other work: the lane runs its own seats
+      const busy = isWaitP4(l) ? creditBusy(l.worktree, l.timings && l.timings.doneAt) : null;
+      acts.push(busy ? `SELF-AUDIT ${k}: credit busy — resume the worker to run its owed seats itself (${busy}); gate-launch ${s.runId} ${k} --resume` : `ENQUEUE ${k}: done — "${l.resultLine}"`);
+    }
   }
   if (paused) {
     acts.unshift('PAUSED: no new launches, no merges (orch resume to continue)');
@@ -297,11 +367,29 @@ function nextActions(root, s, at = Date.now()) {
       free--;
     }
   }
+  // CAPACITY: keep the seat busy — while it is freshly measured under its percentage and fewer than laneCap lanes are
+  // live (LAUNCHED, STALLED or PAUSED — a paused lane is offered RELAUNCH, so it holds its slot), pull more rows; a lane
+  // waiting to launch already holds a slot. Never beside a 429 cap or in single-lane preflight.
+  const c = capacityOf(s.capacity);
+  if (c) {
+    const u = (s.usage || {})[c.seat];
+    const staleMin = s.usageStaleMinutes ?? DEFAULTS.usageStaleMinutes;
+    const fresh = u && at - Date.parse(u.at) <= staleMin * 60000;
+    const live = running + lanes.filter(([, l]) => l.status === 'PAUSED').length;
+    const waiting = lanes.filter(([, l]) => l.status === 'PLANNED' || l.status === 'CLAIMED').length;
+    const pull = c.laneCap - live - waiting;
+    const capped = (cap && cap.holdUntil) || maxLanes < s.maxLanes || s.preflightMode === 'single';
+    if (fresh && u.pct < c.underPct && pull > 0 && !capped) {
+      const from = (s.plan && (s.plan.file || s.plan.title)) || 'the next plan (orch digest <artifact>)';
+      acts.push(`ADD-LANES: ${c.seat} at ${u.pct}% — pull ${pull} row(s) from ${from} (${live} of cap ${c.laneCap} lanes live)`);
+    }
+  }
   if (lanes.every(([, l]) => l.status === 'MERGED')) acts.push('RUN COMPLETE: every lane merged — close out the records');
   return acts;
 }
 
 module.exports = {
   init, load, update, setLane, notice, snapshotLane, integrityBaseline, recordUsage, approve, setPaused, nextActions, placement, event, pauseFile,
+  envLaneCap, capacityOf, measuredLanes, isWaitP4,
   STATUSES, ACTIVE, SEATS, DEFAULTS, RUNNER_OF,
 };

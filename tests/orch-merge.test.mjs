@@ -300,3 +300,102 @@ describe('the lease and orch wait', () => {
     assert.match(stdout, /"type":"test.ping"/);
   });
 });
+
+describe('mechanical resolution of the hot ledger files (features.orchestrator.mechanical)', () => {
+  const resolver = require('../scripts/lib/orch-merge-resolve.cjs');
+  const MECH = { semver: ['package.json', 'package-lock.json'], changelog: ['CHANGELOG.md'], json: ['contracts/api.json'], union: ['audits/ledger.md'] };
+  const pkg = (v, extra = {}) => `${JSON.stringify({ name: 'x', version: v, ...extra }, null, 2)}\n`;
+  const log = (...secs) => `# Changelog\n\n${secs.map(([v, line]) => `## ${v}\n\n- ${line}`).join('\n\n')}\n`;
+
+  test('resolveVersion: the lane bump kind applied to the target, or the lane version when already higher', () => {
+    assert.equal(resolver.resolveVersion({ base: '1.2.0', ours: '1.3.0', theirs: '1.3.0' }), '1.4.0');
+    assert.equal(resolver.resolveVersion({ base: '1.2.0', ours: '1.2.1', theirs: '1.3.0' }), '1.3.0');
+    assert.equal(resolver.resolveVersion({ base: '1.2.0', ours: '1.3.0', theirs: '1.2.1' }), '1.3.1');
+    assert.throws(() => resolver.resolveVersion({ base: '1', ours: 'x', theirs: '1.0.0' }), resolver.NotMechanical);
+  });
+
+  test('merge3 keeps both sides keys, refuses a key both changed, and keeps a "__proto__" key an own key', () => {
+    assert.deepEqual(resolver.merge3({ a: 1 }, { a: 1, b: 2 }, { a: 1, c: 3 }), { a: 1, b: 2, c: 3 });
+    assert.throws(() => resolver.merge3({ a: 1 }, { a: 2 }, { a: 3 }), /both sides changed \$\.a/);
+    const out = resolver.merge3({}, JSON.parse('{"__proto__":{"x":1}}'), {});
+    assert.equal(Object.prototype.hasOwnProperty.call(out, '__proto__'), true);
+    assert.equal({}.x, undefined);
+  });
+
+  test('CHANGELOG: union by version section, newest first, the lane section re-versioned with a note', () => {
+    const b = log(['1.2.0', 'base']);
+    const o = log(['1.3.0', 'target lane'], ['1.2.0', 'base']);
+    const t = log(['1.3.0', 'this lane'], ['1.2.0', 'base']);
+    const m = resolver.mergeChangelog(b, o, t, { from: '1.3.0', to: '1.4.0' });
+    assert.match(m, /## 1\.4\.0\n\n_Re-versioned from 1\.3\.0 at merge \(orch merge\)\._\n- this lane\n\n## 1\.3\.0\n\n- target lane\n\n## 1\.2\.0/);
+    assert.throws(() => resolver.mergeChangelog(b, log(['1.2.0', 'edited A']), log(['1.2.0', 'edited B']), { from: '1.2.0', to: '1.2.0' }), /both sides edited/);
+  });
+
+  test('resolve: off (null) resolves nothing; a non-mechanical file, a modify/delete and a JSON key both changed stay named', () => {
+    const blobs = { base: { 'package.json': pkg('1.0.0'), 'x.ts': 'a', 'contracts/api.json': '{"a":1}' }, ours: { 'package.json': pkg('1.1.0'), 'x.ts': 'b', 'contracts/api.json': '{"a":2}' }, theirs: { 'package.json': pkg('1.1.0'), 'x.ts': 'c', 'contracts/api.json': '{"a":3}' } };
+    const blob = (s, f) => (f in blobs[s] ? blobs[s][f] : null);
+    const off = resolver.resolve(['package.json'], blob, null);
+    assert.deepEqual([off.resolved, off.unresolved.map((u) => u.file)], [{}, ['package.json']]);
+    const r = resolver.resolve(['x.ts', 'contracts/api.json'], blob, MECH);
+    assert.deepEqual(r.unresolved.map((u) => u.file).sort(), ['contracts/api.json', 'x.ts']);
+    assert.match(r.unresolved.find((u) => u.file === 'x.ts').why, /not a mechanical file/);
+    assert.equal(JSON.parse(r.resolved['package.json']).version, '1.2.0', 'both bumped: package.json is re-versioned even without a conflict');
+    const md = resolver.resolve(['CHANGELOG.md'], (s, f) => (f === 'CHANGELOG.md' ? (s === 'ours' ? null : log(['1.0.0', 'x'])) : null), MECH);
+    assert.match(md.unresolved[0].why, /absent on one side/);
+  });
+
+  test('integration: a second lane that took the same version merges mechanically, re-versioned; with mechanical off it stops', () => {
+    for (const mechanical of [MECH, null]) {
+      const { dir, repo, root } = scratchRepo({ files: { 'package.json': pkg('1.0.0'), 'CHANGELOG.md': log(['1.0.0', 'base']) } });
+      const bump = (branch, line) => {
+        const wt = join(dir, branch.replace(/\//g, '-'));
+        git(repo, 'worktree', 'add', '-q', '-b', branch, wt, 'dev');
+        writeFileSync(join(wt, 'package.json'), pkg('1.1.0'));
+        writeFileSync(join(wt, 'CHANGELOG.md'), log(['1.1.0', line], ['1.0.0', 'base']));
+        writeFileSync(join(wt, `${line}.txt`), line);
+        git(wt, 'add', '.');
+        git(wt, 'commit', '-q', '-m', line);
+        return wt;
+      };
+      const w1 = bump('orch/v1-l1', 'one');
+      const w2 = bump('orch/v1-l2', 'two');
+      git(repo, 'checkout', '-q', '--detach');
+      const split = { maxLanes: 2, rows: [], lanes: ['l1', 'l2'].map((n) => ({ name: n, rows: [`R-${n}`], level: 'Standard', track: 'ADDITIVE', dispatch: 'full', ownedFiles: [], hotFiles: ['CHANGELOG.md', 'package.json'] })) };
+      state.init(root, 'v1', split, { repo, target: 'dev', preflightMode: 'parallel' });
+      for (const [n, wt] of [['l1', w1], ['l2', w2]]) {
+        state.setLane(root, 'v1', n, { status: 'DONE', worktree: wt });
+        merge.enqueue(root, 'v1', n);
+      }
+      const o = { repo, slotOk: true, gatesCmd: OK, integration: true, integrationWorktree: join(dir, 'integration'), mechanical };
+      assert.equal(merge.mergeNext(root, 'v1', o).ok, true);
+      const second = merge.mergeNext(root, 'v1', o);
+      if (!mechanical) {
+        assert.deepEqual([second.ok, second.stage], [false, 'dry-merge']);
+        assert.ok(second.files.includes('CHANGELOG.md'), JSON.stringify(second));
+        continue;
+      }
+      assert.equal(second.ok, true, JSON.stringify(second));
+      assert.equal(JSON.parse(git(repo, 'show', 'dev:package.json')).version, '1.2.0');
+      assert.match(git(repo, 'show', 'dev:CHANGELOG.md'), /## 1\.2\.0\n\n_Re-versioned from 1\.1\.0 at merge \(orch merge\)\._\n- two\n\n## 1\.1\.0\n\n- one\n\n## 1\.0\.0/);
+      assert.equal(git(repo, 'show', 'dev:two.txt'), 'two');
+    }
+  });
+});
+
+describe('the review hold fails closed', () => {
+  test('red: a lane whose worktree folder is gone is refused, and a REJECTED job for the lane in ANOTHER queue (moved aside) holds it', () => {
+    const r = rig([['l1', 'b.txt', 'b\n']], { run: 'gh' });
+    const real = state.load(r.root, 'gh').lanes.l1.worktree;
+    state.setLane(r.root, 'gh', 'l1', { worktree: join(r.dir, 'gone') });
+    const o = { repo: r.repo, slotOk: true, gatesCmd: OK, integration: false };
+    assert.throws(() => merge.mergeNext(r.root, 'gh', o), /worktree .*gone is gone/);
+    state.setLane(r.root, 'gh', 'l1', { worktree: real });
+    const d = join(r.repo, '.pipeline', 'credit', 'runs', 'q9', 't9');
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, 'task.json'), JSON.stringify({ worktree: r.wts.l1 }));
+    writeFileSync(join(d, 'verdict.prev-20261015T000000Z.json'), JSON.stringify({ review: 'REJECTED', changed: ['b.txt'] }));
+    assert.throws(() => merge.mergeNext(r.root, 'gh', o), /q9\/t9 review REJECTED \(verdict\.prev-20261015T000000Z\.json\)/);
+    writeFileSync(join(d, 'task.json'), JSON.stringify({ worktree: join(r.dir, 'some-other-lane') }));
+    assert.equal(merge.mergeNext(r.root, 'gh', o).ok, true, 'positive control: a job for another lane does not hold this one');
+  });
+});
