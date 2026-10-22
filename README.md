@@ -84,6 +84,191 @@ protocol (same blocker twice → escalate to you).
 | 🔎 **Every check declared** | An optional check the project cannot run prints `<feature>: not configured`. It never passes silently, and a half-configured feature fails validation. |
 | ✅ **Every DONE is earned** | Close-out re-opens each row's evidence and checks the assertion *entails* the claim — the three fake-done shapes are hunted by name ([`DESIGN.md`](DESIGN.md) §11). |
 
+## 👥 The nine personas
+
+Each persona declares a **tier**, not a model; `PIPELINE_PROFILE.md` maps `strong` / `mid` to your harness's models.
+
+| Phase | Persona | Tier | Writes | Job |
+|---|---|---|---|---|
+| 1 | `module-planner` | strong | plan only | Requirements → cited build plan + task board + blocker list |
+| 2 | `module-builder` | strong | source + tests | TDD per board row: seeded failing test → red → green → refactor |
+| 3 | `module-tester` | strong | tests only | Coverage gaps, real-datastore integration, permission matrix, forced-failure rollback |
+| 4 | `standards-auditor` | strong | — | Boundaries, layering, contracts, naming |
+| 4 | `security-auditor` | strong | — | AuthZ, scope, secrets/PII, input hardening |
+| 4 | `vuln-auditor` | mid | — | Injection, double-apply, unbounded queries, I/O inside transactions |
+| 4 | `invariant-auditor` | strong | — | Is the system still *coherent* after the call succeeded? |
+| 5 | `docs-maintainer` | mid | docs only | API contract, module README, user docs |
+| 6 | `module-reviewer` | strong | review only | Re-verifies every finding at its `file:line`; MERGE-READY or CHANGES-REQUIRED |
+
+Auditors are read-only. A seat that finds a source defect reports it — only the coder fixes, via a `FIX-n` row.
+
+## 🧭 Pick the rigour: tracks
+
+Not every job is a module build. The track is chosen with the brief and confirmed by the planner.
+
+| Track | Use for | Phases run |
+|---|---|---|
+| **FULL** | a new module / feature cluster | all — digest authored at P1 |
+| **ADDITIVE** | a new field or operation on an existing module | all — digest refreshed; all four auditors kept |
+| **PLATFORM** | shared / foundation code | all + named human authorization; standards auditor is primary; wiring check mandatory |
+| **FIX** | a *verified* blocker list | all except the planner (the blocker list is the plan) |
+| **RULINGS** | decision / doc-authority work | 0.5 → 1 → 7 — no coder, no tester |
+| **SOLO** | ledger / docs / test-only | no pipeline, but declared — **never** for a production-source diff |
+
+```mermaid
+flowchart LR
+    SOLO["SOLO"] -->|"needs a source change"| FIX["FIX"]
+    FIX -->|"must decide what to build"| ADD["ADDITIVE"]
+    ADD -->|"new bounded context"| FULL["FULL"]
+```
+
+**The track is a floor, not a ceiling:** a run may escalate up mid-flight, never down (recorded as a board row).
+Work that belongs to another module or track becomes a `SPLIT` finding — a deferred-registry row plus a proposed
+separate run. The pipeline never starts another pipeline.
+
+## ✂️ Lite split (experimental, `features.liteSplit`)
+
+For throughput, the pipeline can be cut in two: build now, gate later in a batch.
+
+```mermaid
+flowchart LR
+    subgraph LITE["build-module-lite (per module)"]
+        L1["Plan"] --> L2["Code TDD"] --> L3["Test"] --> L4["free checks"]
+    end
+    L4 --> Q[("gate queue<br/>BUILT-UNGATED")]
+    Q -->|"trigger reached, up to cap"| G1
+    subgraph GB["build-module-lite-gate-batch (up to 4 modules)"]
+        G1["batch-wide drift / gates / integration"] --> G2["per module: 4 auditors → docs → review"]
+        G2 --> G3["behavioural gate"] --> G4["version + handoff → GATED"]
+    end
+    G2 -.->|findings| FIXL(("FIX-n")) -.-> G2
+```
+
+Each module ends exactly where a full run would have left it. **Nothing merges until `GATED`.**
+
+## 🎛️ Batch orchestrator (opt-in, `features.orchestrator`)
+
+Above the module pipeline sits `orch` — a commander that runs a **whole plan** in parallel lanes. The orchestrator
+session only routes and records; it never reads code. Fixed steps live in `scripts/orch.mjs`, judgement in the
+`orchestrator` skill. State is a file, so a killed session resumes from `orch status`.
+
+```mermaid
+flowchart TD
+    A["📄 Any plan artifact<br/>(markdown / HTML / board)"] --> D["orch digest<br/>rows · inferred cells = ⚠ CONFIRM"]
+    D --> C{"every CONFIRM<br/>resolved from docs?"}
+    C -- no --> R["search docs → decide + record<br/>ask the human only if undefined"] --> C
+    C -- yes --> P["orch preflight<br/>parallel or single mode"]
+    P --> S["orch split<br/>disjoint lanes · level per row"]
+    S --> H{"🧑‍💼 human<br/>approves the split?"}
+    H -- OK --> L["claim → worktree → brief → launch<br/>(placed by the usage guard)"]
+    L --> W["orch watch<br/>DONE / stall notice — no polling"]
+    W --> G["READY → gates · integration · e2e<br/>· behavioural gate"]
+    G --> M["orch merge<br/>one lane at a time into target"]
+    M --> REC["decision log · board · state.json"]
+```
+
+**Levels are set by rule and logged per row** — the orchestrator may raise one, never lower it:
+
+```mermaid
+flowchart LR
+    ROW["plan row"] --> Q1{"risk flag?<br/>money · workflow · migration<br/>platform · permission · cross-module"}
+    Q1 -- yes --> FULLL["🔴 Full<br/>full pipeline"]
+    Q1 -- no --> Q2{"record-only,<br/>no production source?"}
+    Q2 -- yes --> MICRO["⚪ Micro<br/>SOLO"]
+    Q2 -- no --> STD["🟡 Standard<br/>full or lite pipeline<br/>(standardPipeline)"]
+```
+
+Lanes never share a file (`orch claim` refuses overlap); each lane gets its own git worktree and branch. The lane
+count starts at `maxLanes` and rises only with measured evidence that the machine and accounts carried the load.
+Controls: `orch status` · `next` · `preflight` · `pause` · `stop` · `resume`.
+
+### 🛰️ Progress, restarts and artifacts
+
+The orchestrator is built to be killed. Its memory is **files in the repo**, never the conversation and never a
+published page.
+
+```mermaid
+flowchart LR
+    IN["📄 plan artifact<br/>(markdown / HTML page)"] -->|"orch digest — input only"| PLAN["plan.md"]
+    PLAN --> STATE[("state.json + events.jsonl<br/>runs/&lt;run&gt;/")]
+    STATE -->|"orch status → next: lines"| ORCH["orchestrator session<br/>(fresh or restarted)"]
+    ORCH -->|"every launch, merge, decision"| STATE
+    BOARD["task board per module"] -->|"page-keeper (experimental livePage)"| PAGE["🖥️ live progress page"]
+    PAGE -.->|"never read back"| X["✗"]
+```
+
+| What | Role | Survives a restart? |
+|---|---|---|
+| Plan artifact | **Input.** `orch digest` turns any markdown/HTML plan into rows | it is the source, not state |
+| `state.json` + `events.jsonl` | **The run's state.** Lanes, levels, claims, approvals, launches, merges | yes — the first action of every session is `orch status`; it acts only on the `next:` lines |
+| Task board + decision log | Per-module progress and every decision, git-tracked | yes |
+| Live progress page (`features.livePage`, experimental) | A **one-way projection** of a module board for people to watch (per-seat model, time, tokens, cost) | rebuilt from the board; nothing reads state from it |
+
+A restarted session re-arms a watcher for each lane still `LAUNCHED` and carries on. It never rebuilds a run from
+scrollback, and it never reads state from a published page: the page can be stale, the files cannot.
+
+### 👥 Multi-account seats
+
+Work runs on **seats**: the primary account (where the orchestrator session lives), an optional secondary account
+(terminal workers), and an optional API-credit lane. Usage is read fresh before every launch.
+
+```mermaid
+flowchart TD
+    J["lane or job to place"] --> CR{"credit-eligible job<br/>and credit.enabled?"}
+    CR -- yes --> CL["💳 credit lane<br/>headless, API key"]
+    CR -- no --> SEC{"secondary under<br/>its limit (80%)?"}
+    SEC -- yes --> SW["🖥️ secondary seat<br/>terminal worker"]
+    SEC -- no --> PRI{"primary under<br/>its limit (60%)?"}
+    PRI -- yes --> PW["🏠 primary seat<br/>sub-agent or own session"]
+    PRI -- no --> HOLD["⛔ USAGE-HOLD<br/>launch nothing, tell the human"]
+```
+
+| Seat | Runs | Never runs |
+|---|---|---|
+| **Primary** (orchestrator account) | the orchestrator; SOLO lanes as sub-agents; pipeline lanes in their own session; the test slot and every merge | — |
+| **Secondary** | lane workers in their own worktree (plan → build → test) | merges |
+| **Credit lane** | bounded jobs: `code-reading`, `record-fixes`, `docs`, `sweeps`, the tester and the four auditor seats | building, planning, reviewing, orchestrating |
+
+The primary limit sits below the secondary's because the orchestrator session itself runs there. Limits are
+`features.orchestrator.limits`. The plan accounts never receive the API key.
+
+### 💳 Credit lane (only with `credit.enabled`)
+
+```mermaid
+flowchart LR
+    PREP["orch credit-prep<br/>kind · scope · model floor"] --> RUN["orch credit-run<br/>(shell holding the key)"]
+    RUN --> OK{"result"}
+    OK -- "PASS, no file changes" --> DONE["✅ done"]
+    OK -- "PASS, files changed" --> REV["⏸ REVIEW PENDING<br/>orch credit-review"] --> DONE
+    OK -- "account fault<br/>cap · credit out · API error · 429" --> FB["↪ fallback<br/>secondary → primary"]
+    OK -- "job fault<br/>scope · denied · no PASS" --> FIXB["✋ no fallback<br/>fix the brief"]
+```
+
+- **Meter + caps:** `orch credit` shows the period, spend across every worktree, what is left and the pace needed;
+  `dailyCapUsd` stops one bad day spending the period. Running jobs reserve their budget under a machine-wide lock.
+- **Lapsing budget:** `CREDIT-FILL` says how far behind pace spend is and names light jobs to queue.
+- **Quality floors:** each job kind refuses a model below its floor (`models.strong` / `models.mid`); every prompt
+  carries the evidence rules and must end `RESULT: PASS`.
+- **Review hold fails closed:** `orch merge` refuses a lane while a credit job that changed its files is unreviewed.
+- **Auditors on credit:** a lane parked at `WAIT-P4` gets its four auditors via `orch credit-audit`; if the credit
+  lane is busy, the lane self-audits instead of waiting.
+
+## 📚 Where the truth lives
+
+```mermaid
+flowchart LR
+    PROF["PIPELINE_PROFILE.md<br/>project facts + §16 settings"] --> SEATS["every persona<br/>and every script"]
+    SEATS --> BOARD["task board per module"]
+    SEATS --> REG["deferred registry"]
+    SEATS --> DEC["decision log"]
+    BOARD --> PAGE["live HTML run page"]
+    BOARD --> PACK["handoff pack at close-out"]
+    REG --> PACK
+    DEC --> PACK
+```
+
+Every build checks the deferred registry on entry (did I unblock a row?) and updates it on exit.
+
 ## 📦 What's in the box
 
 ```
