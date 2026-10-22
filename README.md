@@ -165,6 +165,12 @@ No target is privileged: personas ship with **harness-neutral frontmatter** (`ca
 every other harness consumes the same files as prompt text. Experimental items install only with
 `--experimental`.
 
+> **⬆️ Already on an older release?** Re-running `unpack` keeps every changed file. Extract the new
+> archive over `builder/`, then `node builder/cli.js upgrade --tool <your-agent> --dry-run`, then
+> without `--dry-run`: kit-owned files are refreshed (each backed up to `.builder/backup-<stamp>/`),
+> the profile and ledgers are never touched. Finish with `verify` + `features`
+> ([`UNPACK.md`](UNPACK.md) § Upgrading an existing install).
+
 <details>
 <summary><b>Supported <code>--tool</code> targets (10)</b></summary>
 
