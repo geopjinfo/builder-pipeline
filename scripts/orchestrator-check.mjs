@@ -14,12 +14,13 @@
  * read (`features.costAccounting.reader === "claude-code"`): the session is the one named by `--session`,
  * else the `CLAUDE_CODE_SESSION_ID` environment variable (Claude Code specific — the harness exports the
  * running session's id to the shells it starts), else the project transcript written most recently (a
- * concurrent session can make that one wrong, hence the order). `--transcript` reads a file directly.
+ * concurrent session can make that one wrong, hence the order). A session named by id that is not in this
+ * checkout's folder is looked up in every project folder (a worktree run). `--transcript` reads a file directly.
  * Any other reader prints "orchestrator model: unmeasurable with this harness" and exits 0.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const profile = require('./lib/profile.cjs');
@@ -63,12 +64,31 @@ function records(file) {
   return out;
 }
 
+/**
+ * A known session id is looked up in this checkout's transcript folder first, then in every sibling project
+ * folder. WHY: the folder is derived from the working directory, and a run that works in a separate worktree
+ * keeps its session transcript under the folder the session was STARTED from — so the check found nothing and
+ * printed "unmeasured" with exit 0, which reads as a pass. A session id is unique across folders, so searching
+ * them all cannot pick the wrong session. Only a known id is searched; the newest-file fallback stays local.
+ */
+function byId(dir, id) {
+  const here = join(dir, `${id}.jsonl`);
+  if (existsSync(here)) return here;
+  const projects = dirname(dir);
+  if (!existsSync(projects)) return here;
+  for (const project of readdirSync(projects)) {
+    const candidate = join(projects, project, `${id}.jsonl`);
+    if (existsSync(candidate)) return candidate;
+  }
+  return here;
+}
+
 function sessionFile() {
   if (arg('--transcript')) return resolve(root, arg('--transcript'));
   const { transcriptDir } = require('./lib/transcript-usage.cjs');
   const dir = transcriptDir(root);
-  if (arg('--session')) return join(dir, `${arg('--session')}.jsonl`);
-  if (process.env.CLAUDE_CODE_SESSION_ID) return join(dir, `${process.env.CLAUDE_CODE_SESSION_ID}.jsonl`);
+  if (arg('--session')) return byId(dir, arg('--session'));
+  if (process.env.CLAUDE_CODE_SESSION_ID) return byId(dir, process.env.CLAUDE_CODE_SESSION_ID);
   if (!existsSync(dir)) return null;
   const newest = readdirSync(dir)
     .filter((f) => f.endsWith('.jsonl'))
