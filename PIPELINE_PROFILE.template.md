@@ -314,7 +314,7 @@ error, because a typo would otherwise switch a check off in silence.
   "features": {
     "graph":            { "state": "off", "check": null, "sync": null, "syncFree": null, "autoLimitKb": 300 },
     "claims":           { "state": "on", "retracted": null, "registryIdPattern": "[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?", "jestBatch": null },
-    "planSchema":       { "state": "on", "sections": ["Track", "Context", "Tasks", "BLOCKERS"], "tables": {}, "oracle": null },
+    "planSchema":       { "state": "on", "sections": ["Track", "Context", "Tasks", "BLOCKERS"], "tables": {}, "taskColumns": ["Task", "Cites", "Test-seed"], "oracle": null },
     "findingsSchema":   { "state": "on" },
     "reviewTemplate":   { "state": "on" },
     "handoffPack":      { "state": "on", "tracker": null },
@@ -326,10 +326,13 @@ error, because a typo would otherwise switch a check off in silence.
     "costAccounting":   { "state": "off", "reader": "claude-code" },
     "bashCap":          { "state": "off", "limitBytes": 4096 },
     "registryGuard":    { "state": "off", "seats": [] },
+    "reanchor":         { "state": "off", "maxRuns": 2 },
+    "outboundGuard":    { "state": "off", "maxBytes": 8000, "denyPaths": [".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa*", "id_ed25519*", "*.keystore", "credentials*.json"], "envFiles": [".env", ".env.local", ".env.development", ".env.test"], "extraPatterns": [], "timeoutMs": 20000 },
     "citations":        { "state": "off", "schemes": [] },
     "lineCitations":    { "state": "off", "catalogues": [], "roots": [], "extensions": [".md"], "roster": null, "control": null, "minFiles": 1, "keyColumn": 0 },
     "wiring":           { "state": "off", "roots": [], "extensions": [], "testPattern": null, "allow": null, "kinds": [] },
     "instructionBudget":{ "state": "off", "files": [], "maxLines": 200 },
+    "instructionLint":  { "state": "off", "files": ["CLAUDE.md", "AGENTS.md", ".claude/**/*.md"], "ignorePaths": [], "figures": [], "sets": [], "baseline": null },
     "decisionIndex":    { "state": "off", "roots": [], "idPattern": "D-\\d+", "out": null },
     "ratchets":         { "state": "off", "lists": [] },
     "builderBatch":     { "state": "unmeasured", "rows": 5 },
@@ -338,10 +341,16 @@ error, because a typo would otherwise switch a check off in silence.
     "graphTrial":       { "state": "experimental-off", "seats": ["orchestrator", "module-planner", "standards-auditor", "invariant-auditor"], "callPattern": null },
     "personas":         { "state": "experimental-off", "catalogue": null, "keyColumn": 0, "labelColumn": 1, "roleColumns": null, "grant": "1", "out": null, "logins": null, "citationPattern": null },
     "advisorBuilder":   { "state": "experimental-off" },
+    "tokenEconomizer":  { "state": "experimental-off" },
+    "planReview":       { "state": "experimental-off" },
+    "rankedSearch":     { "state": "experimental-off" },
+    "riskHint":         { "state": "experimental-off" },
+    "walkPriority":     { "state": "experimental-off" },
+    "ruleNotes":        { "state": "experimental-off" },
     "mutationGate":     { "state": "experimental-off" },
     "liteSplit":        { "state": "experimental-off", "cap": 4, "trigger": 3, "ledgers": ["(^|/)CHANGELOG\\.md$"], "docsOnly": ["(^|/)README\\.md$"] },
     "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
-    "orchestrator":     { "state": "off", "target": null, "seats": ["primary"], "limits": { "secondary": 80, "primary": 60 }, "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null, "credit": { "enabled": false, "dailyCapUsd": null } }
+    "orchestrator":     { "state": "off", "target": null, "seats": ["primary"], "primaryLaunch": "manual", "limits": { "secondary": 80, "primary": 60 }, "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null, "credit": { "enabled": false, "dailyCapUsd": null } }
   }
 }
 ```

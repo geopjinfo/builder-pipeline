@@ -38,10 +38,12 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 
 | Claude Code step | Any harness |
 |---|---|
+| Instruction lint on edit | no post-edit hook. Run `node scripts/instruction-lint.mjs` before committing any instruction-file change; the P7 record gate runs it anyway |
 | Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`); never paste raw suite output into a context |
 | Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>` |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the reviewer may leave only its review file |
 | Protected-path hook | the universal pre-commit guard in `hooks/` (it holds for any agent) |
+| Re-anchor after compaction | unavailable. After any compaction, re-read `state.md`, the board's `phase:status` block and the open `FIX-n` rows by hand before the next dispatch (the playbook's rule) |
 | Session-start index refresh | unavailable. The P1 index gate (`node scripts/index-check.mjs`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
 | Subagent spawn depth 1 | the no-nested-run rule, by instruction; a fresh session that cannot dispatch satisfies it by construction |
 | Prompt-cache TTL by replay | unavailable unless your harness exposes cache settings; if it does, the replay method in `adapters/claude-code.md` applies unchanged |

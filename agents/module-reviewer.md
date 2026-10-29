@@ -63,11 +63,23 @@ result when it has run.
    Emit a traceability table (requirement | source id + § | interface/behaviour | code `file:line`
    | aligned ✅ / ⚠ partial / ❌ divergent | note). **No requirement marked aligned without a cited
    `file:line` on both sides.** Partial/divergent → a ranked finding with the citation + minimal fix.
-4. **Board audit.** Open `tasks/<moduleKey>.md`: every row is `DONE`, `DROPPED` (reasoned), or
+4. **Plan conformance and file scope.** The plan is a contract too.
+   - **Plan conformance.** For each Tasks row and each test-matrix case in `plan.md`, check that the
+     built code and tests do what the plan asked. A test that asserts something different from its
+     matrix line, a file edited in place of the one the plan named, or a planned step that was skipped
+     is a **warning** when the board or the decision log records why. It is a **blocker** when nothing
+     records it, because an unrecorded divergence is a decision nobody can review.
+   - **File scope.** Run `git diff --name-only <base>...<head>` and compare the result against the
+     brief's batch row `files` list plus any scope grant the orchestrator recorded in the run state. A
+     changed file outside both is a **blocker**: lanes are isolated by owned files, and an unclaimed
+     edit becomes a merge conflict or a silent overwrite in another lane. Hot files the brief lists are
+     in scope. With no row `files` list (a single-module run), write `file scope: not configured` under
+     Readiness.
+5. **Board audit.** Open `tasks/<moduleKey>.md`: every row is `DONE`, `DROPPED` (reasoned), or
    `DEFERRED→<id>` with a live matching row in the deferred registry; every `DONE` row cites test
    file(s) that exist and cover the row's acceptance; the tester's `adversarial` list shows genuine
    additions. Any divergence is a **blocker**, not a warning.
-5. Rank all surviving findings by severity (blocker → warning → nit), each mapped to its rule and
+6. Rank all surviving findings by severity (blocker → warning → nit), each mapped to its rule and
    `file:line`.
 
 ## Output contract — write `.pipeline/<moduleKey>/review-pass<n>.md` and return its summary

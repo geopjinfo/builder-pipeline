@@ -67,6 +67,11 @@ const FEATURES = {
   },
   wiring: { defaults: { state: 'off', roots: [], extensions: [], testPattern: null, allow: null, kinds: [] }, requires: ['roots', 'extensions', 'kinds'] },
   instructionBudget: { defaults: { state: 'off', files: [], maxLines: 200 }, requires: ['files', 'maxLines'] },
+  /* What instruction files state about the repo must still be true of it — scripts/instruction-lint.mjs. */
+  instructionLint: {
+    defaults: { state: 'off', files: ['CLAUDE.md', 'AGENTS.md', '.claude/**/*.md'], ignorePaths: [], figures: [], sets: [], history: null, baseline: null },
+    requires: ['files'],
+  },
   decisionIndex: { defaults: { state: 'off', roots: [], idPattern: 'D-\\d+', out: null }, requires: ['roots', 'idPattern', 'out'] },
   ratchets: { defaults: { state: 'off', lists: [] }, requires: ['lists'] },
   builderBatch: { defaults: { state: 'unmeasured', rows: 5 }, requires: ['rows'] },
@@ -81,6 +86,29 @@ const FEATURES = {
     requires: ['catalogue', 'out', 'citationPattern'],
   },
   advisorBuilder: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* A third-party cost plugin on trial lanes (tool pruning + loop guard) — EXPERIMENTS.md §9. Protocol only. */
+  tokenEconomizer: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* A fresh-context readiness review of plan.md between planner and builder — EXPERIMENTS.md §10. Protocol only. */
+  planReview: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* After a compaction, hand the session its run files and open FIX rows — hooks/claude-code/reanchor-after-compact.cjs. */
+  reanchor: { defaults: { state: 'off', maxRuns: 2 }, requires: ['maxRuns'] },
+  /* The one door a model-backed check sends through: denied files, secret shapes, env values, size — scripts/lib/outbound-guard.cjs. */
+  outboundGuard: {
+    defaults: {
+      state: 'off',
+      maxBytes: 8000,
+      denyPaths: ['.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx', 'id_rsa*', 'id_ed25519*', '*.keystore', 'credentials*.json'],
+      envFiles: ['.env', '.env.local', '.env.development', '.env.test'],
+      extraPatterns: [],
+      timeoutMs: 20000,
+    },
+    requires: ['maxBytes', 'denyPaths'],
+  },
+  /* Cheap-model checks from the decision-model review — EXPERIMENTS.md §12–15. Protocol only; each needs outboundGuard on. */
+  rankedSearch: { defaults: { state: 'experimental-off' }, requires: [] },
+  riskHint: { defaults: { state: 'experimental-off' }, requires: [] },
+  walkPriority: { defaults: { state: 'experimental-off' }, requires: [] },
+  ruleNotes: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
   /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
    * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue
@@ -118,6 +146,7 @@ const FEATURES = {
       stallMinutes: 90,
       usageStaleMinutes: 30,
       seats: ['primary'],
+      primaryLaunch: 'manual',
       limits: { secondary: 80, primary: 60 },
       secondaryConfigDir: null,
       usageCommand: null,
@@ -288,7 +317,10 @@ function validate(settings) {
     const kinds = isObject(src) ? ['csv', 'dir', 'files'].filter((k) => src[k] !== undefined) : [];
     if (kinds.length !== 1) return errors.push(`${at}.source: exactly one of { "csv", "column" } · { "dir", "filePattern" } · { "files", "idPattern" }`);
     if (kinds[0] === 'csv' && (typeof src.csv !== 'string' || !(typeof src.column === 'string' || Number.isInteger(src.column)))) errors.push(`${at}.source: "csv" needs a path and a "column" (header name or 0-based index)`);
-    if (kinds[0] === 'dir' && (typeof src.dir !== 'string' || typeof src.filePattern !== 'string' || badRegex(src.filePattern))) errors.push(`${at}.source: "dir" needs a path and a "filePattern" regular expression with one capture group`);
+    /* `dir` is one path or a non-empty list of paths: ids from every directory are merged into one set (a project
+       whose records live in more than one folder must not see a real id in the second folder fail as invented). */
+    const dirOk = typeof src.dir === 'string' || (Array.isArray(src.dir) && src.dir.length > 0 && src.dir.every((d) => typeof d === 'string' && d));
+    if (kinds[0] === 'dir' && (!dirOk || typeof src.filePattern !== 'string' || badRegex(src.filePattern))) errors.push(`${at}.source: "dir" needs a path (or a non-empty list of paths) and a "filePattern" regular expression with one capture group`);
     if (kinds[0] === 'files' && (!Array.isArray(src.files) || src.files.length === 0 || typeof src.idPattern !== 'string' || badRegex(src.idPattern))) errors.push(`${at}.source: "files" needs a non-empty path list and an "idPattern" regular expression`);
   });
   (entries('wiring', 'kinds') ?? []).forEach((k, i) => {
@@ -404,6 +436,9 @@ function validateOrchestrator(settings, badRegex) {
     if (!Array.isArray(seats) || seats.length === 0 || seats.some((s) => !['primary', 'secondary'].includes(s)) || new Set(seats).size !== seats.length) {
       errors.push(`${at('seats')}: a non-empty list of "secondary" and/or "primary", each once, in placement order`);
     }
+  }
+  if (o.primaryLaunch !== undefined && !['manual', 'app-session'].includes(o.primaryLaunch)) {
+    errors.push(`${at('primaryLaunch')}: "manual" (the human starts the lane's session) or "app-session" (the orchestrator starts it — adapters/claude-code.md)`);
   }
   if (o.limits !== undefined) {
     if (!isObject(o.limits)) errors.push(`${at('limits')}: { "secondary": pct, "primary": pct }`);

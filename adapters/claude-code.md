@@ -104,6 +104,8 @@ launches.
 |---|---|---|---|
 | `bash-output-cap.cjs` | `PostToolUse` · `Bash` | An output over `features.bashCap.limitBytes` is written whole under `paths.logs`. The context gets every error-shaped line with its line number, the tail, and the log path. The tier runner's output, already a digest, passes through. Never fails the tool call: any error leaves the original output in place | `bashCap` on · `limitBytes` · `paths.logs` |
 | `registry-read-guard.cjs` | `PreToolUse` · `Read` | Blocks a seat named in `features.registryGuard.seats` from reading the whole registry, and names the row reader instead: `node scripts/ledger-row.mjs registry <ID>`. The orchestrator carries no seat identity in the hook input and keeps Read | `registryGuard` on · `seats` · `paths.registry` · `rowReader` on |
+| `instruction-lint-on-edit.cjs` | `PostToolUse` · `Edit\|Write\|MultiEdit` | When the edited file is an instruction file, runs `node scripts/instruction-lint.mjs --files <it>`. A failure goes back to the agent as a blocking decision with the lint's lines, so a dead path or a bare line reference is fixed in the same turn. Never fails the tool call | `instructionLint` on · `files` |
+| `reanchor-after-compact.cjs` | `SessionStart` · `compact` | After a compaction, hands the session each run in flight: its `state.md` with the `Now:` line, the board and its first open phase, and the open `FIX-n` rows copied verbatim. It reads files only and makes no model call; no run in flight means no output. The orchestrator still re-reads the files: this only stops a summary from losing where they are | `reanchor` on · `maxRuns` · `paths.runs` · `paths.boards` |
 | `reviewer-write-guard.cjs` | `PreToolUse` · `Write\|Edit\|MultiEdit` | The reviewer may write exactly one kind of file: its review, `<runs>/<key>/review-pass<n>.md`. Every other write by that seat is blocked. A grant of Write to one file is only a grant if something enforces the one file | `reviewTemplate` on · `paths.runs` |
 
 **Where the cap takes effect — probed, not assumed.** A disposable project was driven headless with
@@ -240,6 +242,20 @@ your CLI version before relying on it.
 - **Primary-seat pipeline lanes.** With spawn depth 1 a sub-agent cannot dispatch the pipeline's seats, so a
   primary-seat lane that runs a pipeline is its own session on the primary account; only a SOLO lane runs as a
   sub-agent of the orchestrating session.
+- **`primaryLaunch: "app-session"`** (Claude desktop app only). The orchestrator starts that session itself with
+  the app's session tool (`start_session`: a fresh session, the lane worktree as its folder, the brief pointer as
+  its prompt) and records the returned id. The lane then shows in the sidebar, where the human can open it in split
+  view or ask it questions through a side chat without adding to its context. Three limits, all observed:
+  - **Plugins installed at local scope may not load** in an app-started session, although a CLI session in the same
+    folder loads them. The brief's first step therefore checks that the pipeline skill and every plugin it needs
+    are present, and writes `RESULT: FAIL missing <what>` as line 1 of the result file when one is not.
+  - **The turn-end note is cut at about 400 characters**, so it is a trigger only. Line 1 of the result file stays
+    the contract.
+  - **A permission prompt parks the session.** Handle it like a stall: name the prompt, fix the brief or the
+    settings, relaunch.
+
+  Terminal-only setups keep `manual`. Cloud sessions are never used for lanes: they need network access an
+  air-gapped project does not have.
 - **Shells.** In Windows PowerShell, `npm run x -- --flag` can drop the flags: call `node scripts/orch.mjs …`
   directly. A version manager that swaps Node may also drop the globally installed CLI; reinstall it per Node
   version.

@@ -28,6 +28,9 @@ How to run them:
 - Anything else: do NOT edit. If a row needs another file, stop and write `RESULT: FAIL needs <file>`.
 
 ## Where you work
+- First step, before anything else: confirm that the skill your dispatch names (and every plugin it needs) is
+  available in this session. If one is missing, write `RESULT: FAIL missing <what>` as line 1 of the result file
+  and stop. A lane without its skills would run the pipeline from memory.
 - Worktree: <worktree>   Branch: <branch> (cut from <target>)
 - Never: push, force, reset --hard, delete branches or worktrees, rewrite history, touch the release branch,
   local settings files, unlocks or the allow list.
@@ -36,6 +39,10 @@ How to run them:
   through `orch merge`.
 - Records go where the profile puts them: the board `<boards>/<key>.md`, decisions in `<decisions>`, deferrals in
   `<registry>`, questions to the human through the profile's channel (§13).
+- Index: copied into this worktree from the primary. The batch's Graph line is `<graph verdict line>`, decided in
+  `<decision log ref>`. At the pipeline's index step, run the free code sync if the check says code is behind.
+  Never stop to ask about pending docs: the orchestrator already settled that for the batch. Record the batch
+  decision on your `Graph:` line and go on.
 
 ## Seats the orchestrator runs on credit (fill or delete)
 <For each gate-queue key: "P4 auditors: run by the orchestrator on the credit lane (`orch credit-audit`); do NOT

@@ -31,6 +31,13 @@ are never edited to add a module.
 2. Implement the module's registration contract completely — every hook the template defines
    (permissions, routes, migrations, events, settings…), even if empty.
 3. The platform/host discovers it by convention — **no edit to protected core paths**.
+4. **In the same scaffold commit, update every check that counts modules.** A new module folder
+   on its own can turn a gate red before any behaviour exists: an oracle that lists every module's
+   namespace (audit actions, permission prefixes, rosters it feeds), or a fingerprint/baseline that
+   records the module count. Add the new entry to each such oracle and re-baseline each such
+   fingerprint here, not in a later row — and say in the commit and the board row's Notes that the
+   **count** moved, not a behaviour, so a reviewer does not read the re-baseline as an unexplained
+   drift. List the project's module-counting checks in the "Project idioms" section.
 
 ## 2. Build the layering (profile §5 — treat as enforced, not advisory)
 

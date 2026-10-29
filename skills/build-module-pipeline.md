@@ -91,7 +91,10 @@ verdict, each optional check's last result, decisions taken. Rewrite it at EVERY
 any context compaction, re-read in this order — (1) `state.md`, (2) the board's `phase:status`
 block, (3) the open `FIX-n` rows — BEFORE the next dispatch; never reconstruct a run from
 scrollback. **Every phase gate is a compact-safe checkpoint**: you cannot schedule a compaction,
-only make sure that wherever one lands the run survives it.
+only make sure that wherever one lands the run survives it. *Optional, Claude Code only:*
+`hooks/claude-code/reanchor-after-compact.cjs` (`features.reanchor`) hands the compacted session
+those three items — paths, the `Now:` line, the open `FIX-n` rows verbatim — so a summary cannot
+lose them; you still read the files. Feature off → `reanchor: not configured`.
 
 **Put the loop-back list last.** When you re-dispatch the coder, the ordered `FIX-n` list is the
 final thing in the brief, after the context — recency is the one placement effect you control.
@@ -266,7 +269,8 @@ reports the model the run actually used, where the harness keeps that record.
    ```
 
    It holds the plan to the section names in `features.planSchema.sections`, the fixed table
-   headers in `features.planSchema.tables`, and — when `features.planSchema.oracle` is set — every
+   headers in `features.planSchema.tables`, the Tasks columns in `features.planSchema.taskColumns`
+   (add `Files` to require each row's edited files), and — when `features.planSchema.oracle` is set — every
    catalogue key in those tables against the oracle. A malformed plan goes back to the planner once;
    still malformed → a seat-failure row on the board. Feature off → record
    `planSchema: not configured` in `state.md`. A fixed shape is what lets the board, the builder and
@@ -651,11 +655,12 @@ When **MERGE-READY**:
    before proceeding (an out-of-vocabulary status or dangling `DEFERRED→id` rots silently
    otherwise). Make sure every decision and human ruling of this run (boundary events, catalogue
    amendments, fold-in calls, escalation outcomes) is a row in `<decisions>` — future planners cite
-   these ids instead of re-asking. Then the two free record gates:
+   these ids instead of re-asking. Then the three free record gates:
 
    ```
    node scripts/decision-index.mjs --check
    node scripts/instruction-budget.mjs
+   node scripts/instruction-lint.mjs
    ```
 
    - **Decision index** (`features.decisionIndex`) — the index of decision ids is derived from their
@@ -666,6 +671,11 @@ When **MERGE-READY**:
      their line budget. Over budget → move a section into a path-scoped rule file (moved, not
      copied). Without a gate the root file grows back one working agreement at a time. Feature off →
      `instructionBudget: not configured`.
+   - **Instruction lint** (`features.instructionLint`) — what the instruction files state about the
+     repo is still true: every path resolves, no bare `:N` line reference, every registered figure
+     matches its source, every enumerated set is complete, and count claims and history phrases do
+     not grow past the baseline. A module that renamed or moved a file fixes the instructions that
+     cite it here, in the same run. Feature off → `instructionLint: not configured`.
 4. **Version bump** per profile §11 (e.g. semver + changelog entry: module key, requirements
    covered, interfaces/keys, deferrals, notable audit catches). Version + changelog ride the branch.
 5. **The handoff pack — P7 cannot close without it.** Every human-only change this module implies
