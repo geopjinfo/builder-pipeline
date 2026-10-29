@@ -8,7 +8,8 @@
  *
  * Settings: paths.boards · features.citations.schemes — each { name, pattern, skip?, ignoreCase?, source } where
  * source is one of { csv, column } · { dir, filePattern } · { files: [paths], idPattern } (a directory entry in
- * `files` is walked recursively). Paths resolve against the project root. Off → "citations: not configured", exit 0.
+ * `files` is walked recursively). `dir` is one path or a list of paths — every directory is read and the ids are
+ * merged into one set, so records kept in two folders resolve from either; each must exist. Paths resolve against the project root. Off → "citations: not configured", exit 0.
  *
  * No board files → "citations-check: no boards to check", exit 0 (said, never PASS).
  *
@@ -57,12 +58,13 @@ const schemes = lib.compileSchemes(feature.config.schemes);
 for (const scheme of schemes) {
   const src = scheme.source;
   const flags = scheme.ignoreCase ? 'i' : '';
-  const paths = src.csv !== undefined ? [src.csv] : src.dir !== undefined ? [src.dir] : src.files;
+  const dirs = src.dir === undefined ? [] : [].concat(src.dir);
+  const paths = src.csv !== undefined ? [src.csv] : src.dir !== undefined ? dirs : src.files;
   for (const p of paths) if (!existsSync(p)) die(`source missing — ${slash(p)} (scheme "${scheme.name}"). A source that is not there resolves nothing; fix the path, never read it as a pass.`);
   let ids;
   try {
     if (src.csv !== undefined) ids = lib.idsFromCsv(readFileSync(src.csv, 'utf8'), src.column);
-    else if (src.dir !== undefined) ids = lib.idsFromNames(readdirSync(src.dir).filter((f) => statSync(join(src.dir, f)).isFile()), src.filePattern, flags);
+    else if (src.dir !== undefined) ids = lib.idsFromNames(dirs.flatMap((d) => readdirSync(d).filter((f) => statSync(join(d, f)).isFile())), src.filePattern, flags);
     else ids = lib.idsFromTexts(src.files.flatMap((p) => walkFiles(p)).map((f) => readFileSync(f, 'utf8')), src.idPattern, flags);
   } catch (e) {
     die(`source unreadable — ${slash(paths[0])} (scheme "${scheme.name}"): ${e.message}`);
