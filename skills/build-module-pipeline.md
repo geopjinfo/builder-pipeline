@@ -91,7 +91,10 @@ verdict, each optional check's last result, decisions taken. Rewrite it at EVERY
 any context compaction, re-read in this order — (1) `state.md`, (2) the board's `phase:status`
 block, (3) the open `FIX-n` rows — BEFORE the next dispatch; never reconstruct a run from
 scrollback. **Every phase gate is a compact-safe checkpoint**: you cannot schedule a compaction,
-only make sure that wherever one lands the run survives it.
+only make sure that wherever one lands the run survives it. *Optional, Claude Code only:*
+`hooks/claude-code/reanchor-after-compact.cjs` (`features.reanchor`) hands the compacted session
+those three items — paths, the `Now:` line, the open `FIX-n` rows verbatim — so a summary cannot
+lose them; you still read the files. Feature off → `reanchor: not configured`.
 
 **Put the loop-back list last.** When you re-dispatch the coder, the ordered `FIX-n` list is the
 final thing in the brief, after the context — recency is the one placement effect you control.

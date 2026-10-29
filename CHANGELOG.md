@@ -5,6 +5,23 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Re-anchor after compaction (`features.reanchor`, `hooks/claude-code/reanchor-after-compact.cjs`).** A
+  `SessionStart` · `compact` hook hands the compacted session each run in flight: its `state.md` with the `Now:`
+  line, the board and its first open phase, and the open `FIX-n` rows copied verbatim. It reads files only, with
+  no model call, so a summary cannot lose where the run is. The orchestrator still re-reads the files.
+- **Outbound guard (`features.outboundGuard`, `scripts/lib/outbound-guard.cjs`, `scripts/outbound-check.mjs`).**
+  The one door for any step that sends an excerpt to a model. It refuses (never redacts) a denied file, a
+  secret-shaped string, a value from the project's env files, or a payload over the excerpt limit. A refusal, a
+  failed call and a timeout all come back as "no advice", so the pipeline never waits on it. The reasons name the
+  file, the line and the kind of match, never the matched text. With the feature off, the CLI refuses everything.
+- **EXPERIMENTS §12–15:** ranked plain search when the index is stale (`rankedSearch`), a raise-only review-level
+  hint (`riskHint`), model-chosen order for the seeded walk with a replayable trace (`walkPriority`), and advisory
+  notes on prose rules (`ruleNotes`). These are protocols only, each needs `outboundGuard` on, and none may block or
+  lower a level. They came from a review of hosted decision-model use cases against the pipeline: the ideas carried
+  over, the hosted service did not.
+
 ## [0.15.0] — 2026-10-29
 
 ### Added
