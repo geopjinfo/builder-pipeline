@@ -105,8 +105,12 @@ For each `LAUNCH <lane>` line, in order:
      and the first id in the log is the old session, whose `done` would stall the lane at once.
    - **Primary seat.** A SOLO lane: dispatch a sub-agent with the brief pointer; it writes its details to the result
      path and returns one line. A pipeline lane (full or lite) needs a session of its own on the primary account —
-     seats never dispatch, so a sub-agent cannot run a pipeline's seats. Then
-     `orch set <run> <lane> status=LAUNCHED seat=primary sessionId=<id>`.
+     seats never dispatch, so a sub-agent cannot run a pipeline's seats. `features.orchestrator.primaryLaunch`
+     says who starts it: `manual` (the default) → ask the human to start it in the lane worktree with the brief
+     pointer; `app-session` → start it yourself through the harness's session tool, in the lane worktree, with the
+     brief pointer as its whole prompt (the adapter names the tool and its limits). Either way, then
+     `orch set <run> <lane> status=LAUNCHED seat=primary sessionId=<id>`. The session's turn-end note is only a
+     trigger: read line 1 of the result file before `orch notice <run> <lane>`, as for any primary-seat lane.
    - Never start a worker in a permission-bypass mode.
 
 ## 4. While lanes run — the hub

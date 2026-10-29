@@ -25,11 +25,13 @@
  * Rates are USD per million tokens. Update the table AND the version together — a rate change under
  * an unchanged version is indistinguishable from no change at all.
  */
-const VERSION = '2026-09-10';
+const VERSION = '2026-10-29';
 
 /** USD per 1M tokens, verbatim from the published table on VERSION. `cacheRead` is the discounted read of a cached prefix. */
 const RATES = {
   'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.25, cacheWrite5m: 12.5, cacheWrite1h: 20 },
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite5m: 5, cacheWrite1h: 8 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite5m: 2.5, cacheWrite1h: 4 },
   'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite5m: 12.5, cacheWrite1h: 20 },
   'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite5m: 6.25, cacheWrite1h: 10 },
   'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite5m: 6.25, cacheWrite1h: 10 },

@@ -35,6 +35,9 @@ test('a cache write with no recorded split is priced at the 5-minute rate; a par
 
 test('a context-window suffix on the model id is stripped before lookup', () => {
   close(pricing.cost('claude-opus-5[1m]', { inputTokens: M }), 5);
+  // the current Opus and Sonnet are priced, so their dispatches are no longer "unpriced"
+  close(pricing.cost('claude-opus-5-5', { inputTokens: M, outputTokens: M, cacheReadTokens: M }), 4 + 20 + 0.2);
+  close(pricing.cost('claude-sonnet-5-5[1m]', { cacheWriteTokens: M, cacheWrite1hTokens: M }), 4);
   assert.equal(pricing.baseModel('claude-opus-5[1m]'), 'claude-opus-5');
 });
 
