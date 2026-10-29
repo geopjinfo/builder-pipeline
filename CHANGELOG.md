@@ -5,8 +5,37 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-10-29
+
 ### Added
 
+- **Instruction lint (`features.instructionLint`, `scripts/instruction-lint.mjs`).** The instruction files
+  (CLAUDE.md, AGENTS.md, `.claude/**`) are held to the repo:
+  - every inline-code path resolves;
+  - no bare `:N` line reference;
+  - every registered figure matches its source command;
+  - every enumerated set is complete;
+  - count claims and incident-history phrases may not grow past a baseline (`--refresh`).
+
+  It runs as a P7 record gate. `hooks/claude-code/instruction-lint-on-edit.cjs` blocks an agent's failing
+  edit in the same turn; in that `--files` mode no figure command runs. DESIGN §17 gains two writing rules:
+  never type a repo count, and a rule cites a decision id while its history stays in the decision record.
+  One adopting project's audit found every high-confidence drift of this kind, and the lint now catches all
+  of them.
+- **Plan-gap checks.** The planner gives every Tasks row a `Files` column and leaves no placement decision
+  to the builder: which file, which specs pin it, no conditional steps, no timing-dependent asserts. Files
+  outside the batch row's list become a `NEEDS-RULING · scope` entry. The reviewer's new step 4 holds the
+  build to `plan.md` and the diff to the row's files: an unrecorded divergence or an out-of-scope edit is a
+  blocker. `output-check` requires `Files` when `features.planSchema.taskColumns` lists it. These came from
+  a fresh-context plan review that caught gaps no seat had recorded.
+- **The orchestrator owns the index, once per batch.** Before the split approval it runs the index check in
+  the primary and asks the human, once, about docs above the embed limit. Each lane worktree gets a copy
+  of the index, and lane briefs never stop to ask. Lanes in fresh worktrees had been planning with no index.
+- **`orchestrator.primaryLaunch: "app-session"`** (opt-in). The orchestrator starts a primary-seat pipeline
+  lane as its own app session. The adapter lists the limits that were observed, and the lane brief's first
+  step refuses to run without its skills.
+- **Experiments 9–11:** `tokenEconomizer`, `planReview`, and `primaryLaunch`, each with a baseline, a
+  keep/remove rule and its risk.
 - **A citations `dir` source may name several directories.** `source.dir` accepts one path or a
   non-empty list; every directory is read and the ids are merged into one set. Observed in an adopting
   project whose decision records live in two folders: a board citing a real record from the second
@@ -20,12 +49,21 @@ versions independently of any project it is pasted into.
 
 ### Fixed
 
+- **The cost meter priced nothing on the current models and lost seat names.** It now has rates for
+  `claude-opus-5-5` and `claude-sonnet-5-5` (table version 2026-10-29). A resumed session's copy of a
+  subagent transcript no longer erases the seat type its original recorded. In one adopting project, 93
+  of 97 dispatches had read as `unknown` and every one as unpriced.
 - **`orchestrator-check` reported "unmeasured" (exit 0) from a worktree.** The transcript folder is
   derived from the working directory, but a run working in a separate worktree keeps its session
   transcript under the folder the session started from. A session named by `--session` or
   `CLAUDE_CODE_SESSION_ID` is now looked up in this checkout's folder first, then in every project
   folder; the newest-file fallback stays local. Test with a negative control (an unknown id stays
   unmeasured).
+
+### Changed
+
+- **DESIGN.md** gains a terms block, a "costs and when this is overkill" block, the phase order in one
+  line, and a "does not vary" list keyed to principle numbers.
 
 ## [0.14.0] — 2026-10-22
 
