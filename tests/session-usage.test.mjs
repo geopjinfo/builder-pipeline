@@ -6,7 +6,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,6 +56,21 @@ test('the subagent index reads the agent type from the meta file', () => {
   assert.equal(index.get('bg1').sessionId, 'sess-1');
   assert.equal(sessionUsage.subagentUsage('bg2', index), null);
   assert.equal(sessionUsage.subagentIndex(missing).size, 0);
+});
+
+test('the subagent index keeps the agent type when a resumed session copies a transcript without its meta', () => {
+  const root = mkdtempSync(join(tmpdir(), 'su-dup-'));
+  try {
+    for (const [sess, meta] of [['a-orig', true], ['b-copy', false]]) {
+      const dir = join(root, sess, 'subagents');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'agent-x1.jsonl'), '');
+      if (meta) writeFileSync(join(dir, 'agent-x1.meta.json'), JSON.stringify({ agentType: 'security-auditor' }));
+    }
+    assert.equal(sessionUsage.subagentIndex(root).get('x1').agentType, 'security-auditor');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('orchestrator usage is scoped to the named sessions and the run window', () => {

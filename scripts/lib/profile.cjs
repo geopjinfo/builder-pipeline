@@ -81,6 +81,10 @@ const FEATURES = {
     requires: ['catalogue', 'out', 'citationPattern'],
   },
   advisorBuilder: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* A third-party cost plugin on trial lanes (tool pruning + loop guard) — EXPERIMENTS.md §9. Protocol only. */
+  tokenEconomizer: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* A fresh-context readiness review of plan.md between planner and builder — EXPERIMENTS.md §10. Protocol only. */
+  planReview: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
   /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
    * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue
@@ -118,6 +122,7 @@ const FEATURES = {
       stallMinutes: 90,
       usageStaleMinutes: 30,
       seats: ['primary'],
+      primaryLaunch: 'manual',
       limits: { secondary: 80, primary: 60 },
       secondaryConfigDir: null,
       usageCommand: null,
@@ -407,6 +412,9 @@ function validateOrchestrator(settings, badRegex) {
     if (!Array.isArray(seats) || seats.length === 0 || seats.some((s) => !['primary', 'secondary'].includes(s)) || new Set(seats).size !== seats.length) {
       errors.push(`${at('seats')}: a non-empty list of "secondary" and/or "primary", each once, in placement order`);
     }
+  }
+  if (o.primaryLaunch !== undefined && !['manual', 'app-session'].includes(o.primaryLaunch)) {
+    errors.push(`${at('primaryLaunch')}: "manual" (the human starts the lane's session) or "app-session" (the orchestrator starts it — adapters/claude-code.md)`);
   }
   if (o.limits !== undefined) {
     if (!isObject(o.limits)) errors.push(`${at('limits')}: { "secondary": pct, "primary": pct }`);

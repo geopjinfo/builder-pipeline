@@ -141,6 +141,9 @@ function subagentIndex(projectDir) {
       } catch {
         /* no meta — keep the row, type unknown */
       }
+      // A resumed or forked session copies the parent's subagent transcripts without their meta files.
+      // The same agent id then appears twice, and the copy must not erase the type the original recorded.
+      agentType ??= index.get(m[1])?.agentType ?? null;
       index.set(m[1], { file: join(dir, name), sessionId: entry.name, agentType });
     }
   }

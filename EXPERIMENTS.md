@@ -244,3 +244,59 @@ wrongly declared as bookkeeping would keep a stale proof (unsafe) — declare `l
   most of an hour. The fix is to run each test config at most once per sha, or to accept a tier log already
   produced at the same sha — with a red test proving a stale log is refused. Do not change the checker while
   lanes are mid-run on it: that changes the rules under them.
+
+## 9. Learned cost control on trial lanes — `tokenEconomizer` (experimental)
+
+**What ships.** Nothing but this protocol. The plugin is third-party (microsoft/TokenEconomizer, Apache-2.0): it
+prunes tools a repo's sessions never use, sends one redirect note when a turn is stuck in a failure loop, and can
+inject repo facts confirmed over three sessions. It supports a fixed range of harness versions; check yours first.
+
+**Opt in.** `features.tokenEconomizer.state: "experimental-on"`, then install the plugin at local scope **in the
+trial lane worktrees only**, with micro-skills off. It is a dev-time tool: nothing of it ships to an air-gapped
+host.
+
+**Measurement.** First check the meter: `node scripts/cost-window.mjs` over a recent week must price every
+dispatch and name every seat. An `unpriced` count or an `unknown` seat means the rate table or the transcript
+reader is behind, and no comparison is valid until it is fixed. Then take the baseline over two comparable lanes
+without the plugin (`cost-window`, `seat-peaks`, `fix-rate`) and repeat over two lanes with it. **Keep** if cost
+per lane fell and the fix-of-fix rate did not rise; check that pruning removed no tool a seat's `capabilities`
+need. **Remove** otherwise.
+
+**Risk.** A pruned tool a seat needs shows up as a seat that cannot finish, not as an error; the plugin's
+one-command restore undoes it. A harness upgrade past the supported range leaves the plugin inert without saying
+so, so pin the harness version for the trial.
+
+## 10. Fresh-context plan review — `planReview` (experimental)
+
+**What ships.** Nothing but this protocol. Between P1 and P2, a reviewer with **no project instruction files and
+no conversation history** reads `plan.md` and the code it cites, and reports placement decisions left to the
+builder, timing-dependent assertions, specs the plan changes without listing, and edits outside the lane's files.
+On Claude Code the Elephant-Goldfish Model plugin's stage 9 (`implementation_readiness` + `codebase_details` +
+`style`) does this; run it from the CLI, because an app-started session may not load a local-scope plugin.
+
+**Opt in.** `features.planReview.state: "experimental-on"`. The review is read-only, so it may run on the credit
+lane.
+
+**Measurement.** One adopting project's trial on one finished plan, blind to its later records: 0 blockers and
+10 majors, about 80 seconds and $7. It missed 4 of the 6 code and test fixes the auditors later raised, and caught
+two gaps no seat recorded: a race asserted as one fixed code, and edits outside the batch row's files. The planner
+and reviewer personas now check both, so the question this trial must answer is narrower: **does the review still
+find gaps those checks miss?** Run it on the next three FULL-track plans, blind, and score every finding against
+the lane's `FIX-n` rows and review passes. **Keep** if it prevents at least one FIX row per plan that the
+persona checks did not; **remove** otherwise.
+
+**Risk.** A reviewer graded against a feature-spec standard over-corrects: on a rationale document, about half of
+one trial's findings were dropped as the wrong standard. Give it the implementation-readiness standard only.
+
+## 11. Primary-seat lanes started by the orchestrator — `orchestrator.primaryLaunch` (unmeasured, off by default)
+
+**What ships.** `features.orchestrator.primaryLaunch: "app-session"` lets the orchestrator start a primary-seat
+pipeline lane as its own app session instead of asking the human to (`skills/orchestrator.md` §3,
+`adapters/claude-code.md`). The brief's first step refuses to run without its skills.
+
+**Measurement.** One batch with at least one primary-seat pipeline lane, against the last batch where those lanes
+were started by hand: human interventions per lane (starts, unblocks), stalls, and the time from `LAUNCH` to
+`LAUNCHED`. **Keep** if interventions fell and stalls did not rise; **remove** otherwise.
+
+**Risk.** A session that silently lacks a plugin or hook runs the pipeline without its guards. The first-step
+check exists for that; a lane that fails it is a stall, never a degraded run.

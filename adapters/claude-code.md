@@ -240,6 +240,20 @@ your CLI version before relying on it.
 - **Primary-seat pipeline lanes.** With spawn depth 1 a sub-agent cannot dispatch the pipeline's seats, so a
   primary-seat lane that runs a pipeline is its own session on the primary account; only a SOLO lane runs as a
   sub-agent of the orchestrating session.
+- **`primaryLaunch: "app-session"`** (Claude desktop app only). The orchestrator starts that session itself with
+  the app's session tool (`start_session`: a fresh session, the lane worktree as its folder, the brief pointer as
+  its prompt) and records the returned id. The lane then shows in the sidebar, where the human can open it in split
+  view or ask it questions through a side chat without adding to its context. Three limits, all observed:
+  - **Plugins installed at local scope may not load** in an app-started session, although a CLI session in the same
+    folder loads them. The brief's first step therefore checks that the pipeline skill and every plugin it needs
+    are present, and writes `RESULT: FAIL missing <what>` as line 1 of the result file when one is not.
+  - **The turn-end note is cut at about 400 characters**, so it is a trigger only. Line 1 of the result file stays
+    the contract.
+  - **A permission prompt parks the session.** Handle it like a stall: name the prompt, fix the brief or the
+    settings, relaunch.
+
+  Terminal-only setups keep `manual`. Cloud sessions are never used for lanes: they need network access an
+  air-gapped project does not have.
 - **Shells.** In Windows PowerShell, `npm run x -- --flag` can drop the flags: call `node scripts/orch.mjs …`
   directly. A version manager that swaps Node may also drop the globally installed CLI; reinstall it per Node
   version.

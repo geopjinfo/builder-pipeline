@@ -28,6 +28,9 @@ How to run them:
 - Anything else: do NOT edit. If a row needs another file, stop and write `RESULT: FAIL needs <file>`.
 
 ## Where you work
+- First step, before anything else: confirm that the skill your dispatch names (and every plugin it needs) is
+  available in this session. If one is missing, write `RESULT: FAIL missing <what>` as line 1 of the result file
+  and stop. A lane without its skills would run the pipeline from memory.
 - Worktree: <worktree>   Branch: <branch> (cut from <target>)
 - Never: push, force, reset --hard, delete branches or worktrees, rewrite history, touch the release branch,
   local settings files, unlocks or the allow list.
