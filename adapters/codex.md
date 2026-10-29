@@ -74,6 +74,7 @@ If it is not running, the page is only as fresh as the last explicit
 
 | Claude Code step | Here |
 |---|---|
+| Instruction lint on edit | no post-edit hook. Run `node scripts/instruction-lint.mjs` before committing any instruction-file change; the P7 record gate runs it anyway |
 | Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`), and never paste raw suite output into a phase |
 | Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>`; check a seat's transcript if in doubt |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the only change the reviewer may leave is its review file |

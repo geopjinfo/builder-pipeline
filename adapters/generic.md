@@ -38,6 +38,7 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 
 | Claude Code step | Any harness |
 |---|---|
+| Instruction lint on edit | no post-edit hook. Run `node scripts/instruction-lint.mjs` before committing any instruction-file change; the P7 record gate runs it anyway |
 | Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`); never paste raw suite output into a context |
 | Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>` |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the reviewer may leave only its review file |

@@ -398,6 +398,19 @@ The fix is a test that parses the source, derives the figure, and holds every in
 it, with a red proof that the stale sentence fails. A count in a ledger follows the same rule:
 record it with the command that produced it, so the claims check can re-run it.
 
+The same holds for every other fact an instruction file states about the repo: a path, a version in a
+file name, the members of a set. In one adopting project a single audit found a decision-record range
+frozen many records short, a persona citing a spec version that no longer existed, a reviewer told
+to read three of the four reports it had to pass, and line references that had come to point at
+unrelated text. `scripts/instruction-lint.mjs` checks all of these. Two writing rules keep the
+remainder from piling up:
+
+- **Never type a count of something in the repo.** Say *all*, say what to derive it from, or register
+  the figure with the command that computes it.
+- **A rule states its mechanism and cites a decision id.** The incident that produced it ("this used
+  to say…", "fixed on <date>", "until X merges") belongs in the decision record, where it can age
+  without misleading anyone. The lint ratchets these phrases so their number only falls.
+
 ### 18. An instruction with no runnable command is decoration
 
 A seat told what to value but not what to run does nothing: "use the knowledge index", "consult

@@ -67,6 +67,11 @@ const FEATURES = {
   },
   wiring: { defaults: { state: 'off', roots: [], extensions: [], testPattern: null, allow: null, kinds: [] }, requires: ['roots', 'extensions', 'kinds'] },
   instructionBudget: { defaults: { state: 'off', files: [], maxLines: 200 }, requires: ['files', 'maxLines'] },
+  /* What instruction files state about the repo must still be true of it — scripts/instruction-lint.mjs. */
+  instructionLint: {
+    defaults: { state: 'off', files: ['CLAUDE.md', 'AGENTS.md', '.claude/**/*.md'], ignorePaths: [], figures: [], sets: [], history: null, baseline: null },
+    requires: ['files'],
+  },
   decisionIndex: { defaults: { state: 'off', roots: [], idPattern: 'D-\\d+', out: null }, requires: ['roots', 'idPattern', 'out'] },
   ratchets: { defaults: { state: 'off', lists: [] }, requires: ['lists'] },
   builderBatch: { defaults: { state: 'unmeasured', rows: 5 }, requires: ['rows'] },

@@ -330,6 +330,7 @@ error, because a typo would otherwise switch a check off in silence.
     "lineCitations":    { "state": "off", "catalogues": [], "roots": [], "extensions": [".md"], "roster": null, "control": null, "minFiles": 1, "keyColumn": 0 },
     "wiring":           { "state": "off", "roots": [], "extensions": [], "testPattern": null, "allow": null, "kinds": [] },
     "instructionBudget":{ "state": "off", "files": [], "maxLines": 200 },
+    "instructionLint":  { "state": "off", "files": ["CLAUDE.md", "AGENTS.md", ".claude/**/*.md"], "ignorePaths": [], "figures": [], "sets": [], "baseline": null },
     "decisionIndex":    { "state": "off", "roots": [], "idPattern": "D-\\d+", "out": null },
     "ratchets":         { "state": "off", "lists": [] },
     "builderBatch":     { "state": "unmeasured", "rows": 5 },
