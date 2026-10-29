@@ -5,6 +5,28 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **A citations `dir` source may name several directories.** `source.dir` accepts one path or a
+  non-empty list; every directory is read and the ids are merged into one set. Observed in an adopting
+  project whose decision records live in two folders: a board citing a real record from the second
+  folder failed as an invented id. Each listed directory must exist (a missing one exits 2, never
+  skipped); an empty list is an invalid profile. Test: "a dir source may be an array — ids from every
+  directory are merged into one set", red before the change.
+- **Scaffold step: update every module-counting check in the scaffold commit.**
+  `skills/scaffold-module.md` §1 step 4 — a new module folder alone can turn an oracle that lists
+  module namespaces, or a fingerprint that records the module count, red; both are fixed in the
+  scaffold commit and the re-baseline is labelled a count move, not a behaviour change.
+
+### Fixed
+
+- **`orchestrator-check` reported "unmeasured" (exit 0) from a worktree.** The transcript folder is
+  derived from the working directory, but a run working in a separate worktree keeps its session
+  transcript under the folder the session started from. A session named by `--session` or
+  `CLAUDE_CODE_SESSION_ID` is now looked up in this checkout's folder first, then in every project
+  folder; the newest-file fallback stays local. Test with a negative control (an unknown id stays
+  unmeasured).
+
 ## [0.14.0] — 2026-10-22
 
 ### Added

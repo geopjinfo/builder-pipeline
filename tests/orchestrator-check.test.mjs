@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -86,6 +88,30 @@ test('CLI red: a transcript with no orchestrator turns is unmeasured, exit 0', (
   const r = run('orchestrator', ['--transcript', 'no-turns.jsonl']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /unmeasured, not a pass/);
+});
+
+test('CLI: a session id is found in another project folder — a worktree run still measures its own session', () => {
+  // The transcript folder is derived from the working directory; a run working in a worktree keeps its
+  // transcript under the folder the session STARTED from. Seed a fake home with the session in a sibling folder.
+  const home = mkdtempSync(join(tmpdir(), 'orch-home-'));
+  const elsewhere = join(home, '.claude', 'projects', 'the-folder-the-session-started-in');
+  mkdirSync(elsewhere, { recursive: true });
+  copyFileSync(fx('orchestrator', 'mismatch.jsonl'), join(elsewhere, 'sess-42.jsonl'));
+  const env = { ...process.env, HOME: home, USERPROFILE: home, CLAUDE_CODE_SESSION_ID: '' };
+  const go = (args, extra = {}) => spawnSync(process.execPath, [cli, ...args], { cwd: fx('orchestrator'), encoding: 'utf8', env: { ...env, ...extra } });
+  try {
+    const byFlag = go(['--session', 'sess-42']);
+    assert.equal(byFlag.status, 5, byFlag.stdout + byFlag.stderr);
+    assert.match(byFlag.stdout, /WARNING orchestrator model: this session runs model-beta/);
+    const byEnv = go([], { CLAUDE_CODE_SESSION_ID: 'sess-42' });
+    assert.equal(byEnv.status, 5, byEnv.stdout + byEnv.stderr);
+    // Negative control: an id that is in no folder stays unmeasured — the search never picks another session.
+    const unknown = go(['--session', 'sess-404']);
+    assert.equal(unknown.status, 0);
+    assert.match(unknown.stdout, /unmeasured, not a pass/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('CLI: feature off prints not configured; another reader prints unmeasurable', () => {
