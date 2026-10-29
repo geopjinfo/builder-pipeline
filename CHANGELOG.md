@@ -60,6 +60,8 @@ versions independently of any project it is pasted into.
   folder; the newest-file fallback stays local. Test with a negative control (an unknown id stays
   unmeasured).
 
+- **The pack's prose tests read nested worktrees as pack prose.** A worktree of this repo under `.claude/worktrees/` was walked like any other folder, so its files failed the retracted-premise and script-name checks; an adopting project's arch gate, which runs this suite, went red while a worktree existed. `.claude/` (local state only) is now skipped, with a planted-file test that fails without the skip.
+
 ### Changed
 
 - **DESIGN.md** gains a terms block, a "costs and when this is overkill" block, the phase order in one
