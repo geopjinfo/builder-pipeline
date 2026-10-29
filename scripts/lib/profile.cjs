@@ -288,7 +288,10 @@ function validate(settings) {
     const kinds = isObject(src) ? ['csv', 'dir', 'files'].filter((k) => src[k] !== undefined) : [];
     if (kinds.length !== 1) return errors.push(`${at}.source: exactly one of { "csv", "column" } · { "dir", "filePattern" } · { "files", "idPattern" }`);
     if (kinds[0] === 'csv' && (typeof src.csv !== 'string' || !(typeof src.column === 'string' || Number.isInteger(src.column)))) errors.push(`${at}.source: "csv" needs a path and a "column" (header name or 0-based index)`);
-    if (kinds[0] === 'dir' && (typeof src.dir !== 'string' || typeof src.filePattern !== 'string' || badRegex(src.filePattern))) errors.push(`${at}.source: "dir" needs a path and a "filePattern" regular expression with one capture group`);
+    /* `dir` is one path or a non-empty list of paths: ids from every directory are merged into one set (a project
+       whose records live in more than one folder must not see a real id in the second folder fail as invented). */
+    const dirOk = typeof src.dir === 'string' || (Array.isArray(src.dir) && src.dir.length > 0 && src.dir.every((d) => typeof d === 'string' && d));
+    if (kinds[0] === 'dir' && (!dirOk || typeof src.filePattern !== 'string' || badRegex(src.filePattern))) errors.push(`${at}.source: "dir" needs a path (or a non-empty list of paths) and a "filePattern" regular expression with one capture group`);
     if (kinds[0] === 'files' && (!Array.isArray(src.files) || src.files.length === 0 || typeof src.idPattern !== 'string' || badRegex(src.idPattern))) errors.push(`${at}.source: "files" needs a non-empty path list and an "idPattern" regular expression`);
   });
   (entries('wiring', 'kinds') ?? []).forEach((k, i) => {

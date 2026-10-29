@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -193,6 +193,41 @@ describe('citations-check — CLI on a fixture project', () => {
     const r = run(project(), 'tasks/restock.md');
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.equal(lastLine(r), 'citations-check: PASS — 1 resolved, 0 prose (not-evaluable), 0 unresolved, across 1 board(s)');
+  });
+
+  test('a dir source may be an array — ids from every directory are merged into one set', () => {
+    const dir = project();
+    mkdirSync(join(dir, 'records-archive'));
+    renameSync(join(dir, 'records', 'REG-002-negative-stock.md'), join(dir, 'records-archive', 'REG-002-negative-stock.md'));
+    appendFileSync(join(dir, 'tasks', 'restock.md'), '| T2 | x | REG-002 | — | PLANNED |\n');
+    // Negative control: one directory alone no longer holds REG-002, so the citation fails as invented.
+    const single = run(dir);
+    assert.equal(single.status, 1, single.stdout + single.stderr);
+    assert.match(single.stderr, /UNRESOLVED REG-002 {2}\(record\)/);
+    // Both directories: REG-002 resolves from the second, REG-001 still from the first.
+    setProfile(dir, (s) => {
+      s.features.citations.schemes[1].source.dir = ['records', 'records-archive'];
+    });
+    const both = run(dir, '--json');
+    assert.equal(both.status, 0, both.stdout + both.stderr);
+    const data = JSON.parse(both.stdout);
+    assert.deepEqual(data.schemes.find((x) => x.name === 'record').ids, 2);
+    assert.equal(data.results.filter((x) => x.token === 'REG-002').every((x) => x.verdict === 'resolved'), true);
+    // A listed directory that is missing is a missing source — never skipped.
+    rmSync(join(dir, 'records-archive'), { recursive: true });
+    const missing = run(dir);
+    assert.equal(missing.status, 2);
+    assert.match(missing.stderr, /source missing — records-archive \(scheme "record"\)/);
+  });
+
+  test('an empty dir list is an invalid profile', () => {
+    const dir = project();
+    setProfile(dir, (s) => {
+      s.features.citations.schemes[1].source.dir = [];
+    });
+    const r = run(dir);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /features\.citations\.schemes\[1\]\.source: "dir" needs a path/);
   });
 
   test('an invalid profile exits 2 and lists the errors', () => {
