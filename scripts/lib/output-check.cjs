@@ -70,11 +70,16 @@ function checkPlan(text, schema = {}) {
   }
 
   // Every task row is worked test-first, and every row answers to a source — so the Tasks table must carry both
-  // columns, whatever else a project's plan contains.
+  // columns, whatever else a project's plan contains. A project can require more: adding "Files" to taskColumns
+  // makes each row name the files it edits, which the reviewer holds the diff to.
   const taskColumns = schema.taskColumns ?? DEFAULT_TASK_COLUMNS;
   if (sections.includes('Tasks') && taskColumns.length > 0) {
     const found = lines.some((l) => isTableLine(l) && taskColumns.every((c) => cellsOf(l).includes(c)));
-    if (!found) errors.push(`no Tasks table with columns ${taskColumns.join(', ')}`);
+    if (!found) {
+      const near = lines.find((l) => isTableLine(l) && cellsOf(l).includes('Task'));
+      const missing = near ? taskColumns.filter((c) => !cellsOf(near).includes(c)) : [];
+      errors.push(`no Tasks table with columns ${taskColumns.join(', ')}${missing.length ? ` (missing: ${missing.join(', ')})` : ''}`);
+    }
   }
 
   for (const cls of BLOCKER_CLASSES) if (!text.includes(cls)) errors.push(`BLOCKERS does not name the ${cls} class (write "none" under it when empty)`);

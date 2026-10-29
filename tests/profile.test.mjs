@@ -85,6 +85,14 @@ test('red: a malformed plan oracle, handoff tracker or id pattern is refused at 
   assert.deepEqual(good, []);
 });
 
+test('red: an unknown orchestrator primaryLaunch mode is refused; both known modes load', () => {
+  const errs = (primaryLaunch) => profile.parse(block({ schema: 2, features: { orchestrator: { state: 'off', primaryLaunch } } })).errors
+    .filter((e) => e.includes('primaryLaunch'));
+  assert.equal(errs('cloud').length, 1);
+  assert.deepEqual(errs('manual'), []);
+  assert.deepEqual(errs('app-session'), []);
+});
+
 test('feature() refuses a name the pack does not know', () => {
   assert.throws(() => profile.feature(profile.DEFAULTS, 'nope'), /unknown feature/);
 });

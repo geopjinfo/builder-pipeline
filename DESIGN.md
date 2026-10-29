@@ -11,6 +11,18 @@ file tells the human (or the agent tuning the kit for a new project) *why each m
 which rules are load-bearing, and what broke when a rule was missing. Read it before you customize
 anything — most "simplifications" people are tempted to make were tried and failed.
 
+**Terms used here** (the kit itself is described in [`README.md`](README.md); the profile in
+[`PIPELINE_PROFILE.template.md`](PIPELINE_PROFILE.template.md)):
+
+- **Seat** — a persona dispatched in one phase. It is a role in the pipeline, not a Claude account; README's "Multi-account seats" uses the word for accounts.
+- **Board** — the run's task file, `tasks/<moduleKey>.md`, one row per deliverable (§8).
+- **Oracle** — a closed catalogue the agents consult and never extend (§5).
+- **Handoff pack** — the one close-out file listing what a human must act on (§8).
+- **MERGE-READY / CHANGES-REQUIRED** — the reviewer's two verdicts; the human merges, the pipeline never does (§12).
+- **FIX-n** — a board row for one loop-back fix (§9).
+- **Positive control** — a check, on the same fixture, that the thing an absence assertion denies could have been there (§11).
+- **BLOCKER** — a gap in the docs that stops the seat; the seat reports it and does not guess (§4).
+
 ## The problem it solves
 
 Building many similar feature modules with AI agents fails in predictable ways:
@@ -74,6 +86,10 @@ Each phase is a distinct persona with **only the tools its role needs**:
 | 5 Docs | docs-maintainer | allowed doc paths only | mid |
 | 6 Review | module-reviewer | its review file only | strong |
 | 6.5 Behavioural | orchestrator | reports only (runs the real app) | — |
+
+Phase order: `0.5 Track → 1 Plan → 2 Code → 3 Test → 3b Drift → 4a–4d Audit (parallel) → 5 Docs → 6 Review → 6.5 Behavioural`.
+
+The persona files in `agents/` map to phases 1, 2, 3, 4a–4d, 5 and 6, one file per seat. The orchestrator is a skill, not a persona file.
 
 Tiers are fixed in profile §12. Tool scoping is not decoration: a read-only auditor *cannot*
 "helpfully fix" what it finds (which would hide the defect from the coder and the record); a tester
@@ -398,6 +414,19 @@ The fix is a test that parses the source, derives the figure, and holds every in
 it, with a red proof that the stale sentence fails. A count in a ledger follows the same rule:
 record it with the command that produced it, so the claims check can re-run it.
 
+The same holds for every other fact an instruction file states about the repo: a path, a version in a
+file name, the members of a set. In one adopting project a single audit found a decision-record range
+frozen many records short, a persona citing a spec version that no longer existed, a reviewer told
+to read three of the four reports it had to pass, and line references that had come to point at
+unrelated text. `scripts/instruction-lint.mjs` checks all of these. Two writing rules keep the
+remainder from piling up:
+
+- **Never type a count of something in the repo.** Say *all*, say what to derive it from, or register
+  the figure with the command that computes it.
+- **A rule states its mechanism and cites a decision id.** The incident that produced it ("this used
+  to say…", "fixed on <date>", "until X merges") belongs in the decision record, where it can age
+  without misleading anyone. The lint ratchets these phrases so their number only falls.
+
 ### 18. An instruction with no runnable command is decoration
 
 A seat told what to value but not what to run does nothing: "use the knowledge index", "consult
@@ -467,17 +496,54 @@ implementations; gate names; the readiness checklist content; docs write-scope; 
 maps to which phase in your harness; which optional features are on (§16), from what the project
 actually has.
 
-**Does not vary (keep even if it feels heavy):** the phase order; parallel independent auditors;
-read-only enforcement on audit seats; the five-clause operating contract; distilled-artifact
-threading; TDD-per-row with seeds; DONE-requires-test-evidence; the loop-back protocol with
-two-strike escalation; verify-don't-trust in review; the close-out DONE audit; the deferred
-registry entry/exit sweeps; stop-and-ask on boundary events; one run per session; optional checks
-that say `not configured` rather than pass.
+**Does not vary (keep even if it feels heavy).** Each item is keyed to its principle.
+
+Core: never drop or merge.
+
+- §1 — orchestrator conducts, personas play
+- §2 — persona per phase and the phase order
+- §2 — parallel independent auditors
+- §2 — read-only enforcement on audit seats
+- §3 — distilled-artifact threading
+- §4 — the five-clause operating contract
+- §5 — oracles
+- §6 — golden path
+- §7 — TDD per row with seeds
+- §7 — DONE requires test evidence
+- §8 — durable ledgers
+- §8 — deferred registry entry and exit sweeps
+- §9 — fix loop with two-strike escalation
+- §10 — verify, don't trust, in review
+- §11 — earn each DONE at close-out
+- §12 — protected paths and stop-and-ask on boundary events
+
+Measurement and tooling practice: scale to the project.
+
+- §13 — measure what nothing exercises
+- §14 — a second question beyond the declarations
+- §15 — instruments before savings
+- §16 — record-checking scripts
+- §17 — figures in instruction files read from source
+- §18 — a runnable command for every instructed tool
+- §19 — optional checks that say `not configured` and never pass
+- §20 — one run per session
+- §21 — settings decided by replay
+- §22 — unproven ideas shipped as labelled experiments
 
 **Scaling down** (small project / solo dev): you may merge phases 4a–4d into one auditor persona
 with all four lenses, and skip phase 5 if there are no product docs — but never merge the coder
 and the reviewer, and never drop the board. The minimum viable pipeline is
 plan → code(TDD) → test → audit → review, five seats.
+
+**Costs and when this is overkill.**
+
+- Every seat is a fresh context that re-reads its instructions and its slice of the docs, so token cost grows with the seat count. The full pipeline runs every persona in `agents/` plus the orchestrator.
+- The orchestrator's own context is the largest single cost. In one adopting project's measured week it was most of the spend, ahead of any seat.
+- The orchestrator is a single point of failure. That is why run state lives on disk (board, `state.md`, plan, review) and a session can resume from files.
+- Two-strike escalation makes the human a bottleneck: every twice-failed blocker waits for a person to fix the upstream truth.
+- For a small or one-off project, the minimum five-seat pipeline is the ceiling, not the floor. If the work does not repeat, the golden path and the oracles do not pay back.
+
+The war-story figures in this document are anonymised recollections from adopting projects. Each rule stands without its number.
 
 **Scaling up:** add lenses as parallel phase-4 seats (performance, accessibility, i18n,
 compliance) — each read-only, each with the same findings shape, all dispatched in one message.

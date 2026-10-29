@@ -54,6 +54,16 @@ describe('plan', () => {
     assert.ok(checkPlan(plan.replace('### NEEDS-RULING', '### OPEN'), schema()).some((e) => e.includes('NEEDS-RULING class')));
   });
 
+  test('opt-in Files column: off by default, required and named when taskColumns lists it', () => {
+    const withFiles = schema({ taskColumns: ['Task', 'Cites', 'Test-seed', 'Files'] });
+    assert.deepEqual(checkPlan(plan, schema()), [], 'the default columns do not ask for Files, so existing plans still pass');
+    assert.ok(checkPlan(plan, withFiles).includes('no Tasks table with columns Task, Cites, Test-seed, Files (missing: Files)'));
+    const filed = plan
+      .replace('| # | Task | Cites | Test-seed |', '| # | Task | Cites | Test-seed | Files |')
+      .replace(/^(\|[-| ]+\|)$/m, (sep) => (sep.split('|').length - 2 === 4 ? `${sep}---|` : sep));
+    assert.deepEqual(checkPlan(filed, withFiles), []);
+  });
+
   test('the CSV reader honours quoted commas and refuses an absent key column', () => {
     assert.deepEqual(csvCells('stock.read,"read stock levels, per item"'), ['stock.read', 'read stock levels, per item']);
     assert.throws(() => csvColumn('id,name\n1,x', 'key'), /no "key" column/);
