@@ -314,7 +314,7 @@ error, because a typo would otherwise switch a check off in silence.
   "features": {
     "graph":            { "state": "off", "check": null, "sync": null, "syncFree": null, "autoLimitKb": 300 },
     "claims":           { "state": "on", "retracted": null, "registryIdPattern": "[A-Z][A-Z0-9]{1,8}-D\\d+[a-z]?", "jestBatch": null },
-    "planSchema":       { "state": "on", "sections": ["Track", "Context", "Tasks", "BLOCKERS"], "tables": {}, "oracle": null },
+    "planSchema":       { "state": "on", "sections": ["Track", "Context", "Tasks", "BLOCKERS"], "tables": {}, "taskColumns": ["Task", "Cites", "Test-seed"], "oracle": null },
     "findingsSchema":   { "state": "on" },
     "reviewTemplate":   { "state": "on" },
     "handoffPack":      { "state": "on", "tracker": null },
