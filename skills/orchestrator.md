@@ -44,11 +44,26 @@ installed as `specs/orchestrator-plan.template.md` and `specs/orchestrator-worke
    lists what is still open (exit 10 while anything is).
 3. `orch preflight` — the project's own checks. Exit 6 = **one lane only**: say which checks failed and never work
    around one. No checks configured is also one lane.
-4. `orch split <plan> --out .pipeline/orchestrator/runs/<run>/lanes.json`, then
+4. **Index freshness, once per batch** (only when `features.graph` is configured; otherwise record
+   `graph: not configured` and go on). Lanes run in fresh worktrees that hold no index, and a lane worker cannot
+   stop to ask a person. So the index is brought up to date here, in the primary checkout, and every lane copies
+   it (§3 step 2). Run `node scripts/index-check.mjs` and branch on its exit code:
+   - `0` fresh → go on.
+   - `11` code behind → run `features.graph.syncFree` (free), re-check.
+   - `10` / `12` docs pending → run `features.graph.sync` (it embeds up to `features.graph.autoLimitKb`),
+     re-check.
+   - Still `10` / `12` because the pending docs are **above** the limit → **ask the human now, once for the
+     batch**: the pending count, the size, and that the embed spends model tokens. Embed on a yes; on a no,
+     record the decline. Either way, write the decision in the decision log with the final `verdict:` line.
+   - `3` / `4` / `1` → record the verdict (and the error for `1`); lanes locate with plain search.
+
+   The final `verdict:` line is the batch's **Graph line**. It goes in the split you post at step 6 and in every
+   lane brief.
+5. `orch split <plan> --out .pipeline/orchestrator/runs/<run>/lanes.json`, then
    `orch init <run> --lanes … --mode <the preflight mode>`. `split` refuses while a CONFIRM is open.
-5. **Show the human the split and wait.** Post `orch status <run> --split` (lanes, risks, levels, tracks, dispatch,
-   reasons, queued hot files). On their OK: `orch approve <run> --by <who>`, and record the approval in the
-   decision log. Nothing launches before it (`next` says `AWAIT-APPROVAL`).
+6. **Show the human the split and wait.** Post `orch status <run> --split` (lanes, risks, levels, tracks, dispatch,
+   reasons, queued hot files) with the batch's Graph line. On their OK: `orch approve <run> --by <who>`, and record
+   the approval in the decision log. Nothing launches before it (`next` says `AWAIT-APPROVAL`).
 
 **Levels are set by rule, with the reason logged per row** (`scripts/lib/orch-plan.cjs`): risk high → **Full** →
 the full pipeline; record-only with no production-source file → **Micro** → SOLO; everything else **Standard** →
@@ -70,6 +85,12 @@ For each `LAUNCH <lane>` line, in order:
    `orch link-guard <worktree> --brief <file>` says so (exit 4 a link · 3 a link and a brief naming any reinstall
    step — `gate-launch` refuses that lane); unlink it yourself with the command it prints before the launch. No brief
    wording exempts it.
+   **Copy the index** (when `features.graph` is configured): copy the primary checkout's index folder, the one
+   `features.graph.check` reads (`graphify-out/` for graphify), into the lane worktree. It is gitignored, so the
+   worktree starts without it. Leave out the per-checkout lock, log and status files (for graphify: `.sync.lock`,
+   `.sync.log`, `.autosync-status.json`). Copy, never link: the lane's free code sync rewrites the index for the
+   lane's own diff and must not touch the primary's. Then run `node scripts/index-check.mjs` in the worktree. An
+   `absent` verdict there means the copy failed: fix it before the launch.
 3. Write the brief from the worker-brief template into the lane's `brief` path: its rows, its files, its dispatch,
    the rules, the done-test, the result path. Pointers, never pasted docs.
 4. **Place it where `next` says** (`on secondary` / `on primary`). Placement follows `features.orchestrator.seats`
