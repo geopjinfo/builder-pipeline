@@ -7,7 +7,7 @@
  * are fine; the instructions around them are wrong. These checks read the pack's own files only.
  */
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { test } from 'node:test';
@@ -25,7 +25,8 @@ function prose() {
   const out = [];
   const walk = (dir) => {
     for (const name of readdirSync(dir)) {
-      if (['.git', 'node_modules', 'tests', 'examples'].includes(name)) continue;
+      // `.claude/` holds only local state (settings, nested worktrees of this repo); none of it is pack prose.
+      if (['.git', '.claude', 'node_modules', 'tests', 'examples'].includes(name)) continue;
       const p = join(dir, name);
       if (statSync(p).isDirectory()) walk(p);
       else if (name.endsWith('.md') && name !== 'CHANGELOG.md') out.push(posix(relative(PACK, p)));
@@ -34,6 +35,17 @@ function prose() {
   walk(PACK);
   return out.sort();
 }
+
+test('the prose walk skips .claude/: a nested worktree of this repo is never read as pack prose', () => {
+  const dir = join(PACK, '.claude', 'worktrees', '_prose-probe');
+  mkdirSync(dir, { recursive: true });
+  try {
+    writeFileSync(join(dir, 'README.md'), 'Use TodoWrite.');
+    assert.deepEqual(prose().filter((f) => f.startsWith('.claude/')), []);
+  } finally {
+    rmSync(join(PACK, '.claude', 'worktrees', '_prose-probe'), { recursive: true, force: true });
+  }
+});
 
 const PLAYBOOK = 'skills/build-module-pipeline.md';
 const flat = (text) => text.replace(/`/g, '').replace(/\s+/g, ' ');
