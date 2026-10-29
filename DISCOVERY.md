@@ -83,7 +83,7 @@ be true of this repository **now**, not of what the project might adopt later.
 | Feature | Switch `on` only when this repo has | Keys to fill |
 |---|---|---|
 | `claims` · `findingsSchema` · `reviewTemplate` · `handoffPack` · `rowReader` | nothing extra — on by default | `claims.retracted` (a retracted-phrases file, or `null`); `claims.jestBatch` (`{ "cacheDir" }`, only for a jest project whose count claims re-run slow suites); `handoffPack.tracker` only if a tracker with a closed status vocabulary exists |
-| `planSchema` | nothing extra — on by default | `sections`; `tables` (fixed headers); `oracle` only if a catalogue file exists to check plan keys against |
+| `planSchema` | nothing extra — on by default | `sections`; `tables` (fixed headers); `taskColumns` (add `"Files"` to require each task row to name the files it edits); `oracle` only if a catalogue file exists to check plan keys against |
 | `graph` | an index tool installed **and** a check command meeting the exit-code contract (`builder/tooling/optional/README.md`) | `check`, `sync`, `syncFree`, `autoLimitKb` |
 | `contractOracle` | an API contract file **and** a request/response transcript from a behavioural run | `spec`, `transcript`, `baseline`, `codeField`, `statusFamilies` |
 | `rules` | a syntax-tree rules runner installed and a rules config in the repo | `scan`, `baseline`, `ratcheted` |

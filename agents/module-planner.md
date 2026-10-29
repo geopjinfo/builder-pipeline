@@ -47,7 +47,8 @@ to you once, and a second malformed plan is recorded as a seat failure. So:
 - Every table named in `features.planSchema.tables` uses its header row **verbatim** — copy it,
   never paraphrase it. When `features.planSchema.oracle` is set, every catalogue key in those tables
   is checked against that oracle, so an invented key fails before any code exists.
-- `## Tasks` is a table with `Task`, `Cites` and `Test-seed` columns; `## BLOCKERS` names all three
+- `## Tasks` is a table with `Task`, `Cites` and `Test-seed` columns, plus `Files` (see item 8). The
+  checker requires every column in `features.planSchema.taskColumns`, which may include `Files`; `## BLOCKERS` names all three
   classes, with "none" under an empty one.
 
 A fixed shape is what lets the board, the builder and the reviewer read the plan without
@@ -71,6 +72,25 @@ interpreting it.
    answers to; a row citing nothing is a row nobody can check, and an unchecked citation is just a
    more confident-looking invention. The orchestrator materializes this section as the git-tracked
    board `tasks/<moduleKey>.md`.
+
+   **Every row also carries a `Files` column**: each file the row edits, repo-relative, including
+   the existing tests it must change. **No row leaves a placement decision to the builder.** Before you
+   write a row, settle it from the repo:
+   - **Which file.** A step that names a file by basename ("add the key to `permissions.ts`") must
+     resolve to exactly one path. Run `git ls-files '*/<basename>'` and name the full path whenever
+     there is more than one match.
+   - **Which specs pin it.** Run `grep -rn '<symbol>' <test roots>` for every symbol, list or
+     constructor the row changes. Any spec that asserts it exactly, constructs it directly or counts it
+     goes in that row's `Files` and gets a step. This covers exact-list asserts, `new X(...)` callers,
+     and census or roster gates.
+   - **No conditional steps.** "If the spec lists routes, add one" is a fact you can read. Read it,
+     then write the step or drop it.
+   - **No timing-dependent assertions.** A concurrent-request case names the one outcome a race
+     guarantees, or every outcome it accepts.
+
+   In one adopting project, three such gaps reached the builder: two candidate files, a conditional
+   step, and a race asserted as one fixed code. The builder settled each one silently, and no later
+   seat saw it.
 9. **## Track** — confirm or reject the orchestrator's phase-0.5 track (FULL · ADDITIVE · PLATFORM ·
    RULINGS · FIX · SOLO). You are the first seat that reads the actual docs, so this is the one
    cheap correction seam. A track may only escalate **up**; say why if you move it.
@@ -85,6 +105,12 @@ interpreting it.
 
    In one adopting project **most escalations were already answered by the requirement
    register.** Search first, decide second, escalate last.
+
+   **File scope.** When your brief carries the batch row's `files` list (an orchestrated lane), compare
+   the union of the Tasks `Files` column against it. Any file outside the list is a
+   `NEEDS-RULING · scope` entry that names each file and the row that needs it. The orchestrator then
+   widens the row or re-slices the lane. Never plan around the gap silently. When the brief carries no
+   `files` list, write `file scope: not configured` under BLOCKERS.
 
 ## Also author: the module digest (profile §14)
 

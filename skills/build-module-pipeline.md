@@ -266,7 +266,8 @@ reports the model the run actually used, where the harness keeps that record.
    ```
 
    It holds the plan to the section names in `features.planSchema.sections`, the fixed table
-   headers in `features.planSchema.tables`, and — when `features.planSchema.oracle` is set — every
+   headers in `features.planSchema.tables`, the Tasks columns in `features.planSchema.taskColumns`
+   (add `Files` to require each row's edited files), and — when `features.planSchema.oracle` is set — every
    catalogue key in those tables against the oracle. A malformed plan goes back to the planner once;
    still malformed → a seat-failure row on the board. Feature off → record
    `planSchema: not configured` in `state.md`. A fixed shape is what lets the board, the builder and
