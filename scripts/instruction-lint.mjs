@@ -3,8 +3,9 @@
  * scripts/lib/instruction-lint.cjs.
  *
  *   node scripts/instruction-lint.mjs                 the gate over every file in `files`
- *   node scripts/instruction-lint.mjs --files a b     only these files (the edit hook); figures and sets naming
- *                                                     other files are skipped, the ratchet still applies
+ *   node scripts/instruction-lint.mjs --files a b     only these files (the edit hook). No figure command runs in this
+ *                                                     mode (see below); sets naming other files are skipped; the
+ *                                                     ratchet still applies
  *   node scripts/instruction-lint.mjs --list          also print every count claim and history phrase
  *   node scripts/instruction-lint.mjs --refresh       write the current ratchet counts to `baseline` (review the diff:
  *                                                     a raised count is a decision, never a side effect)
@@ -89,7 +90,10 @@ if (only && paths.length === 0) {
 const files = paths.map((path) => ({ path, text: readFileSync(path, 'utf8') }));
 const inScope = (f) => !only || only.includes(f);
 
-const figures = (cfg.figures ?? []).filter((f) => inScope(f.file)).map((f) => {
+// Figure commands run only in the full gate, never with --files. The edit hook runs automatically after an agent's
+// edit, with no permission prompt, so a command that an agent could have just written into the profile must not
+// run there. Figures are checked by the gate and CI, which a person starts.
+const figures = (only ? [] : cfg.figures ?? []).map((f) => {
   let actual = null;
   try {
     actual = execSync(f.command, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() || null;

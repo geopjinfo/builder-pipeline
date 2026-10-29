@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -126,6 +126,17 @@ describe('instruction-lint — CLI on a temporary project', () => {
     const ok = run(dir);
     assert.equal(ok.status, 0, out(ok));
     assert.match(ok.stdout, /instruction-lint: PASS — 4 file\(s\)/);
+  });
+
+  test('--files never runs a figure command: the hook path cannot execute what an agent wrote into the profile', () => {
+    const marker = join(tmpdir(), `ilint-ran-${process.pid}-${Date.now()}`);
+    const dir = project({ ...ON, figures: [{ file: 'CLAUDE.md', pattern: '(\\d+) specs', command: `node -e "require('fs').writeFileSync(process.argv[1],'x');console.log(2)" ${JSON.stringify(marker)}` }] });
+    const hookRun = run(dir, '--files', 'CLAUDE.md');
+    assert.equal(hookRun.status, 0, out(hookRun));
+    assert.equal(existsSync(marker), false, 'the figure command ran in --files mode');
+    assert.equal(run(dir).status, 0, 'the full gate still runs and checks the figure');
+    assert.equal(existsSync(marker), true);
+    rmSync(marker, { force: true });
   });
 
   test('red: a dead path fails, and --files limits the run to the edited file', () => {
