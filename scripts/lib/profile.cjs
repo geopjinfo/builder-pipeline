@@ -90,6 +90,25 @@ const FEATURES = {
   tokenEconomizer: { defaults: { state: 'experimental-off' }, requires: [] },
   /* A fresh-context readiness review of plan.md between planner and builder — EXPERIMENTS.md §10. Protocol only. */
   planReview: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* After a compaction, hand the session its run files and open FIX rows — hooks/claude-code/reanchor-after-compact.cjs. */
+  reanchor: { defaults: { state: 'off', maxRuns: 2 }, requires: ['maxRuns'] },
+  /* The one door a model-backed check sends through: denied files, secret shapes, env values, size — scripts/lib/outbound-guard.cjs. */
+  outboundGuard: {
+    defaults: {
+      state: 'off',
+      maxBytes: 8000,
+      denyPaths: ['.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx', 'id_rsa*', 'id_ed25519*', '*.keystore', 'credentials*.json'],
+      envFiles: ['.env', '.env.local', '.env.development', '.env.test'],
+      extraPatterns: [],
+      timeoutMs: 20000,
+    },
+    requires: ['maxBytes', 'denyPaths'],
+  },
+  /* Cheap-model checks from the decision-model review — EXPERIMENTS.md §12–15. Protocol only; each needs outboundGuard on. */
+  rankedSearch: { defaults: { state: 'experimental-off' }, requires: [] },
+  riskHint: { defaults: { state: 'experimental-off' }, requires: [] },
+  walkPriority: { defaults: { state: 'experimental-off' }, requires: [] },
+  ruleNotes: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
   /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
    * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue

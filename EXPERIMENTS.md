@@ -300,3 +300,67 @@ were started by hand: human interventions per lane (starts, unblocks), stalls, a
 
 **Risk.** A session that silently lacks a plugin or hook runs the pipeline without its guards. The first-step
 check exists for that; a lane that fails it is a stall, never a degraded run.
+
+---
+
+**§12–15 share one door.** Each sends a short excerpt to a cheap model (a Haiku-class subagent on the session's own
+provider). Every payload goes through `scripts/lib/outbound-guard.cjs` (`node scripts/outbound-check.mjs` from a
+shell), so `features.outboundGuard` must be `on` before any of them is switched on. The guard refuses, and never
+redacts: a denied file, a secret-shaped string, a value from `envFiles`, or a payload over `maxBytes` means NOT
+SENT, and the step goes on without advice. A failed or timed-out call is also "no advice". None of the four may block
+a phase, lower a review level, or stand in for a gate. A sending step to a provider other than the session's own is
+a new data recipient, and that is the project owner's decision, recorded before the trial.
+
+## 12. Ranked plain search when the index is stale — `rankedSearch` (experimental)
+
+**What ships.** Nothing but this protocol. When the graph index check reports stale or missing (`graph` off, or
+`index-check` not fresh), a locating seat's plain-search hits are ranked before it opens any: BM25 over the hit lines
+first, and a cheap-model rank of the top 30 only when BM25 ties. The seat still locates first, then verifies by
+reading; a rank is never a citation.
+
+**Measurement.** Replay five locate questions from past runs whose answer file is known, with the index withheld.
+Count reads until the answer file is opened, unranked against ranked. **Keep** if the median falls by at least a
+third with no question missed. **Remove** otherwise.
+
+**Risk.** A confident rank can hide the right file below the fold. The seat reads at least the top five before
+concluding "not found".
+
+## 13. Raise-only review-level hint — `riskHint` (experimental)
+
+**What ships.** Nothing but this protocol. Before review dispatch, a cheap model reads the diff summary (paths and
+hunk headers, not the diff body) and may answer `raise to FULL: <reason>`. Any other answer is ignored. It can never
+lower a level the rules chose, and it is not a gate.
+
+**Measurement.** Replay the last ten lanes, blind to their review records. Count the review findings a raised level
+would have caught that the chosen level missed, against raises that found nothing. **Keep** if it would have caught at
+least one finding for every three false raises. **Remove** otherwise.
+
+**Risk.** Over-raising turns into cost. The ratio above is the stopping rule.
+
+## 14. Model-chosen order for the seeded walk — `walkPriority` (experimental)
+
+**What ships.** Nothing but this protocol. In a seeded random walk across roles and routes (an HTTP behavioural
+tier), a cheap model picks the order of the next ten candidate steps from their names only (role, route, last
+status). The seed and every choice are written to a trace file beside the run, so the walk replays exactly without
+the model. A finding that cannot be replayed from its trace is not a finding.
+
+**Measurement.** Equal step budgets, three seeds each. Count distinct failures per 100 steps, random order against
+model order. **Keep** if model order finds more distinct failures on at least two of the three seeds. **Remove**
+otherwise.
+
+**Risk.** The model may steer toward routes that already fail and away from new ones. Count distinct failures, not
+total failures.
+
+## 15. Advisory notes on prose rules — `ruleNotes` (experimental)
+
+**What ships.** Nothing but this protocol. After an edit, a cheap model checks the changed hunk against the
+project's written rules that no deterministic gate covers yet. It may append a one-line note to the rules backlog
+(`features.rules`' scan list or the project's equivalent): rule id, file and line, one sentence. It never blocks and
+never edits code.
+
+**Measurement.** Over two lanes, a person marks each note true or false. **Keep** if at least two in three are true.
+A rule whose true notes keep recurring is a candidate for a deterministic rule, and the note stops once that rule
+exists. **Remove** otherwise.
+
+**Risk.** A note that reads like a ruling may be acted on as one. The note says "advisory" in its text, and the
+reviewer weighs it like any other unverified claim.

@@ -78,6 +78,7 @@ If it is not running, the page is only as fresh as the last explicit
 | Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`), and never paste raw suite output into a phase |
 | Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>`; check a seat's transcript if in doubt |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the only change the reviewer may leave is its review file |
+| Re-anchor after compaction | unavailable. After any compaction, re-read `state.md`, the board's `phase:status` block and the open `FIX-n` rows by hand before the next dispatch (the playbook's rule) |
 | Session-start index refresh | unavailable. The P1 index gate (`node scripts/index-check.mjs`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
 | Subagent spawn depth 1 | not needed: fresh sessions cannot dispatch |
 | Prompt-cache TTL by replay | unavailable: no such settings are exposed |
