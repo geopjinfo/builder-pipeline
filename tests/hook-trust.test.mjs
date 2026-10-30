@@ -62,13 +62,51 @@ test('verify: committed and clean passes; changed, staged, untracked, ignored or
   git(root, 'reset', '-q', '--hard');
 
   write(root, 'scripts/new.cjs', 'module.exports = 1;\n');
-  assert.deepEqual(trust.trusted(join(root, 'scripts', 'new.cjs')), { ok: false, reason: 'new.cjs: 1 file(s) not committed' });
+  assert.deepEqual(trust.trusted(join(root, 'scripts', 'new.cjs')), { ok: false, reason: 'new.cjs: not all committed at HEAD' });
   write(root, 'scripts/ignored.cjs', 'module.exports = 1;\n');
   assert.equal(trust.trusted(join(root, 'scripts', 'ignored.cjs')).ok, false, 'an ignored file shows in no status, and is still refused');
 
   const bare = tmp();
   write(bare, 'x.cjs', 'module.exports = 1;\n');
   assert.match(trust.trusted(join(bare, 'x.cjs')).reason, /cannot verify against HEAD/);
+});
+
+test('index flags cannot hide a change: assume-unchanged and skip-worktree are still refused', () => {
+  const root = repo({ 'scripts/x.cjs': 'module.exports = 1;\n' });
+  const x = join(root, 'scripts', 'x.cjs');
+  for (const flag of ['--assume-unchanged', '--skip-worktree']) {
+    git(root, 'update-index', flag, 'scripts/x.cjs');
+    write(root, 'scripts/x.cjs', 'module.exports = 2;\n');
+    assert.equal(git(root, 'status', '--porcelain').stdout, '', `control: ${flag} hides the change from status`);
+    assert.deepEqual(trust.trusted(x), { ok: false, reason: 'x.cjs: scripts/x.cjs differs from HEAD' }, flag);
+    git(root, 'update-index', flag.replace('--', '--no-'), 'scripts/x.cjs');
+    git(root, 'checkout', '--', 'scripts/x.cjs');
+  }
+});
+
+test('a fsmonitor command in the repository config is never run by the check', (t) => {
+  const root = repo({ 'scripts/x.cjs': 'module.exports = 1;\n' });
+  const slash = (p) => p.replace(/\\/g, '/');
+  const marker = slash(join(root, 'FSMON'));
+  write(root, 'fsmon.sh', `#!/bin/sh\necho x > "${marker}"\n`);
+  git(root, 'config', 'core.fsmonitor', slash(join(root, 'fsmon.sh')));
+  git(root, 'status');
+  if (!existsSync(marker)) return t.skip('control: this git did not run the fsmonitor command, so the negative proves nothing here');
+  rmSync(marker);
+  assert.equal(trust.trusted(join(root, 'scripts', 'x.cjs')).ok, true);
+  assert.equal(existsSync(marker), false, 'the check ran the configured fsmonitor');
+});
+
+test('a repository planted under scripts/ is refused; a CRLF checkout of an LF blob passes', () => {
+  const root = repo({ 'scripts/lib/x.cjs': 'module.exports = 1;\n' });
+  const x = join(root, 'scripts', 'lib', 'x.cjs');
+  git(join(root, 'scripts'), 'init', '-q');
+  assert.deepEqual(trust.trusted(x, { base: root }), { ok: false, reason: 'x.cjs: scripts/lib/x.cjs is inside a nested repository' });
+  rmSync(join(root, 'scripts', '.git'), { recursive: true, force: true });
+  write(root, 'scripts/lib/x.cjs', 'module.exports = 1;\r\n');
+  assert.deepEqual(trust.trusted(x, { base: root }), { ok: true });
+  write(root, 'scripts/lib/x.cjs', 'module.exports = 3;\r\n');
+  assert.equal(trust.trusted(x, { base: root }).ok, false, 'line endings are the only latitude');
 });
 
 test('lint hook end to end: never spawns for another file; runs the committed script; a rewritten script never runs', () => {

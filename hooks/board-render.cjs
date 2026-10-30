@@ -34,7 +34,7 @@ try {
   const trust = trustLib();
   const render = join(root, 'scripts', 'board-render.mjs');
   for (const file of [join(root, 'scripts', 'lib', 'board-freshness.cjs'), join(root, 'scripts', 'lib', 'profile.cjs'), render]) {
-    const t = trust.trusted(file);
+    const t = trust.trusted(file, { base: root });
     if (!t.ok) throw new Error(`not run — ${t.reason}`);
   }
   const freshness = require(join(root, 'scripts', 'lib', 'board-freshness.cjs'));

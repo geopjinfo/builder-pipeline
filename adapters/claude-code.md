@@ -102,7 +102,8 @@ launches.
 
 **Every hook runs only committed code.** A hook starts outside the permission prompt, so it loads
 `scripts/lib/*.cjs` or spawns `scripts/*.mjs` only when that file and every local file it requires are
-tracked and clean against HEAD (`hook-trust.cjs`, copied next to the hooks). An uncommitted change to
+byte-for-byte the blob at HEAD (`hook-trust.cjs`, copied next to the hooks; it hashes the bytes and never
+trusts `git status`, whose index flags and fsmonitor an agent can set). An uncommitted change to
 that code switches the hook to its safe fallback until the change is committed. The guards keep their
 defaults, and the advisory hooks say they did not run.
 
