@@ -5,6 +5,18 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.15.3] — 2026-10-30
+
+### Security
+
+- **`hook-trust.cjs` judges files by their real path, as Node loads them.** Node resolves a module, and the requires
+  inside it, from its realpath. 0.15.2 hashed through a symlink but resolved requires from the link's own location.
+  So a symlinked file holding an exact copy of a committed file passed the check, while its requires loaded from
+  beside the copy, outside the repository. The same went for a folder symlink or junction holding byte-identical
+  copies. The closure and the repository are now both realpath'd, and a file whose real path leaves the repository
+  is refused. The new folder-junction test fails on 0.15.2 and passes now. The file-symlink test skips on hosts that
+  cannot create file symlinks.
+
 ## [0.15.2] — 2026-10-30
 
 ### Security
