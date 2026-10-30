@@ -127,6 +127,19 @@ test('a fsmonitor command in the repository config is never run by the check', (
   assert.equal(existsSync(marker), false, 'the check ran the configured fsmonitor');
 });
 
+test('a git.exe planted in the working folder is never started by the check (Windows)', (t) => {
+  if (process.platform !== 'win32') return t.skip('only Windows looks in the current folder for a bare program name');
+  const root = repo({ 'scripts/x.cjs': 'module.exports = 1;\n' });
+  const stand = join(process.env.SystemRoot, 'System32', 'whoami.exe'); // prints no git output, so a run of it fails the check
+  copyFileSync(stand, join(root, 'git.exe'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^NoDefaultCurrentDirectoryInExePath$/i.test(k)));
+  const run = (code) => spawnSync(process.execPath, ['-e', code], { cwd: root, env, encoding: 'utf8' });
+  const control = run("process.stdout.write(require('node:child_process').spawnSync('git', ['--version'], { encoding: 'utf8' }).stdout)");
+  if (/git version/.test(control.stdout)) return t.skip('control: this host took git from PATH, so the negative proves nothing here');
+  const r = run(`console.log(JSON.stringify(require(${JSON.stringify(join(hooksDir, 'hook-trust.cjs'))}).trusted(${JSON.stringify(join(root, 'scripts', 'x.cjs'))})))`);
+  assert.deepEqual(JSON.parse(r.stdout), { ok: true }, 'the real git answered');
+});
+
 test('a repository planted under scripts/ is refused; a CRLF checkout of an LF blob passes', () => {
   const root = repo({ 'scripts/lib/x.cjs': 'module.exports = 1;\n' });
   const x = join(root, 'scripts', 'lib', 'x.cjs');
