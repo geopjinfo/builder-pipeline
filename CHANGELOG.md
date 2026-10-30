@@ -5,6 +5,19 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.15.2] — 2026-10-30
+
+### Security
+
+- **`hook-trust.cjs` compares bytes with HEAD instead of asking `git status`.** 0.15.1 trusted `git status`, and
+  that left two gaps. First, `status` runs `core.fsmonitor` from the repository's config, which an agent can write.
+  Second, it reads the index, where `assume-unchanged` or `skip-worktree` hides a change. The check now hashes each
+  file the way git hashes a blob and compares the result with `git rev-parse HEAD:<path>`. It runs git with fsmonitor
+  and hooks off, replace objects ignored and no inherited `GIT_*` environment. A project file must belong to the
+  project root's repository: a file inside a `.git` planted under `scripts/` is refused. A CRLF checkout still
+  matches its LF blob. What it does not cover is now stated in the file: an agent that may commit, or rewrite
+  `.git`, can still put code at HEAD.
+
 ## [0.15.1] — 2026-10-30
 
 ### Security

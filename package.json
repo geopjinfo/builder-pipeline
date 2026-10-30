@@ -1,6 +1,6 @@
 {
   "name": "builder-pipeline",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "private": true,
   "type": "commonjs",
   "description": "The kit runs its own .js files as CommonJS whatever the host package.json declares. A \"type\": \"module\" host otherwise loads cli.js and the hooks as ES modules and they fail on require()."
