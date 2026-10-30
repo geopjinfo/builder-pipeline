@@ -5,6 +5,17 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.15.4] — 2026-10-30
+
+### Security
+
+- **`hook-trust.cjs` resolves a local require the way Node does.** 0.15.3 treated `require('./b')` as a path that does
+  not exist and left it out of the check, while Node loaded `b.js`. The same went for a folder (`./pkg` →
+  `pkg/index.js`), and `require('..')` was not recognised at all. A hook could therefore load a rewritten file behind
+  such a require. No checked script in the pack uses these forms today. Specifiers now go through `require.resolve`,
+  which executes nothing, so a rewritten target is refused and so is a planted `b.js` that would win over a committed
+  `b.json`. Both new tests fail on 0.15.3 and pass now.
+
 ## [0.15.3] — 2026-10-30
 
 ### Security

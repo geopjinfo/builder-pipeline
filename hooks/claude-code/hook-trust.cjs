@@ -28,13 +28,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** Relative requires and imports. A match inside a comment only widens the check, never narrows it. */
-const LOCAL = /\brequire\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)|\bfrom\s+['"](\.{1,2}\/[^'"]+)['"]|\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
+const LOCAL = /\brequire\(\s*['"](\.{1,2}(?:\/[^'"]*)?)['"]\s*\)|\bfrom\s+['"](\.{1,2}(?:\/[^'"]*)?)['"]|\bimport\(\s*['"](\.{1,2}(?:\/[^'"]*)?)['"]\s*\)/g;
+
+/** The file Node would load for this specifier (`./b` → `b.js`, `./pkg` → `pkg/index.js`). Resolving executes nothing. */
+function resolveLocal(specifier, dir) {
+  try {
+    return require.resolve(specifier, { paths: [dir] });
+  } catch {
+    return path.resolve(dir, specifier);
+  }
+}
 
 /**
  * The entry file and every local file it reaches, as REAL paths. Node resolves a module, and the requires inside it,
  * from its realpath; so does this, or a symlinked file holding an exact copy of a committed one would pass while its
- * own requires load from beside the copy. A path that does not exist is left out: nothing can load it, and once
- * someone creates it, it is untracked and refused.
+ * own requires load from beside the copy. A specifier is resolved the way Node resolves it, or `./b` would look like
+ * a missing path while Node loads `b.js`. What resolves to nothing is left out: nothing can load it, and once someone
+ * creates it, it is untracked and refused.
  */
 function closure(entry, fsLike = fs) {
   const seen = new Set();
@@ -49,7 +59,7 @@ function closure(entry, fsLike = fs) {
       return;
     }
     seen.add(file);
-    for (const m of text.matchAll(LOCAL)) walk(path.resolve(path.dirname(file), m[1] ?? m[2] ?? m[3]));
+    for (const m of text.matchAll(LOCAL)) walk(resolveLocal(m[1] ?? m[2] ?? m[3], path.dirname(file)));
   };
   walk(path.resolve(entry));
   return [...seen];
