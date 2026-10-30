@@ -14,14 +14,29 @@
  *
  * IT RENDERS ONLY WHAT IS STALE. The freshness verdict is two `stat` calls per board, so the common
  * case — nothing changed — costs nothing and writes nothing.
+ *
+ * IT RUNS ONLY COMMITTED CODE. The libraries and `scripts/board-render.mjs` are loaded or spawned only when they match
+ * HEAD (`claude-code/hook-trust.cjs`, installed next to this file) — a hook must not run code an agent just wrote.
+ * Untrusted → a stderr line and no render.
  */
 const { execFileSync } = require('node:child_process');
 const { existsSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
 
+function trustLib() {
+  for (const p of [join(__dirname, 'hook-trust.cjs'), join(__dirname, 'claude-code', 'hook-trust.cjs')]) if (existsSync(p)) return require(p);
+  throw new Error('hook-trust.cjs not found');
+}
+
 const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 try {
+  const trust = trustLib();
+  const render = join(root, 'scripts', 'board-render.mjs');
+  for (const file of [join(root, 'scripts', 'lib', 'board-freshness.cjs'), join(root, 'scripts', 'lib', 'profile.cjs'), render]) {
+    const t = trust.trusted(file);
+    if (!t.ok) throw new Error(`not run — ${t.reason}`);
+  }
   const freshness = require(join(root, 'scripts', 'lib', 'board-freshness.cjs'));
   const profile = require(join(root, 'scripts', 'lib', 'profile.cjs'));
   const tasksDir = join(root, profile.load(root).settings.paths?.boards || 'tasks');
@@ -41,7 +56,7 @@ try {
 
     for (const board of stale) {
       try {
-        execFileSync(process.execPath, [join(root, 'scripts', 'board-render.mjs'), board], {
+        execFileSync(process.execPath, [render, board], {
           stdio: 'ignore',
           timeout: 10_000,
         });

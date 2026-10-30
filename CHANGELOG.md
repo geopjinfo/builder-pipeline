@@ -5,6 +5,26 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.15.1] — 2026-10-30
+
+### Security
+
+- **Hooks run only committed code (`hooks/claude-code/hook-trust.cjs`).** Every Claude Code hook used to load
+  `scripts/lib/*.cjs`, or spawn `scripts/*.mjs`, straight from the agent-writable tree, and a hook runs outside the
+  permission prompt. An agent that rewrote one of those files had its code run by the next matching tool call. Now a
+  hook loads or spawns a project file only when that file and every local file it requires are tracked and clean
+  against HEAD. Otherwise:
+  - `instruction-lint-on-edit` sends a "not run" note on an instruction-file edit and never blocks;
+  - `bash-output-cap` leaves the output as it is;
+  - `reviewer-write-guard` keeps its default runs folder and still enforces, and `registry-read-guard` allows;
+  - `reanchor-after-compact` gives the fixed re-read order without the run paths;
+  - `board-render` skips the render, with a stderr line.
+
+  `instruction-lint-on-edit` also checks that the feature is on and the edited file matches
+  `features.instructionLint.files` before it starts anything; before, it spawned the lint on every edit.
+  **Arming:** copy `hook-trust.cjs` into `.claude/hooks/` next to the hooks (`cli.js unpack` does). A hook that
+  cannot find it loads nothing, and the guards then keep their defaults.
+
 ### Added
 
 - **Re-anchor after compaction (`features.reanchor`, `hooks/claude-code/reanchor-after-compact.cjs`).** A

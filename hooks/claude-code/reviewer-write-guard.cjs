@@ -17,7 +17,9 @@
  * Other harnesses: no pre-write hook — the phase diff check is the guard there.
  *
  * Protocol: stdin JSON; exit 2 with the reason on stderr blocks the call; exit 0 allows it. A failure in the
- * hook itself allows the call. Arming is a person's deliberate act: copy to `.claude/hooks/` and add the
+ * hook itself allows the call. A profile loader that differs from HEAD is not run (`hook-trust.cjs`): the guard
+ * falls back to the default runs folder and still enforces. Arming is a person's deliberate act: copy this and
+ * `hook-trust.cjs` to `.claude/hooks/` and add the
  * `PreToolUse` entry running `node .claude/hooks/reviewer-write-guard.cjs`.
  */
 'use strict';
@@ -83,11 +85,19 @@ function decide(input, settings, { root = null } = {}) {
   };
 }
 
+function trustLib() {
+  for (const p of [path.join(__dirname, 'hook-trust.cjs'), path.join(__dirname, 'claude-code', 'hook-trust.cjs')]) if (fs.existsSync(p)) return require(p);
+  throw new Error('hook-trust.cjs not found');
+}
+
+/** The profile loader, only when it matches HEAD (hook-trust.cjs); otherwise null, and the hook keeps its defaults. */
 function loadProfile(root) {
-  for (const candidate of [path.join(root, 'scripts', 'lib', 'profile.cjs'), path.join(__dirname, '..', '..', 'scripts', 'lib', 'profile.cjs')]) {
-    if (fs.existsSync(candidate)) return require(candidate);
+  try {
+    const r = trustLib().load(root, __dirname, 'profile.cjs');
+    return r.ok ? r.module : null;
+  } catch {
+    return null; // no hook-trust.cjs either: same as untrusted
   }
-  return null;
 }
 
 if (require.main === module) {

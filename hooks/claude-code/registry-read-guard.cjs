@@ -17,9 +17,10 @@
  * guard there.
  *
  * Protocol: stdin JSON; exit 2 with the reason on stderr blocks the call; exit 0 allows it. Any failure in
- * the hook itself allows the call — a guard that crashes a session is worse than the read it prevents.
+ * the hook itself allows the call — a guard that crashes a session is worse than the read it prevents. So does a
+ * profile loader that differs from HEAD (`hook-trust.cjs`): the hook never runs code an agent just wrote.
  *
- * Arming: copy to `.claude/hooks/`, then add a `PreToolUse` entry with matcher `Read` running
+ * Arming: copy this and `hook-trust.cjs` to `.claude/hooks/`, then add a `PreToolUse` entry with matcher `Read` running
  * `node .claude/hooks/registry-read-guard.cjs`. Arming is a person's deliberate act.
  */
 'use strict';
@@ -57,11 +58,19 @@ function decide(input, settings) {
   };
 }
 
+function trustLib() {
+  for (const p of [path.join(__dirname, 'hook-trust.cjs'), path.join(__dirname, 'claude-code', 'hook-trust.cjs')]) if (fs.existsSync(p)) return require(p);
+  throw new Error('hook-trust.cjs not found');
+}
+
+/** The profile loader, only when it matches HEAD (hook-trust.cjs); otherwise null, and the hook keeps its defaults. */
 function loadProfile(root) {
-  for (const candidate of [path.join(root, 'scripts', 'lib', 'profile.cjs'), path.join(__dirname, '..', '..', 'scripts', 'lib', 'profile.cjs')]) {
-    if (fs.existsSync(candidate)) return require(candidate);
+  try {
+    const r = trustLib().load(root, __dirname, 'profile.cjs');
+    return r.ok ? r.module : null;
+  } catch {
+    return null; // no hook-trust.cjs either: same as untrusted
   }
-  return null;
 }
 
 if (require.main === module) {
