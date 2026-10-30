@@ -73,7 +73,7 @@ function trustLib() {
 }
 
 function defaultTrust(file) {
-  return trustLib().trusted(file);
+  return trustLib().trusted(file, { base: path.resolve(path.dirname(file), '..') });
 }
 
 function defaultRun(root, rel) {
