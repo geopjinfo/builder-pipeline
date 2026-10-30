@@ -68,10 +68,13 @@ function closure(entry, fsLike = fs) {
 /**
  * Git with nothing from the repository's config that can run a program, and nothing inherited from the caller's
  * environment that could point it at another repository. `rev-parse` reads objects and refs only; it never consults
- * the index or runs fsmonitor, and replace refs are ignored.
+ * the index or runs fsmonitor, and replace refs are ignored. Windows would otherwise look for a bare `git` in the
+ * current folder before PATH, and that folder is agent-writable; it reads this variable from this process's own
+ * environment, so it is set here, not only for the child.
  */
 function defaultGit(cwd, args) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/i.test(k)));
+  process.env.NoDefaultCurrentDirectoryInExePath = '1';
+  const env =Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/i.test(k)));
   env.GIT_NO_REPLACE_OBJECTS = '1';
   return spawnSync('git', ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=', '-C', cwd, ...args], {
     encoding: 'utf8',
