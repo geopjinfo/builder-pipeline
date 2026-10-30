@@ -100,6 +100,12 @@ launches.
 
 ## Hooks
 
+**Every hook runs only committed code.** A hook starts outside the permission prompt, so it loads
+`scripts/lib/*.cjs` or spawns `scripts/*.mjs` only when that file and every local file it requires are
+tracked and clean against HEAD (`hook-trust.cjs`, copied next to the hooks). An uncommitted change to
+that code switches the hook to its safe fallback until the change is committed. The guards keep their
+defaults, and the advisory hooks say they did not run.
+
 | Hook | Event | What it does | Needs from §16 |
 |---|---|---|---|
 | `bash-output-cap.cjs` | `PostToolUse` · `Bash` | An output over `features.bashCap.limitBytes` is written whole under `paths.logs`. The context gets every error-shaped line with its line number, the tail, and the log path. The tier runner's output, already a digest, passes through. Never fails the tool call: any error leaves the original output in place | `bashCap` on · `limitBytes` · `paths.logs` |
