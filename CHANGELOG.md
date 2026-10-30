@@ -5,6 +5,16 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.15.5] — 2026-10-30
+
+### Security
+
+- **`hook-trust.cjs` never starts a `git` from the current folder on Windows.** It started `git` by bare name, and
+  Windows looks in the current folder before PATH unless `NoDefaultCurrentDirectoryInExePath` is set. A `git.exe`
+  planted in the project would then run outside the permission prompt and answer the check itself. The check now sets
+  that variable in its own process before starting git. The new test plants a stand-in `git.exe` with the variable
+  unset: it fails on 0.15.4 and passes now. It skips off Windows, where a bare name is looked up in PATH only.
+
 ## [0.15.4] — 2026-10-30
 
 ### Security
