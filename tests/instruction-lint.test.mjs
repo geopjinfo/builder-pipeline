@@ -153,14 +153,29 @@ describe('instruction-lint — CLI on a temporary project', () => {
     const dir = project({ ...ON, figures: [] });
     mkdirSync(join(dir, 'scripts'), { recursive: true });
     writeFileSync(join(dir, 'scripts', 'instruction-lint.mjs'), '');
-    const fakeRun = (status, stdout = '') => () => ({ status, stdout });
+    const settings = { features: { instructionLint: { state: 'on', files: ['CLAUDE.md', '.claude/**/*.md'] } } };
+    const trust = () => ({ ok: true });
+    let spawned = 0;
+    const fakeRun = (status, stdout = '') => () => (spawned++, { status, stdout });
     const edit = (file) => ({ tool_input: { file_path: join(dir, file) } });
-    const blocked = decide(edit('.claude/agents/reviewer.md'), { root: dir, run: fakeRun(1, '  reviewer.md:1: `docs/gone.md` does not exist') });
+    const blocked = decide(edit('.claude/agents/reviewer.md'), { root: dir, settings, trust, run: fakeRun(1, '  reviewer.md:1: `docs/gone.md` does not exist') });
     assert.equal(blocked.action, 'block');
     assert.match(blocked.reason, /instruction-lint failed for \.claude\/agents\/reviewer\.md[\s\S]*docs\/gone\.md/);
-    assert.equal(decide(edit('CLAUDE.md'), { root: dir, run: fakeRun(0) }).action, 'pass');
-    assert.equal(decide({}, { root: dir }).action, 'pass');
-    assert.equal(decide({ tool_input: { file_path: join(tmpdir(), 'elsewhere.md') } }, { root: dir }).action, 'pass');
+    assert.equal(decide(edit('CLAUDE.md'), { root: dir, settings, trust, run: fakeRun(0) }).action, 'pass');
+    assert.equal(decide({}, { root: dir, settings }).action, 'pass');
+    assert.equal(decide({ tool_input: { file_path: join(tmpdir(), 'elsewhere.md') } }, { root: dir, settings }).action, 'pass');
+    // filter before spawning: another file, or the feature off, never starts the lint
+    spawned = 0;
+    assert.equal(decide(edit('README.md'), { root: dir, settings, trust, run: fakeRun(1) }).reason, 'not an instruction file');
+    assert.equal(decide(edit('CLAUDE.md'), { root: dir, settings: { features: {} }, trust, run: fakeRun(1) }).reason, 'instructionLint: not configured');
+    assert.equal(spawned, 0);
+    // a lint script that differs from HEAD is not run: a note, never a block
+    const note = decide(edit('CLAUDE.md'), { root: dir, settings, trust: () => ({ ok: false, reason: 'instruction-lint.mjs: scripts/instruction-lint.mjs differs from HEAD' }), run: fakeRun(1) });
+    assert.deepEqual([note.action, spawned], ['note', 0]);
+    assert.match(note.reason, /not run for CLAUDE\.md — instruction-lint\.mjs: scripts\/instruction-lint\.mjs differs from HEAD/);
+    // an untrusted profile: a note on the pack's default instruction files only
+    assert.equal(decide(edit('CLAUDE.md'), { root: dir, untrusted: 'profile.cjs: 1 file(s) not committed' }).action, 'note');
+    assert.equal(decide(edit('src/a.ts'), { root: dir, untrusted: 'profile.cjs: 1 file(s) not committed' }).action, 'pass');
     const real = spawnSync(process.execPath, [join(here, '..', 'hooks', 'claude-code', 'instruction-lint-on-edit.cjs')], { input: 'not json', encoding: 'utf8' });
     assert.equal(real.status, 0);
     assert.equal(real.stdout, '');

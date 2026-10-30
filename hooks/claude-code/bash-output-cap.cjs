@@ -14,9 +14,12 @@
  * whose context lives longest, and not the seats. Other harnesses: no post-tool hook — route test suites
  * through the tier runner's digest instead.
  *
+ * The process loads its libraries only when they match HEAD (`hook-trust.cjs`) — a hook must not run code an agent
+ * just wrote. Untrusted → the original result stays in place, as with the feature off.
+ *
  * NEVER FAILS THE TOOL CALL. Any error here exits 0 with no output, which leaves the original result in place.
  *
- * Arming: copy to `.claude/hooks/`, then add a `PostToolUse` entry with matcher `Bash` running
+ * Arming: copy this and `hook-trust.cjs` to `.claude/hooks/`, then add a `PostToolUse` entry with matcher `Bash` running
  * `node .claude/hooks/bash-output-cap.cjs`. Arming is a person's deliberate act.
  */
 'use strict';
@@ -24,6 +27,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ACTIVE = ['on', 'unmeasured', 'experimental-on'];
+
+function trustLib() {
+  for (const p of [path.join(__dirname, 'hook-trust.cjs'), path.join(__dirname, 'claude-code', 'hook-trust.cjs')]) if (fs.existsSync(p)) return require(p);
+  throw new Error('hook-trust.cjs not found');
+}
 
 function lib(root, name) {
   for (const candidate of [path.join(root, 'scripts', 'lib', name), path.join(__dirname, '..', '..', 'scripts', 'lib', name)]) {
@@ -72,8 +80,11 @@ if (require.main === module) {
   try {
     const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     const input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}');
-    const { settings } = lib(root, 'profile.cjs').load(root);
-    const result = decide(input, settings, { root, env: process.env });
+    const trust = trustLib();
+    const profile = trust.load(root, __dirname, 'profile.cjs');
+    const bashCap = profile.ok ? trust.load(root, __dirname, 'bash-cap.cjs') : profile;
+    if (!bashCap.ok) process.exit(0);
+    const result = decide(input, profile.module.load(root).settings, { root, env: process.env, bashCap: bashCap.module });
     if (result.action === 'cap') {
       fs.mkdirSync(path.dirname(result.logPath), { recursive: true });
       fs.writeFileSync(result.logPath, result.log);
