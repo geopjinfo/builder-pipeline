@@ -31,15 +31,19 @@ const path = require('node:path');
 const LOCAL = /\brequire\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)|\bfrom\s+['"](\.{1,2}\/[^'"]+)['"]|\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
 
 /**
- * The entry file and every local file it reaches, absolute. A path that does not exist is left out: nothing can load
- * it, and once someone creates it, it is untracked and refused.
+ * The entry file and every local file it reaches, as REAL paths. Node resolves a module, and the requires inside it,
+ * from its realpath; so does this, or a symlinked file holding an exact copy of a committed one would pass while its
+ * own requires load from beside the copy. A path that does not exist is left out: nothing can load it, and once
+ * someone creates it, it is untracked and refused.
  */
 function closure(entry, fsLike = fs) {
   const seen = new Set();
-  const walk = (file) => {
-    if (seen.has(file)) return;
+  const walk = (start) => {
+    let file;
     let text;
     try {
+      file = fsLike.realpathSync(start);
+      if (seen.has(file)) return;
       text = fsLike.readFileSync(file, 'utf8');
     } catch {
       return;
@@ -97,9 +101,24 @@ function verify(files, { base = files.length ? path.dirname(files[0]) : '.', git
   if (files.length === 0) return { ok: false, reason: 'nothing to verify' };
   const top = git(base, ['rev-parse', '--show-toplevel']);
   if (top.status !== 0 || !top.stdout.trim()) return { ok: false, reason: 'cannot verify against HEAD (no git repository)' };
-  const repo = path.resolve(top.stdout.trim());
+  // Real paths on both sides: a file whose realpath leaves the repository — through a symlinked file or folder — is
+  // outside it, whatever path it was reached by.
+  let repo;
+  try {
+    repo = fs.realpathSync(top.stdout.trim());
+  } catch {
+    return { ok: false, reason: 'cannot verify against HEAD (repository path does not resolve)' };
+  }
   const rels = [];
-  for (const file of files) {
+  const reals = [];
+  for (const given of files) {
+    let file;
+    try {
+      file = fs.realpathSync(given);
+    } catch {
+      return { ok: false, reason: `${path.basename(given)} does not resolve` };
+    }
+    reals.push(file);
     const native = path.relative(repo, file);
     if (!native || native.startsWith('..') || path.isAbsolute(native)) return { ok: false, reason: `${path.basename(file)} is outside the repository` };
     const rel = native.split(path.sep).join('/');
@@ -111,7 +130,7 @@ function verify(files, { base = files.length ? path.dirname(files[0]) : '.', git
   const heads = git(repo, ['rev-parse', ...rels.map((r) => `HEAD:${r}`)]);
   const ids = heads.stdout.split(/\r?\n/).filter((l) => /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(l));
   if (heads.status !== 0 || ids.length !== rels.length) return { ok: false, reason: 'not all committed at HEAD' };
-  const dirty = rels.filter((rel, i) => !matchesHead(fs.readFileSync(files[i]), ids[i]));
+  const dirty = rels.filter((rel, i) => !matchesHead(fs.readFileSync(reals[i]), ids[i]));
   if (dirty.length) return { ok: false, reason: `${dirty.join(', ')} ${dirty.length === 1 ? 'differs' : 'differ'} from HEAD` };
   return { ok: true };
 }
