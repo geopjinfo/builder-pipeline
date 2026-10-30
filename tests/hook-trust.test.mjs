@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -107,6 +107,32 @@ test('a repository planted under scripts/ is refused; a CRLF checkout of an LF b
   assert.deepEqual(trust.trusted(x, { base: root }), { ok: true });
   write(root, 'scripts/lib/x.cjs', 'module.exports = 3;\r\n');
   assert.equal(trust.trusted(x, { base: root }).ok, false, 'line endings are the only latitude');
+});
+
+test('a symlinked copy of a committed file is judged where Node loads it from: its own requires are checked there', (t) => {
+  const committed = { 'scripts/lib/a.cjs': "module.exports = require('./b.cjs');\n", 'scripts/lib/b.cjs': 'module.exports = "clean";\n' };
+  const root = repo(committed);
+  const evil = tmp();
+  write(evil, 'a.cjs', committed['scripts/lib/a.cjs']); // byte-identical to HEAD
+  write(evil, 'b.cjs', 'module.exports = "evil";\n');
+  const a = join(root, 'scripts', 'lib', 'a.cjs');
+  rmSync(a);
+  try {
+    symlinkSync(join(evil, 'a.cjs'), a, 'file');
+  } catch {
+    return t.skip('this host cannot create a file symlink (Windows without developer mode)');
+  }
+  assert.equal(require(a), 'evil', 'control: Node resolves the copy\'s require beside the copy');
+  assert.match(trust.trusted(a, { base: root }).reason, /outside the repository/);
+});
+
+test('a folder junction or symlink out of the repository is refused', () => {
+  const root = repo({ 'scripts/keep.cjs': 'module.exports = 1;\n' });
+  const evil = tmp();
+  copyFileSync(join(root, 'scripts', 'lib', 'profile.cjs'), join(evil, 'profile.cjs')); // byte-identical: only the location is wrong
+  rmSync(join(root, 'scripts', 'lib'), { recursive: true, force: true });
+  symlinkSync(evil, join(root, 'scripts', 'lib'), 'junction');
+  assert.match(trust.trusted(join(root, 'scripts', 'lib', 'profile.cjs'), { base: root }).reason, /outside the repository/);
 });
 
 test('lint hook end to end: never spawns for another file; runs the committed script; a rewritten script never runs', () => {
