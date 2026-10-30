@@ -50,6 +50,36 @@ test('closure follows require, import and from; a path that does not exist is le
   assert.deepEqual(names.sort(), ['a.mjs', 'd.mjs', 'lib/b.cjs', 'lib/c.cjs']);
 });
 
+test('a require without an extension, or of a folder, is checked in the file Node would load', () => {
+  const root = repo({
+    'scripts/a.cjs': "require('./b');\nrequire('./pkg');\nrequire('./up/c.cjs');\n",
+    'scripts/b.js': 'module.exports = 1;\n',
+    'scripts/pkg/index.js': 'module.exports = 2;\n',
+    'scripts/up/c.cjs': "module.exports = require('..');\n",
+    'scripts/index.js': 'module.exports = 3;\n',
+  });
+  const a = join(root, 'scripts', 'a.cjs');
+  assert.deepEqual(trust.trusted(a), { ok: true });
+  const names = trust.closure(a).map((f) => f.slice(root.length + 1).replace(/\\/g, '/'));
+  assert.deepEqual(names.sort(), ['scripts/a.cjs', 'scripts/b.js', 'scripts/index.js', 'scripts/pkg/index.js', 'scripts/up/c.cjs']);
+  for (const rel of ['scripts/b.js', 'scripts/pkg/index.js', 'scripts/index.js']) {
+    write(root, rel, 'module.exports = "rewritten";\n');
+    // Spawned, so the check runs in a fresh process, as a hook does: Node caches resolved paths per process.
+    const r = spawnSync(process.execPath, ['-e', `console.log(JSON.stringify(require(${JSON.stringify(join(hooksDir, 'hook-trust.cjs'))}).trusted(${JSON.stringify(a)})))`], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(r.stdout), { ok: false, reason: `a.cjs: ${rel} differs from HEAD` });
+    git(root, 'checkout', '--', rel);
+  }
+});
+
+test('a planted file that Node would pick for an extensionless require is refused', () => {
+  const root = repo({ 'scripts/a.cjs': "require('./b');\n", 'scripts/b.json': '{}\n' });
+  const a = join(root, 'scripts', 'a.cjs');
+  assert.deepEqual(trust.trusted(a), { ok: true });
+  write(root, 'scripts/b.js', 'module.exports = "planted";\n'); // .js is tried before .json
+  const r = spawnSync(process.execPath, ['-e', `console.log(JSON.stringify(require(${JSON.stringify(join(hooksDir, 'hook-trust.cjs'))}).trusted(${JSON.stringify(a)})))`], { encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(r.stdout), { ok: false, reason: 'a.cjs: not all committed at HEAD' });
+});
+
 test('verify: committed and clean passes; changed, staged, untracked, ignored or no git is refused, with the reason', () => {
   const root = repo({ 'scripts/x.cjs': "module.exports = require('./lib/profile.cjs');\n", '.gitignore': 'scripts/ignored.cjs\n' });
   const x = join(root, 'scripts', 'x.cjs');
