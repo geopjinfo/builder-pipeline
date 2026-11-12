@@ -54,4 +54,6 @@ flowchart LR
 - A drift-gate failure is a **merge blocker**, same class as a failing unit test.
 - Positive-control rule applies to packs too (an expected-empty list needs a seeded-nonempty
   control).
-- Wire commands into profile §2 once built (`test:e2e`, `test:e2e:drift`).
+- Wire commands into profile §2 once built (`test:e2e`, `test:e2e:drift`). An agent runs the suite
+  through the tier wrapper (`commands.tier` with `{tier}` = the e2e tier), never bare: the wrapper
+  keeps the full log on disk and prints a short digest.

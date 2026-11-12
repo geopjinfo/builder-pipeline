@@ -238,8 +238,9 @@ const CAP_TO_CLAUDE_TOOLS = {
   // A read-only seat that must write exactly ONE file of its own (the reviewer's review). The grant is only a
   // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.cjs does.
   'read-only+own-file': 'Read, Grep, Glob, Bash, Write',
-  // Reads and publishes a page; never edits the repo (experimental live-page keeper).
-  publish: 'Bash, Read, Artifact',
+  // Reads and publishes a page; never edits the repo (experimental live-page keeper). The page's data store has
+  // its own tool, separate from the publishing one; the keeper's version-pinned reads and writes go through it.
+  publish: 'Bash, Read, Artifact, ArtifactData',
 };
 // Default tier→model mapping for adapters with a native model field. Override per install with
 // --models strong=<x>,mid=<y> (the setup-builder skill picks these by inspecting the user's
