@@ -68,6 +68,21 @@ new kind, with the waiver riding on it:
 
 (Illustrative only: write it against how your own keys are declared and read.)
 
+**A kind that skips a shape by design is blind to that shape.** The `provider` kind above reads bare class names in
+`providers: [ … ]`, so a provider bound by token (`{ provide: TOKEN, useExisting: Impl }`) is never inventoried, and
+"0 unjoined" says nothing about it. In the adopting project a token-bound seam was judged wired by a reviewer's
+direct evidence, not by the check. The fix was again a kind: a token bound with `useExisting`, `useClass` or
+`useFactory` must be injected by another production file. `useValue` (a constant handed in) and the framework's own
+tokens stay out:
+
+```json
+{ "name": "provider-token", "optional": true,
+  "declare": "\\{\\s*provide\\s*:\\s*(?!APP_)([A-Za-z_$][\\w$]*)\\s*,\\s*(?:useExisting|useClass|useFactory)\\b",
+  "join": "@Inject\\(\\s*{id}\\s*\\)|\\binject\\s*:\\s*\\[[^\\]]*\\b{id}\\b|:\\s*{id}\\b" }
+```
+
+(`APP_` is one framework's reserved token prefix; use your container's.)
+
 ## The allow file
 
 A JSON array of seams ruled latent — a brick deliberately ahead of its consumer:

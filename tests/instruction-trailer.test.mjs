@@ -107,4 +107,10 @@ describe('the fence fences its own definition', () => {
       assert.equal(INSTRUCTION_DIFF.test(near), false, near);
     }
   });
+
+  test('a tracked git-hooks folder is in the set; a near-miss folder name is not', () => {
+    assert.equal(verdict({ changedFiles: ['.githooks/post-merge'], commitMessages: ['chore: tidy'] }).ok, false);
+    assert.equal(INSTRUCTION_DIFF.test('.githooks'), true);
+    for (const near of ['.githooksx/post-merge', 'docs/.githooks.md']) assert.equal(INSTRUCTION_DIFF.test(near), false, near);
+  });
 });
