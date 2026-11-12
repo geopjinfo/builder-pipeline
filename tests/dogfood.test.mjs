@@ -190,7 +190,7 @@ describe('adopter dogfood — a Python service with every optional feature off',
       const agent = (name) => readFileSync(join(cc, '.claude', 'agents', `${name}.md`), 'utf8');
       assert.match(agent('module-reviewer'), /^tools: Read, Grep, Glob, Bash, Write$/m);
       assert.match(agent('security-auditor'), /^tools: Read, Grep, Glob, Bash$/m);
-      assert.match(agent('page-keeper'), /^tools: Bash, Read, Artifact$/m);
+      assert.match(agent('page-keeper'), /^tools: Bash, Read, Artifact, ArtifactData$/m);
       assert.match(agent('docs-maintainer'), /^effort: low$/m);
       for (const hook of ['bash-output-cap.cjs', 'registry-read-guard.cjs', 'reviewer-write-guard.cjs']) assert.ok(existsSync(join(cc, '.claude', 'hooks', hook)), hook);
       assert.ok(!existsSync(join(cc, '.claude', 'settings.json')), 'the installer armed a hook — that is the human\'s act');

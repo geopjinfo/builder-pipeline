@@ -160,6 +160,8 @@ const gateSource = Array.isArray(A.gates) && A.gates.length
   : 'Read PIPELINE_PROFILE.md §2 (commands) and §8 (gates) and run every gate and test command named there, from the repo root.'
 const gatesResult = await agent(
   `Run the live gate baseline and report each gate. Fix NOTHING. ${gateSource}\n`
+    + 'Run every test tier through the tier wrapper (§2 `commands.tier`, `{tier}` filled in) when the profile names one, '
+    + 'never the bare suite command: the wrapper keeps the full log on disk and prints a short digest. '
     + 'A command that would change state beyond its own caches and logs (migrations, formatters that write, deploys, '
     + 'anything destructive) is NOT run: record it as skipped with that reason. A command that needs infrastructure '
     + 'that is not up is skipped with that reason, never reported as passed. Capture counts and the tail of each output.',

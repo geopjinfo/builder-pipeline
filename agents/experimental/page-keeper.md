@@ -34,12 +34,16 @@ publish a hosted page with a data store — today that is Claude Code's hosted-p
 1. `node scripts/board-render.mjs <key> --json` — writes one JSON document per board section into
    the directory it prints (by default `<runs>/<key>/page/`). Each document is kept under the page
    store's size cap; a large section arrives as numbered parts, split and never truncated.
-2. Load every document into the page's `page` collection, one document per file, its id the file
-   name without `.json`. *Claude Code:* the hosted-page tool's batch database write, at most 50
-   writes per batch — send the rest in a further batch.
-3. Delete any document in `page` whose id is no longer a file, so a section that shrank leaves no
-   stale part behind.
-4. Reply with one line: the page address, the number of documents written, the number deleted.
+2. List what the page's `page` collection holds now (follow the cursor until there is no next
+   page), and note each document's version.
+3. Load every file into `page`, one document per file, its id the file name without `.json`. Pin
+   the version from step 2 on every write to a document that already exists, so a write never
+   overwrites a change it did not see. *Claude Code:* the page **data** tool (not the publishing
+   tool), its batch write, at most 50 writes per batch — send the rest in a further batch.
+4. In the same kind of batch, delete — version-pinned — every document from step 2 whose id is no
+   longer a file, so a section that shrank leaves no stale part behind. If a pinned write fails
+   because the document changed, list again and redo that write.
+5. Reply with one line: the page address, the number of documents written, the number deleted.
 
 ## Never
 
@@ -48,3 +52,4 @@ publish a hosted page with a data store — today that is Claude Code's hosted-p
   own accounting would be self-reporting the numbers the board exists to check.
 - Publish page markup or change the page's capabilities. The page shell is published once, by the
   orchestrating session.
+- Read or write the page's data through the publishing tool. The data tool owns every read and write.
