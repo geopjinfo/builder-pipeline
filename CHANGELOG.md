@@ -5,6 +5,50 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-11-12
+
+### Security
+
+- **The optional index hooks start committed code only.** `tooling/optional/session-sync-hook.js` used to start the
+  interpreter named in a file inside the git-ignored index directory, on `autosync.py`, with no check; the post-merge
+  block `sync-hook.sh` installs did the same. An agent that wrote either could have its code run on the next session
+  or merge, outside the permission prompt. Now:
+  - the hook starts Python only when every entry of the folder holding `autosync.py` is a plain file equal to its
+    blob at HEAD (`hook-trust.cjs`, installed beside it) and no committed file is missing;
+  - the interpreter is `INDEX_PYTHON`, else the tool venv (`INDEX_TOOL_VENV`, default `graphifyy`) that `uv tool dir`
+    or pipx reports, found outside the project, never a recorded path;
+  - Python runs `-I -B` with an unused pycache prefix, no inherited `PYTHON*` and `NoDefaultCurrentDirectoryInExePath`;
+  - the merge block checks the hook and `hook-trust.cjs` against HEAD and runs the hook with `--trigger merge`, so
+    both triggers share one implementation; `sync.py` runs `-m graphify` with `-P`.
+
+  Three new tests (an untracked module, an edited script, a recorded interpreter) fail on 0.15.5 and pass now; the
+  positive control runs the sync for both triggers.
+
+### Added
+
+- **Worktree sweep lists orphan folders** (with `prefix` set): folders beside the primary that `git worktree list`
+  does not know and that hold no `.git`, with their size. Listed only, never removed — that is a recursive delete.
+- **Briefs carry a context budget.** `templates/module-brief.md` and `templates/orchestrator-worker-brief.md`: the
+  thread dispatches and decides only, heavy steps go to one sub-agent that returns at most 10 lines, long runs go
+  detached, and `state.md` is updated after every step. Every tier output goes under the worktree's gitignored logs
+  dir, never `../` or the worktree root. The worker brief checks the deferral registry on entry.
+- **A provider-token wiring kind**, documented in `examples/wiring/README.md`: the `provider` kind skips
+  `{ provide: TOKEN, use* }` bindings by design, so it was blind to them.
+- **A tracked git-hooks folder is an instruction file** in the `instruction-trailer.cjs` example.
+
+### Fixed
+
+- **Worktree sweep:** a `git worktree remove` whose folder survives is `FAIL … at rmdir`, never `SWEPT`.
+- **`wiring-check`** drains stdout/stderr before it exits; a bare exit after many lines could cut a piped `--list`.
+- **`orch`:** a stray file under `runs/` is no longer read as a run by `pause`, `resume` or `status`.
+- **page-keeper** reads the page collection first and pins every overwrite and delete to the version it saw,
+  through the page data tool; the Claude Code install grants it `ArtifactData`.
+- **standards- and invariant-auditor** may run the graph-query commands when the graph trial is on; their read-only
+  command list had forbidden the step the reference asks for.
+- **Tiers are never run bare** by the repo-audit gate agent or the e2e harness skill: they go through
+  `commands.tier`.
+- **Seven project ids** in the instruction-lint, outbound-guard and reanchor examples are now neutral.
+
 ## [0.15.5] — 2026-10-30
 
 ### Security
