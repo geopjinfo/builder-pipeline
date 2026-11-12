@@ -155,7 +155,11 @@ Through `autosync.py --trigger session` it shares the lock and the automatic-emb
 other triggers.
 
 - **When it speaks:** only when the previous run left docs above the limit.
-- **When it stays silent:** no index, no interpreter, or `INDEX_SYNC_SKIP` set.
+- **When it stays silent:** no index, no interpreter, `INDEX_SYNC_SKIP` set, or index scripts that
+  differ from HEAD. It needs `hook-trust.cjs` beside it in the hooks folder (`cli.js unpack` copies it
+  with the guards); without it, it starts nothing.
+- **The merge trigger:** the post-merge block `sync-hook.sh` installs runs this same hook with
+  `--trigger merge`, so both triggers get the same trust check and isolated interpreter.
 - **Another index tool:** it is written for the graphify example; keep its shape and change the
   command it spawns (see [`tooling/optional/README.md`](../tooling/optional/README.md)).
 

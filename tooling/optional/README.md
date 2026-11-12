@@ -97,15 +97,34 @@ These keep a graphify graph current and meet the whole contract:
     `--no-embed` is the free `features.graph.syncFree` step before the phase-4 auditors.
 - **`session-sync-hook.js`** is the session-start trigger for Claude Code. It starts
   `autosync.py --trigger session` detached, exits 0 at once, and speaks only when the previous run's
-  decision was `over-limit`. Its header gives the `settings.json` snippet.
+  decision was `over-limit`. Its header gives the `settings.json` snippet. With `--trigger merge` it is
+  also the merge trigger's runner, and then it prints nothing.
 - **`sync-hook.sh`** installs the guarded post-merge block. The block runs
-  `autosync.py --trigger merge` on the branches in `BASE_BRANCHES` (default `main`). List every base
-  branch your feature work merges into.
+  `node <HOOKS_JS_DIR>/session-sync-hook.js --trigger merge` on the branches in `BASE_BRANCHES`
+  (default `main`). List every base branch your feature work merges into.
 
-**Requires graphify installed** (`graphify-out/.graphify_python`, written by a full run). Without it
+**These run outside the permission prompt, so they start committed code only.** A git hook and a session
+hook both run unattended; a script or interpreter an agent can rewrite would otherwise run on the next
+merge or session with no approval.
+- The merge block starts node only when `session-sync-hook.js` and `hook-trust.cjs` (from
+  `hooks/claude-code/`, installed beside the hook) are plain files equal to their blobs at HEAD.
+- The hook starts Python only when **every** entry of the folder holding `autosync.py` is a plain file
+  equal to its blob at HEAD, and no committed file is missing. A package folder, an extension module,
+  a sourceless `.pyc` or a link would each change what `import sync` loads.
+- The interpreter comes from `INDEX_PYTHON`, else the tool venv (`INDEX_TOOL_VENV`, default `graphifyy`)
+  that `uv tool dir` or pipx reports, found outside the project. It is **never** read from a path
+  recorded inside the index directory: that folder is git-ignored, and an agent can write it.
+- Python runs as `-I -B` with an unused pycache prefix, no inherited `PYTHON*` variables, and
+  `NoDefaultCurrentDirectoryInExePath` set, so no repository bytecode is read and no child on Windows
+  takes a program from the current folder. `sync.py` runs `-m graphify` with `-P` for the same reason.
+
+Anything untrusted means no sync, silently; the session and the merge carry on.
+
+**Requires graphify installed** (as a `uv tool` or pipx venv, or named by `INDEX_PYTHON`). Without it
 these are inert. Place the Python files two levels below the repo root (for example
-`scripts/graphify/`), or set `INDEX_ROOT`. Localize the branch list, the embed command, and a
-`.graphifyignore` that excludes human-facing publishes and derived artifacts.
+`scripts/graphify/`), or set `INDEX_ROOT`. Keep that folder holding only the committed scripts. Localize
+the branch list, the embed command, and a `.graphifyignore` that excludes human-facing publishes and
+derived artifacts.
 `hooks/graphify-post-merge.sh` is the simpler standalone merge trigger; it has no lock.
 
 All of these ship un-wired; UNPACK never arms them. They are choices.
