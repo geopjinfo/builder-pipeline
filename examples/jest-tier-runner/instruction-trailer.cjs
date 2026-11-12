@@ -14,8 +14,13 @@
  * branch's own copy of this file — would then certify its own removal. So the installed path of this file
  * (`scripts/lib/instruction-trailer.cjs`, per the README) is part of `INSTRUCTION_DIFF`: a change to the definition is
  * an instruction change and must be declared like one. If you install it elsewhere, change that alternative too.
+ *
+ * A TRACKED GIT-HOOKS FOLDER IS IN THE SET TOO. `.githooks/` (or whatever `core.hooksPath` names) decides what runs
+ * unattended on every commit and merge, outside any permission prompt, so changing it changes what the agents' work
+ * sets off. Add any script a hook executes by path as well (that one file, not its whole folder). Each entry ends at
+ * the shared `(\/|$)`, so a near-miss such as `.githooksx/` stays outside.
  */
-const INSTRUCTION_DIFF = /^(CLAUDE\.md|AGENTS\.md|\.claude\/(rules|agents|skills|hooks|settings[^/]*\.json)|scripts\/lib\/instruction-trailer\.cjs)(\/|$)/;
+const INSTRUCTION_DIFF = /^(CLAUDE\.md|AGENTS\.md|\.claude\/(rules|agents|skills|hooks|settings[^/]*\.json)|scripts\/lib\/instruction-trailer\.cjs|\.githooks)(\/|$)/;
 const TRAILER = /^instructions-change:\s*\S+/m;
 
 /** Pure verdict over (changed files, commit messages). */

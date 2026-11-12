@@ -29,6 +29,17 @@ const require = createRequire(import.meta.url);
 const wiring = require('./lib/wiring.cjs');
 const profile = require('./lib/profile.cjs');
 
+/**
+ * Exit only after stdout/stderr have drained. A bare process.exit() right after many console.log() calls can cut a
+ * piped stdout short (observed: a --list run captured 170 of 228 lines). Same exit codes; top-level await keeps the
+ * code after the call from running. usage() stays synchronous: its output is two lines on stderr.
+ */
+async function exitFlushed(code) {
+  await new Promise((resolve) => process.stdout.write('', resolve));
+  await new Promise((resolve) => process.stderr.write('', resolve));
+  process.exit(code);
+}
+
 const usage = (why) => {
   console.error(`wiring-check: ${why}`);
   console.error('usage: node scripts/wiring-check.mjs [--list] [--allow <file>]');
@@ -39,12 +50,12 @@ const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
   console.error('wiring-check: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
   for (const e of loaded.errors) console.error(`  ${e}`);
-  process.exit(2);
+  await exitFlushed(2);
 }
 const feature = profile.feature(loaded.settings, 'wiring');
 if (!feature.enabled) {
   console.log(feature.line);
-  process.exit(0);
+  await exitFlushed(0);
 }
 const { roots, extensions, testPattern, kinds } = feature.config;
 
@@ -67,7 +78,7 @@ const kindErrors = wiring.validateKinds(kinds);
 if (kindErrors.length > 0) {
   console.error('wiring-check: features.wiring.kinds is invalid');
   for (const e of kindErrors) console.error(`  ${e}`);
-  process.exit(2);
+  await exitFlushed(2);
 }
 
 const posix = (p) => p.replace(/\\/g, '/');
@@ -97,7 +108,7 @@ if (allowPath) {
 const allow = wiring.parseAllow(allowText);
 if (allow.error) {
   console.error(`wiring-check: allow file ${allowPath} is unusable — ${allow.error}`);
-  process.exit(2);
+  await exitFlushed(2);
 }
 
 const seams = wiring.inventory(files, kinds);
@@ -123,10 +134,10 @@ for (const p of verdict.problems) console.log(`  ${p}`);
 
 if (verdict.ok) {
   console.log(`wiring-check: PASS — ${seams.length} seam(s), ${verdict.waived.length} ruled latent, ${verdict.notEvaluable.length} not-evaluable, 0 unjoined`);
-  process.exit(0);
+  await exitFlushed(0);
 }
 console.log(
   `wiring-check: FAIL — ${verdict.problems.length} problem(s), ${verdict.unjoined.length} unjoined of ${seams.length} seam(s). ` +
     'Join it, delete it, or rule it latent with a reason and a citation in the allow file.',
 );
-process.exit(1);
+await exitFlushed(1);
