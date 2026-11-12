@@ -145,6 +145,37 @@ describe('worktree sweep — apply', () => {
     assert.match(out.summary, /would remove 1, kept 1 · dry run/);
   });
 
+  test('red: a removal that leaves the folder behind is FAIL at rmdir, never SWEPT', () => {
+    assert.deepEqual(sweep.removalOutcome({ code: 0, out: '', err: '' }, { listed: false, exists: false }), { ok: true });
+    const left = sweep.removalOutcome({ code: 0, out: '', err: '' }, { listed: false, exists: true });
+    assert.equal(left.ok, false);
+    assert.equal(left.step, 'rmdir');
+    const busy = sweep.removalOutcome({ code: 128, out: '', err: 'error: failed to delete x: Directory not empty' }, { listed: true, exists: true });
+    assert.equal(busy.step, 'rmdir');
+    assert.equal(sweep.removalOutcome({ code: 128, out: '', err: 'fatal: contains modified files' }, { listed: true, exists: true }).step, 'remove');
+  });
+
+  test('red: an unregistered prefix folder with no .git is listed ORPHAN with its size and never removed', () => {
+    const r = rig();
+    addWt(r, 'wt-done');
+    const shell = join(r.parent, 'wt-shell');
+    mkdirSync(join(shell, 'logs'), { recursive: true });
+    writeFileSync(join(shell, 'logs', 'left.log'), 'x'.repeat(2048));
+    mkdirSync(join(r.parent, 'wt-lane'));
+    mkdirSync(join(r.parent, 'other-folder'));
+    const found = sweep.orphans({ repo: r.repo, prefix: 'wt-', reserved: ['wt-lane'], procLines: [] });
+    assert.deepEqual(found.map((o) => [o.name, o.verdict]).sort(), [['wt-lane', 'KEEP'], ['wt-shell', 'ORPHAN']]);
+    assert.equal(found.find((o) => o.name === 'wt-shell').bytes, 2048);
+    assert.deepEqual(sweep.orphans({ repo: r.repo, prefix: null, procLines: [] }), [], 'no prefix: nothing can be told apart');
+    assert.match(sweep.orphans({ repo: r.repo, prefix: 'wt-', procLines: null }).find((o) => o.name === 'wt-shell').reasons.join(), /process check could not run/);
+    const lines = [];
+    const out = sweep.run({ ...opts(r), prefix: 'wt-', reserved: ['wt-lane'], apply: true, date: '2026-10-14', report: (l) => lines.push(l) });
+    assert.deepEqual(out.failed, []);
+    assert.equal(existsSync(join(shell, 'logs', 'left.log')), true, 'listed only: the sweep never deletes an orphan');
+    assert.ok(lines.some((l) => /^ORPHAN wt-shell — 2\.0 KB, .*listed only/.test(l)), lines.join('\n'));
+    assert.match(out.summary, /orphans: 1 \(2\.0 KB\), listed only/);
+  });
+
   test('the module never uses a recursive delete or --force (git refuses what it would lose)', () => {
     const src = readFileSync(join(here, '..', 'scripts', 'lib', 'worktree-sweep.cjs'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
     assert.doesNotMatch(src, /rmSync|rmdirSync|force:\s*true|'--force'|'-f'/);
