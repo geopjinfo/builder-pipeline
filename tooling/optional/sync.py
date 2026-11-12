@@ -233,8 +233,11 @@ def write_outputs(G, old_comm: dict, labels: dict, detection: dict) -> None:
 
 
 def export_html() -> None:
+    # -P (3.11+): `-m` must not put the current folder, i.e. the repository, first on sys.path, or a planted
+    # graphify.py there would run instead of the installed tool.
+    flags = ["-P"] if sys.version_info >= (3, 11) else []
     try:
-        subprocess.run([sys.executable, "-m", "graphify", "export", "html"], cwd=str(ROOT), check=False, capture_output=True)
+        subprocess.run([sys.executable, *flags, "-m", "graphify", "export", "html"], cwd=str(ROOT), check=False, capture_output=True)
     except Exception:
         pass
 

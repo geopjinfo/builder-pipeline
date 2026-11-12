@@ -11,12 +11,21 @@
 #   BASE_BRANCHES="main develop" scripts/graphify/sync-hook.sh install
 # (default: main). autosync.py tees its own output into the index directory's .sync.log.
 #
+# The block runs the session-start hook with --trigger merge, from HOOKS_JS_DIR (default .claude/hooks), where
+# session-sync-hook.js and hook-trust.cjs must both be committed:
+#   HOOKS_JS_DIR=".claude/hooks" scripts/graphify/sync-hook.sh install
+#
 # Usage:
 #   scripts/graphify/sync-hook.sh install
 #   scripts/graphify/sync-hook.sh uninstall
 #   scripts/graphify/sync-hook.sh status
 
 set -eu
+
+HOOKS_JS_DIR="${HOOKS_JS_DIR:-.claude/hooks}"
+case "$HOOKS_JS_DIR" in
+  /*|*..*|*'"'*|*'$'*|*'`'*|*'\'*) echo "graphify-sync: HOOKS_JS_DIR must be a plain path relative to the repo root." >&2; exit 2 ;;
+esac
 
 BEGIN="# >>> graphify-sync >>>"
 END="# <<< graphify-sync <<<"
@@ -71,11 +80,21 @@ if [ -z "\${INDEX_SYNC_SKIP:-}" ]; then
     *) _gs_base= ;;
   esac
   if [ -n "\$_gs_root" ] && [ -n "\$_gs_base" ]; then
-    # Strip a UTF-8 BOM (PowerShell writes one) and CR/LF from the saved path.
-    _gs_py="\$(cat "\$_gs_root/graphify-out/.graphify_python" 2>/dev/null | tr -d '\357\273\277\r\n' || true)"
-    if [ -n "\$_gs_py" ] && [ -f "\$_gs_py" ]; then
-      nohup "\$_gs_py" "\$_gs_root/scripts/graphify/autosync.py" --trigger merge \\
-        >/dev/null 2>&1 &
+    # One implementation: the session-start hook, run with --trigger merge. It checks the script folder against HEAD,
+    # finds its own interpreter (never a path recorded in the index directory) and spawns it isolated with a clean
+    # environment. Here, before node starts it, only the hook file and hook-trust.cjs are checked: each must be a plain
+    # file whose bytes are the blob at HEAD (HEAD is already the merge result, so a file the merge changed counts as committed).
+    _gs_ok=1
+    for _gs_f in session-sync-hook.js hook-trust.cjs; do
+      _gs_file="\$_gs_root/${HOOKS_JS_DIR}/\$_gs_f"
+      _gs_have="\$(git hash-object -- "\$_gs_file" 2>/dev/null || true)"
+      _gs_head="\$(git --no-replace-objects ls-tree HEAD -- "${HOOKS_JS_DIR}/\$_gs_f" 2>/dev/null | cut -f1 | cut -d' ' -f3)"
+      { [ -f "\$_gs_file" ] && [ ! -L "\$_gs_file" ] && [ -n "\$_gs_have" ] && [ "\$_gs_have" = "\$_gs_head" ]; } || _gs_ok=0
+    done
+    if [ "\$_gs_ok" = 1 ] && command -v node >/dev/null 2>&1; then
+      # Detached: autosync.py takes its lock, syncs code, and embeds docs only within the limit. The merge never waits.
+      CLAUDE_PROJECT_DIR="\$_gs_root" nohup node "\$_gs_root/${HOOKS_JS_DIR}/session-sync-hook.js" --trigger merge \\
+        </dev/null >/dev/null 2>&1 &
     fi
   fi
 fi

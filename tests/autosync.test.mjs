@@ -311,3 +311,78 @@ describe('session-sync-hook.js', () => {
     assert.equal(skipped.stdout, '');
   });
 });
+
+describe('session-sync-hook.js starts committed code only', { skip: NO_PYTHON }, () => {
+  const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
+  const pyExe = () => spawnSync(PY, ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).stdout.trim();
+
+  /** A repo with the hook + hook-trust installed, an index, and a committed autosync.py that leaves a marker when it runs. */
+  function repo() {
+    const p = project();
+    writeFileSync(join(p.out, 'graph.json'), '{"nodes":[],"edges":[]}');
+    writeFileSync(join(p.root, '.gitignore'), 'graphify-out/\nran-*.txt\n');
+    const hooks = join(p.root, '.claude', 'hooks');
+    mkdirSync(hooks, { recursive: true });
+    writeFileSync(join(hooks, 'session-sync-hook.js'), readFileSync(HOOK));
+    writeFileSync(join(hooks, 'hook-trust.cjs'), readFileSync(join(PACK, 'hooks', 'claude-code', 'hook-trust.cjs')));
+    const dir = join(p.root, 'scripts', 'graphify');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'autosync.py'),
+      'import sys\nfrom pathlib import Path\nPath.cwd().joinpath("ran-" + sys.argv[sys.argv.index("--trigger") + 1] + ".txt").write_text("ran")\n',
+    );
+    git(p.root, 'init', '-q');
+    git(p.root, 'add', '-A');
+    git(p.root, 'commit', '-qm', 'base');
+    const run = (trigger = 'session') =>
+      spawnSync(process.execPath, [join(hooks, 'session-sync-hook.js'), '--trigger', trigger], {
+        encoding: 'utf8',
+        env: cleanEnv({ CLAUDE_PROJECT_DIR: p.root, INDEX_PYTHON: pyExe() }),
+        timeout: 15_000,
+      });
+    return { ...p, dir, run };
+  }
+
+  /** Wait for the detached child's marker; resolves false after `ms`. */
+  async function ran(root, trigger, ms) {
+    for (const until = Date.now() + ms; Date.now() < until; await sleep(100)) if (existsSync(join(root, `ran-${trigger}.txt`))) return true;
+    return false;
+  }
+
+  test('committed scripts: the sync starts, for the session and the merge trigger', async () => {
+    const r = repo();
+    assert.equal(r.run('session').status, 0);
+    assert.equal(await ran(r.root, 'session', 10_000), true, 'positive control: a trusted folder runs');
+    assert.equal(r.run('merge').status, 0);
+    assert.equal(await ran(r.root, 'merge', 10_000), true);
+  });
+
+  test('red: an untracked module beside autosync.py means no sync; removing it restores the sync', async () => {
+    const r = repo();
+    writeFileSync(join(r.dir, 'sync.py'), 'raise SystemExit("planted")\n');
+    r.run();
+    assert.equal(await ran(r.root, 'session', 2500), false, 'an extra file in the folder changes what import loads');
+    rmSync(join(r.dir, 'sync.py'));
+    r.run();
+    assert.equal(await ran(r.root, 'session', 10_000), true);
+  });
+
+  test('red: a script changed in the working tree means no sync', async () => {
+    const r = repo();
+    writeFileSync(join(r.dir, 'autosync.py'), `${readFileSync(join(r.dir, 'autosync.py'), 'utf8')}# edited\n`);
+    r.run();
+    assert.equal(await ran(r.root, 'session', 2500), false);
+  });
+
+  test('red: an interpreter path recorded in the index directory is never used', async () => {
+    const r = repo();
+    writeFileSync(join(r.out, '.graphify_python'), pyExe()); // a working interpreter: the old hook would have run it
+    const res = spawnSync(process.execPath, [join(r.root, '.claude', 'hooks', 'session-sync-hook.js')], {
+      encoding: 'utf8',
+      env: cleanEnv({ CLAUDE_PROJECT_DIR: r.root, INDEX_TOOL_VENV: 'no-such-venv-for-this-test' }),
+      timeout: 15_000,
+    });
+    assert.equal(res.status, 0);
+    assert.equal(await ran(r.root, 'session', 2500), false, 'no INDEX_PYTHON and no tool venv: nothing runs');
+  });
+});
