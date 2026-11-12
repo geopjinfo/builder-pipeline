@@ -6,8 +6,10 @@
  *
  * Dry run unless --apply: prints KEEP (with every reason) or SWEEP per worktree, then one summary line. With
  * --apply each SWEEP worktree has its backup dirs copied under <logs>/backups/worktrees-<date>/, a node_modules link
- * unlinked, and `git worktree remove` run without --force. Branches are kept. Run it from the primary checkout,
- * after the merge — the person or seat that merges a run runs it, never the run itself.
+ * unlinked, and `git worktree remove` run without --force; a folder left behind is FAIL at rmdir. Branches are kept.
+ * With a `prefix`, it also lists ORPHAN folders beside the primary (the prefix, unknown to `git worktree list`, no
+ * .git) with their size, and never removes them. Run it from the primary checkout, after the merge — the person or
+ * seat that merges a run runs it, never the run itself.
  *
  * Settings (PIPELINE_PROFILE.md §16): features.worktreeSweep.{state, target, idleHours, prefix, reserved,
  * backupDirs, holdCommand}.
