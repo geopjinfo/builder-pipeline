@@ -60,11 +60,11 @@ describe('instruction-lint — pure rules', () => {
   });
 
   test('count claims: numbers and ranges are found, "one X" rules are not', () => {
-    assert.deepEqual(countClaims('six seats, eight of the twelve skills, ADR-008…026, one module, 3 lanes').map((c) => c.claim), [
+    assert.deepEqual(countClaims('six seats, eight of the twelve skills, REC-008…026, one module, 3 lanes').map((c) => c.claim), [
       'six seats',
       'eight of the twelve skills',
       '3 lanes',
-      'ADR-008…026',
+      'REC-008…026',
     ]);
   });
 

@@ -20,7 +20,7 @@
  *                       there next. Cite a heading or quote the sentence.
  *   - figures (hard)    every registered figure matches its source: { file, pattern (one capture group), command }.
  *   - sets (hard)       every file that enumerates a declared set names every member of it.
- *   - counts (ratchet)  count-shaped claims ("six seats", "ADR-008…026") not covered by a registered figure.
+ *   - counts (ratchet)  count-shaped claims ("six seats", "REC-008…026") not covered by a registered figure.
  *   - history (ratchet) incident history inside a rule ("used to", "fixed 2026-08-19", "until X merges", "first weeks").
  *                       The rule states its mechanism and cites a decision id; the story lives in the decision record.
  *

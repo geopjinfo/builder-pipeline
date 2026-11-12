@@ -41,7 +41,7 @@ const state = (now, fix) => `# k — orchestrator state
 ## Open FIX rows
 | # | file:line | Rule / requirement id | Minimal fix | Status |
 |---|-----------|-----------------------|-------------|--------|
-${fix.map(([id, f, status]) => `| ${id} | src/a.ts:12 | AG-3 | ${f} | ${status} |`).join('\n')}
+${fix.map(([id, f, status]) => `| ${id} | src/a.ts:12 | SEC-3 | ${f} | ${status} |`).join('\n')}
 `;
 
 /** A project with one run per entry: { key, board, state, age } (age in seconds — larger is older). */
@@ -75,13 +75,13 @@ test('a run in flight: state path with its Now line, the board with its first op
   assert.equal(runs[0].now, 'P3 Test — dispatched');
   assert.equal(runs[0].phase, 'P3 Test · IN-PROGRESS');
   assert.deepEqual(runs[0].fix, [
-    '| FIX-1 | src/a.ts:12 | AG-3 | add the scope check | IN-PROGRESS |',
+    '| FIX-1 | src/a.ts:12 | SEC-3 | add the scope check | IN-PROGRESS |',
     '| FIX-3 | board-only fix | G-1 | PLANNED | t.spec.ts | |',
   ]);
   const text = reanchor.render({ runs });
   assert.match(text, /re-read these files in order/);
   assert.match(text, /1\. \.pipeline\/x44\/state\.md {2}\(Now: P3 Test — dispatched\)/);
-  assert.match(text, /\| FIX-1 \| src\/a\.ts:12 \| AG-3 \| add the scope check \| IN-PROGRESS \|/);
+  assert.match(text, /\| FIX-1 \| src\/a\.ts:12 \| SEC-3 \| add the scope check \| IN-PROGRESS \|/);
   assert.doesNotMatch(text, /old fix/);
 });
 
