@@ -23,6 +23,13 @@ forbidden doc paths — changes there ride the handoff pack.
 > invariant auditors → docs → reviewer → behavioural gate, gate-fail loop). **Wave/priority:** `<…>`.
 > **Why now / unblocks:** `<one line>`.
 >
+> **0a. Context budget:** this thread dispatches and decides only. Every heavy step (reading a spec,
+> building a row, a seat, writing the pack) goes to one sub-agent that returns at most 10 lines
+> (`RESULT: PASS|FAIL <line>` · sha · digest lines · `wrote:` paths · ids taken · open questions ·
+> next) and writes the rest to a file. Long tier/gate runs go detached where the harness allows,
+> never streamed into the thread. Update `<runs>/<MODULE_KEY>/state.md` after every step, so a reset
+> or a compaction is "re-read `state.md`, then continue".
+>
 > **`GRANT-ASK: <file>:<line range> — <change>`** — one line per fenced site whose fix is comment/prose-only
 > and already ruled in substance. The ruling party grants or refuses each IN WORDS in its reply; a granted
 > one is applied in-run as its own commit with the comment-only proof quoted; not granted in words = not
@@ -61,8 +68,10 @@ forbidden doc paths — changes there ride the handoff pack.
 > money, credentials, file handling>`.
 >
 > **10. Tests (TDD):** the coder writes each task's seeded failing test FIRST (red → green; seeds
-> from the plan's Test-seed column), the tester then verifies + extends adversarially. Tiers per
-> profile §9, plus module-specific cases: `<list>`.
+> from the plan's Test-seed column), the tester then verifies + extends adversarially. Write every
+> tier/command output under `<your worktree>/<logs dir>/` (gitignored); never redirect to `../` or the
+> worktree root — loose files there are never swept, and untracked ones keep the worktree dirty, so
+> the worktree sweep keeps it forever. Tiers per profile §9, plus module-specific cases: `<list>`.
 >
 > **11. Definition of done:** gates + integration green; `module-readiness-check` clean; all four
 > auditors + `module-reviewer` **MERGE-READY**; the behavioural-gate result recorded; task board

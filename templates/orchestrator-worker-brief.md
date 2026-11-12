@@ -37,6 +37,15 @@ How to run them:
 - Tests: <the tiers this lane may run itself, e.g. unit + the affected-tests command>. Do NOT run the heavy tiers
   the orchestrator owns (<e.g. integration, gates>). Report `READY: <tiers> @ <sha>` and the orchestrator runs them
   through `orch merge`.
+- Output files: write every tier/command output under `<worktree>/<logs dir>/` (gitignored). Never redirect to
+  `../` or to the worktree root: loose files in the parent folder are never cleaned up, and untracked files in the
+  worktree root make it dirty, so the worktree sweep keeps it forever.
+- Context budget: your thread dispatches and decides only. Heavy steps (reading specs, building rows, seats, packs)
+  go to one sub-agent that returns at most 10 lines (`RESULT` · sha · digest · wrote · ids · open · next) with the
+  full output in a file. Run long tiers detached where the harness allows. Update `<runs>/<key>/state.md` after every
+  step; after a reset or a compaction read `state.md`, then continue.
+- On entry, check `<registry>` for deferred rows this lane unblocks; fold them into the board and list them here:
+  <ids, or "none — checked">.
 - Records go where the profile puts them: the board `<boards>/<key>.md`, decisions in `<decisions>`, deferrals in
   `<registry>`, questions to the human through the profile's channel (§13).
 - Index: copied into this worktree from the primary. The batch's Graph line is `<graph verdict line>`, decided in

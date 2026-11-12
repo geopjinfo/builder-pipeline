@@ -141,9 +141,14 @@ const tierCmd = settings.commands && settings.commands.tier;
 let rootCache = null;
 const root = () => (rootCache = rootCache || store.orchRoot());
 const repoOf = () => path.resolve(flags.repo || store.primaryRoot());
+// Run directories only: a stray file under runs/ (a note, an editor backup) is not a run, and `pause`/`resume`/
+// `status` would otherwise try to load it as one.
 const runIds = () => {
   try {
-    return fs.readdirSync(path.join(root(), 'runs'));
+    return fs
+      .readdirSync(path.join(root(), 'runs'), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
   } catch {
     return [];
   }

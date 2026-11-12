@@ -143,6 +143,18 @@ describe('a killed orchestrator resumes from the state file', () => {
     assert.equal(orch(dir, root, ['resume']).status, 0);
     assert.match(state.nextActions(root, state.load(root, 'p1'))[0], /^LAUNCH l1/);
   });
+
+  test('red: a stray file under runs/ is not a run — pause, resume and status skip it', () => {
+    const { dir, root } = project();
+    state.init(root, 'r1', lanes(1), { preflightMode: 'parallel' });
+    state.approve(root, 'r1', 'human');
+    writeFileSync(join(root, 'runs', 'notes.txt'), 'not a run');
+    const paused = orch(dir, root, ['pause']);
+    assert.equal(paused.status, 0, paused.out);
+    assert.match(paused.stdout, /PAUSED all runs \(1\)/);
+    assert.equal(orch(dir, root, ['status']).status, 0);
+    assert.equal(orch(dir, root, ['resume']).status, 0);
+  });
 });
 
 describe('lane placement: the secondary seat first, then the primary under its lower limit, hold when both are full', () => {
