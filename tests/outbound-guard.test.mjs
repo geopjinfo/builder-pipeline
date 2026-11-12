@@ -76,8 +76,8 @@ test('a payload over the excerpt limit is refused — paths and excerpts, not fi
 });
 
 test('project patterns add to the built-in shapes', () => {
-  const config = { extraPatterns: ['\\bDALIL-[0-9]{6}\\b'] };
-  assert.deepEqual(guard.check({ text: 'tenant DALIL-123456' }, { fsLike: noFs, config }).reasons, ['text:1: project pattern 1']);
+  const config = { extraPatterns: ['\\bACME-[0-9]{6}\\b'] };
+  assert.deepEqual(guard.check({ text: 'tenant ACME-123456' }, { fsLike: noFs, config }).reasons, ['text:1: project pattern 1']);
 });
 
 test('send: refused payloads never reach the call; failures and timeouts come back as no advice', async () => {
