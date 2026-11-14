@@ -110,10 +110,13 @@ function historyHits(text, patterns = DEFAULT_HISTORY) {
  *   sets?: { name: string, members: string[], files: string[] }[],
  *   history?: string[] | null,
  *   baseline?: { counts?: Record<string, number>, history?: Record<string, number> } | null,
+ *   unchecked?: (token: string) => string | null,   a reason a missing path cannot be judged (its dependency is not
+ *                                                installed), or null; such a path is reported in notChecked, not a problem
  * }} opts
  */
 function lint(files, opts) {
-  const { exists, index = [], ignorePaths = [], figures = [], sets = [], history = null, baseline = null } = opts;
+  const { exists, index = [], ignorePaths = [], figures = [], sets = [], history = null, baseline = null, unchecked = () => null } = opts;
+  const notChecked = [];
   const ignore = ignorePaths.map((p) => new RegExp(p));
   const basenames = new Set(index.map((p) => p.slice(p.lastIndexOf('/') + 1)));
   const atTail = (t) => (t.includes('/') ? index.some((p) => p === t || p.endsWith(`/${t}`)) : basenames.has(t));
@@ -154,7 +157,11 @@ function lint(files, opts) {
     for (const { n, token } of pathCandidates(text, { dirExists })) {
       if (ignore.some((re) => re.test(token))) continue;
       const fromFile = here ? `${here}/${token}`.split('/').reduce((acc, s) => (s === '..' ? acc.slice(0, -1) : s === '.' ? acc : [...acc, s]), []).join('/') : token;
-      if (!exists(token) && !exists(fromFile) && !atTail(token)) problems.push(`${path}:${n}: \`${token}\` does not exist`);
+      if (exists(token) || exists(fromFile) || atTail(token)) continue;
+      // A path inside a dependency that is not installed (a fresh clone before `npm install`) cannot be judged.
+      const why = unchecked(token);
+      if (why) notChecked.push(`${path}:${n}: \`${token}\` not checked — ${why}`);
+      else problems.push(`${path}:${n}: \`${token}\` does not exist`);
     }
     for (const { n, ref } of bareLineRefs(text)) problems.push(`${path}:${n}: bare line reference \`${ref}\` — name the file, cite a heading, or quote the sentence`);
     const c = countClaims(text).filter(({ n }) => !figureLines.has(`${path}:${n}`));
@@ -171,7 +178,7 @@ function lint(files, opts) {
       for (const [p, k] of Object.entries(now)) if (k > (base[p] ?? 0)) ratchet.push(`${p}: ${k} unregistered ${kind}, baseline ${base[p] ?? 0} — register or reword the new ones (--list shows them)`);
     }
   }
-  return { ok: problems.length === 0 && ratchet.length === 0, problems, ratchet, counts, history: historyCounts, detail };
+  return { ok: problems.length === 0 && ratchet.length === 0, problems, ratchet, counts, history: historyCounts, detail, notChecked };
 }
 
 module.exports = { lint, pathCandidates, bareLineRefs, countClaims, historyHits, proseLines, DEFAULT_HISTORY };

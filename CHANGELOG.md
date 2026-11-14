@@ -20,6 +20,12 @@ versions independently of any project it is pasted into.
 - **unpack gitignores `logs/bash/`** (or `<paths.logs>/bash/`) the way it does `.pipeline/`, whenever the Claude Code
   hooks — bash-output-cap among them — are installed, so the first capped command no longer dirties `git status`.
   Listed once; a re-run says `skip (exists)`. Tests: `tests/gitignore.test.mjs`.
+- **A fresh clone (no `node_modules`) can edit CLAUDE.md with instruction lint on.** The hook still runs its vendored
+  `.claude/hooks/kit/` copy; a cited path inside a package that is not installed (the pointer block's
+  `node_modules/@geopjinfo/builder-pipeline/…`) is now `not checked — not configured: … is not installed (run npm
+  install)` instead of a dead path, and the hook relays that as a note and allows the edit. A missing lint script is a
+  "not configured" note too, never silence. A real dead path beside it still blocks. Tests:
+  `tests/package-hooks.test.mjs`.
 
 ## [1.0.0-rc.1] — 2026-11-14
 

@@ -118,7 +118,12 @@ if (cfg.baseline && !baseline && !flag('--refresh')) {
 }
 
 const exists = (rel) => existsSync(join(root, rel));
-const result = lint(files, { exists, index: walk(root), ignorePaths: cfg.ignorePaths ?? [], figures, sets, history: cfg.history ?? null, baseline: only ? (baseline ? { counts: baseline.counts, history: baseline.history } : null) : baseline });
+/** A cited path inside a package that is not installed (no `npm install` yet) is not a dead path: it cannot be judged. */
+const unchecked = (token) => {
+  const m = /^node_modules\/((?:@[^/]+\/)?[^/]+)/.exec(token);
+  return m && !existsSync(join(root, 'node_modules', ...m[1].split('/'))) ? `not configured: ${m[1]} is not installed (run npm install)` : null;
+};
+const result = lint(files, { exists, unchecked, index: walk(root), ignorePaths: cfg.ignorePaths ?? [], figures, sets, history: cfg.history ?? null, baseline: only ? (baseline ? { counts: baseline.counts, history: baseline.history } : null) : baseline });
 
 if (flag('--refresh')) {
   if (!cfg.baseline) { console.error('instruction-lint: --refresh needs features.instructionLint.baseline'); process.exit(2); }
@@ -126,6 +131,7 @@ if (flag('--refresh')) {
   console.log(`instruction-lint: baseline written to ${cfg.baseline} — review the diff before committing`);
 }
 for (const p of result.problems) console.log(`  ${p}`);
+for (const p of result.notChecked) console.log(`  ${p}`);
 for (const p of result.ratchet) console.log(`  ratchet: ${p}`);
 if (flag('--list')) {
   for (const l of result.detail.counts) console.log(`  count  ${l}`);
@@ -135,7 +141,7 @@ const total = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 const ok = result.problems.length === 0 && (flag('--refresh') || result.ratchet.length === 0);
 console.log(
   ok
-    ? `instruction-lint: PASS — ${files.length} file(s); ${total(result.counts)} count claim(s), ${total(result.history)} history phrase(s) within the baseline${baseline ? '' : ' (no baseline: reported, not enforced)'}`
+    ? `instruction-lint: PASS — ${files.length} file(s); ${total(result.counts)} count claim(s), ${total(result.history)} history phrase(s) within the baseline${baseline ? '' : ' (no baseline: reported, not enforced)'}${result.notChecked.length ? `; ${result.notChecked.length} path(s) not checked (not configured: a dependency is not installed)` : ''}`
     : `instruction-lint: FAIL — ${result.problems.length} problem(s), ${result.ratchet.length} ratchet rise(s)`,
 );
 process.exit(ok ? 0 : 1);
