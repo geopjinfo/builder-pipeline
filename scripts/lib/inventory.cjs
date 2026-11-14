@@ -203,6 +203,22 @@ function scanPersonas(root) {
   return out;
 }
 
+/**
+ * The profiles persona-detect wrote: every file the roster (personas/INDEX.md) names. They are the kit's proposal for
+ * this project, so they are listed for review but are not evidence that the project already had a setup — counting
+ * them read a fresh repo as brownfield on any re-run after persona-detect (N1).
+ */
+function rosterProfiles(root) {
+  const personas = require('./personas.cjs');
+  try {
+    const roster = personas.parseRoster(fs.readFileSync(path.join(root, 'personas', 'INDEX.md'), 'utf8'));
+    if (!Array.isArray(roster.personas)) return new Set();
+    return new Set(roster.personas.filter((e) => e && e.id).map((e) => posix(path.join('personas', personas.fileOf(e)))));
+  } catch {
+    return new Set();
+  }
+}
+
 /** Every skill, agent, persona, playbook and hook the project already has, in a stable order. */
 function inventory(projectRoot) {
   return [...LOCATIONS.flatMap((loc) => scanLocation(projectRoot, loc)), ...scanPersonas(projectRoot)];
@@ -372,7 +388,10 @@ function mode(projectRoot, { exclude = new Set(), isKit = () => false } = {}) {
       return false;
     }
   });
-  const items = inventory(projectRoot).filter((it) => !isKit(it)).length;
+  const detected = rosterProfiles(projectRoot);
+  const own = inventory(projectRoot).filter((it) => !isKit(it));
+  const personaProfiles = own.filter((it) => it.kind === 'persona' && detected.has(it.path)).length;
+  const items = own.length - personaProfiles;
   const evidence = {
     files: counts.files,
     codeFiles: counts.code,
@@ -382,6 +401,7 @@ function mode(projectRoot, { exclude = new Set(), isKit = () => false } = {}) {
     countedManifests,
     instructionFiles,
     existingItems: items,
+    personaProfiles,
   };
   const reasons = [];
   if (counts.code >= CODE_FLOOR) reasons.push(`${counts.code} source file(s)`);
@@ -439,4 +459,4 @@ function pipelineSeats(kitRoot) {
   return [...seats].sort();
 }
 
-module.exports = { LOCATIONS, SIMILAR, inventory, kitInventory, overlaps, mode, report, tokens, jaccard, frontmatter, triggers, kitKeys, pipelineSeats };
+module.exports = { LOCATIONS, SIMILAR, inventory, rosterProfiles, kitInventory, overlaps, mode, report, tokens, jaccard, frontmatter, triggers, kitKeys, pipelineSeats };
