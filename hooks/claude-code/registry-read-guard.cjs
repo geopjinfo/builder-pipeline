@@ -84,8 +84,8 @@ const notJudging = (input, why) => {
 };
 
 /**
- * How this project runs ledger-row, from the kit's run-hint.cjs (the one place a run command is spelled): the project's
- * scripts/ copy (folder layout), else the copy vendored into kit/ beside this file (package layout) — loaded like any
+ * How this project runs ledger-row, from the kit's run-hint.cjs (the one place a run command is spelled): the copy
+ * vendored into kit/ beside this file (package layout), else the project's scripts/ copy (folder layout) — loaded like any
  * hook code, only when it matches HEAD, never from node_modules.
  */
 function ledgerRowCommand(root) {
