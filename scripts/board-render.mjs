@@ -113,9 +113,11 @@ const td = (v, cls = '') => `<td${cls ? ` class="${cls}"` : ''}>${v}</td>`;
 function resolveBoard(arg) {
   // Run from the package (`builder run`), the script's own parent is the package, not the project:
   // BUILDER_PROJECT_ROOT names the project then.
+  // Run from inside node_modules with no BUILDER_PROJECT_ROOT, the parent folder is the package: use the cwd then.
+  const self = dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
   const repoRoot = process.env.BUILDER_PROJECT_ROOT
     ? resolve(process.env.BUILDER_PROJECT_ROOT)
-    : resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+    : /(^|[\\/])node_modules[\\/]/.test(self) ? resolve(process.cwd()) : resolve(self, '..');
   const boardPath = arg.endsWith('.md') ? resolve(arg) : join(repoRoot, boardsDirOf(repoRoot), `${arg}.md`);
   const key = basename(boardPath, '.md');
   return { boardPath, key, root: rootOf(dirname(boardPath)) };

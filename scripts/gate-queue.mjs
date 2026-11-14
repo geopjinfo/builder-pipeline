@@ -162,7 +162,8 @@ try {
       const out = join(cfg.boards, `gate-batch-${s.batch.id}.md`);
       if (existsSync(out)) fail(`board: ${out} already exists — the board is the run's truth once written; append FIX-n rows to it`, 2);
       writeFileSync(out, q.board(s, { boards: cfg.boards }));
-      execFileSync(process.execPath, [join('scripts', 'board-progress.mjs'), out], { stdio: 'ignore' });
+      // The sibling script beside this one — a package install has no scripts/ folder in the project.
+      execFileSync(process.execPath, [require('node:url').fileURLToPath(new URL('./board-progress.mjs', import.meta.url)), out], { stdio: 'ignore' });
       console.log(`gate-queue: wrote ${out}`);
       break;
     }

@@ -1062,7 +1062,8 @@ function cmdRun(args) {
   const [name, ...rest] = args;
   if (!name) {
     const list = (dir, prefix) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.(mjs|cjs|js)$/.test(f)).map((f) => prefix + f.replace(/\.(mjs|cjs|js)$/, '')) : []);
-    const names = [...list(path.join(KIT, 'scripts'), ''), ...list(path.join(KIT, 'tooling', 'experimental'), 'experimental/')].sort();
+    // One name per script: `page-shell.cjs` + `page-shell.mjs` are one runnable name (kitScript picks .mjs first).
+    const names = [...new Set([...list(path.join(KIT, 'scripts'), ''), ...list(path.join(KIT, 'tooling', 'experimental'), 'experimental/')])].sort();
     console.log(`builder kit ${VERSION} — scripts (${RUN} run <name> [args]):`);
     for (const n of names) console.log(`  ${n}`);
     return;

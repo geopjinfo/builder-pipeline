@@ -120,6 +120,16 @@ versions independently of any project it is pasted into.
   the command without its data heredoc bodies — only when the command is made of data statements alone and runs no
   shell or interpreter; `git commit -F -` counts as inert only as the whole command (it runs config-driven hooks).
   Tests: `tests/fence-heredoc-links.test.mjs` (46 cases).
+- **`board-check-all` works from the package, and `--fix` never passes after a crash.** It spawned
+  `scripts/board-progress.mjs` and `scripts/board-render.mjs` relative to the working directory, so installed as a
+  package every board failed with "Cannot find module"; `--fix` then printed PASS, exit 0. The siblings are now
+  resolved beside the script, the project is `BUILDER_PROJECT_ROOT` or the cwd, a child that fails under `--fix`
+  fails the run, and the advice names the layout's own form (`npx builder run board-check-all --fix`). `gate-queue
+  board` had the same cwd-relative spawn; `board-render` run from `node_modules` without `BUILDER_PROJECT_ROOT` took
+  the package for the project. Tests: `tests/package-layout.test.mjs`.
+- **`builder run` lists each script once, and `board-progress` takes a board key.** `experimental/page-shell` (a
+  `.cjs` and an `.mjs`) was listed twice; `board-progress rooms` now resolves `<paths.boards>/rooms.md` like
+  `board-render <key>`. Tests: `tests/package-layout.test.mjs`.
 
 ## [0.16.0] — 2026-11-12
 
