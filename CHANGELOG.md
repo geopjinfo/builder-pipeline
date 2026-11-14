@@ -46,6 +46,16 @@ versions independently of any project it is pasted into.
   hook and `hooks/README.md`: the hook keeps no state, so a profile that disappears or turns malformed drops
   §16's paths from the next call on — which is why the profile itself is fenced. Tests: the `finding 1/2/3`
   groups in `tests/protected-paths-profile.test.mjs` (the real file-symlink case runs where the host may make one).
+- **The profile's shell fence no longer fails open on a cap or an unplaced base (second security review, two HIGH
+  findings).** (1) The operand cap (256) and the base-directory cap (24) used to stop the check, so 256 padding
+  operands, or enough directory operands, left the profile after them unseen: a cap reached on a non-read-only
+  pipeline (or the PowerShell tool) now refuses the statement with its own reason. (2) Protection depended on
+  finding the base a relative or `..` operand is resolved against: any operand whose last path segment spells
+  `PIPELINE_PROFILE.md` — any case, quoted or backslash-spliced, after `=`/`:`/a glued option, with the trailing
+  dots and spaces or the `:stream` Windows drops, or as the 8.3 name `PIPELI~1.MD` — is now refused by its NAME,
+  whatever it resolves to; landing stays as a second layer. Read-only pipelines stay open. Trade-off: a mutating
+  shell statement naming another file of that name (`rm docs/PIPELINE_PROFILE.md`) is refused too; the file tools
+  still judge by landing. Tests: the `second review` groups in `tests/protected-paths-profile.test.mjs`.
 
 ## [1.0.0] — 2026-11-14
 

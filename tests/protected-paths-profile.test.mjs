@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -234,7 +234,11 @@ describe('finding 2: the profile is fenced by its root-anchored real path only',
     for (const p of ['docs/PIPELINE_PROFILE.md', 'src/open/PIPELINE_PROFILE.md', 'PIPELINE_PROFILE.md.bak', 'notes/PIPELINE_PROFILE.md/a.txt', slash(join(proj, 'docs/PIPELINE_PROFILE.md'))]) {
       assert.equal(blocks(write(p), c), false, p);
     }
-    for (const cmd of ['rm docs/PIPELINE_PROFILE.md', 'echo x > docs/PIPELINE_PROFILE.md', 'rm -r notes/PIPELINE_PROFILE.md']) assert.equal(blocks(sh(cmd), c), false, cmd);
+    for (const cmd of ['rm PIPELINE_PROFILE.md.bak', 'echo x > docs/PIPELINE_PROFILE.md.bak']) assert.equal(blocks(sh(cmd), c), false, cmd);
+  });
+  test('trade-off (second review, finding 2): a non-read-only SHELL statement naming another file of that name fails closed on the name', () => {
+    for (const cmd of ['rm docs/PIPELINE_PROFILE.md', 'echo x > docs/PIPELINE_PROFILE.md', 'rm -r notes/PIPELINE_PROFILE.md']) assert.equal(blocks(sh(cmd), c), true, cmd);
+    assert.equal(blocks(sh('cat docs/PIPELINE_PROFILE.md'), c), false, 'reads stay open');
   });
   test('the one file stays fenced, and the grant opens exactly that one file', () => {
     assert.equal(blocks(write('PIPELINE_PROFILE.md'), c), true);
@@ -279,5 +283,66 @@ describe('finding 3: the profile is matched by LANDING, a linked profile by its 
     assert.equal(blocks(write('PIPELINE_PROFILE.md'), c), true, 'the link');
     assert.equal(blocks(sh('rm PIPELINE_PROFILE.md'), c), true, 'unlinking the link');
     assert.equal(blocks(sh('truncate -s0 cfg/real-profile.md'), c), true, 'the target from the shell');
+  });
+});
+
+// ── 1.0.1 second security review (two HIGH fail-open findings) ────────────────────────────────────────────────
+describe('second review, finding 1: a cap reached on a non-read-only pipeline refuses, never stops checking', () => {
+  const proj = lab(settings({ protected: ['src/secret/'] }));
+  const c = cfg(proj);
+  const pad = Array.from({ length: 300 }, (_, i) => `f${i}`).join(' ');
+  test('red: 300 padding operands, then the profile', () => {
+    assert.equal(blocks(sh(`rm ${pad} PIPELINE_PROFILE.md`), c), true);
+    assert.equal(blocks(sh(`rm ${pad} x/../PIPELINE_PROFILE.md`), c), true, 'spelled so only landing finds it');
+  });
+  test('red: 300 operands that do not name it are refused too while the profile is fenced — the cap fails closed', () => {
+    const r = guard.decide(sh(`rm ${pad}`), c);
+    assert.equal(r.block, true);
+    assert.match(r.reason, /too many|cap/i);
+  });
+  test('red: more directory operands than the base cap refuse', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `d${i}`);
+    for (const d of many) mkdirSync(join(proj, 'src', 'open', d), { recursive: true });
+    const r = guard.decide(sh(`touch ${many.map((d) => `src/open/${d}`).join(' ')} && rm ../oops.md`), c);
+    assert.equal(r.block, true);
+    assert.match(r.reason, /too many|cap/i);
+  });
+  test('reads stay open past any cap', () => {
+    assert.equal(blocks(sh(`grep -n x ${pad} PIPELINE_PROFILE.md`), c), false);
+    assert.equal(blocks(sh(`cat ${pad}`), c), false);
+  });
+  test('a pipeline under the caps that does not name it stays open', () => {
+    assert.equal(blocks(sh('rm f1 f2 f3'), c), false);
+  });
+});
+
+describe('second review, finding 2: the profile\'s NAME fails closed, whatever it resolves to', () => {
+  const proj = lab(settings({ protected: ['src/secret/'] }));
+  const c = cfg(proj);
+  const root = basename(proj);
+  const outside = mkdtempSync(join(tmpdir(), 'fence-profile-far-'));
+  made.push(outside);
+  const O = slash(outside);
+  test('red: a ..-path through a directory outside every base', () => {
+    assert.equal(blocks(sh(`git -C ${O}/new rm ../x/../../${root}/PIPELINE_PROFILE.md`), c), true);
+    assert.equal(blocks(sh(`rm ../x/../${root}/PIPELINE_PROFILE.md`), c), true);
+  });
+  test('red: a ..-chain from a cd target', () => {
+    assert.equal(blocks(sh(`D=${O}/new; cd $D && rm ../x/../../${root}/PIPELINE_PROFILE.md`), c), true, 'a cd target the hook cannot place');
+    assert.equal(blocks(sh(`cd ${O} && mkdir -p a/b && cd a/b && rm ../../../${root}/PIPELINE_PROFILE.md`), c), true);
+  });
+  test('red: mixed case, a trailing dot or space, quotes and backslashes spliced in', () => {
+    for (const cmd of [
+      `git -C ${O}/new rm ../x/../../${root}/pipeline_profile.MD`, 'rm elsewhere/pipeline_profile.MD', 'rm PIPELINE_PROFILE.md.',
+      'rm "PIPELINE_PROFILE.md "', 'rm "PIPELINE_PROFILE.md. ."', `rm ${O}/new/PIPELINE_PROFILE.md...`, 'rm Pipeline_Pro""file.md', 'rm "elsewhere\\PIPELINE_PROFILE.md"', 'rm PIPELINE_PROF\\ILE.MD',
+      'rm PIPELINE_PROFILE.md::$DATA', 'rm PIPELINE_PROFILE.md:x', 'rm PIPELI~1.MD', 'rm --file=sub/pipeline_profile.md',
+    ]) assert.equal(blocks(sh(cmd), c), true, cmd);
+    assert.equal(blocks({ tool_name: 'PowerShell', tool_input: { command: 'Remove-Item ..\\x\\..\\far\\pipeline_profile.md.' } }, c), true);
+  });
+  test('reads of the same spellings stay allowed; near-names are not the name', () => {
+    for (const cmd of [
+      `cat ../x/../${root}/pipeline_profile.MD`, 'grep -n x PIPELINE_PROFILE.md.', `cat ${O}/new/PIPELINE_PROFILE.md...`, 'git diff pipeline_profile.MD',
+      'rm PIPELINE_PROFILE.md.bak', 'rm my-PIPELINE_PROFILE.md', 'rm PIPELINE_PROFILE.mdx',
+    ]) assert.equal(blocks(sh(cmd), c), false, cmd);
   });
 });

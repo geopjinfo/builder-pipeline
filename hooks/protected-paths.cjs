@@ -124,7 +124,10 @@ function selfPath() {
  *     `git -C . rm`, truncate, `dd of=`, `find -delete`, shred, install …). So it FAILS CLOSED instead
  *     (profileNamed): a pipeline that names the profile — by spelling or by landing, as an operand, after `=` or `:`,
  *     with quotes or backslashes spliced in, relative to any cd or any directory operand (`git -C docs rm ../…`) — is
- *     refused unless every stage is READ-ONLY (cat, grep, git show|diff|log … — the READ_ONLY rule below). A DATA
+ *     refused unless every stage is READ-ONLY (cat, grep, git show|diff|log … — the READ_ONLY rule below). The NAME
+ *     alone suffices (namesProfile: last segment, any case, trailing dots/spaces and streams dropped), whatever the
+ *     operand resolves to, so a base the hook cannot find does not open it; landing is a second layer, and a cap
+ *     reached there (operands, base directories) refuses the statement instead of leaving operands unchecked. A DATA
  *     heredoc body naming it is not an operand. The PowerShell tool has no read-only reading: any statement naming it
  *     is refused (read it with the Read tool).
  * With §16 `protected` empty the profile is NOT fenced: an edit there can only add protection, and the pipeline's own
@@ -759,6 +762,20 @@ function deny(hit, what, ctx) {
  * bodies when something in the command runs code; not understood by the lexer, or the PowerShell tool — the whole text.
  */
 const PROFILE_TOKENS_MAX = 256;
+const PROFILE_BASES_MAX = 24;
+const PROFILE_LOWER = PROFILE_FILE.toLowerCase();
+/**
+ * Does an operand's LAST path segment spell the profile's name? Decided by the name alone, whatever the operand
+ * resolves to, and as Windows reads a name: any case, trailing dots and spaces dropped (`PIPELINE_PROFILE.md. `),
+ * an alternate data stream (`…md:x`, `…md::$DATA`) and a drive-relative `C:` ignored, the 8.3 short name
+ * (`PIPELI~1.MD`) included. Quote and backslash splices are undone by the caller's three readings of the text.
+ */
+function namesProfile(tok) {
+  let s = fwd(String(tok)).replace(/[/. ]+$/, '');
+  s = s.slice(s.lastIndexOf('/') + 1).replace(/^[A-Za-z]:/, '').toLowerCase();
+  s = s.replace(/:.*$/, '').replace(/[. ]+$/, '');
+  return s === PROFILE_LOWER || /^pipeli~\d+\.md$/.test(s);
+}
 function profileNamed(command, isPowerShell, dirs, ctx) {
   if (!ctx.profile) return null;
   let scope = command;
@@ -773,7 +790,6 @@ function profileNamed(command, isPowerShell, dirs, ctx) {
   const pieces = new Set();
   for (const text of [scope, scope.replace(/["']/g, ''), scope.replace(/["'\\]/g, '')]) {
     for (const tok of operandsOf(text)) {
-      if (pieces.size >= PROFILE_TOKENS_MAX) break;
       const t = tok.trim();
       if (!t) continue;
       pieces.add(t);
@@ -785,17 +801,34 @@ function profileNamed(command, isPowerShell, dirs, ctx) {
     }
   }
   const hit = (tok, why) => ({ prefix: PROFILE_TAG, why: `${tok} is ${PROFILE_WHY}${why ? `; ${why}` : ''}` });
+  // Layer 1 — the NAME, on every operand, uncapped and with no filesystem lookup: an operand whose last segment spells
+  // the profile is refused whatever it resolves to (a `..` path through a directory no base knows, a cd target held
+  // in a variable). Another file of that name is refused with it here; the file tools still judge by landing.
+  for (const p of pieces) {
+    if (namesProfile(p)) return hit(p, 'its name is the profile\'s, and a statement naming it fails closed whatever it resolves to');
+  }
+  // Layer 2 — LANDING, which costs filesystem lookups and so is capped. A cap reached is refused, never a reason to
+  // stop checking: the operands after it would go unseen.
+  const capped = (what) => ({
+    prefix: PROFILE_TAG,
+    what: `this command has ${what} for the profile check to place every operand (caps: ${PROFILE_TOKENS_MAX} operands, ${PROFILE_BASES_MAX} base directories), so the hook cannot rule out that it`,
+    why: `${PROFILE_WHY}; a cap reached fails closed — split the command into smaller ones`,
+  });
+  if (pieces.size > PROFILE_TOKENS_MAX) return capped(`too many operands (${pieces.size})`);
   // Bases a relative operand may be resolved against: the cwd, every cd, and every operand that is a directory
   // (`git -C docs rm ../PIPELINE_PROFILE.md`, `tar -C`, `--work-tree=`).
   const bases = [ctx.cwd, ...dirs];
+  if (bases.length > PROFILE_BASES_MAX) return capped(`too many cd targets (${bases.length})`);
   for (const p of pieces) {
-    if (bases.length >= 24) break;
     if (/[$%`]/.test(p) || /^-/.test(p) || DISCARD.test(p)) continue;
     for (const from of [ctx.cwd, ...dirs]) {
       const abs = resolveTarget(p, from);
       if (abs === null) continue;
       try {
-        if (fs.statSync(abs).isDirectory() && !bases.includes(abs)) bases.push(abs);
+        if (fs.statSync(abs).isDirectory() && !bases.includes(abs)) {
+          if (bases.length >= PROFILE_BASES_MAX) return capped('too many directory operands');
+          bases.push(abs);
+        }
       } catch (_) {
         /* not a directory */
       }
@@ -835,7 +868,7 @@ function decideShell(command, isPowerShell, ctx) {
   const runsCode = isPowerShell || RUNS_CODE.test(command);
   const named = profileNamed(command, isPowerShell, cdDirsOf(command, ctx), ctx);
   if (named) {
-    const r = deny(named, `this ${tool} command names ${PROFILE_FILE} outside a read-only pipeline, which`, ctx);
+    const r = deny(named, named.what ? `this ${tool} ${named.what.replace(/^this /, '')}` : `this ${tool} command names ${PROFILE_FILE} outside a read-only pipeline, which`, ctx);
     if (r) return r;
   }
   for (const target of writes) {
