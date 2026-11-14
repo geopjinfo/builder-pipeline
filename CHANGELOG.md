@@ -130,6 +130,16 @@ versions independently of any project it is pasted into.
 - **`builder run` lists each script once, and `board-progress` takes a board key.** `experimental/page-shell` (a
   `.cjs` and an `.mjs`) was listed twice; `board-progress rooms` now resolves `<paths.boards>/rooms.md` like
   `board-render <key>`. Tests: `tests/package-layout.test.mjs`.
+- **The hooks find the kit in the package.** `board-render.cjs` and `instruction-lint-on-edit.cjs` looked only in
+  `<project>/scripts/`, which an npm install never creates, so both were silent no-ops ("board-freshness.cjs not
+  found", "profile.cjs not found"). Every hook now resolves a kit file through `hook-trust.cjs locate()`: the
+  project's `scripts/` copy (folder layout, checked against HEAD), else the installed package
+  (`require.resolve('@geopjinfo/builder-pipeline/package.json', { paths: [project] })`). A package file is not in the
+  project's repository, so "matches HEAD" cannot vouch for it: unpack/upgrade now record a hash of every package
+  script under `package.files` in `builder.lock.json`, and a package file runs only when the lock matches HEAD and
+  the file and everything it requires hash to what the lock records — an edit in `node_modules` or an uncommitted
+  lock gets "not run", as an uncommitted script does. `registry-read-guard` names `npx builder run ledger-row` in
+  the package layout. Tests: `tests/package-hooks.test.mjs`.
 
 ## [0.16.0] — 2026-11-12
 

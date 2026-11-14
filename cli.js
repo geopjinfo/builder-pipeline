@@ -167,7 +167,24 @@ function writeLock() {
   if (DRY) return;
   const files = { ...lockPrior(), ...LOCK.next };
   const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
-  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify({ kit: VERSION, files: sorted }, null, 2) + '\n');
+  const lock = { kit: VERSION, files: sorted };
+  if (PACKAGED) lock.package = packageRecord();
+  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify(lock, null, 2) + '\n');
+}
+
+/**
+ * Installed as a package, the hooks run the kit's scripts from node_modules — outside the project's repository, so
+ * "matches HEAD" cannot vouch for them. The lock records a hash of every package script; committed, it is what the
+ * hooks check a package file against (hooks/claude-code/hook-trust.cjs trustedByLock). Run upgrade after updating
+ * the package, then commit the lock — until then the hooks say "not run" instead of running unreviewed code.
+ */
+function packageRecord() {
+  const files = {};
+  for (const rel of filesUnder('scripts')) {
+    if (!/\.(c?js|mjs)$/.test(rel)) continue;
+    files[posixPath(path.join('scripts', rel))] = shaOf(fs.readFileSync(path.join(KIT, 'scripts', rel)));
+  }
+  return { name: require('./package.json').name, version: VERSION, files };
 }
 
 function upgradeLog(status, dst, note = '') {
