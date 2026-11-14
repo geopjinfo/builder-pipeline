@@ -7,6 +7,16 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Persona detector.** `skills/persona-detect.md` reads the project, researches its domain (the tool's own web
+  search, every researched claim Derived with its URL; offline = repository only), runs a census of product users,
+  delivery roles and governance approvers with a refusal list, and writes a fenced `personas/` library from
+  `templates/personas/` (WHY, USAGE, INDEX, census, profile template). `personas/INDEX.md` carries one json roster
+  block (`id`, `name`, `set`, `confirmed`, `routes`, optional `file`, `render`, `tier`); nothing becomes an agent
+  before the human confirms it, and a refresh proposes additions and changes only, never overwriting a confirmed
+  persona. A thin project takes its input from a six-question interview answer set. `scripts/lib/personas.cjs`
+  (`parseRoster`, `validate`, `toNeutralAgent`, `mergeProposal`) and `node scripts/personas-check.mjs [dir]
+  [--render <out>] [--json]` hold the roster and render confirmed personas as neutral read-only agent files.
+  Tests: `tests/personas-detect.test.mjs` (30 cases).
 - **The kit is an installable package.** `package.json` is no longer private: name `@geopjinfo/builder-pipeline`, a
   `builder` command (`cli.js`), `files` (every folder and document the CLI reads; the kit's own `tests/` stay out),
   `engines.node >=18` (the floor `cli.js` enforces), `license` (UNLICENSED until one is chosen) and `repository`.
