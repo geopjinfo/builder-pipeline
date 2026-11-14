@@ -71,7 +71,7 @@ interpreting it.
    seed). **Every row also carries a `Cites` id** — the requirement, decision record or gate it
    answers to; a row citing nothing is a row nobody can check, and an unchecked citation is just a
    more confident-looking invention. The orchestrator materializes this section as the git-tracked
-   board `tasks/<moduleKey>.md`.
+   board `<boards>/<moduleKey>.md` (`<boards>` is §16 `paths.boards`, default `tasks`).
 
    **Every row also carries a `Files` column**: each file the row edits, repo-relative, including
    the existing tests it must change. **No row leaves a placement decision to the builder.** Before you

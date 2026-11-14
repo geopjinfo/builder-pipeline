@@ -18,7 +18,10 @@ points — batch everything else.
 - Confirm `node --version` is 18 or newer. If Node is missing or older, fall back to
   `builder/scripts/unpack.sh` or `unpack.ps1` (claude-code and codex only, no frontmatter
   transform, no checkers), and say so.
-- Run `node builder/tests/run.mjs`. Red means a damaged pack or an old Node: stop and report.
+- Prove the kit runs: `node builder/cli.js --version` prints its version. A kit copied in as a
+  folder also carries its own suite (`tests/run.mjs` inside the kit folder) — run it there; red means
+  a damaged pack or an old Node: stop and report. An npm-package install ships no suite (the kit's
+  release was tested in its own repository); `--version` is the check.
 - Record how many lines `git status --porcelain` prints (setup doesn't require clean; the number
   goes in the final report so the human can separate kit files from their own edits).
 - **Upgrade mode:** if `PIPELINE_PROFILE.md` already exists and is filled, this is a re-verify/

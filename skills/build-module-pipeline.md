@@ -277,7 +277,7 @@ reports the model the run actually used, where the harness keeps that record.
    the reviewer read the plan without interpreting it.
 
    Then **materialize the task board**: create `<boards>/<key>.md` from the plan's `## Tasks`
-   (format: `tasks/README.md`; all rows `PLANNED` with their Test-seed **and a `Cites` id**; append
+   (format: `<boards>/README.md`; all rows `PLANNED` with their Test-seed **and a `Cites` id**; append
    the step-0b `C-n` rows and the digest's candidates as `IC-n` rows). Keep the board's
    `phase:status` block current at each gate and run `node scripts/board-check-all.mjs` with it: the
    progress bar is a projection of the Status column, never typed. Pass the `plan.md` **path** (not
@@ -326,7 +326,7 @@ reports the model the run actually used, where the harness keeps that record.
    records (`features.costAccounting`). Log an event where it happens, not at the end — a run that
    dies mid-phase must leave a truthful partial log rather than a summary written from memory. A
    `ceiling` event is not optional bookkeeping: it is how the run says out loud that it will not
-   reach what it set out to. Format: `tasks/README.md`.
+   reach what it set out to. Format: `<boards>/README.md`.
 2. **Code** — dispatch `module-builder` in **batches of at most `features.builderBatch.rows` board
    rows** (default five), a **fresh dispatch per batch**, each given the `plan.md` path, the board
    path and its row ids. The builder reads its rows with

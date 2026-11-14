@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { after, describe, test } from 'node:test';
@@ -52,6 +52,23 @@ describe('the kit names itself where it is installed', () => {
     assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /node_modules\/@geopjinfo\/builder-pipeline\/DISCOVERY\.md/);
     // A project's own .builder/ folder is not the kit: its paths are left alone.
     assert.match(readFileSync(join(proj, 'AGENTS.md'), 'utf8'), /`\.builder\/playbooks\/build-module-pipeline\.md`/);
+  });
+
+  test('red: installed as a package, every kit file an installed Markdown file names is one the package ships', () => {
+    // The package ships package.json "files" only — the kit's own tests/ stay out — so a rewritten
+    // `builder/tests/run.mjs` would send a package user to a file that is not there.
+    const at = 'node_modules/@geopjinfo/builder-pipeline';
+    const { proj, cli } = project(at);
+    for (const extra of ['tests', '.git']) rmSync(join(proj, ...at.split('/'), extra), { recursive: true, force: true });
+    const r = run(cli, proj, ['unpack', '--tool', 'claude-code,opencode,codex']);
+    assert.equal(r.status, 0, r.stderr);
+    const missing = [];
+    for (const f of mdFiles(proj)) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/node_modules\/@geopjinfo\/builder-pipeline\/([\w./-]*[\w/])/g)) {
+        if (!existsSync(join(proj, ...at.split('/'), ...m[1].split('/')))) missing.push(`${relative(proj, f)}: ${m[1]}`);
+      }
+    }
+    assert.deepEqual([...new Set(missing)], []);
   });
 
   test('control: copied in as builder/, the text is unchanged — node builder/cli.js and builder/DISCOVERY.md', () => {

@@ -29,7 +29,7 @@ invariants with reference implementations (§7), and gates (§8).
 distilled, doc-cited plan + `## Tasks`). Implement exactly that plan — it is your scoped context,
 so you don't re-read whole specs; read the sections the plan cites, not whole documents. If the plan
 is missing or contradicts a doc, stop and report it; don't improvise around it. You are also handed
-the git-tracked task board `tasks/<moduleKey>.md` (format: `tasks/README.md`) and the ids of the
+the git-tracked task board `<boards>/<moduleKey>.md` (`<boards>` is §16 `paths.boards`, default `tasks`; format: `<boards>/README.md`) and the ids of the
 rows this dispatch owns — keep those rows current as you work.
 
 ## TDD loop (per board row — non-negotiable)
