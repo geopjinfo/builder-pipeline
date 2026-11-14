@@ -213,6 +213,28 @@ function strings(value, path, out = []) {
   return out;
 }
 
+/**
+ * Why a `paths.logs` value is refused, or null: it must be a project-relative folder with no `..` segment, outside
+ * `.claude/hooks/`, `.codex/hooks/` and every §16 `protected` glob's fixed prefix (case-insensitive).
+ */
+function logsProblem(logs, protectedGlobs) {
+  if (typeof logs !== 'string' || !logs.trim()) return 'a non-empty project-relative folder';
+  const p = logs.trim().replace(/\\/g, '/');
+  if (/^(?:\/|~|[A-Za-z]:|\$)/.test(p)) return `must be project-relative, got ${JSON.stringify(logs)}`;
+  if (p.split('/').includes('..')) return `must stay inside the project (no .. segment), got ${JSON.stringify(logs)}`;
+  const rel = `${p.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')}/`.toLowerCase();
+  for (const h of ['.claude/hooks/', '.codex/hooks/']) if (rel.startsWith(h)) return `must not be inside the hook folder ${h}, got ${JSON.stringify(logs)}`;
+  for (const g of Array.isArray(protectedGlobs) ? protectedGlobs : []) {
+    if (typeof g !== 'string') continue;
+    let pre = g.trim().replace(/\\/g, '/').replace(/^(?:\.\/)+/, '');
+    const wild = pre.search(/[*?[\]{}]/);
+    if (wild !== -1) pre = pre.slice(0, pre.slice(0, wild).lastIndexOf('/') + 1);
+    pre = pre.replace(/\/+$/, '');
+    if (pre && !pre.startsWith('!') && rel.startsWith(`${pre.toLowerCase()}/`)) return `must not be under the protected glob ${JSON.stringify(g)}, got ${JSON.stringify(logs)}`;
+  }
+  return null;
+}
+
 /** @returns {string[]} every problem with a merged settings object */
 function validate(settings) {
   const errors = [];
@@ -226,6 +248,12 @@ function validate(settings) {
     errors.push('commands.tier: a command containing {tier}, or null');
   }
   if (settings.paths && !Array.isArray(settings.paths.citationRoots)) errors.push('paths.citationRoots: must be an array');
+  // The bash cap hook writes logs there with fs, unseen by the protected-paths fence: keep it inside the project and
+  // out of every protected glob and hook folder.
+  if (settings.paths && settings.paths.logs !== undefined) {
+    const why = logsProblem(settings.paths.logs, settings.protected);
+    if (why) errors.push(`paths.logs: ${why}`);
+  }
   /*
    * The run directory is fixed in schema 2. The board freshness gate, the watcher, the renderer's run-log reader and
    * the installer's .gitignore line all use `.pipeline`; a setting three of them ignored would put a run's pages in
@@ -587,4 +615,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, feature, merge, rootOf };
+module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, logsProblem, feature, merge, rootOf };
