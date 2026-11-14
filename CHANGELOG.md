@@ -5,6 +5,8 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-11-14
+
 ### Fixed
 
 - **Every shipped file gives install-neutral commands.** The script and tool headers, the experimental
