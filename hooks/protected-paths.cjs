@@ -10,7 +10,7 @@
  *   {
  *     "hooks": {
  *       "PreToolUse": [{
- *         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+ *         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|mcp__.*",
  *         "hooks": [{ "type": "command", "command": "node .claude/hooks/protected-paths.cjs" }]
  *       }]
  *     }
@@ -50,12 +50,30 @@
  *               below). A command made of data heredoc statements alone is also judged WITHOUT their bodies by the
  *               writes, links and cd rules — a body quoting `ln -s` or `> protected/x` makes neither (dataStripped);
  *               a link maker word is found anywhere in a statement, not only after a known lead (makersAnywhere);
+ *      named    FAILS CLOSED (protectedNamed below): any statement outside a READ-ONLY pipeline (cat, ls, grep,
+ *               git show|diff|log …) that names a protected path — by spelling (case-insensitive on Windows), by
+ *               landing under the cwd, every cd target and every directory operand, as a glob that may reach it, as a
+ *               folder containing it for a remover/mover, as an unplaceable operand sharing a segment with it, as a
+ *               path in a patch file — is refused: rm, `git checkout --`, tar -C, unzip -d, `dd of=`, install,
+ *               curl -o, robocopy, Remove-Item and whatever the next spelling is. Reading is the Read tool's job;
+ *      resets   `git reset --hard`, `git stash`, `git clean -f` with no pathspec, `git checkout|restore .`, a forced
+ *               checkout — whole-tree rewrites — are refused while anything is protected;
+ *  - MCP tools (`mcp__*`): every path-shaped key (path, paths, file_path, destination, target, source …) is judged as
+ *    a Write; read-named tools are not; a path that cannot be placed fails CLOSED (decideMcp).
+ *  - Windows forms: `\\?\`, `\\.\`, `\\?\UNC\`, `\\localhost\C$` (and 127.0.0.1, ::1, this host) are placed as the
+ *    drive path; any other share cannot be placed and fails CLOSED when its spelling could be protected.
  *  - This file itself: it defines the protected set, so it is protected whenever anything is (`BUILDER_UNLOCK=fence`).
+ *    So are the whole `.claude/hooks/` (the kit/ copy, hook-trust.cjs, every sibling hook) and `.codex/hooks/`, by
+ *    landing: their files run on the next tool call. The same grant opens them.
  *  - Hard links: a write to an EXISTING file with more than one hard link is refused. There is no link to follow,
  *    so whether the same bytes also live under a protected path cannot be told — it fails CLOSED.
- * Not seen, stated plainly: a path an interpreter builds at runtime; a `cd` whose operand cannot be placed
- * (`cd "$D"` — not failed closed, since `cd` is in most commands). A deny list of makers, admittedly; the
- * landing check is what holds when a maker is missed. Exit 2 = deny the tool call, message shown to the agent.
+ *  - A crash blocks: malformed input while anything is protected, an unreadable configuration, or an exception
+ *    while judging exits 2 with the reason (verdict below) — Claude Code treats exit 1 as non-blocking.
+ * Not seen, stated plainly: a path an interpreter builds at runtime (`'src/co'+'re'` inside node -e); a `cd` whose
+ * operand cannot be placed (`cd "$D"` — not failed closed, since `cd` is in most commands); a variable holding a
+ * whole path with no protected segment spelled (`rm -rf $X`); a branch switch (`git checkout other-branch`); a script
+ * or tool that writes protected files without naming them. The pre-commit hook and CI are the backstop. Exit 2 =
+ * deny the tool call, message shown to the agent.
  */
 'use strict';
 const fs = require('fs');
@@ -131,9 +149,9 @@ function selfPath() {
  *     heredoc body naming it is not an operand. The PowerShell tool has no read-only reading: any statement naming it
  *     is refused (read it with the Read tool).
  * With §16 `protected` empty the profile is NOT fenced: an edit there can only add protection, and the pipeline's own
- * setup writes the profile. Not seen, stated plainly: a glob that deletes it (`rm *.md`), and a whole-tree reset
- * (`git checkout .`, `git stash`) — residuals shared with every protected path; the pre-commit hook and CI are the
- * backstop.
+ * setup writes the profile. Not seen, stated plainly: a glob that deletes it (`rm *.md` — the glob rule judges
+ * prefixes, not this one file); whole-tree resets are refused by the reset rule while anything is protected. The
+ * pre-commit hook and CI are the backstop.
  *
  * KNOWN LIMIT — no memory between calls. The hook keeps no state: every call reads the profile afresh. If the profile
  * disappears or becomes malformed (by a person, or by a route above that was not seen), §16's prefixes and the
@@ -212,9 +230,38 @@ function config(env = process.env, cwd = process.cwd()) {
   };
 }
 
-/** An absolute native path for a spelled target, or null when it cannot be placed (`/tmp/x` on Windows). */
+/**
+ * WINDOWS PATH FORMS (S3). `\\?\C:\x` and `\\.\C:\x` (device namespace) are `C:\x`; `\\?\UNC\host\share\x` is
+ * `\\host\share\x`; an administrative share on this machine (`\\localhost\C$\x`, `\\127.0.0.1\c$`, `\\::1\`, this
+ * host's name) is the drive path. Any other share, or a device path that is not a drive path, cannot be placed:
+ * null, and the caller fails closed when its spelling could be protected. Never touches the network.
+ */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0:0:0:0:0:0:0:1']);
+function winPlace(raw) {
+  let s = String(raw).trim();
+  if (!WIN) return s;
+  const dev = /^[\\/]{2}[?.][\\/]+(.*)$/.exec(s);
+  if (dev) {
+    s = dev[1];
+    const unc = /^UNC[\\/]+(.*)$/i.exec(s);
+    if (unc) s = `\\\\${unc[1]}`;
+    else return /^[A-Za-z]:(?:[\\/]|$)/.test(s) ? s : null;
+  }
+  const share = /^[\\/]{2}([^\\/?.][^\\/]*)[\\/]+([^\\/]+)(.*)$/.exec(s);
+  if (share) {
+    const host = share[1].toLowerCase();
+    const drive = /^([A-Za-z])\$$/.exec(share[2]);
+    if (drive && (LOCAL_HOSTS.has(host) || host === os.hostname().toLowerCase())) return `${drive[1]}:${share[3] || '\\'}`;
+    return null;
+  }
+  return s;
+}
+
+/** An absolute native path for a spelled target, or null when it cannot be placed (`/tmp/x` on Windows, a share). */
 function resolveTarget(target, cwd) {
-  let p = fwd(String(target).trim());
+  const placed = winPlace(target);
+  if (placed === null) return null;
+  let p = fwd(placed);
   p = p.replace(/^(?:~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|%USERPROFILE%)(?=\/|$)/i, fwd(os.homedir()));
   if (WIN && p.startsWith('/')) {
     const drive = /^\/(?:cygdrive\/)?([a-zA-Z])(\/.*|$)/.exec(p); // Git Bash spells C:\x as /c/x
@@ -264,11 +311,62 @@ function relToRoot(real, ctx) {
   if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
   return fwd(rel);
 }
-/** Is a root-relative path the prefix itself (a file, or the folder) or under it? */
+/** Is a root-relative path the prefix itself (a file, or the folder) or under it? Case-insensitive on Windows. */
 const under = (rel, prefix) => {
-  const p = prefix.replace(/\/+$/, '');
-  return rel === p || rel.startsWith(`${p}/`);
+  const p = fold(prefix.replace(/\/+$/, ''));
+  const r = fold(rel);
+  return r === p || r.startsWith(`${p}/`);
 };
+
+/**
+ * The protected prefix a SPELLING names (case-insensitively on Windows): it starts with the prefix, holds it after a
+ * `/`, or IS the prefixed folder itself (`rm -rf src/core`, `…/src/core`). null when none.
+ */
+function spelledIn(spelling, ctx) {
+  const s = fold(fwd(spelling));
+  return (
+    ctx.prefixes.find((p) => {
+      const f = fold(p);
+      const bare = f.replace(/\/+$/, '');
+      return !!bare && (s.startsWith(f) || s.includes(`/${f}`) || s === bare || s.endsWith(`/${bare}`));
+    }) || null
+  );
+}
+
+/**
+ * THE HOOK FOLDERS (S7). Every file in the project's `.claude/hooks/` (the kit's `kit/` copy, hook-trust.cjs, the
+ * sibling hooks) and `.codex/hooks/` is code the NEXT tool call runs — a rewrite there is a fence that certifies its
+ * own removal, as for this file. So while anything is protected the whole folders are, by where a write LANDS (real
+ * paths), unlocked like this file by `BUILDER_UNLOCK=fence`.
+ */
+const HOOK_DIRS = ['.claude/hooks', '.codex/hooks'];
+function hookDirsOf(ctx) {
+  if (!ctx._hooks) {
+    const root = rootOf(ctx);
+    ctx._hooks = HOOK_DIRS.map((h) => {
+      const at = path.join(root, ...h.split('/'));
+      try {
+        return realTarget(at);
+      } catch (_) {
+        return at;
+      }
+    });
+  }
+  return ctx._hooks;
+}
+const HOOK_WHY = 'the hook folder: its files run on every tool call, so they define the fence too';
+/** A spelling that could be a hook folder or this hook (for paths that cannot be placed or resolved). */
+const hookSpelled = (spelling) => {
+  const s = fold(fwd(spelling));
+  return HOOK_DIRS.some((h) => s.startsWith(`${h}/`) || s.includes(`/${h}/`) || s === h || s.endsWith(`/${h}`)) || /(?:^|\/)protected-paths\.cjs$/.test(s);
+};
+/** A target that cannot be placed or resolved: fenced when its spelling could be protected (fails closed). */
+function closedSpelling(spelling, ctx, why) {
+  const spelled = spelledIn(spelling, ctx);
+  if (spelled) return { prefix: spelled, why: `${spelling} ${why}; this fails closed` };
+  if (hookSpelled(spelling)) return { prefix: SELF_TAG, why: `${spelling} ${why}, and could be a hook file; this fails closed` };
+  return profileClosed(spelling, ctx, why);
+}
 
 /** The fenced profile's tag: one file, matched by landing (see PROFILE_FILE above), unlocked by ctx.profileUnlock. */
 const PROFILE_TAG = `${PROFILE_FILE} (the §16 profile)`;
@@ -292,17 +390,20 @@ const profileClosed = (spelling, ctx, why) => (ctx.profile && PROFILE_NAME.test(
 /** The protected prefix a target is spelled into or lands in, or null. Undecidable + spelled = fenced. */
 function fenceOf(target, ctx, cwd = ctx.cwd) {
   const spelling = fwd(target);
-  const spelled = ctx.prefixes.find((p) => spelling.startsWith(p) || spelling.includes(`/${p}`)) || null;
+  const spelled = spelledIn(spelling, ctx);
   const abs = resolveTarget(target, cwd);
-  if (abs === null) return spelled || profileClosed(spelling, ctx, 'cannot be placed');
+  if (abs === null) return spelled || closedSpelling(spelling, ctx, 'cannot be placed');
   let real;
   try {
     real = realTarget(abs);
   } catch (e) {
-    return spelled ? { prefix: spelled, why: `cannot be resolved (${e.code || e.message}); this fails closed` } : profileClosed(spelling, ctx, `cannot be resolved (${e.code || e.message})`);
+    return spelled ? { prefix: spelled, why: `cannot be resolved (${e.code || e.message}); this fails closed` } : closedSpelling(spelling, ctx, `cannot be resolved (${e.code || e.message})`);
   }
   if (ctx.self && fold(real) === fold(ctx.self)) return { prefix: SELF_TAG, why: 'this file defines the protected set' };
   if (spelled) return spelled;
+  const fr = fold(real);
+  const hookDir = hookDirsOf(ctx).find((h) => fr === fold(h) || fr.startsWith(fold(h + path.sep)));
+  if (hookDir) return { prefix: SELF_TAG, why: `${fwd(hookDir)} is ${HOOK_WHY}` };
   const rel = relToRoot(real, ctx);
   const inPrefix = rel === null ? null : ctx.prefixes.find((p) => under(rel, p));
   if (inPrefix) return inPrefix;
@@ -475,6 +576,8 @@ function linkOperandFence(tok, ctx, cwd = ctx.cwd) {
   }
   const bare = real.replace(/[\\/]+$/, '');
   if (ctx.self && fold(ctx.self).startsWith(fold(bare + path.sep))) return { prefix: SELF_TAG, why: `${fwd(bare)} holds this hook, which defines the protected set` };
+  const holds = hookDirsOf(ctx).find((h) => fold(h + path.sep).startsWith(fold(bare + path.sep)));
+  if (holds) return { prefix: SELF_TAG, why: `${fwd(bare)} holds ${fwd(holds)}, ${HOOK_WHY}` };
   const root = rootOf(ctx);
   if (fold(root + path.sep).startsWith(fold(bare + path.sep))) return { prefix: ctx.prefixes[0], why: `${fwd(bare)} is the project root or a folder above it` };
   const rel = relToRoot(bare, ctx);
@@ -859,6 +962,286 @@ function profileNamed(command, isPowerShell, dirs, ctx) {
   return null;
 }
 
+/**
+ * NAMED = REFUSED (S1, S2, S5, globs, resets). A deny list of writers (rm, `git checkout --`, tar -C, unzip -d,
+ * `dd of=`, install, curl -o, robocopy, Remove-Item …) loses to the next spelling, so the fence FAILS CLOSED, as it
+ * does for the profile: while anything is protected, a statement outside a READ-ONLY pipeline (READ_ONLY above: cat,
+ * ls, grep, git show|diff|log …) that NAMES a protected path or a hook folder is refused. Named means any operand —
+ * as written, with quotes and backslashes spliced out, after `=` or `REV:`, a glued `-oFILE`, each `{a,b}` brace
+ * alternative, the words of a quoted string when the statement runs a shell or builds a string — that is:
+ *   - SPELLED into a prefix (case-insensitively on Windows), or the prefixed folder itself;
+ *   - LANDS in one, resolved against the cwd, EVERY cd/pushd/Set-Location target, and every directory operand
+ *     (`git -C core rm fenced`), by real path, so a junction does not hide it;
+ *   - a GLOB whose fixed part leads to, or whose wildcards may expand to, a protected folder (`rm core/*`);
+ *   - for a remover or mover (rm, rmdir, del, Remove-Item, mv, Move-Item, robocopy, git rm|mv|clean|checkout|restore)
+ *     a folder that CONTAINS one (`rm -rf src`, `git checkout -- .`); `git clean` with no pathspec means the cwd;
+ *   - an operand that cannot be placed (`$D/fenced`, `"$d/fenced"`, `'core/'+'fenced'`, Join-Path) that SHARES A
+ *     SEGMENT with a protected prefix; a patch (`git apply`, `git am`, `patch`) whose file names one.
+ * `cd` statements themselves are judged by the cd rule above, and `npm|pnpm|yarn|bun run <script>`'s script name is a
+ * name, not a path. A cap reached (operands, bases) refuses the statement rather than leaving operands unseen.
+ * WHOLE-TREE RESETS — `git reset --hard|--merge|--keep`, `git stash` (but list|show|drop|clear|create), a forced
+ * `git checkout|switch` — rewrite every protected file at once and are refused while anything is protected.
+ */
+const NAMED_TOKENS_MAX = 256;
+const NAMED_BASES_MAX = 24;
+const GIT_LEAD = String.raw`(?:\S*[\\/])?git(?:\.exe)?(?:\s+(?:-C|-c|--git-dir|--work-tree)(?:=|\s+)\S+|\s+--[\w-]+(?:=\S+)?|\s+-[pP])*\s+`;
+const WHOLE_TREE = new RegExp(String.raw`^${GIT_LEAD}(?:reset\b(?=.*\s--(?:hard|merge|keep)\b)|stash(?!\s+(?:list|show|drop|clear|create)\b)(?=\s|$)|(?:checkout|switch)\b(?=.*\s(?:-f|--force|--discard-changes)(?=\s|$)))`, 'i');
+const REMOVER = new RegExp(String.raw`^(?:(?:\S*[\\/])?(?:rm|rmdir|rd|del|erase|unlink|shred|mv|move|robocopy|Remove-Item|ri|Clear-Content|clc|Move-Item|mi)(?:\.exe)?|${GIT_LEAD}(?:rm|mv|clean|checkout|restore))(?=\s|$)`, 'i');
+const GIT_CLEAN = new RegExp(String.raw`^${GIT_LEAD}clean(?=\s|$)([\s\S]*)$`, 'i');
+const PATCHER = new RegExp(String.raw`^(?:${GIT_LEAD}(?:apply|am)|(?:\S*[\\/])?patch(?:\.exe)?)(?=\s|$)`, 'i');
+const CONCAT = /['"]\s*\+|\+\s*['"]|-join\b|\bJoin-Path\b|::Combine\s*\(|\s-f\s/i;
+const SCRIPT_RUN = /\b((?:npm|pnpm|yarn|bun)(?:\.cmd)?\s+run(?:-script)?\s+)[\w:.-]+/gi;
+const URL_TOK = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+/** The statements the named rule reads: those of non-read-only pipelines, plus non-data heredoc bodies; no cd. */
+function namedStatements(command, isPowerShell) {
+  const split = isPowerShell ? null : splitShell(command);
+  let texts = [command];
+  if (split) {
+    const kept = split.pipes.filter((p) => !p.readOnly).map((p) => p.text);
+    const runs = RUNNER.test(kept.join('\n'));
+    texts = [...kept, ...split.docs.filter((h) => !h.kind || (runs && (h.kind === 'cat' || h.kind === 'tee'))).map((h) => h.body)];
+  }
+  const out = [];
+  for (const t of texts) {
+    for (const raw of t.split(SPLIT)) {
+      const head = statementHead(raw);
+      if (!raw.trim() || CD.test(head)) continue;
+      out.push({ raw: raw.replace(SCRIPT_RUN, '$1'), head });
+    }
+  }
+  return out;
+}
+
+/** `a/{b,c}` → `a/b`, `a/c` (bash brace expansion, a few levels). */
+function braces(tok, out = [], depth = 0) {
+  const m = /\{([^{}]*,[^{}]*)\}/.exec(tok);
+  if (!m || depth > 3 || out.length > 32) {
+    out.push(tok);
+    return out;
+  }
+  for (const alt of m[1].split(',')) braces(tok.slice(0, m.index) + alt + tok.slice(m.index + m[0].length), out, depth + 1);
+  return out;
+}
+
+/** The operands of one statement, in every reading a shell may make of them. */
+function piecesOf(st, isPowerShell) {
+  const pieces = new Set();
+  const words = RUNNER.test(st.raw) || CONCAT.test(st.raw) || SHELL_WRAP.test(st.raw);
+  const one = (t) => {
+    for (const b of braces(t)) {
+      pieces.add(b);
+      const eq = b.lastIndexOf('=');
+      if (eq !== -1) pieces.add(b.slice(eq + 1));
+      const colon = !URL_TOK.test(b) && /^(?![A-Za-z]:[\\/])[^:]*:(.+)$/.exec(b);
+      if (colon) pieces.add(colon[1]);
+      if (/^-[A-Za-z]./.test(b)) pieces.add(b.slice(2));
+    }
+  };
+  const readings = isPowerShell ? [st.raw, st.raw.replace(/["']/g, '')] : [st.raw, st.raw.replace(/["']/g, ''), st.raw.replace(/["'\\]/g, '')];
+  for (const text of readings) {
+    for (const m of text.matchAll(/[^\s"'`;|&()<>]*\{[^{}\s]*,[^{}\s]*\}[^\s"'`;|&()<>]*/g)) one(m[0]); // `a/{b,c}`: the comma splits operands below
+    for (const tok of operandsOf(text)) {
+      const t = tok.trim();
+      if (!t) continue;
+      if (/\s/.test(t)) {
+        if (words) for (const w of operandsOf(t)) if (w.trim() && !/\s/.test(w)) one(w.trim());
+        continue;
+      }
+      one(t);
+    }
+  }
+  return [...pieces].filter((p) => p && !URL_TOK.test(p) && !DISCARD.test(p) && !/^-/.test(p));
+}
+
+const isRelative = (t) => relativeTok(t) || /^\.{1,2}(?:[\\/]|$)/.test(t);
+const dynamic = (t) => /[$%`]/.test(String(t).replace(/^(?:~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|%USERPROFILE%|\$PWD|\$\{PWD\}|\$pwd)(?=[\\/]|$)/i, ''));
+const segsOf = (p) => fwd(p).split('/').filter((s) => s && s !== '.' && s !== '..');
+
+/** An operand that cannot be placed (or a piece of a built string) sharing a segment with a protected prefix. */
+function sharedSegment(tok, ctx) {
+  const mine = String(tok).split(/[\\/'"+(),\s]+/).filter((s) => s && !/[$%`]/.test(s) && s !== '.' && s !== '..').map(fold);
+  if (!mine.length) return null;
+  for (const p of ctx.prefixes) {
+    const shared = segsOf(p).map(fold).find((s) => mine.includes(s));
+    if (shared) return { prefix: p, why: `${tok} cannot be placed and shares the segment "${shared}" with it; this fails closed — spell the path out` };
+  }
+  const hook = ['.claude', '.codex'].find((s) => mine.includes(s));
+  return hook ? { prefix: SELF_TAG, why: `${tok} cannot be placed and shares "${hook}" with a hook folder; this fails closed` } : null;
+}
+
+/** A root-real folder: every protected prefix (and hook folder, this hook) it IS an ancestor of. [] when none. */
+function containedIn(real, ctx) {
+  const bare = real.replace(/[\\/]+$/, '');
+  const fb = fold(bare + path.sep);
+  const hits = [];
+  if (ctx.self && fold(ctx.self).startsWith(fb)) hits.push({ prefix: SELF_TAG, why: `${fwd(bare)} holds this hook, which defines the protected set` });
+  for (const h of hookDirsOf(ctx)) if (fold(h + path.sep).startsWith(fb)) hits.push({ prefix: SELF_TAG, why: `${fwd(bare)} holds ${fwd(h)}, ${HOOK_WHY}` });
+  const rel = fold(rootOf(ctx) + path.sep).startsWith(fb) ? '' : relToRoot(bare, ctx);
+  if (rel === null) return hits;
+  for (const p of ctx.prefixes) if (rel === '' || fold(p).startsWith(`${fold(rel)}/`)) hits.push({ prefix: p, why: `${fwd(bare)} contains ${p}` });
+  return hits;
+}
+
+/** A glob token, from `base`: the protected prefixes (and hook folders) its fixed part leads to or its wildcards may reach. */
+function globHits(tok, base, ctx) {
+  const parts = fwd(tok).split('/');
+  const wi = parts.findIndex((s) => /[*?[]/.test(s));
+  if (wi < 0) return [];
+  const fixed = parts.slice(0, wi).join('/');
+  const abs = resolveTarget(fixed === '' && parts.length > 1 && wi > 0 ? '/' : fixed || '.', base);
+  if (abs === null) return [];
+  let real;
+  try {
+    real = realTarget(abs);
+  } catch (_) {
+    return [];
+  }
+  const root = rootOf(ctx);
+  let relSegs;
+  const r = relToRoot(real, ctx);
+  if (r !== null) relSegs = r ? r.split('/') : [];
+  else if (fold(root + path.sep).startsWith(fold(real.replace(/[\\/]+$/, '') + path.sep))) return containedIn(root, ctx); // a glob above the root
+  else return [];
+  const pats = parts.slice(wi).filter(Boolean);
+  const segRe = (g) => {
+    try {
+      return new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`, WIN ? 'i' : '');
+    } catch (_) {
+      return /^/; // not understood: matches (fails closed)
+    }
+  };
+  const hits = [];
+  const targets = [...ctx.prefixes.map((p) => ({ p, hit: { prefix: p, why: `the glob ${tok} may reach ${p}` } })), ...HOOK_DIRS.map((h) => ({ p: h, hit: { prefix: SELF_TAG, why: `the glob ${tok} may reach ${h}, ${HOOK_WHY}` } }))];
+  for (const { p, hit } of targets) {
+    const want = segsOf(p);
+    let ok = true;
+    for (let i = 0; i < want.length && ok; i += 1) {
+      if (i < relSegs.length) ok = fold(relSegs[i]) === fold(want[i]);
+      else {
+        const g = pats[i - relSegs.length];
+        if (g === undefined) break; // the glob names an ancestor of the prefix: it may contain it
+        if (g === '**') break;
+        ok = segRe(g).test(want[i]);
+      }
+    }
+    if (ok) hits.push(hit);
+  }
+  return hits;
+}
+
+/** Paths a patch file names (`diff --git`, `---`/`+++`, rename/copy lines), a/ b/ dropped. */
+function patchPaths(file) {
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile() || st.size > 1024 * 1024) return [];
+    const out = new Set();
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      let m = /^diff --git (\S+) (\S+)/.exec(line);
+      if (m) {
+        out.add(m[1]);
+        out.add(m[2]);
+      }
+      m = /^(?:---|\+\+\+|rename from|rename to|copy from|copy to) (\S+)/.exec(line);
+      if (m && m[1] !== '/dev/null') out.add(m[1]);
+    }
+    return [...out].flatMap((p) => [p, p.replace(/^[ab]\//, '')]);
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Every hit (most often one) for a command that names a protected path outside a read-only pipeline. */
+function protectedNamed(command, isPowerShell, dirs, ctx) {
+  const stmts = namedStatements(command, isPowerShell);
+  if (!stmts.length) return [];
+  const capped = (what) => [{ prefix: ctx.prefixes[0], what: `this command has ${what} for the fence to place every operand (caps: ${NAMED_TOKENS_MAX} operands, ${NAMED_BASES_MAX} base directories), so the hook cannot rule out that it`, why: 'a cap reached fails closed — split the command into smaller ones' }];
+  const bases = [ctx.cwd, ...dirs];
+  if (bases.length > NAMED_BASES_MAX) return capped(`too many cd targets (${bases.length})`);
+  const perStmt = stmts.map((st) => ({ ...st, pieces: piecesOf(st, isPowerShell) }));
+  const total = perStmt.reduce((n, s) => n + s.pieces.length, 0);
+  if (total > NAMED_TOKENS_MAX) return capped(`too many operands (${total})`);
+  // Directory operands are bases too (`git -C core rm fenced`, `tar -C`, `--work-tree=`).
+  for (const st of perStmt) {
+    for (const p of st.pieces) {
+      if (dynamic(p) || /[*?[]/.test(p)) continue;
+      for (const from of isRelative(p) ? [ctx.cwd, ...dirs] : [ctx.cwd]) {
+        const abs = resolveTarget(p, from);
+        if (abs === null || bases.includes(abs)) continue;
+        try {
+          if (fs.statSync(abs).isDirectory()) {
+            if (bases.length >= NAMED_BASES_MAX) return capped('too many directory operands');
+            bases.push(abs);
+          }
+        } catch (_) {
+          /* not a directory */
+        }
+      }
+    }
+  }
+  const patching = perStmt.some((st) => PATCHER.test(st.head));
+  const hits = [];
+  const later = []; // hits found only under a directory operand: reported after the plain ones
+  const primary = 1 + dirs.length;
+  let sink = hits;
+  const tag = (list, tok) => list.forEach((h) => sink.push({ ...(typeof h === 'string' ? { prefix: h } : h), tok }));
+  for (const st of perStmt) {
+    const remover = REMOVER.test(st.head);
+    const concat = CONCAT.test(st.raw);
+    const pieces = [...st.pieces];
+    const clean = GIT_CLEAN.exec(st.head);
+    if (clean && !operandsOf(clean[1]).some((t) => !/^-/.test(t))) pieces.push('.'); // git clean's pathspec defaults to the cwd
+    for (const p of pieces) {
+      if (dynamic(p) || concat) {
+        const s = sharedSegment(p, ctx);
+        if (s) tag([s], p);
+        if (dynamic(p)) continue;
+      }
+      const spelled = spelledIn(p, ctx);
+      if (spelled) {
+        tag([spelled], p);
+        continue;
+      }
+      const from = isRelative(p) ? bases : [ctx.cwd];
+      if (/[*?[]/.test(p)) {
+        for (const b of from) tag(globHits(p, b, ctx), p);
+        continue;
+      }
+      for (const [i, b] of from.entries()) {
+        sink = i < primary ? hits : later;
+        const hit = fenceOf(p, ctx, b);
+        if (hit) tag([hit], p);
+        if (remover && !/^\/[a-z]$/i.test(p)) {
+          const abs = resolveTarget(p, b);
+          if (abs !== null) {
+            try {
+              tag(containedIn(realTarget(abs), ctx), p);
+            } catch (_) {
+              /* judged by spelling */
+            }
+          }
+        }
+        if (patching) for (const q of patchPaths(resolveTarget(p, b) || p)) for (const pb of bases) {
+          const h = fenceOf(q, ctx, pb);
+          if (h) tag([h], `${p} (patches ${q})`);
+        }
+      }
+      sink = hits;
+    }
+  }
+  return [...hits, ...later];
+}
+
+/** A whole-tree reset while anything is protected: every protected prefix it rewrites. */
+function wholeTreeReset(command, isPowerShell) {
+  const text = isPowerShell ? command : dataStripped(command);
+  for (const raw of text.split(SPLIT)) {
+    const head = statementHead(raw);
+    if (WHOLE_TREE.test(head)) return head.trim();
+  }
+  return null;
+}
+
 function decideShell(command, isPowerShell, ctx) {
   const tool = isPowerShell ? 'PowerShell' : 'Bash';
   const text = isPowerShell ? command : dataStripped(command); // a data heredoc body is not a write, a link or a cd
@@ -918,6 +1301,57 @@ function decideShell(command, isPowerShell, ctx) {
       if (r) return { ...r, reason: `${r.reason} Read with the Read tool, or put the code in a script that names no protected path.` };
     }
   }
+  const reset = wholeTreeReset(command, isPowerShell);
+  if (reset) {
+    for (const hit of containedIn(rootOf(ctx), ctx)) {
+      const r = deny(hit, `this ${tool} command resets the whole working tree (${reset.slice(0, 60)}), which`, ctx);
+      if (r) return r;
+    }
+  }
+  for (const hit of protectedNamed(command, isPowerShell, cdDirsOf(command, ctx), ctx)) {
+    const what = hit.what ? `this ${tool} ${hit.what.replace(/^this /, '')}` : `this ${tool} command names ${hit.tok} outside a read-only pipeline (cat, ls, grep, git show|diff|log …), which`;
+    const r = deny(hit, what, ctx);
+    if (r) return r;
+  }
+  return { block: false };
+}
+
+/**
+ * MCP FILE TOOLS (S4). An `mcp__<server>__<tool>` call is judged by every path-shaped key of its input (path, paths,
+ * file_path, destination, target, source, new_path, … — also inside arrays and nested objects), exactly as a Write: by
+ * spelling and by landing. A tool whose name reads as a read (read_*, list_*, get_*, search_*, …) and carries no
+ * writing word is not judged; anything else is. A path that cannot be placed fails CLOSED.
+ */
+const MCP_PATH_KEY = /^(?:path|paths|file|files|file_?path|file_?paths|file_?name|notebook_?path|destination|dest|destination_?path|target|target_?path|source|source_?path|src|new_?path|old_?path|directory|dir|output_?path|output_?file|out_?file)$/i;
+const MCP_READ = /^(?:read|list|get|search|find|stat|view|show|glob|grep|directory_tree|tree|describe|query|fetch|count|head|tail)(?:_|$)/i;
+const MCP_WRITES = /write|edit|move|create|delete|remove|rename|copy|put|set|upload|patch|append|mkdir|make|exec|run|start|kill|replace|insert|update|save|apply|link|unzip|extract|download|touch|truncate/i;
+function mcpPaths(v, isPath, out, depth) {
+  if (out.length >= 64 || depth > 4) return out;
+  if (typeof v === 'string') {
+    if (isPath && v.trim()) out.push(v);
+  } else if (Array.isArray(v)) {
+    for (const x of v) mcpPaths(x, isPath, out, depth + 1);
+  } else if (v && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) mcpPaths(x, MCP_PATH_KEY.test(k), out, depth + 1);
+  }
+  return out;
+}
+function decideMcp(tool, ti, ctx) {
+  const action = tool.slice(tool.lastIndexOf('__') + 2);
+  if (MCP_READ.test(action) && !MCP_WRITES.test(action)) return { block: false };
+  for (const p of mcpPaths(ti, false, [], 0)) {
+    if (resolveTarget(p, ctx.cwd) === null) {
+      return blocked(`BLOCKED: ${tool} names ${p}, a path this hook cannot place on this machine, so it cannot rule out a protected path (PIPELINE_PROFILE.md §4/§16); this fails closed — spell a native absolute path or a project-relative one.`);
+    }
+    const hit = fenceOf(p, ctx);
+    if (hit) {
+      const r = deny(hit, `${tool} on ${p}`, ctx);
+      if (r) return r;
+      continue;
+    }
+    const n = hardLinks(p, ctx);
+    if (n) return blocked(`BLOCKED: ${tool} on ${p}, an existing file with ${n} hard links. The same bytes live at another path this hook cannot see, which may be protected. Delete this name (one file) and write the file fresh, or ask the human.`);
+  }
   return { block: false };
 }
 
@@ -931,6 +1365,7 @@ function decide(input, ctx = config()) {
   const tool = String((input && input.tool_name) || '');
   const isPowerShell = /^powershell$/i.test(tool);
   if ((tool === 'Bash' || isPowerShell) && typeof ti.command === 'string') return decideShell(ti.command, isPowerShell, ctx);
+  if (/^mcp__/i.test(tool)) return decideMcp(tool, ti, ctx);
   const filePath = ti.file_path || ti.notebook_path || '';
   if (!filePath) return { block: false };
   // fenceOf reads a RUN of separators as one: a doubled backslash or slash must not hide a protected prefix.
@@ -941,23 +1376,47 @@ function decide(input, ctx = config()) {
   return { block: false };
 }
 
-module.exports = { decide, config, profileProtected, globPrefix, mentionScope, splitShell, SELF_UNLOCK, linkStatements, statementHead, cdDirsOf, shellWriteTargets, fenceOf, realTarget, resolveTarget };
+/**
+ * CRASH = BLOCK (S8). The exit code for one hook input: 0 allow, 2 deny (with the message). Malformed input while
+ * anything is protected, a configuration that cannot be read, and any exception in decide() all deny — exit 1 is a
+ * NON-blocking error to Claude Code, so a crash would otherwise let the call through. Nothing protected = 0.
+ */
+function verdict(text, deps = {}) {
+  const readConfig = deps.config || config;
+  const judge = deps.decide || decide;
+  let ctx;
+  try {
+    ctx = readConfig();
+  } catch (e) {
+    return { code: 2, message: `BLOCKED: the protected-paths hook could not read its configuration (${(e && e.message) || e}); this fails closed — ask the human.` };
+  }
+  let j;
+  try {
+    j = JSON.parse(text);
+  } catch (_) {
+    if (!ctx.prefixes.length) return { code: 0 };
+    return { code: 2, message: 'BLOCKED: the protected-paths hook received hook input that is not JSON (malformed); while paths are protected this fails closed.' };
+  }
+  try {
+    const v = judge(j, ctx);
+    return v && v.block ? { code: 2, message: v.reason } : { code: 0 };
+  } catch (e) {
+    return { code: 2, message: `BLOCKED: the protected-paths hook failed while judging this call (${(e && e.message) || e}); a crash fails closed — retry in a simpler form, or ask the human.` };
+  }
+}
+
+module.exports = { decide, verdict, config, profileProtected, globPrefix, mentionScope, splitShell, SELF_UNLOCK, linkStatements, statementHead, cdDirsOf, shellWriteTargets, fenceOf, realTarget, resolveTarget };
 
 if (require.main === module) {
+  process.on('uncaughtException', (e) => {
+    console.error(`BLOCKED: the protected-paths hook crashed (${(e && e.message) || e}); a crash fails closed.`);
+    process.exit(2);
+  });
   let input = '';
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
-    let j;
-    try {
-      j = JSON.parse(input);
-    } catch (_) {
-      process.exit(0); // malformed input → don't block
-    }
-    const v = decide(j, config());
-    if (v.block) {
-      console.error(v.reason);
-      process.exit(2); // exit 2 = deny the tool call, message shown to the agent
-    }
-    process.exit(0);
+    const v = verdict(input);
+    if (v.code === 2) console.error(v.message); // exit 2 = deny the tool call, message shown to the agent
+    process.exit(v.code);
   });
 }
