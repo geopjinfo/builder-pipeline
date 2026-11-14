@@ -3,7 +3,7 @@
 > **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
 > kit copied in as a `builder/` folder ([`UNPACK.md`](../UNPACK.md)), run it from the project's `scripts/` copy with Node.
 
-One adapter among ten. It is privileged in nothing, but it has the richest native integration:
+One adapter among eleven. It is privileged in nothing, but it has the richest native integration:
 personas register as subagents, skills as `/skills`, hooks can see and change a tool call before
 or after it runs, and every dispatch leaves a transcript the pack can read for accounting.
 
@@ -26,11 +26,11 @@ authority if this table and the CLI ever disagree.
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |
 | `templates/module-brief.md` | `specs/module-brief.template.md` (or your briefs dir) |
 | `PIPELINE_PROFILE.template.md` | `PIPELINE_PROFILE.md` (repo root, **filled**, §16 included) |
-| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | `scripts/`, `scripts/lib/` (plain Node, harness-independent) |
-| `hooks/claude-code/*.js` | `.claude/hooks/` — **copied, never registered.** Registering is a person's act (below) |
+| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | **Package install: not copied.** They run from the package as `npx builder run <name>` (`npx builder run` lists them). Folder copy (`builder/`): `scripts/`, `scripts/lib/`, `scripts/oracles/` (plain Node, harness-independent) |
+| `hooks/claude-code/*.cjs` | `.claude/hooks/` — **copied, never registered.** Registering is a person's act (below). Package install: the scripts those hooks load are vendored beside them under `.claude/hooks/kit/`, never read from `node_modules` |
 | `hooks/protected-paths.cjs`, `hooks/board-render.cjs` | `.claude/hooks/` — same rule. Register `protected-paths.cjs` on `PreToolUse` with the matcher `Edit\|Write\|MultiEdit\|NotebookEdit\|Bash\|PowerShell` (its header has the snippet): a matcher without `Bash`/`PowerShell` leaves the shell route unguarded, and one without `NotebookEdit` leaves notebook writes unguarded |
 | `agents/experimental/page-keeper.md` | `.claude/agents/page-keeper.md` — only with `--experimental` |
-| `tooling/experimental/page-shell.{cjs,mjs}` | `scripts/experimental/` — only with `--experimental` |
+| `tooling/experimental/page-shell.{cjs,mjs}` | only with `--experimental`. Package install: not copied, run as `npx builder run experimental/page-shell`. Folder copy: `scripts/experimental/` |
 
 `scripts/unpack.sh claude-code` / `scripts/unpack.ps1 claude-code` does the copies without Node,
 but without the frontmatter transform.
@@ -47,10 +47,11 @@ but without the frontmatter transform.
 3. **Skills routing.** Agents reference skills by name; Claude Code resolves them once installed.
    Optionally add `skills: [scaffold-module]` to `module-builder.md` and
    `skills: [module-readiness-check]` to `module-reviewer.md` so they preload.
-4. **CLAUDE.md.** Add:
-   > Module builds go through the `build-module-pipeline` skill. Project grounding for all
-   > pipeline personas is `PIPELINE_PROFILE.md` (repo root).
-5. **.gitignore.** Add `.pipeline/` and your `paths.logs` directory.
+4. **CLAUDE.md** — done by `unpack`: it appends the pointer block between the `builder-kit:pipeline`
+   markers and leaves the rest of the file byte for byte. Check it is there; do not paste a second copy.
+5. **.gitignore** — done by `unpack`: it appends `.pipeline/` and `<paths.logs>/bash/` (the output cap's
+   logs) when they are not listed yet. Add the rest of your `paths.logs` directory by hand if it should
+   stay untracked.
 6. **Settings** — the block below, merged into `.claude/settings.json` by a person.
 
 ## Settings
@@ -104,7 +105,7 @@ launches.
 ## Hooks
 
 **Every hook runs only committed code.** A hook starts outside the permission prompt, so it loads
-`scripts/lib/*.cjs` or spawns `scripts/*.mjs` only when that file and every local file it requires are
+`scripts/lib/*.cjs` or spawns `scripts/*.mjs` (package install: the vendored copies under `.claude/hooks/kit/`) only when that file and every local file it requires are
 byte-for-byte the blob at HEAD (`hook-trust.cjs`, copied next to the hooks; it hashes the bytes and never
 trusts `git status`, whose index flags and fsmonitor an agent can set). An uncommitted change to
 that code switches the hook to its safe fallback until the change is committed. The guards keep their
@@ -152,15 +153,15 @@ subagent tool calls. A guard blocks with exit code 2 and says what to do instead
 
 ### Session-start index refresh (optional)
 
-If §16 has `features.graph` on, arm `tooling/optional/session-sync-hook.js` (copied into your hooks
-folder) on `SessionStart`. It starts the index sync **detached**, so it never delays the session.
+If §16 has `features.graph` on, copy `tooling/optional/session-sync-hook.cjs` from the kit into
+`.claude/hooks/` **by hand** — `unpack` does not install it — and arm it on `SessionStart`. It starts the index sync **detached**, so it never delays the session.
 Through `autosync.py --trigger session` it shares the lock and the automatic-embed limit with your
 other triggers.
 
 - **When it speaks:** only when the previous run left docs above the limit.
 - **When it stays silent:** no index, no interpreter, `INDEX_SYNC_SKIP` set, or index scripts that
-  differ from HEAD. It needs `hook-trust.cjs` beside it in the hooks folder (`cli.js unpack` copies it
-  with the guards); without it, it starts nothing.
+  differ from HEAD. It needs `hook-trust.cjs` beside it in the hooks folder (`npx builder unpack --tool
+  claude-code` copies it with the guards); without it, it starts nothing.
 - **The merge trigger:** the post-merge block `sync-hook.sh` installs runs this same hook with
   `--trigger merge`, so both triggers get the same trust check and isolated interpreter.
 - **Another index tool:** it is written for the graphify example; keep its shape and change the
