@@ -7,6 +7,7 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **unpack installs the setup and persona-detector skills** (`builder-init`, `persona-detect`) with the pipeline skills, so builder-init's last step finds the detector.
 - **Codex and Antigravity install natively; `--tool antigravity` is new.** `unpack`/`upgrade --tool codex` now
   writes `.codex/agents/*.toml` and `.agents/skills/`, `--tool antigravity` writes `.agents/agents/*.md` and
   `.agents/skills/`, both with the pointer in `AGENTS.md`, all rendered by `adapters/lib/` and passed through the
