@@ -5,6 +5,14 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **The kit is an installable package.** `package.json` is no longer private: name `@geopjinfo/builder-pipeline`, a
+  `builder` command (`cli.js`), `files` (every folder and document the CLI reads; the kit's own `tests/` stay out),
+  `engines.node >=18` (the floor `cli.js` enforces), `license` (UNLICENSED until one is chosen) and `repository`.
+  Install from a tag: `npm i -D github:geopjinfo/builder-pipeline#<tag>`; `npx builder --version`. Tests:
+  `tests/package.test.mjs`.
+
 ### Security
 
 - **`protected-paths.cjs` finds a link maker anywhere in a statement.** The statement-lead list is a list of
