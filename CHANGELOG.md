@@ -146,6 +146,39 @@ versions independently of any project it is pasted into.
   project's `scripts/` copy (folder layout), else the copy unpack vendors beside the hooks (package layout — see
   ### Security), both checked against HEAD. `registry-read-guard`
   names `npx builder run ledger-row` in the package layout. Tests: `tests/package-hooks.test.mjs`.
+- **A new repo reads as greenfield after the kit installs itself.** `inventory` called a bare `npm init` repo
+  brownfield: `"main": "index.js"` counted although no `index.js` exists, and the `builder-init` skill bootstrap just
+  wrote counted as an existing item; after unpack, the kit-only pointer block in an instruction file and (folder
+  layout) the copied `scripts/*.mjs` counted too. Now an entry point counts only when its file exists, the files the
+  lock records (or, before the lock, the kit's script copies) are not source, an instruction file holding only the
+  kit's pointer block is not evidence, and `existingItems` leaves kit-installed items out. Tests:
+  `tests/setup-flow.test.mjs`.
+- **The persona library is read through its roster.** `inventory` listed `personas/{WHY,USAGE,INDEX,_TEMPLATE,
+  _census}.md` as five project personas and missed the real profiles. It now reads the roster in
+  `personas/INDEX.md` (`scripts/lib/personas.cjs`: `<set>/<id>.md` or the entry's `file`, named by the id), walks the
+  set folders when there is no roster, and never lists the library's own files. Tests: `tests/setup-flow.test.mjs`.
+- **`choices set` refuses a key that names no kit item; `choices check` flags one.** A typo was recorded with exit 0
+  and the real clash stayed undecided, so it was skipped in silence. The error lists the kit's keys; unpack notes an
+  unknown recorded key. Tests: `tests/setup-flow.test.mjs`; `tests/choices.test.mjs` and
+  `tests/cli-commands.test.mjs` now record a real kit item instead of the project's `skill:code-review`.
+- **"both" is refused for a pipeline seat, and `verify` fails when a seat is not the kit's.** A seat installed as
+  `builder-<name>` while `build-module-pipeline` dispatches `module-reviewer` and `reviewer-write-guard.cjs` guards it
+  by name, so the project's same-name agent ran as the final gate. The seats are computed from the kit
+  (`inventory.cjs pipelineSeats`: the personas the kit skills name, plus the write-guard's reviewer); `choices set`
+  refuses "both" for one and offers keep or kit, `choices check` flags a hand-written one, unpack stops before writing
+  anything, and `verify` checks every seat in every installed persona folder is the kit's file (locked) under its own
+  name — a kept, renamed or missing seat FAILs. Non-seat items may still be "both". Tests: `tests/setup-flow.test.mjs`;
+  the codex "both" case in `tests/clash-install.test.mjs` now uses a non-seat persona.
+- **bootstrap is stable across re-runs, and its lock is not taken for an install.** Run 2 detected Antigravity from
+  the `.agents/skills/builder-init/` run 1 wrote; detection now counts a tool folder only when it holds a file the
+  lock does not record (an empty folder still counts). Bootstrap's lock records only what it wrote and is marked
+  `"bootstrap": true`: over an install from before the lock, it no longer turns every kit file into a "foreign"
+  clash (upgrade skipped them all) — unpack/upgrade drop the mark. SETUP_PROMPT.md says bootstrap writes the lock.
+  Tests: `tests/setup-flow.test.mjs`.
+- **A setup with nothing to decide leaves an empty `builder.choices.json`.** unpack writes `{ "version": 1, "items":
+  {} }` when there was no clash to decide and the file is absent (not on `--dry-run`, not when a clash was left
+  undecided), so the setup commit records that the confirm gate ran; the builder-init skill says so. Tests:
+  `tests/setup-flow.test.mjs`.
 - **The docs the install points the agent to are install-neutral.** `DISCOVERY.md` §5 said `node builder/cli.js
   verify`, §3 cited `builder/examples/…` and `builder/tooling/…`; `USAGE.md` had nine `node scripts/<x>.mjs`
   commands; the persona library said `node scripts/personas-check.mjs`. They now say `npx builder …` /

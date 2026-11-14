@@ -160,12 +160,12 @@ describe('scripts/choices.mjs', () => {
   test('set, list, unset, check', () => {
     const root = tempDir();
     assert.match(run(root, ['check']).stdout, /every clashing kit item will be skipped/);
-    const s = run(root, ['set', 'skill:code-review', 'both', '--by', 'reviewer-a', '--project', '.claude/skills/code-review/SKILL.md', '--note', 'different scope']);
+    const s = run(root, ['set', 'skill:caveman', 'both', '--by', 'reviewer-a', '--project', '.claude/skills/code-review/SKILL.md', '--note', 'different scope']);
     assert.equal(s.status, 0, s.stderr);
     const saved = JSON.parse(readFileSync(join(root, ch.FILE), 'utf8'));
-    assert.equal(saved.items['skill:code-review'].decision, 'both');
-    assert.match(run(root, ['list']).stdout, /skill:code-review\s+both\s+reviewer-a/);
-    assert.equal(run(root, ['unset', 'skill:code-review']).status, 0);
+    assert.equal(saved.items['skill:caveman'].decision, 'both');
+    assert.match(run(root, ['list']).stdout, /skill:caveman\s+both\s+reviewer-a/);
+    assert.equal(run(root, ['unset', 'skill:caveman']).status, 0);
     assert.match(run(root, ['check']).stdout, /valid, 0 choice/);
   });
 

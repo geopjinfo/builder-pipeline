@@ -95,9 +95,16 @@ For every confirmed row whose kit item is in `clashes` (or that the human decide
 npx builder choices set <kind>:<name> <keep|kit|both> --by "<human's name or handle>" --project <project path> [--note "<one-line reason>"]
 ```
 
-`<kind>:<name>` is the KIT item's key as `clashes` lists it. Then `npx builder choices list` and show it. The file is
+`<kind>:<name>` is the KIT item's key as `clashes` lists it; `choices set` refuses a key that names no kit item.
+**A pipeline seat cannot be "both"** — the personas the pipeline skills dispatch by name (module-planner,
+module-builder, module-tester, the auditors, docs-maintainer, module-reviewer): renamed `builder-<name>`, the skills
+and the reviewer write-guard would still call the old name and run the project's agent in its place, so `choices set`
+refuses it. Offer **keep** (the kit seat is not installed and `verify` fails until the seat is the kit's) or **kit**
+(the project's file is backed up, then replaced). Then `npx builder choices list` and show it. The file is
 `builder.choices.json` at the repo root; commit it with the setup — it is what keeps `upgrade` from undoing these
-answers. To reopen one later: `npx builder choices unset <kind>:<name>` and re-run this skill.
+answers. With nothing to decide, Step 6 writes it empty (`{ "version": 1, "items": {} }`), so every setup commit
+records that the confirm gate ran; with a clash left undecided it writes none. To reopen one later:
+`npx builder choices unset <kind>:<name>` and re-run this skill.
 
 ## Step 6 — install
 
@@ -135,7 +142,7 @@ command: *"Build the `<X>` module through the pipeline."* in a fresh session.
 | Step 1 | `inventory` exits non-zero ("kit not found") | Stop; ask the human to re-run the setup prompt |
 | Step 3 | an item cannot be read (binary, permission) | Row with verdict **keep**, reason "not readable — left as is" |
 | Step 4 | the human declines or does not answer | Record nothing; Step 6 still runs and skips every clash; say so |
-| Step 5 | `choices set` rejects a key or value | Fix the key from `clashes`; never hand-edit around the validator |
+| Step 5 | `choices set` rejects a key or value | Fix the key from `clashes` (the error lists the kit's keys); a seat refused as "both" goes back to the human as keep or kit; never hand-edit around the validator |
 | Step 5 | `builder.choices.json` is invalid | `npx builder choices check` names the problem; fix it with the human, then retry |
 | Step 6 | install prints an error | Stop; show it verbatim; nothing is retried with a different flag on a guess |
 | Step 7 | verify FAILs | Fix with the human; never mark a feature on without the file or tool it needs |

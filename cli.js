@@ -163,11 +163,25 @@ function lockPrior() {
   return LOCK.prior;
 }
 const lockKey = (dst) => posixPath(dst);
-function writeLock() {
+/**
+ * `bootstrap: true` marks a lock that only bootstrap has written (it records the builder-init copies it wrote and
+ * nothing else). Such a lock is not an install: over an install from before the lock it must not turn every kit file
+ * the lock does not list into a "foreign" clash (legacyInstall). The first unpack/upgrade drops the mark.
+ */
+function writeLock({ bootstrap = false } = {}) {
   if (DRY) return;
   const files = { ...lockPrior(), ...LOCK.next };
   const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
-  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify({ kit: VERSION, files: sorted }, null, 2) + '\n');
+  const lock = { kit: VERSION, files: sorted };
+  if (bootstrap && (!fs.existsSync(path.join(CWD, LOCK_FILE)) || lockMeta().bootstrap === true)) lock.bootstrap = true;
+  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify(lock, null, 2) + '\n');
+}
+function lockMeta() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(CWD, LOCK_FILE), 'utf8')) || {};
+  } catch (_) {
+    return {};
+  }
 }
 
 /**
@@ -738,6 +752,12 @@ function cmdUnpack(tools) {
   installCommon();
   writeLock();
   if (CLASH_SKIPPED.size) console.log(clashSummary());
+  else if (!DRY && !fs.existsSync(path.join(CWD, choicesLib.FILE))) {
+    // Nothing to decide is still a decision on record: the setup commit carries the (empty) answers file, so the
+    // confirm gate visibly ran. Undecided clashes leave it absent — an empty file would read as "decided".
+    choicesLib.write(CWD, choicesLib.empty());
+    log('wrote:', `${choicesLib.FILE} (no clashes to decide)`);
+  }
   console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'}${EXPERIMENTAL ? ' Experimental files included.' : ''} Next steps:
   1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md (incl. §16 settings) from
      THIS project's docs (not the kit's source project).
@@ -786,6 +806,39 @@ function cmdTargets() {
 
 function profileLib() {
   return require(path.join(KIT, 'scripts', 'lib', 'profile.cjs'));
+}
+
+/**
+ * Every pipeline seat (scripts/lib/inventory.cjs pipelineSeats: the personas the kit skills dispatch by name, and the
+ * reviewer the write-guard targets) must be the KIT's file at the seat's own name, for every persona folder the kit
+ * installed into. A project agent kept in a seat's place, a seat renamed, or a seat deleted means a phase runs the
+ * wrong agent or none — and nothing else would say so. With a lock, "the kit's" = the lock records the path; an
+ * install from before the lock is judged by the file's name alone.
+ */
+function seatProblems() {
+  const lock = lockPrior();
+  const legacy = !fs.existsSync(path.join(CWD, LOCK_FILE));
+  const seats = require('./scripts/lib/inventory.cjs').pipelineSeats(KIT);
+  const where = [
+    ...['claude-code', 'codex', 'antigravity'].map((t) => ({ t, dir: ADAPTERS[t].agentsDir, at: (s) => ADAPTERS[t].renderAgent(fs.readFileSync(path.join(KIT, 'agents', `${s}.md`), 'utf8'), { file: `${s}.md` }).path })),
+    { t: 'agent files', dir: '.builder/personas', at: (s) => `.builder/personas/${s}.md` },
+  ];
+  const checked = [];
+  const problems = [];
+  for (const { t, dir, at } of where) {
+    const installed = legacy ? fs.existsSync(path.join(CWD, dir)) : Object.keys(lock).some((k) => k.startsWith(`${dir}/`));
+    if (!installed) continue;
+    checked.push(t);
+    for (const s of seats) {
+      if (!fs.existsSync(path.join(KIT, 'agents', `${s}.md`))) continue;
+      const rel = at(s);
+      const abs = path.join(CWD, ...rel.split('/'));
+      if (!fs.existsSync(abs)) problems.push(`${rel} missing`);
+      else if (!legacy && !lock[rel]) problems.push(`${rel} is not the kit's (a project file kept in the seat's place — choose "kit" for agent:${s})`);
+      else if (!new RegExp(`^\\s*name\\s*[:=]\\s*["']?${s}["']?\\s*$`, 'm').test(fs.readFileSync(abs, 'utf8'))) problems.push(`${rel} does not carry the name ${s}`);
+    }
+  }
+  return { checked, problems };
 }
 
 function cmdVerify() {
@@ -849,6 +902,10 @@ function cmdVerify() {
 
   const personaAt = ['.claude/agents/module-planner.md', '.codex/agents/module-planner.toml', '.agents/agents/module-planner.md', '.builder/personas/module-planner.md'];
   check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)');
+  const seats = seatProblems();
+  check(seats.problems.length === 0, seats.problems.length === 0
+    ? `pipeline seats are the kit's (${seats.checked.join(', ') || 'no persona folder'})`
+    : `pipeline seats not the kit's — the pipeline skills dispatch these by name: ${seats.problems.join('; ')}`);
 
   const wired = Object.values(TOOLS)
     .map((t) => t.pointer)
@@ -1104,7 +1161,7 @@ function cmdRun(args) {
   const r = require('child_process').spawnSync(process.execPath, [file, ...rest], {
     cwd: CWD,
     stdio: 'inherit',
-    env: { ...process.env, BUILDER_PROJECT_ROOT: CWD },
+    env: { ...process.env, BUILDER_PROJECT_ROOT: CWD, BUILDER_KIT_ROOT: KIT },
   });
   if (r.error) die(`${name}: ${r.error.message}`);
   process.exit(r.status === null ? 1 : r.status);
@@ -1116,7 +1173,8 @@ function cmdRun(args) {
  * kit paths are the kit's (they upgrade as they always did) and are not compared as project items.
  */
 function legacyInstall() {
-  if (fs.existsSync(path.join(CWD, LOCK_FILE))) return false;
+  // A lock only bootstrap wrote lists just the builder-init copies: it says nothing about an older install.
+  if (fs.existsSync(path.join(CWD, LOCK_FILE)) && lockMeta().bootstrap !== true) return false;
   if (fs.existsSync(path.join(CWD, 'PIPELINE_PROFILE.md'))) return true;
   return [...new Set(Object.values(TOOLS).map((t) => t.pointer))].some((p) => {
     const abs = path.join(CWD, p);
@@ -1137,6 +1195,12 @@ const CLASH_SKIPPED = new Set();
 function setupClashCheck() {
   const loaded = choicesLib.read(CWD);
   if (loaded.errors.length) die(`${choicesLib.FILE} is invalid — nothing installed:\n  ${loaded.errors.join('\n  ')}\n  (${RUN} choices check names each problem)`);
+  // A pipeline seat recorded as "both" would install renamed while the skills dispatch the old name: refuse it before
+  // anything is written. A key that names no kit item decides nothing — said, not fatal (a kit release may drop one).
+  const invLib = require('./scripts/lib/inventory.cjs');
+  const keyCheck = choicesLib.checkKeys(loaded.choices, { keys: invLib.kitKeys(KIT), seats: invLib.pipelineSeats(KIT) });
+  if (keyCheck.seatBoth.length) die(`${choicesLib.FILE} — nothing installed:\n  ${keyCheck.seatBoth.map(choicesLib.seatBoth).join('\n  ')}\n  (${RUN} choices set <key> <keep|kit> --by <you>)`);
+  for (const k of keyCheck.unknown) console.log(`note: ${choicesLib.FILE} records ${k}, which names no kit item — it decides nothing (${RUN} choices unset ${k})`);
   const legacy = legacyInstall();
   const view = require('./cli/inventory.cjs').projectView(CWD, KIT, { lock: lockPrior(), legacy });
   const printed = new Set();
