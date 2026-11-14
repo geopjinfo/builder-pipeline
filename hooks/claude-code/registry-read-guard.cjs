@@ -34,7 +34,7 @@ const norm = (p) => path.posix.normalize(String(p ?? '').replace(/\\/g, '/'));
  * @param {object} settings  merged pipeline settings (`profile.load().settings`)
  * @returns {{ block: false } | { block: true, reason: string }}
  */
-function decide(input, settings) {
+function decide(input, settings, { ledgerRow = 'node scripts/ledger-row.mjs' } = {}) {
   if (!input || input.tool_name !== 'Read' || !input.agent_type) return { block: false };
   const guard = { state: 'off', seats: [], ...(settings?.features?.registryGuard ?? {}) };
   if (!['on', 'unmeasured', 'experimental-on'].includes(guard.state)) return { block: false };
@@ -53,7 +53,7 @@ function decide(input, settings) {
     block: true,
     reason:
       `Blocked Read of ${target} by ${input.agent_type}.\n` +
-      `  Read the rows you need instead: node scripts/ledger-row.mjs registry <ID> [<ID> …] (section + header + row).\n` +
+      `  Read the rows you need instead: ${ledgerRow} registry <ID> [<ID> …] (section + header + row).\n` +
       `  The whole registry is re-paid on every later turn of this dispatch.`,
   };
 }
@@ -73,13 +73,23 @@ function loadProfile(root) {
   }
 }
 
+/** How this project runs ledger-row: its scripts/ copy (folder layout), else the installed package (npx builder run). */
+function ledgerRowCommand(root) {
+  if (fs.existsSync(path.join(root, 'scripts', 'ledger-row.mjs'))) return 'node scripts/ledger-row.mjs';
+  try {
+    return trustLib().packageDir(root) ? 'npx builder run ledger-row' : 'node scripts/ledger-row.mjs';
+  } catch {
+    return 'node scripts/ledger-row.mjs';
+  }
+}
+
 if (require.main === module) {
   let result = { block: false };
   try {
     const input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}');
     const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
     const profile = loadProfile(root);
-    if (profile) result = decide(input, profile.load(root).settings);
+    if (profile) result = decide(input, profile.load(root).settings, { ledgerRow: ledgerRowCommand(root) });
   } catch {
     result = { block: false };
   }

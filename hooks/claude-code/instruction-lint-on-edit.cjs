@@ -46,7 +46,7 @@ const matches = (rel, globs) => globs.some((g) => globRe(g).test(rel));
  *   `settings` null with `untrusted` set means the profile could not be loaded safely.
  * @returns {{ action: 'pass', reason: string } | { action: 'block', reason: string } | { action: 'note', reason: string }}
  */
-function decide(input, { root, settings = null, untrusted = null, trust = defaultTrust, run = defaultRun }) {
+function decide(input, { root, settings = null, untrusted = null, trust, run = defaultRun, find = defaultFind }) {
   const file = input?.tool_input?.file_path;
   if (!file) return { action: 'pass', reason: 'no file path' };
   const rel = path.relative(root, path.resolve(root, file)).replace(/\\/g, '/');
@@ -58,11 +58,12 @@ function decide(input, { root, settings = null, untrusted = null, trust = defaul
   const feature = settings.features?.instructionLint ?? {};
   if (!ACTIVE.includes(feature.state ?? 'off')) return { action: 'pass', reason: 'instructionLint: not configured' };
   if (!matches(rel, feature.files ?? DEFAULT_FILES)) return { action: 'pass', reason: 'not an instruction file' };
-  const script = path.join(root, 'scripts', 'instruction-lint.mjs');
-  if (!fs.existsSync(script)) return { action: 'pass', reason: 'no lint script' };
-  const t = trust(script);
+  // The project's scripts/ copy (folder layout), else the installed package's (npm layout).
+  const script = find(root);
+  if (!script) return { action: 'pass', reason: 'no lint script' };
+  const t = (trust || ((file) => defaultTrust(file, root)))(script);
   if (!t.ok) return { action: 'note', reason: `instruction-lint hook: not run for ${rel} — ${t.reason}` };
-  const r = run(root, rel);
+  const r = run(root, rel, script);
   if (r.status !== 1) return { action: 'pass', reason: `lint exit ${r.status}` };
   return { action: 'block', reason: `instruction-lint failed for ${rel} — fix it in this turn:\n${r.stdout.trim()}` };
 }
@@ -72,12 +73,25 @@ function trustLib() {
   throw new Error('hook-trust.cjs not found');
 }
 
-function defaultTrust(file) {
-  return trustLib().trusted(file, { base: path.resolve(path.dirname(file), '..') });
+/** The lint script for this project: `<root>/scripts/instruction-lint.mjs`, else the installed package's; or null. */
+function defaultFind(root) {
+  const own = path.join(root, 'scripts', 'instruction-lint.mjs');
+  if (fs.existsSync(own)) return own;
+  const pkg = trustLib().packageDir(root);
+  const packaged = pkg && path.join(pkg, 'scripts', 'instruction-lint.mjs');
+  return packaged && fs.existsSync(packaged) ? packaged : null;
 }
 
-function defaultRun(root, rel) {
-  return spawnSync(process.execPath, [path.join(root, 'scripts', 'instruction-lint.mjs'), '--files', rel], { cwd: root, encoding: 'utf8', timeout: 20000 });
+/** A project copy is checked against HEAD; a package file against the committed lock (hook-trust.cjs). */
+function defaultTrust(file, root) {
+  const lib = trustLib();
+  const pkg = root && lib.packageDir(root);
+  if (pkg && !path.relative(pkg, file).startsWith('..')) return lib.trustedByLock(file, { root, pkg });
+  return lib.trusted(file, { base: path.resolve(path.dirname(file), '..') });
+}
+
+function defaultRun(root, rel, script = path.join(root, 'scripts', 'instruction-lint.mjs')) {
+  return spawnSync(process.execPath, [script, '--files', rel], { cwd: root, encoding: 'utf8', timeout: 20000, env: { ...process.env, BUILDER_PROJECT_ROOT: root } });
 }
 
 if (require.main === module) {

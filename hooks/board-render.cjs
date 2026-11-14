@@ -32,13 +32,16 @@ const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 try {
   const trust = trustLib();
-  const render = join(root, 'scripts', 'board-render.mjs');
-  for (const file of [join(root, 'scripts', 'lib', 'board-freshness.cjs'), join(root, 'scripts', 'lib', 'profile.cjs'), render]) {
-    const t = trust.trusted(file, { base: root });
+  // The project's scripts/ copies (folder layout), else the installed package's (npm layout) — hook-trust locate().
+  const found = {};
+  for (const rel of [join('lib', 'board-freshness.cjs'), join('lib', 'profile.cjs'), 'board-render.mjs']) {
+    const t = trust.locate(root, __dirname, rel);
     if (!t.ok) throw new Error(`not run — ${t.reason}`);
+    found[rel] = t.file;
   }
-  const freshness = require(join(root, 'scripts', 'lib', 'board-freshness.cjs'));
-  const profile = require(join(root, 'scripts', 'lib', 'profile.cjs'));
+  const render = found['board-render.mjs'];
+  const freshness = require(found[join('lib', 'board-freshness.cjs')]);
+  const profile = require(found[join('lib', 'profile.cjs')]);
   const tasksDir = join(root, profile.load(root).settings.paths?.boards || 'tasks');
 
   if (existsSync(tasksDir)) {
@@ -57,6 +60,8 @@ try {
     for (const board of stale) {
       try {
         execFileSync(process.execPath, [render, board], {
+          cwd: root,
+          env: { ...process.env, BUILDER_PROJECT_ROOT: root },
           stdio: 'ignore',
           timeout: 10_000,
         });
