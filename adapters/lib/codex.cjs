@@ -90,7 +90,7 @@ function hooksConfig({ hooksDir = '.codex/hooks' } = {}) {
     hooks: {
       PreToolUse: [
         {
-          matcher: 'Bash',
+          matcher: 'Bash|mcp__.*',
           hooks: [{ type: 'command', command: `node "$(git rev-parse --show-toplevel)/${hooksDir}/protected-paths.cjs"`, timeout: 30 }],
         },
       ],

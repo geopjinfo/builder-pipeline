@@ -95,7 +95,7 @@ function hooksSettings() {
 /** The protected-paths entry its header documents (PreToolUse; the matcher must include the shell tools). */
 function protectedPathsHook() {
   return {
-    matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell',
+    matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|mcp__.*',
     hooks: [{ type: 'command', command: 'node .claude/hooks/protected-paths.cjs' }],
   };
 }
