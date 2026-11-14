@@ -179,6 +179,10 @@ versions independently of any project it is pasted into.
   {} }` when there was no clash to decide and the file is absent (not on `--dry-run`, not when a clash was left
   undecided), so the setup commit records that the confirm gate ran; the builder-init skill says so. Tests:
   `tests/setup-flow.test.mjs`.
+- **The autosync contention test no longer races a timer.** The holder kept the lock for a fixed 3 s; under full-suite
+  load the second trigger's interpreter could start after that, find no lock and exit 3 instead of 20. `autosync.py`
+  gains a test aid, `--release-on <path>` (with `--hold-lock`, release once the path exists), and the test holds the
+  lock until it has checked the second trigger, then releases it. Tests: `tests/autosync.test.mjs`.
 - **The docs the install points the agent to are install-neutral.** `DISCOVERY.md` §5 said `node builder/cli.js
   verify`, §3 cited `builder/examples/…` and `builder/tooling/…`; `USAGE.md` had nine `node scripts/<x>.mjs`
   commands; the persona library said `node scripts/personas-check.mjs`. They now say `npx builder …` /
