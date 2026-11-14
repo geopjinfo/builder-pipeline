@@ -17,6 +17,9 @@ versions independently of any project it is pasted into.
   package, `unpack` copies no scripts or oracle adapters into the project, the installed prose says
   `npx builder run <name>` instead of `node scripts/<name>.mjs`, and `verify` looks for the scripts in the package.
   A kit copied in as `builder/` is unchanged. Tests: `tests/run-from-package.test.mjs`.
+- **`builder.lock.json`** records the sha256 of every kit-owned file the kit writes. `upgrade` keeps a kit-owned file
+  changed since then and reports it `kept (local edit)`; `--force` overwrites it after the usual backup. Project-owned
+  files are not locked; an install with no lock upgrades as before. Tests: `tests/lock.test.mjs`.
 - **The kit names itself where it is installed:** as a package, installed Markdown, the pointer block and CLI output
   say `npx builder …` and `node_modules/<package>/<file>`; a `builder/` copy is byte-identical to before. Tests:
   `tests/kit-location.test.mjs`.

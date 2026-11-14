@@ -70,6 +70,8 @@ describe('upgrade — an older install brought level with the pack', () => {
     copyPack(root);
     const r = run(root, ['unpack', '--tool', 'claude-code', '--no-extras']);
     assert.equal(r.status, 0, r.out);
+    // An older release wrote no builder.lock.json (lock.test.mjs covers an install that has one).
+    unlinkSync(join(root, 'builder.lock.json'));
     fresh = snapshot(root);
 
     // Age the install: two kit files from an "older release", one kit file the older release did not ship.
