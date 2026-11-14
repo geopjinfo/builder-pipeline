@@ -80,7 +80,8 @@ function decide(input, settings, { root, env = {}, stamp = new Date().toISOStrin
   const logs = settings?.paths?.logs ?? 'logs';
   const prefixes = fencePrefixes === undefined ? fenceSet(root, env) : fencePrefixes;
   if (!Array.isArray(prefixes)) return { action: 'pass', refused: true, reason: `bashCap: no log written — the protected-paths fence's set could not be read (${prefixes?.reason ?? 'unknown'}), so paths.logs cannot be checked against it` };
-  const refused = (profileLib ?? lib(root, 'profile.cjs')).logsProblem(logs, settings?.protected, { root, prefixes });
+  const check = () => (profileLib ?? lib(root, 'profile.cjs')).logsProblem(logs, settings?.protected, { root, prefixes });
+  const refused = check();
   if (refused) return { action: 'pass', refused: true, reason: `bashCap: no log written — paths.logs ${refused}` };
   const r = input.tool_response;
   const res = typeof r === 'string' ? { stdout: r, stderr: '' } : { stdout: r?.stdout ?? '', stderr: r?.stderr ?? '' };
@@ -93,6 +94,7 @@ function decide(input, settings, { root, env = {}, stamp = new Date().toISOStrin
   return {
     action: 'cap',
     logPath,
+    recheck: check, // after mkdir: the folder now exists, so its real path is judged again before the write
     log: `$ ${command}\n\n${res.stdout}${res.stderr ? `\n[stderr]\n${res.stderr}` : ''}`,
     output: {
       hookSpecificOutput: {
@@ -115,7 +117,12 @@ if (require.main === module) {
     if (result.refused) process.stderr.write(`${result.reason}\n`);
     if (result.action === 'cap') {
       fs.mkdirSync(path.dirname(result.logPath), { recursive: true });
-      fs.writeFileSync(result.logPath, result.log);
+      const again = result.recheck();
+      if (again) {
+        process.stderr.write(`bashCap: no log written — paths.logs ${again}\n`);
+        process.exit(0);
+      }
+      fs.writeFileSync(result.logPath, result.log, { flag: 'wx' }); // never through an existing name (a planted link)
       process.stdout.write(JSON.stringify(result.output));
     }
   } catch {
