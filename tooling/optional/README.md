@@ -72,7 +72,7 @@ two concurrent embeds double the spend and can corrupt the index. Store the hold
 time in the lock, so a lock left by a dead process can be reclaimed once it is older than the longest
 plausible sync.
 
-### The graphify example: `sync.py` + `autosync.py` + `session-sync-hook.js` + `sync-hook.sh`
+### The graphify example: `sync.py` + `autosync.py` + `session-sync-hook.cjs` + `sync-hook.sh`
 
 These keep a graphify graph current and meet the whole contract:
 
@@ -95,18 +95,18 @@ These keep a graphify graph current and meet the whole contract:
     `.autosync-status.json`.
   - **Exit codes:** `0` fresh · `10` pending · `20` lock held · `3` no index · `1` error.
     `--no-embed` is the free `features.graph.syncFree` step before the phase-4 auditors.
-- **`session-sync-hook.js`** is the session-start trigger for Claude Code. It starts
+- **`session-sync-hook.cjs`** is the session-start trigger for Claude Code. It starts
   `autosync.py --trigger session` detached, exits 0 at once, and speaks only when the previous run's
   decision was `over-limit`. Its header gives the `settings.json` snippet. With `--trigger merge` it is
   also the merge trigger's runner, and then it prints nothing.
 - **`sync-hook.sh`** installs the guarded post-merge block. The block runs
-  `node <HOOKS_JS_DIR>/session-sync-hook.js --trigger merge` on the branches in `BASE_BRANCHES`
+  `node <HOOKS_JS_DIR>/session-sync-hook.cjs --trigger merge` on the branches in `BASE_BRANCHES`
   (default `main`). List every base branch your feature work merges into.
 
 **These run outside the permission prompt, so they start committed code only.** A git hook and a session
 hook both run unattended; a script or interpreter an agent can rewrite would otherwise run on the next
 merge or session with no approval.
-- The merge block starts node only when `session-sync-hook.js` and `hook-trust.cjs` (from
+- The merge block starts node only when `session-sync-hook.cjs` and `hook-trust.cjs` (from
   `hooks/claude-code/`, installed beside the hook) are plain files equal to their blobs at HEAD.
 - The hook starts Python only when **every** entry of the folder holding `autosync.py` is a plain file
   equal to its blob at HEAD, and no committed file is missing. A package folder, an extension module,

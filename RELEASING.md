@@ -36,8 +36,8 @@ so nothing reaches them until a tag exists and they bump to it.
 
    ```
    npm i -D github:geopjinfo/builder-pipeline#vX.Y.Z
-   npx builder upgrade --tool <the tools it installed> --dry-run
-   npx builder upgrade --tool <the tools it installed>
+   npx builder upgrade --dry-run
+   npx builder upgrade   # the install's tools and flags come from builder.lock.json; add --prune to remove what the release dropped
    npx builder verify
    ```
 
