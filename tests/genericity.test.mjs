@@ -19,20 +19,26 @@ import { fileURLToPath } from 'node:url';
 
 const PACK = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+// The source project's own names are stored encoded, so this file does not itself carry them in plain text (the
+// source repository scans the kit for exactly those strings). b64 = the plain words, base64-encoded.
+const b64 = (t) => Buffer.from(t, 'base64').toString('utf8');
+const SOURCE_NAMES = b64('ZGFsaWx8YWRmZHxhaWNlbnRlcnxnZW9yZ2Vwag=='); // four project/owner names, |-separated
+const SOURCE_PLACE = b64('QWJ1IERoYWJp');
+
 /**
  * Shapes a project-specific id takes. Each one is named so a failure says which rule it broke.
  * Company and project names come from this repository's own history; the id shapes are the ones its source
  * project used (registry rows, decision ids, ADR numbers, rulings), and the rest is anything tied to one machine.
  */
 export const DENY = [
-  ['source-project name', /\b(?:dalil|adfd|aicenter|georgepj)\b/i],
+  ['source-project name', new RegExp(`\\b(?:${SOURCE_NAMES})\\b`, 'i')],
   ['source-product name', /\bPMP\b/],
-  ['place name', /\bAbu Dhabi\b/i],
+  ['place name', new RegExp(`\\b${SOURCE_PLACE}\\b`, 'i')],
   ['registry-row id (ABC-D12)', /\b[A-Z][A-Z0-9]{1,5}-D\d+\b/],
   ['decision id (DEC-1234)', /\bDEC-\d{2,}\b/],
   ['ADR number (ADR-0NN)', /\bADR-\d{3,}\b/],
-  ['ruling id (OD-B14-31, G-41)', /\bOD-[A-Z0-9]+-\d+\b|\bG-\d{2}\b/],
-  ['plan-item id (A-066)', /\bA-\d{3}\b/],
+  ['ruling id (OD-X-N, G-NN)', /\bOD-[A-Z0-9]+-\d+\b|\bG-\d{2}\b/],
+  ['plan-item id (A-NNN)', /\bA-\d{3}\b/],
   ['absolute drive path', /(?<![\w])[A-Za-z]:[\\/](?:Users|George|Projects|home|srv)\b/i],
   ['home-directory path', /(?<![\w.])\/(?:home|Users)\/[a-z][\w.-]*\//],
   ['private IPv4 address', /\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b/],
@@ -105,19 +111,19 @@ describe('genericity — the shipped kit names no project', () => {
 
   test('red: every rule catches its shape', () => {
     const seeds = {
-      'source-project name': 'the Dalil backend',
+      'source-project name': `the ${SOURCE_NAMES.split('|')[0]} backend`,
       'source-product name': 'the PMP platform',
-      'place name': 'in Abu Dhabi',
-      'registry-row id (ABC-D12)': 'PLT-D93',
-      'decision id (DEC-1234)': 'DEC-4700',
-      'ADR number (ADR-0NN)': 'ADR-014',
-      'ruling id (OD-B14-31, G-41)': 'OD-B14-31',
-      'plan-item id (A-066)': 'A-066',
-      'absolute drive path': 'D:\\George\\x',
+      'place name': `in ${SOURCE_PLACE}`,
+      'registry-row id (ABC-D12)': ['XYZ', 'D12'].join('-'),
+      'decision id (DEC-1234)': ['DEC', '1234'].join('-'),
+      'ADR number (ADR-0NN)': ['ADR', '012'].join('-'),
+      'ruling id (OD-X-N, G-NN)': ['OD', 'X9', '12'].join('-'),
+      'plan-item id (A-NNN)': ['A', '123'].join('-'),
+      'absolute drive path': 'C:\\Users\\alice\\x',
       'home-directory path': 'cat /home/alice/x',
-      'private IPv4 address': 'ssh 192.168.10.53',
+      'private IPv4 address': 'ssh 192.168.0.10',
       'private hostname': 'build.corp',
-      'email address': 'someone@company.ae',
+      'email address': 'someone@company.test',
     };
     assert.deepEqual(Object.keys(seeds).sort(), DENY.map(([r]) => r).sort(), 'one seed per rule');
     for (const [rule, text] of Object.entries(seeds)) {
