@@ -48,6 +48,8 @@ test('the prose walk skips .claude/: a nested worktree of this repo is never rea
 });
 
 const PLAYBOOK = 'skills/build-module-pipeline.md';
+/** The playbook plus the reference files it points into (its detail moved there by progressive disclosure). */
+const PLAYBOOK_SET = [PLAYBOOK, ...readdirSync(join(PACK, 'skills', 'references')).filter((f) => f.endsWith('.md')).map((f) => `skills/references/${f}`)];
 const flat = (text) => text.replace(/`/g, '').replace(/\s+/g, ' ');
 
 test('the prose corpus is not empty', () => {
@@ -70,7 +72,7 @@ test('every `node scripts/<x>.mjs` the prose names is a script the pack ships', 
 });
 
 test('every pack file the playbook, personas and adapters point at exists', () => {
-  const sources = [PLAYBOOK, ...prose().filter((f) => f.startsWith('agents/') || f.startsWith('adapters/'))];
+  const sources = [...PLAYBOOK_SET, ...prose().filter((f) => f.startsWith('agents/') || f.startsWith('adapters/'))];
   const missing = [];
   for (const file of sources) {
     for (const m of read(file).matchAll(/\b((?:skills\/references|adapters|templates|hooks\/claude-code|agents\/experimental|tooling\/experimental)\/[\w.-]+\.(?:md|js|cjs|mjs)|EXPERIMENTS\.md)\b/g)) {
@@ -150,7 +152,8 @@ test('the profile template parses, and its only problems are the placeholders an
 });
 
 test('every optional step in the playbook has its "not configured" line', () => {
-  const text = flat(read(PLAYBOOK));
+  // The playbook or the reference file its step points at: most optional steps' detail lives in skills/references/.
+  const text = PLAYBOOK_SET.map((f) => flat(read(f))).join(' ');
   const optional = [
     'graph', 'orchestratorModel', 'planSchema', 'citations', 'builderBatch', 'claims', 'lineCitations', 'wiring', 'mutation', 'rules',
     'findingsSchema', 'reviewTemplate', 'contractOracle', 'ratchets', 'fixLane', 'decisionIndex', 'instructionBudget', 'instructionLint', 'worktreeSweep',
