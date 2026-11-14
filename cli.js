@@ -72,6 +72,23 @@ const TOOLS = {
   generic:       { style: 'dotBuilder', pointer: 'AGENTS.md', label: 'Any other agent (AGENTS.md)' },
 };
 
+// --------------------------- where the kit lives ---------------------------
+/**
+ * The kit's own prose says `builder/<file>` and `node builder/cli.js` — true when the kit is a folder copied into the
+ * project as `builder/`. Installed as a package it lives at `node_modules/@<scope>/builder-pipeline/` and runs as
+ * `npx builder`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
+ * installs into the project (Markdown) and every line the CLI prints goes through kitPaths(), so it names the kit
+ * where it actually is. With the kit at `builder/` nothing changes, byte for byte.
+ */
+const posixPath = (p) => p.split(path.sep).join('/');
+const KIT_REL = posixPath(path.relative(CWD, KIT)) || '.';
+const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder' : `node ${KIT_REL}/cli.js`;
+const KIT_ENTRY = /(?<![.\w@/-])builder\/(?=(?:cli\.js|[A-Z][A-Z_]*(?:\.template)?\.md|adapters|agents|examples|hooks|oracles|scripts|skills-extra|skills|templates|tooling|tests)\b)/g;
+function kitPaths(text) {
+  if (KIT_REL === 'builder') return text;
+  return text.replace(/\bnode builder\/cli\.js\b/g, RUN).replace(KIT_ENTRY, `${KIT_REL}/`);
+}
+
 // --------------------------- small helpers ---------------------------------
 let DRY = false;
 let NO_EXTRAS = false;
@@ -136,7 +153,7 @@ function place(dst, produce, owner) {
 }
 
 function copyIfAbsent(src, dst, owner = 'kit') {
-  place(dst, () => fs.readFileSync(src), owner);
+  place(dst, () => (/\.md$/i.test(dst) ? kitPaths(fs.readFileSync(src, 'utf8')) : fs.readFileSync(src)), owner);
 }
 
 /**
@@ -278,7 +295,7 @@ function toClaudeAgent(content) {
 }
 
 function copyTransformed(src, dst, fn) {
-  place(dst, () => fn(fs.readFileSync(src, 'utf8')), 'kit');
+  place(dst, () => kitPaths(fn(fs.readFileSync(src, 'utf8'))), 'kit');
 }
 
 function copyDirIfAbsent(srcDir, dstDir, skipTop = []) {
@@ -340,6 +357,10 @@ Module/feature builds go through the multi-agent builder pipeline.
   cheap scoped doc/architecture lookups (query the graph before re-reading big docs), \`caveman\`
   for compressed replies, \`ledger-audit\` for periodic unearned-status sweeps of the ledgers.
 ${MARKER_END}`;
+  return pointerFrame(tool, kitPaths(body));
+}
+
+function pointerFrame(tool, body) {
   if (TOOLS[tool].mdc) {
     return `---
 description: Builder pipeline — how module builds run in this repo
@@ -876,6 +897,12 @@ function cmdCheckLedgers() {
 function die(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
 function main() {
+  // Every line the CLI prints names the kit where it is (kitPaths above): `npx builder verify`, not a builder/ folder
+  // the project does not have.
+  for (const k of ['log', 'error']) {
+    const write = console[k].bind(console);
+    console[k] = (...a) => write(...a.map((x) => (typeof x === 'string' ? kitPaths(x) : x)));
+  }
   const major = Number(process.versions.node.split('.')[0]);
   if (major < 18) die(`Node ${process.versions.node} — the builder kit needs Node 18 or newer`);
 
