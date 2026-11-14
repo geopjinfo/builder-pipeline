@@ -32,6 +32,11 @@ versions independently of any project it is pasted into.
   frontmatter (or TOML) name renamed. A skipped `build-module-pipeline` takes its references with it. An invalid
   choices file stops the install before anything is written. A project with no clash installs byte-for-byte as before.
   Tests: `tests/clash-install.test.mjs`.
+- **`builder doctor [--tool …] [--json]`.** Per selected (or detected) tool, each kit feature as supported, partial or
+  unsupported with the reason — Codex: sandbox not narrowable per agent, `apply_patch` not judged by protected-paths,
+  no agent name in hooks; Antigravity: hooks not written, whole-tool grants, no effort; dotBuilder tools: prompt files
+  and playbooks held by hand — followed by the adapter's own `unconfirmed` list word for word. A report: exit 0.
+  Tests: `tests/doctor.test.mjs`.
 - **Per-harness renderers in `adapters/lib/`.** Pure modules (text in, `{ path, content }` out) for Claude Code (a
   move-compatible copy of the install transform, byte-identical for every persona), Codex (`.codex/agents/*.toml`,
   `.agents/skills/`, `.codex/hooks.json`) and Antigravity (`.agents/agents/*.md`, `.agents/skills/`), each checked
