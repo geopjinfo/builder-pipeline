@@ -14,6 +14,7 @@ Usage:
 
   --no-embed        code sync only (a pre-audit gate uses this: free, seconds)
   --hold-lock N     test aid: take the lock, hold it N seconds, touch nothing else
+  --release-on P    test aid (with --hold-lock): release as soon as path P exists
 
 Environment:
   INDEX_AUTO_LIMIT_KB          auto-embed limit in KB (default 300); above it a person decides
@@ -164,6 +165,7 @@ def main(argv: list, code_sync=None) -> int:
     parser.add_argument("--trigger", required=True, choices=["merge", "session", "p1", "p4", "manual"])
     parser.add_argument("--no-embed", action="store_true")
     parser.add_argument("--hold-lock", type=float, default=0)
+    parser.add_argument("--release-on", default=None)
     args = parser.parse_args(argv)
 
     if os.environ.get("INDEX_SYNC_SKIP"):
@@ -184,8 +186,14 @@ def main(argv: list, code_sync=None) -> int:
         return EXIT_LOCKED
     try:
         if args.hold_lock:
+            # --release-on PATH: hold until PATH exists (at most --hold-lock seconds), so a test releases the lock
+            # on a signal instead of racing a timer it cannot see under load.
             print(f"{prefix} holding the lock {args.hold_lock:g}s (test aid).", flush=True)
-            time.sleep(args.hold_lock)
+            deadline = time.time() + args.hold_lock
+            while time.time() < deadline:
+                if args.release_on and os.path.exists(args.release_on):
+                    break
+                time.sleep(min(0.05, max(0.0, deadline - time.time())))
             return EXIT_FRESH
 
         code = (code_sync or sync.main)()

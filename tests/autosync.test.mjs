@@ -133,20 +133,27 @@ print(json.dumps(dict(first=first, heldPid=held["pid"] == os.getpid(), second=se
 });
 
 describe('autosync.py — as a process', { skip: NO_PYTHON }, () => {
-  test('contention: a second trigger exits 20 and does nothing while the first holds the lock', async () => {
+  test('contention: a second trigger exits 20 and does nothing while the first holds the lock', async (t) => {
     const p = project();
     const lock = join(p.out, '.sync.lock');
-    const holder = spawn(PY, [AUTOSYNC, '--trigger', 'merge', '--hold-lock', '3'], { env: p.env(), stdio: 'ignore' });
-    const exited = new Promise((resolve) => holder.on('close', resolve));
-    for (let i = 0; i < 200 && !existsSync(lock); i++) await sleep(50);
+    // The holder keeps the lock until the test says so (--release-on), not for a fixed time: under load the second
+    // trigger's interpreter could start after a 3 s hold had already ended, find no lock, and exit 3 (seen in full runs).
+    const release = join(p.out, '..', 'release-now');
+    t.after(() => { try { writeFileSync(release, ''); } catch { /* already released */ } }); // never leave the holder running
+    const holder = spawn(PY, [AUTOSYNC, '--trigger', 'merge', '--hold-lock', '120', '--release-on', release], { env: p.env(), stdio: 'ignore' });
+    let holderDone = false;
+    const exited = new Promise((resolve) => holder.on('close', (code) => { holderDone = true; resolve(code); }));
+    for (let i = 0; i < 600 && !existsSync(lock); i++) await sleep(50);
     assert.ok(existsSync(lock), 'the holder never took the lock');
 
     const second = py([AUTOSYNC, '--trigger', 'session'], p.env());
+    assert.ok(!holderDone && existsSync(lock), 'the holder still holds the lock while the second trigger runs');
     assert.equal(second.status, 20, second.out);
     assert.match(second.out, /lock held/);
     assert.ok(existsSync(lock), 'the refused trigger removed a lock it did not own');
     assert.ok(!existsSync(join(p.out, '.autosync-status.json')), 'the refused trigger wrote a status');
 
+    writeFileSync(release, '');
     assert.equal(await exited, 0);
     assert.ok(!existsSync(lock), 'the holder did not release its lock');
     assert.match(readFileSync(join(p.out, '.sync.log'), 'utf8'), /lock held by another trigger/);
