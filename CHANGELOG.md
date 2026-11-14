@@ -111,6 +111,17 @@ versions independently of any project it is pasted into.
   and compares a heredoc end line with its CR, so a lone or trailing `\r` moved the body boundary.
 - **Read-only verbs:** `-O` inside a flag cluster (`git grep -nO'cmd'`, also spelled with quotes or a backslash) and
   git's `--open…`/`--ou…` prefixes are writing options, so such a pipeline is no longer read-only.
+- **A hook runs package code only on an anchor outside `node_modules`.** Installed as a package, the kit's scripts
+  are in agent-writable `node_modules/`, so a hash read from there would vouch for whatever is on disk. unpack/upgrade
+  now take each script's hash from the published tarball — read from npm's content-addressed cache and checked
+  against the `integrity` in the project's package-lock.json — and record `package: { integrity, verified: true,
+  files }` in `builder.lock.json` only when `node_modules` matches that tarball (`scripts/lib/package-integrity.cjs`).
+  No package-lock entry, no integrity (a git dependency), no cached tarball, bytes that do not match, or a
+  `node_modules` file that differs → `verified: false`, a reason, no hashes, and a note at install. A hook runs a
+  package file only when `builder.lock.json` and package-lock.json both match HEAD, the lock's integrity is the one
+  package-lock.json records, and the file and everything it requires hash to the lock (`hook-trust.cjs
+  trustedByLock`); anything else is "not run". Tests: `tests/package-hooks.test.mjs` (tampered before install,
+  swapped cache bytes, no package-lock, package-lock or lock edited after the commit, file edited after the commit).
 
 ### Fixed
 
@@ -135,11 +146,8 @@ versions independently of any project it is pasted into.
   found", "profile.cjs not found"). Every hook now resolves a kit file through `hook-trust.cjs locate()`: the
   project's `scripts/` copy (folder layout, checked against HEAD), else the installed package
   (`require.resolve('@geopjinfo/builder-pipeline/package.json', { paths: [project] })`). A package file is not in the
-  project's repository, so "matches HEAD" cannot vouch for it: unpack/upgrade now record a hash of every package
-  script under `package.files` in `builder.lock.json`, and a package file runs only when the lock matches HEAD and
-  the file and everything it requires hash to what the lock records — an edit in `node_modules` or an uncommitted
-  lock gets "not run", as an uncommitted script does. `registry-read-guard` names `npx builder run ledger-row` in
-  the package layout. Tests: `tests/package-hooks.test.mjs`.
+  project's repository, so "matches HEAD" cannot vouch for it — see ### Security for what does. `registry-read-guard`
+  names `npx builder run ledger-row` in the package layout. Tests: `tests/package-hooks.test.mjs`.
 - **The docs the install points the agent to are install-neutral.** `DISCOVERY.md` §5 said `node builder/cli.js
   verify`, §3 cited `builder/examples/…` and `builder/tooling/…`; `USAGE.md` had nine `node scripts/<x>.mjs`
   commands; the persona library said `node scripts/personas-check.mjs`. They now say `npx builder …` /
