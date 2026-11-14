@@ -17,6 +17,9 @@ versions independently of any project it is pasted into.
   layout (unchanged there). The registry guard loads the helper like its other code (trusted, never node_modules) and
   says `ledger-row registry <ID>` when it cannot. Tests: `tests/invocation.test.mjs` (no hard-coded form outside the
   helper under scripts/ or hooks/; the helper per layout; usage lines run from a package copy).
+- **unpack gitignores `logs/bash/`** (or `<paths.logs>/bash/`) the way it does `.pipeline/`, whenever the Claude Code
+  hooks — bash-output-cap among them — are installed, so the first capped command no longer dirties `git status`.
+  Listed once; a re-run says `skip (exists)`. Tests: `tests/gitignore.test.mjs`.
 
 ## [1.0.0-rc.1] — 2026-11-14
 
