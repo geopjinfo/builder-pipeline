@@ -605,7 +605,7 @@ function installTool(tool) {
   wirePointer(t.pointer, pointerBlock(tool), Boolean(t.mdc));
 }
 
-function installCommon() {
+function installCommon(tools = []) {
   console.log('\n[common] ledgers + profile');
   /**
    * The installer honours §16 `paths` like every other reader — it was the last one that did not.
@@ -669,15 +669,30 @@ function installCommon() {
     }
   }
 
+  ignoreLine('.pipeline/');
+  /**
+   * An armed bash-output-cap hook writes each capped output whole to <paths.logs>/bash/ (default logs/bash/);
+   * unignored, the first capped command dirties `git status`. Added only when that hook is installed (Claude Code).
+   */
+  if (tools.includes('claude-code') || fs.existsSync(path.join(CWD, '.claude', 'hooks', 'bash-output-cap.cjs'))) {
+    const logs = String(profileLib().load(CWD).settings?.paths?.logs || 'logs').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+    ignoreLine(`${logs}/bash/`);
+  }
+}
+
+/** Append `line` to the project's .gitignore unless it is already listed (with or without a leading or trailing slash). */
+function ignoreLine(line) {
   const gi = path.join(CWD, '.gitignore');
-  const has = fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8'));
+  const text = fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : null;
+  const bare = line.replace(/\/$/, '');
+  const has = text !== null && text.split(/\r?\n/).some((l) => l.trim().replace(/^\//, '').replace(/\/$/, '') === bare);
   if (has) {
-    if (MODE === 'upgrade') upgradeLog('kept-project-owned', '.gitignore', '.pipeline/ already listed');
-    else log('skip (exists):', '.gitignore (.pipeline/)');
+    if (MODE === 'upgrade') upgradeLog('kept-project-owned', '.gitignore', `${line} already listed`);
+    else log('skip (exists):', `.gitignore (${line})`);
   } else {
-    if (!DRY) fs.appendFileSync(gi, `${fs.existsSync(gi) ? '\n' : ''}.pipeline/\n`);
-    if (MODE === 'upgrade') upgradeLog('added', '.gitignore', '.pipeline/ line appended');
-    else log(DRY ? 'would append:' : 'appended:', '.gitignore (.pipeline/)');
+    if (!DRY) fs.appendFileSync(gi, `${text !== null && !text.endsWith('\n') ? '\n' : ''}${line}\n`);
+    if (MODE === 'upgrade') upgradeLog('added', '.gitignore', `${line} line appended`);
+    else log(DRY ? 'would append:' : 'appended:', `.gitignore (${line})`);
   }
 }
 
@@ -749,7 +764,7 @@ function cmdUnpack(tools) {
   }
   setupClashCheck();
   for (const tool of tools) installTool(tool);
-  installCommon();
+  installCommon(tools);
   writeLock();
   if (CLASH_SKIPPED.size) console.log(clashSummary());
   else if (!DRY && !fs.existsSync(path.join(CWD, choicesLib.FILE))) {
@@ -782,7 +797,7 @@ function cmdUpgrade(tools) {
   console.log(`builder kit ${VERSION} — upgrade${DRY ? ' (dry run: nothing is written)' : ''}`);
   setupClashCheck();
   for (const tool of tools) installTool(tool);
-  installCommon();
+  installCommon(tools);
   writeLock();
   if (CLASH_SKIPPED.size) console.log(clashSummary());
   const c = UPGRADE.counts;
