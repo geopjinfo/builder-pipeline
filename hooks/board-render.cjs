@@ -32,7 +32,7 @@ const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 try {
   const trust = trustLib();
-  // The project's scripts/ copies (folder layout), else the installed package's (npm layout) — hook-trust locate().
+  // The copies vendored beside the hooks (package layout), else the project's scripts/ (folder layout) — hook-trust locate().
   const found = {};
   for (const rel of [join('lib', 'board-freshness.cjs'), join('lib', 'profile.cjs'), 'board-render.mjs']) {
     const t = trust.locate(root, __dirname, rel);

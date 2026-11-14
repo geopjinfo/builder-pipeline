@@ -89,6 +89,18 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     assert.match(r.stdout, /never-written/);
   });
 
+  test('red (I2): an old committed scripts/instruction-lint.mjs does not shadow the vendored one', () => {
+    const { proj } = installed({ profile: LINT_ON });
+    const instr = LINT_ON.features.instructionLint.files[0];
+    mkdirSync(join(proj, 'scripts'), { recursive: true });
+    writeFileSync(join(proj, 'scripts', 'instruction-lint.mjs'), 'process.exit(0);\n');
+    writeFileSync(join(proj, instr), `${readFileSync(join(proj, instr), 'utf8')}\nRead \`docs/never-written.md\` first.\n`);
+    git(proj, 'add', '-A');
+    git(proj, 'commit', '-q', '-m', 'old copy + edit');
+    const r = hook(proj, 'instruction-lint-on-edit.cjs', { tool_name: 'Edit', tool_input: { file_path: join(proj, instr) } });
+    assert.match(r.stdout, /"decision":"block"/, r.stdout + r.stderr);
+  });
+
   test('red: node_modules not installed (fresh clone) → the pointer block is not a dead path; "not configured", allowed', () => {
     const { proj } = installed({ profile: LINT_ON });
     rmSync(join(proj, 'node_modules'), { recursive: true, force: true });
@@ -117,6 +129,19 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     const r = hook(proj, 'board-render.cjs', { tool_name: 'Write', tool_input: { file_path: join(proj, 'tasks', 'rooms.md') } });
     assert.match(r.stderr, /not run — .*not found/);
     assert.ok(!existsSync(join(proj, 'tasks', 'rooms.html')), 'nothing was rendered from node_modules');
+  });
+
+  test('red (I2): after a folder->package move the vendored copy wins over an old committed scripts/lib copy', () => {
+    const { proj } = installed();
+    const old = join(proj, 'scripts', 'lib', 'profile.cjs');
+    mkdirSync(dirname(old), { recursive: true });
+    writeFileSync(old, 'module.exports = { old: true };\n');
+    git(proj, 'add', '-A');
+    git(proj, 'commit', '-q', '-m', 'old folder-layout copy');
+    const trust = require(join(proj, ...HOOKS, 'hook-trust.cjs'));
+    const r = trust.locate(proj, join(proj, ...HOOKS), join('lib', 'profile.cjs'));
+    assert.equal(r.ok, true, r.reason);
+    assert.equal(r.file, join(proj, ...HOOKS, 'kit', 'lib', 'profile.cjs'));
   });
 
   test('red: a vendored file that requires into node_modules is refused, even committed', () => {

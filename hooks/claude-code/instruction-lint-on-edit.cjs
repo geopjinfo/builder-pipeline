@@ -59,7 +59,7 @@ function decide(input, { root, settings = null, untrusted = null, trust, run = d
   const feature = settings.features?.instructionLint ?? {};
   if (!ACTIVE.includes(feature.state ?? 'off')) return { action: 'pass', reason: 'instructionLint: not configured' };
   if (!matches(rel, feature.files ?? DEFAULT_FILES)) return { action: 'pass', reason: 'not an instruction file' };
-  // The project's scripts/ copy (folder layout), else the installed package's (npm layout).
+  // The copy vendored beside the hooks (package layout), else the project's scripts/ copy (folder layout).
   const script = find(root);
   if (!script) return { action: 'note', reason: `instruction-lint hook: not configured for ${rel} — no lint script (scripts/instruction-lint.mjs, or .claude/hooks/kit/instruction-lint.mjs from unpack); the edit is allowed` };
   const t = (trust || ((file) => defaultTrust(file, root)))(script);
@@ -80,12 +80,13 @@ function trustLib() {
 }
 
 /**
- * The lint script for this project: `<root>/scripts/instruction-lint.mjs` (folder layout), else the copy unpack
- * vendored beside the hooks (package layout: `kit/instruction-lint.mjs` next to this file); or null. Never anything
+ * The lint script for this project: the copy unpack vendored beside the hooks (package layout: `kit/instruction-lint.mjs`
+ * next to this file — first, so an old folder-layout copy never shadows it), else `<root>/scripts/instruction-lint.mjs`
+ * (folder layout); or null. Never anything
  * under node_modules (hook-trust.cjs).
  */
 function defaultFind(root) {
-  for (const f of [path.join(root, 'scripts', 'instruction-lint.mjs'), path.join(__dirname, 'kit', 'instruction-lint.mjs')]) if (fs.existsSync(f)) return f;
+  for (const f of [path.join(__dirname, 'kit', 'instruction-lint.mjs'), path.join(root, 'scripts', 'instruction-lint.mjs')]) if (fs.existsSync(f)) return f;
   return null;
 }
 
