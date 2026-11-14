@@ -26,6 +26,9 @@ versions independently of any project it is pasted into.
   install)` instead of a dead path, and the hook relays that as a note and allows the edit. A missing lint script is a
   "not configured" note too, never silence. A real dead path beside it still blocks. Tests:
   `tests/package-hooks.test.mjs`.
+- **registry-read-guard no longer yields in silence.** When it cannot load its profile code (differs from HEAD, not
+  found) or fails, a subagent's Read is still allowed, with one stderr line: `registry-read-guard: not judging this
+  read — <why>`. The orchestrator's own reads stay quiet. Tests: `tests/package-hooks.test.mjs`.
 
 ## [1.0.0-rc.1] — 2026-11-14
 

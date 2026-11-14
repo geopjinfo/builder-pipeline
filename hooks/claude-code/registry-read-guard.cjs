@@ -18,7 +18,8 @@
  *
  * Protocol: stdin JSON; exit 2 with the reason on stderr blocks the call; exit 0 allows it. Any failure in
  * the hook itself allows the call — a guard that crashes a session is worse than the read it prevents. So does a
- * profile loader that differs from HEAD (`hook-trust.cjs`): the hook never runs code an agent just wrote.
+ * profile loader that differs from HEAD (`hook-trust.cjs`): the hook never runs code an agent just wrote. Either way a
+ * subagent's Read it lets through unjudged gets one stderr line saying why (`registry-read-guard: not judging …`).
  *
  * Arming: copy this and `hook-trust.cjs` to `.claude/hooks/`, then add a `PreToolUse` entry with matcher `Read` running
  * `node .claude/hooks/registry-read-guard.cjs`. Arming is a person's deliberate act.
@@ -66,15 +67,20 @@ function trustLib() {
   throw new Error('hook-trust.cjs not found');
 }
 
-/** The profile loader, only when it matches HEAD (hook-trust.cjs); otherwise null, and the hook keeps its defaults. */
+/** The profile loader, only when it matches HEAD (hook-trust.cjs); otherwise why not, and the hook keeps its defaults. */
 function loadProfile(root) {
   try {
     const r = trustLib().load(root, __dirname, 'profile.cjs');
-    return r.ok ? r.module : null;
-  } catch {
-    return null; // no hook-trust.cjs either: same as untrusted
+    return r.ok ? { profile: r.module } : { profile: null, why: r.reason };
+  } catch (e) {
+    return { profile: null, why: e && e.message ? e.message : 'hook-trust.cjs could not be loaded' }; // same as untrusted
   }
 }
+
+/** A read the guard could have judged (a subagent's Read) but will not: one stderr line saying why, then allow. */
+const notJudging = (input, why) => {
+  if (input && input.tool_name === 'Read' && input.agent_type) process.stderr.write(`registry-read-guard: not judging this read — ${String(why).replace(/\s+/g, ' ')}\n`);
+};
 
 /**
  * How this project runs ledger-row, from the kit's run-hint.cjs (the one place a run command is spelled): the project's
@@ -92,13 +98,16 @@ function ledgerRowCommand(root) {
 
 if (require.main === module) {
   let result = { block: false };
+  let input = null;
   try {
-    const input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}');
+    input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}');
     const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
-    const profile = loadProfile(root);
+    const { profile, why } = loadProfile(root);
     if (profile) result = decide(input, profile.load(root).settings, { ledgerRow: ledgerRowCommand(root) });
-  } catch {
+    else notJudging(input, why);
+  } catch (e) {
     result = { block: false };
+    notJudging(input, `the hook failed (${e && e.message ? e.message : e})`);
   }
   if (result.block) {
     process.stderr.write(`${result.reason}\n`);
