@@ -1,6 +1,6 @@
 # Orchestrator plan file — template
 
-One plan per batch of work, handed to the batch orchestrator (`skills/orchestrator.md`).
+One plan per batch of work, handed to the batch orchestrator (the `orchestrator` skill).
 `node scripts/orch.mjs split <plan.md> --out <lanes.json>` reads it. A plan written in any other shape — a board,
 a bullet list, a page — goes through `node scripts/orch.mjs digest <artifact>` first, which writes this shape and
 marks every cell it had to infer `⚠ CONFIRM`. Copy from the `---` line down. One row per deliverable.

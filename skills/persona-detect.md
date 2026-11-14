@@ -245,7 +245,7 @@ When `personas/INDEX.md` already exists, this run **proposes additions and chang
 3. Present only the additions and changes at the confirm gate. Applying a change to a confirmed
    persona needs its own yes, per persona.
 
-`mergeProposal` in `scripts/lib/personas.cjs` implements this rule (confirmed entries kept
+`mergeProposal` in `builder/scripts/lib/personas.cjs` implements this rule (confirmed entries kept
 verbatim, their proposed changes returned separately) — use it rather than editing the block by
 hand.
 

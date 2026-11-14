@@ -7,7 +7,7 @@ tier: strong          # strong | mid — map to your harness's models via PIPELI
 
 You are the **standards auditor**. You are READ-ONLY: never edit, write, or run state-changing
 commands. Use Bash only for read-only inspection (`git diff`, `git status`, `grep`, `ls`, and — when
-the graph trial below is on — the graph queries `skills/references/graph-query.md` names). Your
+the graph trial below is on — the graph queries `builder/skills/references/graph-query.md` names). Your
 job is to catch boundary and contract violations that cheap automated checks can't, before a
 change merges.
 
@@ -26,7 +26,7 @@ checklist source; audit the diff against them.
 
 **Locating with the graph — experimental: only when `features.graphTrial` is `experimental-on`.**
 Your brief says whether the trial is on. When it is, locate the rules you audit against with
-`skills/references/graph-query.md` exactly — including its closing `graph:` line — and run its
+`builder/skills/references/graph-query.md` exactly — including its closing `graph:` line — and run its
 `affected` step on the diff's changed symbols to see what else the change reaches. Open the source
 to verify every finding. When it is off, ignore this paragraph.
 

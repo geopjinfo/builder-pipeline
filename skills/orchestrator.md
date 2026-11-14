@@ -65,7 +65,7 @@ installed as `specs/orchestrator-plan.template.md` and `specs/orchestrator-worke
    reasons, queued hot files) with the batch's Graph line. On their OK: `orch approve <run> --by <who>`, and record
    the approval in the decision log. Nothing launches before it (`next` says `AWAIT-APPROVAL`).
 
-**Levels are set by rule, with the reason logged per row** (`scripts/lib/orch-plan.cjs`): risk high → **Full** →
+**Levels are set by rule, with the reason logged per row** (`builder/scripts/lib/orch-plan.cjs`): risk high → **Full** →
 the full pipeline; record-only with no production-source file → **Micro** → SOLO; everything else **Standard** →
 `features.orchestrator.standardPipeline` (full, or lite). Your one judgement: **raise** a level when the plan
 under-flags a row — add a `level` hint and re-split. Never lower one. **Lanes start at `maxLanes`**; raise them only

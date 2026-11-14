@@ -85,8 +85,8 @@ regressions), not just time.
 orchestrator's own shell output while keeping every error line. It does not cap subagents — see
 `adapters/claude-code.md`.
 
-**Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `skills/state-template.md` in
-this kit): loop number, open FIX rows, which phases must re-run, the last digest lines, the index
+**Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `builder/skills/state-template.md`
+in the kit): loop number, open FIX rows, which phases must re-run, the last digest lines, the index
 verdict, each optional check's last result, decisions taken. Rewrite it at EVERY phase gate. After
 any context compaction, re-read in this order — (1) `state.md`, (2) the board's `phase:status`
 block, (3) the open `FIX-n` rows — BEFORE the next dispatch; never reconstruct a run from
@@ -121,13 +121,13 @@ in the chat report is not a handoff.
 | 0 | **Index freshness gate** | orchestrator | — | `index-check` (optional) |
 | 0b | Deferred sweep | orchestrator | — | `<registry>` |
 | 0.5 | **Track selection** | orchestrator | — | — |
-| 1 | Plan | `module-planner` | — | plan shape check · `skills/references/graph-query.md` (experimental) |
+| 1 | Plan | `module-planner` | — | plan shape check · `builder/skills/references/graph-query.md` (experimental) |
 | 2 | Code | `module-builder`, in batches | — | `ledger-row` · claims check at the end |
 | 3 | Test | `module-tester` | — | mutation step (optional, non-blocking) |
 | 3b | **Contract & effect drift** | orchestrator — *deterministic, free* | — | profile §14 drift oracles |
 | 4 | Audit | `standards-auditor` + `security-auditor` + `vuln-auditor` + **`invariant-auditor`** | **yes — one message, 4 dispatches** | index re-sync (optional) · `rules.txt` (optional) · findings check |
 | 5 | Docs | `docs-maintainer` | — | claims check at the end |
-| 6 | Review | `module-reviewer` | — | `skills/references/review-template.md` · review check |
+| 6 | Review | `module-reviewer` | — | `builder/skills/references/review-template.md` · review check |
 | 6.5 | **Behavioural gate** | orchestrator — *runs the real application* | — | contract oracle (optional) |
 | 7 | Close-out | orchestrator | — | handoff pack + check |
 
@@ -244,7 +244,7 @@ reports the model the run actually used, where the harness keeps that record.
    the questions about the code.
 
    *Experimental:* when `features.graphTrial` is `experimental-on`, tell the planner the trial is on;
-   it then follows `skills/references/graph-query.md` and ends with a `graph:` line. See
+   it then follows `builder/skills/references/graph-query.md` and ends with a `graph:` line. See
    `EXPERIMENTS.md`.
 
    **Blockers are triaged, not uniform** — three outcomes, and only the third stops the run:
@@ -483,7 +483,7 @@ reports the model the run actually used, where the harness keeps that record.
 6. **Review** — dispatch `module-reviewer` with the diff ref, `plan.md`, and the structured
    upstream findings. It verifies each finding's evidence, runs the readiness checklist, performs
    the requirements-alignment audit, audits the board, **writes `<runs>/<key>/review-pass<n>.md`
-   itself** in the shape of `skills/references/review-template.md` (Verdict · Readiness ·
+   itself** in the shape of `builder/skills/references/review-template.md` (Verdict · Readiness ·
    Requirement traceability · Invariant candidates · Findings (ranked) · Loop-back list · Merge
    conditions — the only file the reviewer may write), and returns **MERGE-READY** or
    **CHANGES-REQUIRED**. Before acting on the verdict:

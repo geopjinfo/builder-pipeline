@@ -1,8 +1,8 @@
 # tasks/ — per-module pipeline build boards
 
 > **Install this file as `tasks/README.md`** in the target repo (the unpack step does this).
-> The unpack step also installs `scripts/board-progress.mjs` + `scripts/board-check-all.mjs`,
-> and `tasks/_session-board.template.md` for cross-run delivery boards.
+> The board scripts (`board-progress`, `board-check-all`, run as shown under the progress block below) come
+> with the kit, and the unpack step installs `tasks/_session-board.template.md` for cross-run delivery boards.
 
 One git-tracked board per `build-module-pipeline` run: `tasks/<moduleKey>.md` (`paths.boards`). The
 board is the **durable truth** for what a module build planned, finished, dropped, and deferred, and
@@ -27,7 +27,7 @@ _Started: <date> · Track: <track> · Brief: <one line> · Plan: .pipeline/<modu
 <!-- phase:status end -->
 
 <!-- progress:auto start -->
-(computed by scripts/board-progress.mjs — never hand-edited)
+(computed by the board-progress script — never hand-edited)
 <!-- progress:auto end -->
 
 ## P2 — Code

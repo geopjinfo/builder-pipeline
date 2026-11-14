@@ -760,7 +760,8 @@ function cmdUpgrade(tools) {
   if (c.updated > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
   console.log(`Next steps:
   1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
-     (PIPELINE_PROFILE.md, the board rules, the brief templates) against builder/ by hand where it matters.
+     (PIPELINE_PROFILE.md, the board rules, the brief templates) against builder/PIPELINE_PROFILE.template.md
+     and builder/templates/ by hand where it matters.
   2. node builder/cli.js verify
   3. node builder/cli.js features   — settings this release added default to off / not configured until §16 sets them.
   4. node builder/cli.js doctor     — what each tool supports, partly supports or cannot hold.`);
@@ -816,20 +817,22 @@ function cmdVerify() {
       ? 'no ledger left at a default path that §16 moved'
       : `left at a default path that §16 moved: ${twins.map(([, file, configured, key]) => `${file} (${key} says "${configured}")`).join(', ')} — a second, unreconciled ledger the checkers cannot see; move any content into the §16 copy, then delete it`,
   );
+  // Where the scripts are for this layout: the package's scripts/ or the project's copies (labels name it).
+  const sh = posixPath(path.relative(CWD, SCRIPTS_HOME)) || 'scripts';
   check(
     fs.existsSync(path.join(SCRIPTS_HOME, 'board-progress.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'board-check-all.mjs')),
-    'board scripts installed (scripts/board-{progress,check-all}.mjs)',
+    `board scripts installed (${sh}/board-{progress,check-all}.mjs)`,
   );
   check(
     fs.existsSync(path.join(SCRIPTS_HOME, 'board-render.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'board-watch.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'lib', 'board-parse.cjs')),
-    'run-board tooling installed (scripts/board-{render,watch}.mjs + scripts/lib/*.cjs)',
+    `run-board tooling installed (${sh}/board-{render,watch}.mjs + ${sh}/lib/*.cjs)`,
   );
   const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')];
   const missing = checkers.filter((s) => !fs.existsSync(path.join(SCRIPTS_HOME, s)));
-  check(missing.length === 0, `checkers installed (scripts/{${checkers.join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
+  check(missing.length === 0, `checkers installed (${sh}/{${checkers.map(posixPath).join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
 

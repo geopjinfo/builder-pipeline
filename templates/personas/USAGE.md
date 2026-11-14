@@ -18,7 +18,7 @@ human at the confirm gate, never by an agent.
 | Route | Use when | How | Promote after |
 |---|---|---|---|
 | **Inline** | one-off — "read `<file>` and answer as this actor" | paste the agent seed into a fresh sub-agent prompt | second use |
-| **Rendered agent** | the persona takes a task kind repeatedly | `node scripts/personas-check.mjs --render <dir>`, then install the files with the tool's adapter | — |
+| **Rendered agent** | the persona takes a task kind repeatedly | `npx builder personas-check --render <dir>`, then install the files with the tool's adapter | — |
 | **Skill** | the persona *is* a procedure — a review, a checklist, a sign-off | a skill whose body is the seed plus the procedure | — |
 
 Start inline. Most profiles never need promoting, and an agent file that exists but is never
