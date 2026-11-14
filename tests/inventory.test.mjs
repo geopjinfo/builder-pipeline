@@ -180,6 +180,32 @@ describe('mode()', () => {
     assert.deepEqual(m.evidence.countedManifests, []);
   });
 
+  test('greenfield: the profiles persona-detect wrote (roster-listed, plus its library files) are not mode evidence (N1)', () => {
+    const root = tempDir('green-');
+    put(root, 'package.json', JSON.stringify({ name: 'x', devDependencies: { '@geopjinfo/builder-pipeline': '1.0.0' } }));
+    const roster = { personas: [{ id: 'member', set: 'product' }, { id: 'auditor', set: 'governance' }, { id: 'pm', set: 'delivery' }] };
+    put(root, 'personas/INDEX.md', `# Personas\n\n\`\`\`json\n${JSON.stringify(roster, null, 2)}\n\`\`\`\n`);
+    for (const p of roster.personas) put(root, `personas/${p.set}/${p.id}.md`, `# ${p.id}\n\nA proposed persona.\n`);
+    put(root, 'personas/USAGE.md', '# Usage\n');
+    put(root, 'personas/WHY.md', '# Why\n');
+    const m = inv.mode(root);
+    assert.equal(m.mode, 'greenfield', JSON.stringify(m.evidence));
+    assert.equal(m.evidence.existingItems, 0);
+    assert.equal(m.evidence.personaProfiles, 3);
+    // They are still listed for review: only the mode evidence leaves them out.
+    assert.equal(inv.inventory(root).filter((i) => i.kind === 'persona').length, 3);
+  });
+
+  test('red: a project persona the roster does not list still counts toward brownfield', () => {
+    const root = tempDir('brown-');
+    put(root, 'personas/INDEX.md', '# Personas\n\n```json\n{ "personas": [{ "id": "member", "set": "product" }] }\n```\n');
+    put(root, 'personas/product/member.md', '# member\n\nProposed.\n');
+    put(root, 'personas/architect.md', '# Architect\n\nKeeps the module boundaries honest.\n');
+    const m = inv.mode(root);
+    assert.equal(m.mode, 'brownfield');
+    assert.equal(m.evidence.existingItems, 1);
+  });
+
   test('brownfield: own skills and an AGENTS.md, with the evidence named', () => {
     const m = inv.mode(brownfield());
     assert.equal(m.mode, 'brownfield');

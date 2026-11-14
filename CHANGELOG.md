@@ -5,6 +5,13 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A fresh repo stays greenfield after persona-detect (N1).** `inventory`'s mode evidence no longer counts the
+  profiles the roster (`personas/INDEX.md`) names: they are the kit's own proposal, still listed for review, and
+  reported as `evidence.personaProfiles`. A persona the roster does not list still counts. Tests:
+  `tests/inventory.test.mjs`.
+
 ## [1.0.0-rc.1] — 2026-11-14
 
 ### Added
