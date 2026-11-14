@@ -5,6 +5,12 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-11-15
+
+### Fixed
+
+- **The credit guard dir accepts the CLI's own plugin counter.** claude 2.1.318 and later write `plugins/store/<name>_builtin-<hex>.json` (a usage counter for its built-in agent-rules plugin) on every run, so `guardDirFaults` refused every credit job after the first. A `plugins/` holding only `store/` with only such files is not an installed plugin; anything else still is. Tests: one green and three red cases in `tests/orch-credit.test.mjs`.
+
 ## [1.0.3] — 2026-11-15
 
 Fixes from four grounded audits (docs vs code, tests, security, install lifecycle) of 1.0.2.
