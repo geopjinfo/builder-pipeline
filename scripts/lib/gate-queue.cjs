@@ -1,4 +1,5 @@
 'use strict';
+const { runHint } = require('./run-hint.cjs');
 /**
  * The lite-split gate queue — `<boards>/_gate-queue.md` (feature `liteSplit`, skills
  * `build-module-lite` + `build-module-lite-gate-batch`).
@@ -231,8 +232,8 @@ function serialize(state, { trigger = DEFAULT_TRIGGER } = {}) {
   return [
     '# Gate queue — modules built lite, waiting for their gate batch',
     '',
-    '_Written by `node scripts/gate-queue.mjs` only — never by hand. The JSON block at the bottom is the record;',
-    'the tables are generated from it. `node scripts/gate-queue.mjs status` recomputes what is stale._',
+    `_Written by \`${runHint('gate-queue')}\` only — never by hand. The JSON block at the bottom is the record;`,
+    `the tables are generated from it. \`${runHint('gate-queue')} status\` recomputes what is stale._`,
     '',
     `Open: **${open.length}** of cap ${state.cap} · trigger the gate batch at ${trigger}.`,
     '',

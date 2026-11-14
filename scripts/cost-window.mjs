@@ -22,6 +22,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 
 const TOKEN_KEYS = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'];
 
@@ -82,7 +83,7 @@ function main() {
   const since = arg('--since');
   const until = arg('--until');
   if (!since || !until) {
-    console.error('usage: node scripts/cost-window.mjs --since <iso> --until <iso> [--rates <pricing.cjs>] [--json]');
+    console.error(`usage: ${runHint('cost-window')} --since <iso> --until <iso> [--rates <pricing.cjs>] [--json]`);
     process.exit(2);
   }
   const profile = require('./lib/profile.cjs');

@@ -19,6 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 import { readContext, settingsOrExit } from './handoff-check.mjs';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const lib = require('./lib/handoff-check.cjs');
 const runLog = require('./lib/run-log.cjs');
 
@@ -29,7 +30,7 @@ const flag = (n, d = null) => {
 };
 const key = argv[0];
 if (!key || key.startsWith('--')) {
-  console.error('usage: node scripts/handoff-pack.mjs <key> [--base <ref>] [--out <path>] [--date YYYY-MM-DD]');
+  console.error(`usage: ${runHint('handoff-pack')} <key> [--base <ref>] [--out <path>] [--date YYYY-MM-DD]`);
   process.exit(2);
 }
 const { settings, feature } = settingsOrExit('handoff-pack');

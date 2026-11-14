@@ -50,6 +50,7 @@
  * settings, stream, verdict). This code never reads, prints or logs an API key: the worker inherits it.
  */
 const fs = require('fs');
+const { runHint } = require('./run-hint.cjs');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
@@ -228,7 +229,7 @@ function queueRootOf(worktree, cwd = process.cwd()) {
 function launcherCommand({ cwd = process.cwd(), queue } = {}) {
   const here = checkoutOf(cwd);
   const q = queue ? checkoutOf(path.resolve(String(queue))) : here;
-  return `node scripts/orch.mjs credit-run --all-queued${samePath(q, here) ? '' : ` --queue ${q}`}  (from ${here}, in a shell that supplies the API key)`;
+  return `${runHint('orch')} credit-run --all-queued${samePath(q, here) ? '' : ` --queue ${q}`}  (from ${here}, in a shell that supplies the API key)`;
 }
 
 /**
@@ -292,7 +293,7 @@ function prepare(spec, { root = creditRoot(), brief, allowMissing = false, ctx =
   fs.writeFileSync(files.task, JSON.stringify(t, null, 2) + '\n');
   fs.writeFileSync(files.prompt, prompt(t, brief));
   fs.writeFileSync(files.settings, JSON.stringify(worker.settings({ allow: worker.allowEntries({ writeGlobs: t.writeGlobs, commands: t.commands }), deny: worker.denyEntries({ forbidden: t.forbidden }) }), null, 2) + '\n');
-  return { dir, files, command: `node scripts/orch.mjs credit-run ${t.run} ${t.task}` };
+  return { dir, files, command: `${runHint('orch')} credit-run ${t.run} ${t.task}` };
 }
 
 // ------------------------------------------------------------------------------------------- scope

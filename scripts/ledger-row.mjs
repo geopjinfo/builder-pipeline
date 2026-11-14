@@ -15,18 +15,19 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const { findRows } = require('./lib/table-row.cjs');
 const profile = require('./lib/profile.cjs');
 
 const [mode, ...rest] = process.argv.slice(2);
 if (mode !== 'registry' && mode !== 'board') {
-  console.error('usage: node scripts/ledger-row.mjs registry <ID>… | board <board.md | key> <ROW>…');
+  console.error(`usage: ${runHint('ledger-row')} registry <ID>… | board <board.md | key> <ROW>…`);
   process.exit(2);
 }
 
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error('ledger-row: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`ledger-row: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

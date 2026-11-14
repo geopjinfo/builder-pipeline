@@ -40,7 +40,7 @@ const sibling = (name) => fileURLToPath(new URL(`./${name}`, import.meta.url));
 const ROOT = projectRoot();
 process.chdir(ROOT); // board paths below are printed and passed relative to the project
 const CHILD = { encoding: 'utf8', cwd: ROOT, env: { ...process.env, BUILDER_PROJECT_ROOT: ROOT } };
-const FIX_HINT = runHint('board-check-all', fileURLToPath(import.meta.url), '--fix');
+const FIX_HINT = runHint('board-check-all', '--fix');
 
 const MARKER = '<!-- progress:auto start -->';
 /** The boards directory is §16 `paths.boards`; `tasks/` only when there is no profile to say otherwise. */
@@ -60,7 +60,7 @@ if (!existsSync(DIR)) {
 const onlyAt = process.argv.indexOf('--only');
 const only = onlyAt === -1 ? null : process.argv[onlyAt + 1];
 if (onlyAt !== -1 && (!only || only.startsWith('--'))) {
-  console.error('usage: node scripts/board-check-all.mjs [--fix] [--only <key>]');
+  console.error(`usage: ${runHint('board-check-all')} [--fix] [--only <key>]`);
   process.exit(2);
 }
 const isBoard = (f) =>

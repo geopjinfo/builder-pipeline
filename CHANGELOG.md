@@ -11,6 +11,12 @@ versions independently of any project it is pasted into.
   profiles the roster (`personas/INDEX.md`) names: they are the kit's own proposal, still listed for review, and
   reported as `evidence.personaProfiles`. A persona the roster does not list still counts. Tests:
   `tests/inventory.test.mjs`.
+- **Every run command a kit script or hook prints names its layout.** The ~40 usage, error and generated-header lines
+  that said `node scripts/<x>.mjs` now come from `scripts/lib/run-hint.cjs` (`runHint(name)`, `cliHint(cmd)`): `npx
+  builder run <x>` installed as a package or vendored into `.claude/hooks/kit/`, `node scripts/<x>.mjs` in the folder
+  layout (unchanged there). The registry guard loads the helper like its other code (trusted, never node_modules) and
+  says `ledger-row registry <ID>` when it cannot. Tests: `tests/invocation.test.mjs` (no hard-coded form outside the
+  helper under scripts/ or hooks/; the helper per layout; usage lines run from a package copy).
 
 ## [1.0.0-rc.1] — 2026-11-14
 

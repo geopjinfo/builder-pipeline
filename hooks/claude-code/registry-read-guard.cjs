@@ -27,6 +27,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+/** When the kit's run-hint.cjs cannot be loaded (untrusted, missing): name the script, not a layout. */
+const FALLBACK_LEDGER_ROW = 'ledger-row';
+
 const norm = (p) => path.posix.normalize(String(p ?? '').replace(/\\/g, '/'));
 
 /**
@@ -34,7 +37,7 @@ const norm = (p) => path.posix.normalize(String(p ?? '').replace(/\\/g, '/'));
  * @param {object} settings  merged pipeline settings (`profile.load().settings`)
  * @returns {{ block: false } | { block: true, reason: string }}
  */
-function decide(input, settings, { ledgerRow = 'node scripts/ledger-row.mjs' } = {}) {
+function decide(input, settings, { ledgerRow = FALLBACK_LEDGER_ROW } = {}) {
   if (!input || input.tool_name !== 'Read' || !input.agent_type) return { block: false };
   const guard = { state: 'off', seats: [], ...(settings?.features?.registryGuard ?? {}) };
   if (!['on', 'unmeasured', 'experimental-on'].includes(guard.state)) return { block: false };
@@ -73,11 +76,18 @@ function loadProfile(root) {
   }
 }
 
-/** How this project runs ledger-row: its scripts/ copy (folder layout), else the installed package (npx builder run). */
+/**
+ * How this project runs ledger-row, from the kit's run-hint.cjs (the one place a run command is spelled): the project's
+ * scripts/ copy (folder layout), else the copy vendored into kit/ beside this file (package layout) — loaded like any
+ * hook code, only when it matches HEAD, never from node_modules.
+ */
 function ledgerRowCommand(root) {
-  if (fs.existsSync(path.join(root, 'scripts', 'ledger-row.mjs'))) return 'node scripts/ledger-row.mjs';
-  // The package layout vendors the hooks' scripts into kit/ beside this file; nothing under node_modules is loaded.
-  return fs.existsSync(path.join(__dirname, 'kit')) ? 'npx builder run ledger-row' : 'node scripts/ledger-row.mjs';
+  try {
+    const r = trustLib().load(root, __dirname, 'run-hint.cjs');
+    return r.ok ? r.module.runHint('ledger-row') : FALLBACK_LEDGER_ROW;
+  } catch {
+    return FALLBACK_LEDGER_ROW;
+  }
 }
 
 if (require.main === module) {

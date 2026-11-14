@@ -25,6 +25,7 @@ import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const { lint } = require('./lib/instruction-lint.cjs');
 const profile = require('./lib/profile.cjs');
 
@@ -36,7 +37,7 @@ const only = onlyIdx >= 0 ? args.slice(onlyIdx + 1).filter((a) => !a.startsWith(
 const root = process.cwd();
 const loaded = profile.load(root);
 if (loaded.errors.length > 0) {
-  console.error('instruction-lint: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`instruction-lint: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

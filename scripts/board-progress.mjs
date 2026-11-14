@@ -41,9 +41,10 @@ const unrecognised = [];
  */
 const skipped = [];
 
+const { runHint: usageHint } = (await import('node:module')).createRequire(import.meta.url)('./lib/run-hint.cjs');
 const USAGE = [
-  'usage: node scripts/board-progress.mjs <board.md>          rewrite the progress block',
-  '       node scripts/board-progress.mjs <board.md> --check  exit 1 if the block is stale',
+  `usage: ${usageHint('board-progress')} <board.md>          rewrite the progress block`,
+  `       ${usageHint('board-progress')} <board.md> --check  exit 1 if the block is stale`,
 ].join('\n');
 
 const args = process.argv.slice(2);
@@ -62,7 +63,6 @@ const { createRequire } = await import('node:module');
 const req = createRequire(import.meta.url);
 const { projectRoot, runHint } = req('./lib/run-hint.cjs');
 const { existsSync: exists } = await import('node:fs');
-const { fileURLToPath } = await import('node:url');
 let file = given;
 if (!given.endsWith('.md') && !exists(given)) {
   const root = projectRoot();
@@ -74,7 +74,7 @@ if (!given.endsWith('.md') && !exists(given)) {
   }
   if (process.cwd() !== root) process.chdir(root);
 }
-const HINT = runHint('board-progress', fileURLToPath(import.meta.url), file);
+const HINT = runHint('board-progress', file);
 
 const source = readFileSync(file, 'utf8');
 const eol = source.includes('\r\n') ? '\r\n' : '\n';

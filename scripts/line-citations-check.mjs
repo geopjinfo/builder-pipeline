@@ -28,13 +28,14 @@ import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const lib = require('./lib/line-citations.cjs');
 const profile = require('./lib/profile.cjs');
 
 const NAME = 'line-citations-check';
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error(`${NAME}: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs`);
+  console.error(`${NAME}: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

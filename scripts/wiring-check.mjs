@@ -26,6 +26,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const wiring = require('./lib/wiring.cjs');
 const profile = require('./lib/profile.cjs');
 
@@ -42,13 +43,13 @@ async function exitFlushed(code) {
 
 const usage = (why) => {
   console.error(`wiring-check: ${why}`);
-  console.error('usage: node scripts/wiring-check.mjs [--list] [--allow <file>]');
+  console.error(`usage: ${runHint('wiring-check')} [--list] [--allow <file>]`);
   process.exit(2);
 };
 
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error('wiring-check: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`wiring-check: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   await exitFlushed(2);
 }

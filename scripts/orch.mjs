@@ -80,6 +80,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const profile = require('./lib/profile.cjs');
 const store = require('./lib/orch-store.cjs');
 const planLib = require('./lib/orch-plan.cjs');
@@ -117,7 +118,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = 'usage: node scripts/orch.mjs <digest|split|init|approve|preflight|claim|release|claims|gate-launch|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)';
+const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -125,7 +126,7 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
 
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error('orch: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`orch: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }
