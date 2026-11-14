@@ -157,11 +157,13 @@ function trusted(entry, opts = {}) {
 
 /**
  * THE KIT AS AN INSTALLED PACKAGE. Installed with npm, the kit's scripts live under
- * `node_modules/@geopjinfo/builder-pipeline/` — not in the project's repository, so "matches HEAD" cannot vouch for
- * them. The project's COMMITTED `builder.lock.json` does instead: unpack/upgrade record a hash of every package
- * script under `package.files`, and a package file runs only when the lock matches HEAD (a change to it is a
- * reviewed commit) and the file and every local file it requires hash to what the lock records. An agent that
- * edits a file in node_modules changes its hash; one that edits the lock to match leaves it differing from HEAD.
+ * `node_modules/@geopjinfo/builder-pipeline/` — not in the project's repository and writable by any agent, so neither
+ * "matches HEAD" nor a hash read from node_modules can vouch for them. The anchor is the `integrity` npm wrote into
+ * the project's package-lock.json (the sha512 of the published tarball): unpack/upgrade take each script's hash from
+ * that tarball, never from node_modules, and record `verified: true` only when node_modules matched it
+ * (scripts/lib/package-integrity.cjs). A package file then runs only when package-lock.json and builder.lock.json
+ * both match HEAD (changes to them are reviewed commits), the lock's `package.integrity` is the integrity
+ * package-lock.json records, and the file and every local file it requires hash to what the lock records.
  */
 const PACKAGE = '@geopjinfo/builder-pipeline';
 const LOCK = 'builder.lock.json';
@@ -183,14 +185,22 @@ function trustedByLock(entry, { root, pkg, git = defaultGit } = {}) {
   if (!fs.existsSync(entry)) return { ok: false, reason: `${path.basename(entry)} not found` };
   const lockAbs = path.join(root, LOCK);
   if (!fs.existsSync(lockAbs)) return { ok: false, reason: `${path.basename(entry)}: no ${LOCK} records the package (run the kit's unpack or upgrade, then commit the lock)` };
-  const v = verify([lockAbs], { base: root, git });
-  if (!v.ok) return { ok: false, reason: `${path.basename(entry)}: ${LOCK} cannot vouch for the package — ${v.reason}` };
-  let recorded;
+  const npmLock = path.join(root, 'package-lock.json');
+  if (!fs.existsSync(npmLock)) return { ok: false, reason: `${path.basename(entry)}: no package-lock.json anchors the package` };
+  const v = verify([lockAbs, npmLock], { base: root, git });
+  if (!v.ok) return { ok: false, reason: `${path.basename(entry)}: ${LOCK} and package-lock.json cannot vouch for the package — ${v.reason}` };
+  let record;
+  let integrity;
   try {
-    recorded = JSON.parse(fs.readFileSync(lockAbs, 'utf8')).package?.files || {};
+    record = JSON.parse(fs.readFileSync(lockAbs, 'utf8')).package || {};
+    const pl = JSON.parse(fs.readFileSync(npmLock, 'utf8'));
+    integrity = (pl.packages?.[`node_modules/${PACKAGE}`] || pl.dependencies?.[PACKAGE] || {}).integrity;
   } catch {
-    return { ok: false, reason: `${path.basename(entry)}: ${LOCK} is not valid JSON` };
+    return { ok: false, reason: `${path.basename(entry)}: ${LOCK} or package-lock.json is not valid JSON` };
   }
+  if (record.verified !== true) return { ok: false, reason: `${path.basename(entry)}: the package is not verified (${record.reason || `no package record in ${LOCK}`})` };
+  if (!integrity || record.integrity !== integrity) return { ok: false, reason: `${path.basename(entry)}: ${LOCK} was not made from the package package-lock.json records (run the kit's upgrade, then commit)` };
+  const recorded = record.files || {};
   let base;
   try {
     base = fs.realpathSync(pkg);

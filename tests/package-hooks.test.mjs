@@ -1,18 +1,14 @@
 /**
- * The kit installed as a package (node_modules/@geopjinfo/builder-pipeline) — what the sample-project run found broken:
- *   D2  board-check-all spawned `scripts/board-progress.mjs` relative to the working directory, and its --fix printed
- *       PASS after the child crashed;
- *   D3  the board-render and instruction-lint hooks looked for `<project>/scripts/lib`, which a package install never
- *       creates, so they were silent no-ops;
- *   D7  the docs the install sends the agent to named the folder-layout commands;
- *   D8  installed files named `scripts/…` and `builder/` paths that do not exist in this layout;
- *   D11 board-progress took a path only, not the board key the docs use.
- * The folder layout (kit copied in as `builder/`) is the control: it keeps its `node scripts/…` forms.
+ * D3 — the hooks find the kit when it is installed as a package (node_modules/@geopjinfo/builder-pipeline), and run
+ * its code only when the committed builder.lock.json + package-lock.json vouch for it: the script hashes come from the
+ * tarball package-lock.json's integrity names (npm's cache), never from node_modules.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { dirname, join, relative } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -48,22 +44,142 @@ function files(root, from = root) {
   return acc;
 }
 
+/** A ustar archive of { name: Buffer } (names < 100 bytes, or split into the 155-byte prefix). */
+function tar(entries) {
+  const blocks = [];
+  for (const [name, body] of Object.entries(entries)) {
+    const h = Buffer.alloc(512);
+    let base = name;
+    let prefix = '';
+    if (Buffer.byteLength(name) > 99) {
+      const cut = name.lastIndexOf('/', 154);
+      prefix = name.slice(0, cut);
+      base = name.slice(cut + 1);
+    }
+    h.write(base, 0);
+    h.write('0000644\0', 100);
+    h.write('0000000\0', 108);
+    h.write('0000000\0', 116);
+    h.write(`${body.length.toString(8).padStart(11, '0')}\0`, 124);
+    h.write('00000000000\0', 136);
+    h.write('        ', 148);
+    h.write('0', 156);
+    h.write('ustar\0', 257);
+    h.write('00', 263);
+    h.write(prefix, 345);
+    let sum = 0;
+    for (const b of h) sum += b;
+    h.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148);
+    blocks.push(h, body, Buffer.alloc((512 - (body.length % 512)) % 512));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return Buffer.concat(blocks);
+}
+
+/**
+ * "Publish" the installed kit: its scripts/ and package.json as a tarball in a private npm cache (cacache layout),
+ * and a package-lock.json that records its integrity — what `npm i` leaves behind.
+ */
+function publish(proj, kit, { tamperTarball = false } = {}) {
+  const entries = { 'package/package.json': readFileSync(join(kit, 'package.json')) };
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else entries[`package/${relative(kit, p).split('\\').join('/')}`] = readFileSync(p);
+    }
+  };
+  walk(join(kit, 'scripts'));
+  if (tamperTarball) entries['package/scripts/lib/board-freshness.cjs'] = Buffer.concat([entries['package/scripts/lib/board-freshness.cjs'], Buffer.from('\n// forged\n')]);
+  const tgz = gzipSync(tar(entries));
+  const digest = createHash('sha512').update(tgz).digest();
+  const cache = join(proj, '.npm-cache');
+  const hex = digest.toString('hex');
+  mkdirSync(join(cache, '_cacache', 'content-v2', 'sha512', hex.slice(0, 2), hex.slice(2, 4)), { recursive: true });
+  writeFileSync(join(cache, '_cacache', 'content-v2', 'sha512', hex.slice(0, 2), hex.slice(2, 4), hex.slice(4)), tgz);
+  const integrity = `sha512-${digest.toString('base64')}`;
+  writeFileSync(
+    join(proj, 'package-lock.json'),
+    JSON.stringify({ name: 'p', lockfileVersion: 3, packages: { '': { name: 'p' }, 'node_modules/@geopjinfo/builder-pipeline': { version: '0.0.0', integrity } } }, null, 2),
+  );
+  return { cache, integrity };
+}
+
 describe('D3 — the hooks find the kit in the package', () => {
-  /** A committed project with the kit installed as a package: the hooks trust what the committed lock records. */
-  function installed() {
+  /**
+   * A committed project with the kit installed as a package. The lock's package record is anchored to the
+   * package-lock.json integrity (the published tarball), never to what node_modules holds.
+   */
+  function installed({ before } = {}) {
     const p = project();
     git(p.proj, 'init', '-q');
-    writeFileSync(join(p.proj, '.gitignore'), 'node_modules/\n');
-    const u = run(p.cli, p.proj, ['unpack', '--tool', 'claude-code']);
+    writeFileSync(join(p.proj, '.gitignore'), 'node_modules/\n.npm-cache/\n');
+    const { cache } = publish(p.proj, p.kit);
+    if (before) before(p);
+    const u = run(p.cli, p.proj, ['unpack', '--tool', 'claude-code'], { npm_config_cache: cache });
     assert.equal(u.status, 0, out(u));
-    const lock = JSON.parse(readFileSync(join(p.proj, 'builder.lock.json'), 'utf8'));
-    assert.ok(lock.package && lock.package.files['scripts/lib/profile.cjs'], 'the lock records the package files the hooks run');
     git(p.proj, 'add', '-A');
     git(p.proj, 'commit', '-q', '-m', 'setup');
-    return p;
+    const lock = JSON.parse(readFileSync(join(p.proj, 'builder.lock.json'), 'utf8'));
+    return { ...p, lock, unpack: u };
   }
   const hook = (proj, file, input) =>
     spawnSync(process.execPath, [join(proj, '.claude', 'hooks', file)], { cwd: proj, input: JSON.stringify(input), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: proj } });
+
+  test('red: the lock records the package from the tarball package-lock.json names', () => {
+    const { lock } = installed();
+    assert.equal(lock.package.verified, true, JSON.stringify(lock.package));
+    assert.match(lock.package.integrity, /^sha512-/);
+    assert.match(lock.package.files['scripts/lib/profile.cjs'], /^[0-9a-f]{64}$/);
+  });
+
+  test('red: node_modules tampered BEFORE unpack is never vouched for — the hooks do not run it', () => {
+    const { proj, lock, unpack } = installed({
+      before: ({ kit }) => writeFileSync(join(kit, 'scripts', 'lib', 'board-freshness.cjs'), `${readFileSync(join(kit, 'scripts', 'lib', 'board-freshness.cjs'), 'utf8')}\n// planted\n`),
+    });
+    assert.equal(lock.package.verified, false);
+    assert.equal(lock.package.files, undefined, 'no hash is taken from node_modules');
+    assert.match(lock.package.reason, /node_modules differs from the published tarball: scripts\/lib\/board-freshness\.cjs/);
+    assert.match(unpack.stdout, /could not be verified/);
+    const r = hook(proj, 'board-render.cjs', { tool_name: 'Write', tool_input: { file_path: join(proj, 'x.md') } });
+    assert.match(r.stderr, /not run — .*not verified/);
+  });
+
+  test('red: no integrity to anchor to (no package-lock.json) — not verified, not run', () => {
+    const { proj, lock } = installed({ before: ({ proj: pr }) => rmSync(join(pr, 'package-lock.json')) });
+    assert.equal(lock.package.verified, false);
+    const r = hook(proj, 'board-render.cjs', { tool_name: 'Write', tool_input: { file_path: join(proj, 'x.md') } });
+    assert.match(r.stderr, /not run/);
+  });
+
+  test('red: a cache entry swapped for other bytes (a tarball matching tampered files) is refused', () => {
+    const { lock } = installed({
+      before: ({ proj: pr, kit }) => {
+        const { integrity } = JSON.parse(readFileSync(join(pr, 'package-lock.json'), 'utf8')).packages['node_modules/@geopjinfo/builder-pipeline'];
+        const hex = Buffer.from(integrity.slice(7), 'base64').toString('hex');
+        const real = join(pr, '.npm-cache', '_cacache', 'content-v2', 'sha512', hex.slice(0, 2), hex.slice(2, 4), hex.slice(4));
+        const forged = publish(pr, kit, { tamperTarball: true });
+        const fhex = Buffer.from(forged.integrity.slice(7), 'base64').toString('hex');
+        // the forged tarball's bytes under the REAL integrity's name, and the real package-lock entry back
+        writeFileSync(real, readFileSync(join(pr, '.npm-cache', '_cacache', 'content-v2', 'sha512', fhex.slice(0, 2), fhex.slice(2, 4), fhex.slice(4))));
+        const fresh = join(kit, 'scripts', 'lib', 'board-freshness.cjs');
+        writeFileSync(fresh, Buffer.concat([readFileSync(fresh), Buffer.from('\n// forged\n')]));
+        const pl = JSON.parse(readFileSync(join(pr, 'package-lock.json'), 'utf8'));
+        pl.packages['node_modules/@geopjinfo/builder-pipeline'].integrity = integrity;
+        writeFileSync(join(pr, 'package-lock.json'), JSON.stringify(pl));
+      },
+    });
+    assert.equal(lock.package.verified, false);
+    assert.match(lock.package.reason, /not in the npm cache/);
+  });
+
+  test('red: a package-lock.json changed after the commit no longer vouches', () => {
+    const { proj } = installed();
+    const pl = join(proj, 'package-lock.json');
+    writeFileSync(pl, readFileSync(pl, 'utf8').replace('sha512-', 'sha512-A'));
+    const r = hook(proj, 'board-render.cjs', { tool_name: 'Write', tool_input: { file_path: join(proj, 'x.md') } });
+    assert.match(r.stderr, /not run/);
+  });
 
   test('red: board-render loads its libraries from the package', () => {
     const { proj } = installed();

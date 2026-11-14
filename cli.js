@@ -168,23 +168,23 @@ function writeLock() {
   const files = { ...lockPrior(), ...LOCK.next };
   const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
   const lock = { kit: VERSION, files: sorted };
-  if (PACKAGED) lock.package = packageRecord();
+  if (PACKAGED) {
+    lock.package = packageRecord();
+    if (!lock.package.verified) console.log(`\nnote: the installed package could not be verified against package-lock.json (${lock.package.reason}) — the hooks will not run package code until it is. Fix that, then run upgrade and commit ${LOCK_FILE}.`);
+  }
   fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify(lock, null, 2) + '\n');
 }
 
 /**
- * Installed as a package, the hooks run the kit's scripts from node_modules — outside the project's repository, so
- * "matches HEAD" cannot vouch for them. The lock records a hash of every package script; committed, it is what the
- * hooks check a package file against (hooks/claude-code/hook-trust.cjs trustedByLock). Run upgrade after updating
- * the package, then commit the lock — until then the hooks say "not run" instead of running unreviewed code.
+ * Installed as a package, the hooks run the kit's scripts from node_modules — outside the project's repository and
+ * writable by any agent, so neither "matches HEAD" nor a hash read from node_modules can vouch for them. The record
+ * is anchored to the `integrity` in the project's package-lock.json: each script's hash comes from the published
+ * tarball (npm's cache, checked against that integrity), and node_modules must match it (scripts/lib/
+ * package-integrity.cjs). Unverifiable → `verified: false` with the reason and no hashes, and the hooks run no package
+ * code (hooks/claude-code/hook-trust.cjs trustedByLock). Commit the lock with package-lock.json.
  */
 function packageRecord() {
-  const files = {};
-  for (const rel of filesUnder('scripts')) {
-    if (!/\.(c?js|mjs)$/.test(rel)) continue;
-    files[posixPath(path.join('scripts', rel))] = shaOf(fs.readFileSync(path.join(KIT, 'scripts', rel)));
-  }
-  return { name: require('./package.json').name, version: VERSION, files };
+  return require('./scripts/lib/package-integrity.cjs').packageRecord(CWD, KIT);
 }
 
 function upgradeLog(status, dst, note = '') {
