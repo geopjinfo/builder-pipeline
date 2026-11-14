@@ -23,6 +23,14 @@ versions independently of any project it is pasted into.
   (`parseRoster`, `validate`, `toNeutralAgent`, `mergeProposal`) and `node scripts/personas-check.mjs [dir]
   [--render <out>] [--json]` hold the roster and render confirmed personas as neutral read-only agent files.
   Tests: `tests/personas-detect.test.mjs` (30 cases).
+- **Setup starts from the AI tool, and a project's own items win.** `SETUP_PROMPT.md` is now one paste-ready line
+  (`bootstrap`, then the new `builder-init` skill). `scripts/lib/inventory.cjs` (+ `scripts/inventory.mjs`) lists
+  every existing skill, agent, persona, playbook and hook across the harness folders, calls the repo greenfield or
+  brownfield with its evidence, and scores each item against the kit (same name, same content, token-Jaccard
+  wording); `scripts/lib/choices.cjs` (+ `scripts/choices.mjs`) records the human's per-item keep / kit / both in
+  `builder.choices.json`, and `applyChoices()` skips and reports any clash without a recorded choice. The skill
+  reviews every item with a verdict and reasons, waits for the confirm, records, installs, verifies, then runs the
+  persona detector. Tests: `tests/inventory.test.mjs`, `tests/choices.test.mjs`.
 - **The kit is an installable package.** `package.json` is no longer private: name `@geopjinfo/builder-pipeline`, a
   `builder` command (`cli.js`), `files` (every folder and document the CLI reads; the kit's own `tests/` stay out),
   `engines.node >=18` (the floor `cli.js` enforces), `license` (UNLICENSED until one is chosen) and `repository`.
