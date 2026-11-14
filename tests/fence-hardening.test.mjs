@@ -145,12 +145,36 @@ describe('S4 — MCP file tools', () => {
     mcp('mcp__fs__write_file', { path: `${slash(hl)}/hook-trust.cjs`, content: '' }),
     ...(WIN ? [mcp('mcp__fs__write_file', { path: '/tmp/x', content: '' })] : []),
   ]);
-  green('a read tool on the fence, a write elsewhere, a tool with no path', [
+  green('a read of an unprotected path, a write elsewhere, a tool with no path, a harmless command', [
+    mcp('mcp__desktop-commander__read_file', { path: 'notes/a.md' }),
+    mcp('mcp__fs__list_directory', { path: 'src/feature' }),
+    mcp('mcp__fs__write_file', { path: 'notes/x.md', content: 'see core/fenced/x.ts' }),
+    mcp('mcp__slack__send_message', { channel: 'C1', text: 'core/fenced is protected' }),
+    mcp('mcp__dc__start_process', { command: 'ls notes', timeout_ms: 1000 }),
+  ]);
+  red('(1) an MCP tool that runs a command naming the fence', [
+    mcp('mcp__dc__start_process', { command: 'rm -rf core/fenced' }),
+    mcp('mcp__x__execute_command', { cmd: 'cd core && rm -rf fenced' }),
+    mcp('mcp__x__run', { script: "Remove-Item core/fenced -Recurse" }),
+    mcp('mcp__x__terminal_send', { input: 'rm -rf core/fenced' }),
+  ]);
+  red('(2) a path-shaped value under an unlisted key, the new keys, file:// URLs; a file write with no path', [
+    mcp('mcp__fs__write_file', { where: 'core/fenced/x.ts', content: 'x' }),
+    mcp('mcp__git__checkout', { repo_path: `${P}/core/fenced` }),
+    mcp('mcp__fs__save', { location: 'core/fenced/y' }),
+    mcp('mcp__fs__write_file', { uri: `file://${WIN ? '/' : ''}${P.split('/').map(encodeURIComponent).join('/').replace(/^([A-Za-z])%3A/, '$1:')}/core/fenced/x.ts` }),
+    mcp('mcp__fs__write_file', { content: 'x' }),
+  ]);
+  red('(3) the count or depth cap reached', [
+    mcp('mcp__fs__write_multiple', { paths: Array.from({ length: 65 }, (_, i) => `notes/n${i}`) }),
+    mcp('mcp__fs__write_file', { a: { b: { c: { d: { e: { path: 'notes/x' } } } } } }),
+  ]);
+  red('(4) a read tool on the fence, and a read tool with an output key', [
     mcp('mcp__desktop-commander__read_file', { path: 'core/fenced/x.ts' }),
     mcp('mcp__fs__list_directory', { path: 'core/fenced' }),
-    mcp('mcp__fs__write_file', { path: 'notes/x.md', content: 'x' }),
-    mcp('mcp__slack__send_message', { channel: 'C1', text: 'core/fenced is protected' }),
-  ]);
+    mcp('mcp__fs__read_file', { path: 'notes/a.md', output: 'core/fenced/b' }),
+    mcp('mcp__fs__get_file', { path: 'notes/a.md', destination: '/tmp/never/placed' }),
+  ].slice(0, WIN ? 4 : 3));
   test('green: a grant opens an MCP write as it opens a Write', () => {
     assert.equal(blocks(mcp('mcp__fs__write_file', { path: 'core/fenced/x.ts' }), { unlockable: { 'core/fenced/': 'core' }, grant: 'core' }), false);
   });
@@ -287,6 +311,29 @@ describe('S6 — paths.logs is validated and the bash cap writes no log outside 
     assert.equal(r.action, 'pass', r.reason);
     assert.match(r.reason, /paths\.logs/);
     assert.equal(cap.decide(input, on('notes/logs'), { root: proj, stamp: 'T', pid: 1, fencePrefixes: { reason: 'untrusted' } }).action, 'pass'); // set unreadable: fails closed
+  });
+  test('red (5): the write target <logs>/bash is judged — a fence equal to it or under it refuses', () => {
+    assert.ok(profile.logsProblem('core', [], { prefixes: ['core/bash/'] }));
+    assert.ok(profile.logsProblem('core', [], { prefixes: ['core/bash/deep/'] }));
+    assert.equal(profile.logsProblem('core', [], { prefixes: ['core/fenced/'] }), null); // green: a sibling fence
+  });
+  test('red (5): a junction planted at <logs>/bash, after the first check, is caught by the recheck after mkdir', () => {
+    mkdirSync(join(proj, 'lg2'));
+    const r = cap.decide(input, on('lg2'), { root: proj, stamp: 'T', pid: 1, fencePrefixes: ['core/fenced/'] });
+    assert.equal(r.action, 'cap');
+    assert.equal(r.recheck(), null);
+    symlinkSync(join(proj, 'core', 'fenced'), join(proj, 'lg2', 'bash'), WIN ? 'junction' : 'dir');
+    try {
+      assert.match(r.recheck(), /land/);
+    } finally {
+      rmdirSync(join(proj, 'lg2', 'bash'));
+    }
+  });
+  test('red (6): trailing dots and spaces are cut per segment; a ":" in a segment is refused', () => {
+    for (const logs of ['.claude./hooks', '.claude /hooks', '.claude. ./hooks.', 'core./fenced ', 'logs:stream', 'logs/x::$DATA']) {
+      assert.ok(profile.logsProblem(logs, ['core/fenced/**']), logs);
+    }
+    assert.equal(profile.logsProblem('logs.d', ['core/fenced/**']), null);
   });
   test('red: a logs folder that is a junction into the fence or a hook folder is refused by landing', () => {
     const into = [['jl-fence', join(proj, 'core', 'fenced')], ['jl-hooks', join(proj, '.claude', 'hooks')], ['jl-out', out]];

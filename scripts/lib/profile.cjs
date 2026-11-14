@@ -213,8 +213,16 @@ function strings(value, path, out = []) {
   return out;
 }
 
-/** A path as forward-slash segments with `.` and empty segments dropped (`a//./b\c/` → `a/b/c`). */
-const logSegs = (p) => String(p).replace(/\\/g, '/').split('/').filter((s) => s && s !== '.');
+/**
+ * A path as forward-slash segments, as Windows reads them: `.` and empty segments dropped, trailing dots and spaces
+ * cut from each segment (`.claude./hooks ` is `.claude/hooks`): `a//./b\c/` → `a/b/c`.
+ */
+const logSegs = (p) =>
+  String(p)
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((s) => (s === '..' ? s : s.replace(/[. ]+$/, '')))
+    .filter((s) => s && s !== '.');
 const LOG_FENCE_DIRS = ['.claude/hooks', '.codex/hooks'];
 
 /** Real path of `p` (which may not exist yet): realpath of the deepest existing ancestor, plus the rest. Throws. */
@@ -245,6 +253,7 @@ function logsProblem(logs, protectedGlobs, opts = {}) {
   const p = logs.trim().replace(/\\/g, '/');
   if (/^(?:\/|~|[A-Za-z]:|\$|%)/.test(p) || /[$%`]/.test(p)) return `must be a literal project-relative folder, got ${shown}`;
   if (p.split('/').includes('..')) return `must stay inside the project (no .. segment), got ${shown}`;
+  if (p.split('/').some((s) => s.includes(':'))) return `must not name a stream or a drive (a ':' in a segment), got ${shown}`;
   const fences = [];
   for (const h of LOG_FENCE_DIRS) fences.push({ segs: logSegs(h), what: `the hook folder ${h}/` });
   for (const g of Array.isArray(protectedGlobs) ? protectedGlobs : []) {
@@ -257,17 +266,20 @@ function logsProblem(logs, protectedGlobs, opts = {}) {
     fences.push({ segs, what: `the protected glob ${JSON.stringify(g)}` });
   }
   for (const pre of Array.isArray(opts.prefixes) ? opts.prefixes : []) if (typeof pre === 'string' && logSegs(pre).length) fences.push({ segs: logSegs(pre), what: `the protected path ${JSON.stringify(pre)}` });
-  const inside = (segs) => fences.find((f) => f.segs.length <= segs.length && f.segs.every((s, i) => s.toLowerCase() === segs[i].toLowerCase()));
-  const spelled = inside(logSegs(p));
+  // The cap writes into <logs>/bash: refused when that target is under a fence, or a fence equals it or sits under it.
+  const same = (a, b) => a.every((s, i) => s.toLowerCase() === b[i].toLowerCase());
+  const inside = (segs) => fences.find((f) => (f.segs.length <= segs.length ? same(f.segs, segs) : same(segs, f.segs)));
+  const spelled = inside([...logSegs(p), 'bash']);
   if (spelled) return `must not be under ${spelled.what}, got ${shown}`;
   if (opts.root) {
     let rel;
     try {
       const root = realDeepest(opts.root);
-      const real = realDeepest(join(opts.root, ...logSegs(p)));
+      const real = realDeepest(join(opts.root, ...logSegs(p), 'bash'));
       const r = relative(root, real);
       if (r.startsWith('..') || isAbsolute(r)) return `must land inside the project, got ${shown} (it resolves to ${real.replace(/\\/g, '/')})`;
       rel = logSegs(r);
+      if (!rel.length) return `must not land on the project root, got ${shown}`;
     } catch (e) {
       return `cannot be resolved (${e.code || e.message}); this fails closed, got ${shown}`;
     }
