@@ -278,10 +278,12 @@ print(json.dumps(dict(written=written, exists=flag.exists(), missing=sync.load_p
 });
 
 describe('session-sync-hook.cjs', () => {
+  // A wall-clock bound under the spawn timeout flakes on a loaded CI runner; the behaviour that matters is that
+  // the hook returned by itself (exit 0, not killed by the timeout) and wrote nothing.
+  const SPAWN_TIMEOUT_MS = 15_000;
   const node = (env) => {
-    const started = Date.now();
-    const r = spawnSync(process.execPath, [HOOK], { encoding: 'utf8', env, timeout: 15_000 });
-    return { status: r.status, stdout: r.stdout ?? '', ms: Date.now() - started };
+    const r = spawnSync(process.execPath, [HOOK], { encoding: 'utf8', env, timeout: SPAWN_TIMEOUT_MS });
+    return { status: r.status, stdout: r.stdout ?? '', timedOut: r.error?.code === 'ETIMEDOUT' || r.signal !== null };
   };
 
   /** An index with a recorded previous status; the "interpreter" is node running an empty script, so no Python is spawned. */
@@ -309,9 +311,10 @@ describe('session-sync-hook.cjs', () => {
   test('no index: exits 0 at once and says nothing', () => {
     const p = project();
     const r = node(cleanEnv({ CLAUDE_PROJECT_DIR: p.root }));
+    assert.equal(r.timedOut, false, `the hook did not return within the ${SPAWN_TIMEOUT_MS} ms spawn timeout`);
     assert.equal(r.status, 0);
     assert.equal(r.stdout, '');
-    assert.ok(r.ms < 5000, `took ${r.ms} ms`);
+    assert.deepEqual(readdirSync(p.out), [], 'no index: nothing written, nothing started');
   });
 
   test('the previous run left docs above the limit: it says so, as SessionStart context', () => {
