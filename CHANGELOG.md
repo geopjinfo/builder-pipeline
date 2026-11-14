@@ -5,6 +5,27 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Security
+
+- **`protected-paths.cjs` finds a link maker anywhere in a statement.** The statement-lead list is a list of
+  prefixes, and a prefix not on it hid the maker: `find … -exec|-execdir|-ok ln -s <protected> …`, `flock`, `busybox`,
+  `doas`, `ionice -c3` leads and a PowerShell `ForEach-Object { New-Item -ItemType Junction … }` block were allowed.
+  A token-bounded maker word now starts a statement of its own and its operands are judged as at a head; read-only
+  pipelines and data heredoc bodies are left out unless the command could run what it wrote.
+- **Any CR in a shell command is not understood** by the heredoc lexer (fails closed): bash ends a line on `\n` only
+  and compares a heredoc end line with its CR, so a lone or trailing `\r` moved the body boundary.
+- **Read-only verbs:** `-O` inside a flag cluster (`git grep -nO'cmd'`, also spelled with quotes or a backslash) and
+  git's `--open…`/`--ou…` prefixes are writing options, so such a pipeline is no longer read-only.
+
+### Fixed
+
+- **A data heredoc is judged by its target, not its body.** `cat > notes.md <<'EOF'`, `tee [-a] f <<'EOF'` (stdout
+  may go to `/dev/null`) and a lone `git commit -F - <<'EOF'` whose body quoted a redirect or a link into a
+  protected folder were refused as a write or link they never make. The write-shape, link and `cd` stages now read
+  the command without its data heredoc bodies — only when the command is made of data statements alone and runs no
+  shell or interpreter; `git commit -F -` counts as inert only as the whole command (it runs config-driven hooks).
+  Tests: `tests/fence-heredoc-links.test.mjs` (46 cases).
+
 ## [0.16.0] — 2026-11-12
 
 ### Security
