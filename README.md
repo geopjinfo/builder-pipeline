@@ -104,8 +104,8 @@ records, how to resume, and the troubleshooting table.
 3. Preview, then apply, with the same tools you installed for:
 
    ```
-   npx builder upgrade --tool <your tools> --dry-run
-   npx builder upgrade --tool <your tools>
+   npx builder upgrade --dry-run
+   npx builder upgrade            # tools, models and extras come from builder.lock.json; --prune removes what a release dropped
    ```
 
    Kit-owned files are refreshed, each backed up first to `.builder/backup-<stamp>/`; local edits are kept; your
@@ -123,7 +123,8 @@ records, how to resume, and the troubleshooting table.
 | `inventory [--json] [--threshold n]` | the project's own skills/agents/personas/hooks and their overlap with the kit |
 | `choices list\|set\|unset\|check` | the per-item keep / kit / both decisions (builder.choices.json) |
 | `unpack --tool <list\|all>` | install (copy-if-absent; undecided clashes are skipped) |
-| `upgrade --tool <list\|all>` | refresh kit-owned files (backup first; `--force` over local edits) |
+| `upgrade [--tool <list\|all>] [--prune]` | refresh kit-owned files (backup first; `--force` over local edits); tools and flags default to the install's, recorded in the lock; files a release dropped are reported `stale`, `--prune` removes them |
+| `uninstall --tool <list> \| --all [--dry-run]` | remove the kit's files for those tools and its pointer block; project-owned and locally edited files are kept and named |
 | &nbsp;&nbsp;`[--dry-run] [--no-extras] [--experimental] [--models strong=x,mid=y \| codex.<tier>=x \| antigravity.<tier>=x]` | options for `unpack` / `upgrade` |
 | `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
 | `features` | which optional checks are on, off, unmeasured or experimental |

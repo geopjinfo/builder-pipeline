@@ -86,8 +86,8 @@ driven by old personas and old skills. Use `upgrade` instead. Extract the new re
 
 ```
 node builder/cli.js --version
-node builder/cli.js upgrade --tool <your-agent> --dry-run
-node builder/cli.js upgrade --tool <your-agent>
+node builder/cli.js upgrade --dry-run
+node builder/cli.js upgrade   # tools and flags from builder.lock.json; --tool overrides, --prune removes files a release dropped
 ```
 
 Pass the same `--tool`, `--models`, `--no-extras` and `--experimental` you gave the original
