@@ -82,3 +82,14 @@ describe('a usage line printed from the package says npx builder run', () => {
     });
   }
 });
+
+describe('the reference docs give install-neutral commands', () => {
+  for (const doc of ['USAGE.md', 'DESIGN.md', 'EXPERIMENTS.md', ...readdirSync(join(PACK, 'adapters')).filter((f) => f.endsWith('.md')).map((f) => `adapters/${f}`)]) {
+    test(`${doc}: npx builder forms only, with the folder layout in one note`, () => {
+      const text = readFileSync(join(PACK, ...doc.split('/')), 'utf8');
+      const hits = text.split(/\r?\n/).map((l, i) => (HARD.test(l) ? `${doc}:${i + 1}: ${l.trim().slice(0, 100)}` : null)).filter(Boolean);
+      assert.deepEqual(hits, []);
+      if (/npx builder run /.test(text)) assert.match(text, /^> \*\*Commands\.\*\*/m, `${doc} names npx builder run without the folder-layout note`);
+    });
+  }
+});
