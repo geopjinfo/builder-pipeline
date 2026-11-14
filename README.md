@@ -167,6 +167,21 @@ you installed; *partial* = the kit relies on instructions or a by-hand step ther
 
 The native targets are `claude-code`, `codex` and `antigravity`. The other `--tool` targets — `generic`, `opencode`, `gemini`, `cursor`, `copilot`, `windsurf`, `cline`, `aider` — install as prompt files under `.builder/`, each with its pointer in its own instruction or rules file (`npx builder targets` lists them).
 
+## 🛠️ Working on the kit itself
+
+For maintainers of this repository, not for projects that install it:
+
+1. Clone it — `git clone https://github.com/geopjinfo/builder-pipeline.git`; Node 18+ and Git are all it needs
+   (no `npm install`: zero dependencies).
+2. Work on a branch, never on `main`.
+3. Keep the suite green from the repo root: `node tests/run.mjs`.
+4. Release: bump `package.json` `version`, rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] — YYYY-MM-DD`
+   (the suite fails if the two differ), merge into `main`, tag `vX.Y.Z` (annotated) and push `main` with the tag.
+   Projects pick it up by bumping their dependency to the new tag and running `npx builder upgrade` + `verify`.
+
+The full routine, with what to check at each step, is in [`RELEASING.md`](RELEASING.md) (kept in the repo, not
+shipped in the package).
+
 ## 📁 Copying the kit as a folder (secondary)
 
 Without npm, a release archive of the kit can be extracted at the project root as a `builder/` folder, and the
