@@ -17,7 +17,7 @@ anything — most "simplifications" people are tempted to make were tried and fa
 **Terms used here** (the kit itself is described in [`README.md`](README.md); the profile in
 [`PIPELINE_PROFILE.template.md`](PIPELINE_PROFILE.template.md)):
 
-- **Seat** — a persona dispatched in one phase. It is a role in the pipeline, not a Claude account; README's "Multi-account seats" uses the word for accounts.
+- **Seat** — a persona dispatched in one phase. It is a role in the pipeline, not a Claude account; GUIDE.md's "Multi-account seats" uses the word for accounts.
 - **Board** — the run's task file, `tasks/<moduleKey>.md`, one row per deliverable (§8).
 - **Oracle** — a closed catalogue the agents consult and never extend (§5).
 - **Handoff pack** — the one close-out file listing what a human must act on (§8).
