@@ -125,7 +125,37 @@ const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
  * the set unpack installs.
  */
 let MODE = 'unpack';
-const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0 } };
+const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0 } };
+
+/**
+ * builder.lock.json — what the kit last wrote, per KIT-OWNED file: { kit: version, files: { "<dst>": "<sha256>" } }.
+ * Ownership classes: kit-owned (refreshed by upgrade, locked here), project-owned (seeded once, never touched again,
+ * not locked) and merged (the pointer block inside a file the user also writes in; only its marked span is the kit's).
+ * An upgrade that finds a kit-owned file whose content no longer matches its lock entry has met a LOCAL EDIT: it keeps
+ * the file and says so instead of overwriting it; `--force` overwrites (after the usual backup). A file with no lock
+ * entry (an install from before the lock) is upgraded as before. Line endings do not count as an edit.
+ */
+const LOCK_FILE = 'builder.lock.json';
+let FORCE = false;
+const LOCK = { prior: null, next: {} };
+const shaOf = (buf) => require('crypto').createHash('sha256').update(Buffer.from(buf).toString('utf8').replace(/\r\n/g, '\n')).digest('hex');
+function lockPrior() {
+  if (LOCK.prior === null) {
+    try {
+      LOCK.prior = JSON.parse(fs.readFileSync(path.join(CWD, LOCK_FILE), 'utf8')).files || {};
+    } catch (_) {
+      LOCK.prior = {};
+    }
+  }
+  return LOCK.prior;
+}
+const lockKey = (dst) => posixPath(dst);
+function writeLock() {
+  if (DRY) return;
+  const files = { ...lockPrior(), ...LOCK.next };
+  const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
+  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify({ kit: VERSION, files: sorted }, null, 2) + '\n');
+}
 
 function upgradeLog(status, dst, note = '') {
   UPGRADE.counts[status]++;
@@ -158,21 +188,34 @@ function place(dst, produce, owner) {
   const exists = fs.existsSync(abs);
   if (MODE !== 'upgrade') {
     if (exists) return log('skip (exists):', dst);
-    if (!DRY) writeFile(abs, produce());
+    const content = produce();
+    if (!DRY) writeFile(abs, content);
+    if (owner === 'kit') LOCK.next[lockKey(dst)] = shaOf(content);
     return log(DRY ? 'would install:' : 'installed:', dst);
   }
   // Two tools can map one source to one destination (codex + opencode share .builder/): report it once.
   if (UPGRADE.seen.has(dst)) return;
   UPGRADE.seen.add(dst);
   if (!exists) {
-    if (!DRY) writeFile(abs, produce());
+    const content = produce();
+    if (!DRY) writeFile(abs, content);
+    if (owner === 'kit') LOCK.next[lockKey(dst)] = shaOf(content);
     return upgradeLog('added', dst);
   }
   if (owner === 'project') return upgradeLog('kept-project-owned', dst);
   const next = Buffer.from(produce());
-  if (sameText(fs.readFileSync(abs), next)) return upgradeLog('unchanged', dst);
+  const current = fs.readFileSync(abs);
+  if (sameText(current, next)) {
+    LOCK.next[lockKey(dst)] = shaOf(next);
+    return upgradeLog('unchanged', dst);
+  }
+  const locked = lockPrior()[lockKey(dst)];
+  if (locked && locked !== shaOf(current) && !FORCE) {
+    return upgradeLog('kept (local edit)', dst, `changed since the kit wrote it (${LOCK_FILE}) — move the change into the profile or an overlay, or re-run with --force`);
+  }
   backup(dst);
   if (!DRY) writeFile(abs, next);
+  LOCK.next[lockKey(dst)] = shaOf(next);
   upgradeLog('updated', dst);
 }
 
@@ -584,6 +627,7 @@ function cmdUnpack(tools) {
   }
   for (const tool of tools) installTool(tool);
   installCommon();
+  writeLock();
   console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'}${EXPERIMENTAL ? ' Experimental files included.' : ''} Next steps:
   1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md (incl. §16 settings) from
      THIS project's docs (not the kit's source project).
@@ -607,9 +651,10 @@ function cmdUpgrade(tools) {
   console.log(`builder kit ${VERSION} — upgrade${DRY ? ' (dry run: nothing is written)' : ''}`);
   for (const tool of tools) installTool(tool);
   installCommon();
+  writeLock();
   const c = UPGRADE.counts;
   const backups = path.join('.builder', `backup-${UPGRADE.stamp}`);
-  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}.`);
+  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}.`);
   if (c.updated > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
   console.log(`Next steps:
   1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
@@ -966,6 +1011,7 @@ function main() {
   DRY = argv.includes('--dry-run');
   NO_EXTRAS = argv.includes('--no-extras');
   EXPERIMENTAL = argv.includes('--experimental');
+  FORCE = argv.includes('--force');
 
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return console.log(VERSION);
   if (cmd === 'run') return cmdRun(argv.slice(1));
