@@ -5,6 +5,10 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-14
+
+First upstream release: the kit installs as a package from a git tag and drives Claude Code, Codex and Antigravity from one source. Smoke-tested 14 Nov in a brownfield sample: Antigravity loaded 17 skills and 10 agents; Codex discovered the 17 skills and read the module-reviewer agent (own-file write scope); the owner confirmed the sample personas. Since rc.2: the genericity test carries no source names.
+
 ## [1.0.0-rc.2] — 2026-11-15
 
 ### Fixed
