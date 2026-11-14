@@ -36,3 +36,9 @@ Rules of thumb:
 - `protected-paths.cjs` reads the profile's §16 `protected` globs itself, ADD-ONLY: they join its filled list and
   `BUILDER_PROTECTED`, never remove one, and a missing or malformed profile adds nothing. While §16 adds
   anything, `PIPELINE_PROFILE.md` is protected too (`BUILDER_UNLOCK=fence` opens it) — so a person edits §16.
+  It is fenced as one file — the project root's profile, by where a path lands (a link to it, or a profile that
+  is itself a link, by its real target) — never by name, so `docs/PIPELINE_PROFILE.md` is not it. From the shell,
+  any pipeline that names it and is not read-only (cat, grep, `git show|diff|log` …) is refused: fail closed,
+  not a list of removers. Known limit: the hook keeps no state between calls, so if the profile disappears or
+  becomes malformed, §16's paths and the profile's own fence are gone from the next call on (the hook is then as
+  strict as with no profile); that is why the profile itself is fenced against removal and rewrite.

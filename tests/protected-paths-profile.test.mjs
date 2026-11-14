@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
@@ -179,5 +179,105 @@ describe('package mode: the installed hook reads §16 with node_modules gone', (
     assert.equal(run(write(slash(join(proj, 'PIPELINE_PROFILE.md')))).status, 2, 'the profile');
     assert.equal(run(write(installed)).status, 2, 'the hook itself');
     assert.equal(run(write(slash(join(proj, 'src/open/a.ts')))).status, 0, 'control');
+  });
+});
+
+// ── 1.0.1 security review: the profile fence is decided by what a statement NAMES and where it LANDS ──────────
+const links = [];
+after(() => {
+  for (const at of links.reverse()) {
+    try { rmdirSync(at); } catch { try { unlinkSync(at); } catch { /* left for the OS */ } } // the LINK, never its target
+  }
+});
+let fileLinks = true;
+try {
+  const probe = mkdtempSync(join(tmpdir(), 'fence-probe-'));
+  made.push(probe);
+  writeFileSync(join(probe, 't'), 'x');
+  symlinkSync(join(probe, 't'), join(probe, 'l'), 'file');
+} catch { fileLinks = false; }
+
+describe('finding 1: any non-read-only statement naming the fenced profile is refused (fails closed)', () => {
+  const proj = lab(settings({ protected: ['src/secret/'] }));
+  const c = cfg(proj);
+  const P = slash(proj);
+  test('red: removers the first-word list missed, and every overwrite shape, are refused', () => {
+    for (const cmd of [
+      '/bin/rm PIPELINE_PROFILE.md', '\\rm PIPELINE_PROFILE.md', 'rm.exe PIPELINE_PROFILE.md', 'command rm PIPELINE_PROFILE.md',
+      'git -C . rm PIPELINE_PROFILE.md', 'git -c core.x=y checkout -- PIPELINE_PROFILE.md', 'git --git-dir=.git checkout -- PIPELINE_PROFILE.md',
+      'git -C docs rm ../PIPELINE_PROFILE.md', 'truncate -s 0 PIPELINE_PROFILE.md', 'find . -name PIPELINE_PROFILE.md -delete',
+      'dd if=/dev/null of=PIPELINE_PROFILE.md', 'shred -u PIPELINE_PROFILE.md', 'install /dev/null PIPELINE_PROFILE.md',
+      'cp /dev/null PIPELINE_PROFILE.md', '> PIPELINE_PROFILE.md', ': > PIPELINE_PROFILE.md', 'echo {} | tee PIPELINE_PROFILE.md',
+      'git diff --output=PIPELINE_PROFILE.md', 'rm PIPELINE_PROF""ILE.md', "rm 'PIPELINE_PROFILE'.md", 'rm PIPELINE_PROF\\ILE.md',
+      'rm $D/PIPELINE_PROFILE.md', `rm ${P}/PIPELINE_PROFILE.md`, 'cd docs && truncate -s0 ../PIPELINE_PROFILE.md',
+    ]) assert.equal(blocks(sh(cmd), c), true, cmd);
+    for (const cmd of ['Clear-Content PIPELINE_PROFILE.md', 'Set-Content -Path PIPELINE_PROFILE.md -Value x']) {
+      assert.equal(blocks({ tool_name: 'PowerShell', tool_input: { command: cmd } }, c), true, cmd);
+    }
+  });
+  test('reads stay open: a read-only pipeline, a data heredoc body, a statement that does not name it', () => {
+    for (const cmd of [
+      'cat PIPELINE_PROFILE.md', 'grep -n protected PIPELINE_PROFILE.md', 'git show HEAD:PIPELINE_PROFILE.md', 'git diff PIPELINE_PROFILE.md',
+      'git log --oneline -- PIPELINE_PROFILE.md', 'head -5 PIPELINE_PROFILE.md | wc -l', "cat >> notes.md <<'EOF'\nsee PIPELINE_PROFILE.md\nEOF", 'rm notes.md',
+    ]) assert.equal(blocks(sh(cmd), c), false, cmd);
+  });
+  test('the fence grant opens it, as for writes', () => {
+    assert.equal(blocks(sh('truncate -s 0 PIPELINE_PROFILE.md'), cfg(proj, { BUILDER_UNLOCK: 'fence' })), false);
+  });
+});
+
+describe('finding 2: the profile is fenced by its root-anchored real path only', () => {
+  const proj = lab(settings({ protected: ['src/secret/'] }));
+  mkdirSync(join(proj, 'notes', 'PIPELINE_PROFILE.md'), { recursive: true });
+  const c = cfg(proj);
+  test('red: another file or folder spelled like it is not the profile', () => {
+    for (const p of ['docs/PIPELINE_PROFILE.md', 'src/open/PIPELINE_PROFILE.md', 'PIPELINE_PROFILE.md.bak', 'notes/PIPELINE_PROFILE.md/a.txt', slash(join(proj, 'docs/PIPELINE_PROFILE.md'))]) {
+      assert.equal(blocks(write(p), c), false, p);
+    }
+    for (const cmd of ['rm docs/PIPELINE_PROFILE.md', 'echo x > docs/PIPELINE_PROFILE.md', 'rm -r notes/PIPELINE_PROFILE.md']) assert.equal(blocks(sh(cmd), c), false, cmd);
+  });
+  test('the one file stays fenced, and the grant opens exactly that one file', () => {
+    assert.equal(blocks(write('PIPELINE_PROFILE.md'), c), true);
+    assert.equal(blocks(write('./docs/../PIPELINE_PROFILE.md'), c), true, 'landing, not spelling');
+    const g = cfg(proj, { BUILDER_UNLOCK: 'fence' });
+    assert.equal(blocks(write('PIPELINE_PROFILE.md'), g), false);
+    assert.equal(blocks(write(slash(join(proj, 'src/secret/PIPELINE_PROFILE.md'))), g), true, 'a §16 path stays closed');
+  });
+});
+
+describe('finding 3: the profile is matched by LANDING, a linked profile by its real target', () => {
+  test('red: a junction or dir link onto the project root reaches the profile under any spelling', () => {
+    const proj = lab(settings({ protected: ['src/secret/'] }));
+    const outside = mkdtempSync(join(tmpdir(), 'fence-profile-out-'));
+    made.push(outside);
+    const j = join(outside, 'j');
+    symlinkSync(proj, j, process.platform === 'win32' ? 'junction' : 'dir');
+    links.push(j);
+    const c = cfg(proj);
+    assert.equal(blocks(write(slash(join(j, 'PIPELINE_PROFILE.md'))), c), true);
+    assert.equal(blocks(sh(`truncate -s0 ${slash(join(j, 'PIPELINE_PROFILE.md'))}`), c), true);
+    assert.equal(blocks(write(slash(join(j, 'src/open/a.ts'))), c), false, 'control');
+  });
+  test('red: fenceOf matches ctx.profile by landing wherever the real file lives', () => {
+    const proj = lab(settings({ protected: ['src/secret/'] }));
+    mkdirSync(join(proj, 'cfg'));
+    writeFileSync(join(proj, 'cfg', 'real-profile.md'), 'x');
+    const c = { ...cfg(proj), profile: guard.realTarget(join(proj, 'cfg', 'real-profile.md')) };
+    assert.ok(guard.fenceOf('cfg/real-profile.md', c), 'the real target');
+    assert.equal(blocks(write('cfg/real-profile.md'), c), true);
+    assert.equal(blocks(sh('rm cfg/real-profile.md'), c), true);
+    assert.equal(blocks(write('cfg/other.md'), c), false, 'control');
+  });
+  test('red: a profile that is a file symlink is fenced at the link and at its real target', { skip: !fileLinks && 'file symlinks need a privilege this host lacks (the fenceOf test above carries the proof)' }, () => {
+    const proj = lab();
+    mkdirSync(join(proj, 'cfg'));
+    writeFileSync(join(proj, 'cfg', 'real-profile.md'), settings({ protected: ['src/secret/'] }));
+    symlinkSync(join(proj, 'cfg', 'real-profile.md'), join(proj, 'PIPELINE_PROFILE.md'), 'file');
+    const c = cfg(proj);
+    assert.ok(c.prefixes.includes('src/secret/'));
+    assert.equal(blocks(write('cfg/real-profile.md'), c), true, 'the target');
+    assert.equal(blocks(write('PIPELINE_PROFILE.md'), c), true, 'the link');
+    assert.equal(blocks(sh('rm PIPELINE_PROFILE.md'), c), true, 'unlinking the link');
+    assert.equal(blocks(sh('truncate -s0 cfg/real-profile.md'), c), true, 'the target from the shell');
   });
 });

@@ -113,12 +113,30 @@ function selfPath() {
  * entry a prefix cannot hold without fencing the whole project (`*.md`, `.env*`, `**`), a negation (`!x`), an
  * unfilled placeholder (`<glob>`), an absolute path or one with a `..` segment is skipped, and the others still count.
  *
- * THE PROFILE FENCES ITSELF while §16 adds anything: a write to it, and an rm / mv / del / Remove-Item / Move-Item /
- * git rm|mv|checkout|restore that names it, is refused (`BUILDER_UNLOCK=fence` opens it, as for this file) — else
- * one edit could shrink the list this hook reads. With §16 `protected` empty the profile is NOT fenced: an edit there
- * can only add protection, and the pipeline's own setup writes the profile. Not seen, stated plainly: a glob that
- * deletes it (`rm *.md`), and a whole-tree reset (`git checkout .`, `git stash`) — residuals shared with every
- * protected path; the pre-commit hook and CI are the backstop.
+ * THE PROFILE FENCES ITSELF while §16 adds anything (`BUILDER_UNLOCK=fence` opens it, as for this file) — else one
+ * edit could shrink the list this hook reads. It is fenced as ONE FILE: the project root's PIPELINE_PROFILE.md, by
+ * its real path (ctx.profile) and, when it is itself a link, at the link's own path too (ctx.profileAt) — never by a
+ * bare name, so docs/PIPELINE_PROFILE.md, PIPELINE_PROFILE.md.bak or a folder of that name are not it, and the
+ * fence grant opens exactly that file. A target is matched by where it LANDS (a junction onto the root, a link to the
+ * real target); one whose spelling ends in the profile's name but cannot be placed or resolved fails CLOSED.
+ *   - File tools and shell write shapes: judged by fenceOf, as every protected path.
+ *   - Any other shell statement: a deny list of removers (rm, git rm …) loses to the next spelling (`/bin/rm`, `\rm`,
+ *     `git -C . rm`, truncate, `dd of=`, `find -delete`, shred, install …). So it FAILS CLOSED instead
+ *     (profileNamed): a pipeline that names the profile — by spelling or by landing, as an operand, after `=` or `:`,
+ *     with quotes or backslashes spliced in, relative to any cd or any directory operand (`git -C docs rm ../…`) — is
+ *     refused unless every stage is READ-ONLY (cat, grep, git show|diff|log … — the READ_ONLY rule below). A DATA
+ *     heredoc body naming it is not an operand. The PowerShell tool has no read-only reading: any statement naming it
+ *     is refused (read it with the Read tool).
+ * With §16 `protected` empty the profile is NOT fenced: an edit there can only add protection, and the pipeline's own
+ * setup writes the profile. Not seen, stated plainly: a glob that deletes it (`rm *.md`), and a whole-tree reset
+ * (`git checkout .`, `git stash`) — residuals shared with every protected path; the pre-commit hook and CI are the
+ * backstop.
+ *
+ * KNOWN LIMIT — no memory between calls. The hook keeps no state: every call reads the profile afresh. If the profile
+ * disappears or becomes malformed (by a person, or by a route above that was not seen), §16's prefixes and the
+ * profile's own fence are gone from the next call on — the hook is then exactly as strict as without a profile. That
+ * is why the profile is fenced against removal and rewrite while §16 adds anything; the filled PROTECTED list and
+ * BUILDER_PROTECTED never depend on it.
  */
 const PROFILE_FILE = 'PIPELINE_PROFILE.md';
 const PROFILE_MAX_BYTES = 1024 * 1024;
@@ -161,23 +179,33 @@ function config(env = process.env, cwd = process.cwd()) {
   const fromProfile = profileProtected(projectDir);
   const unlockable = Object.fromEntries(Object.entries(UNLOCKABLE).map(([k, v]) => [fwd(k), v]));
   let profile = null;
+  let profileAt = null;
   if (fromProfile.length) {
-    // The profile joins the fence. A built-in entry for it keeps its own unlock rule (or none): never loosened here.
-    if (!base.includes(PROFILE_FILE)) unlockable[PROFILE_FILE] = SELF_UNLOCK;
+    // The profile joins the fence as ONE file (see PROFILE_TAG), not as a prefix. `profileAt` is the root's entry
+    // itself (lstat: a link's own path); `profile` is where it really lives. Unresolvable = the entry's own path.
+    const entry = path.resolve(projectDir, PROFILE_FILE);
     try {
-      profile = realTarget(path.resolve(projectDir, PROFILE_FILE));
+      profileAt = path.join(realTarget(projectDir), PROFILE_FILE);
     } catch (_) {
-      profile = path.resolve(projectDir, PROFILE_FILE);
+      profileAt = entry;
+    }
+    try {
+      profile = realTarget(entry);
+    } catch (_) {
+      profile = profileAt;
     }
   }
   return {
     self: selfPath(),
-    prefixes: [...new Set([...base, ...fromProfile, ...(fromProfile.length ? [PROFILE_FILE] : [])])],
+    prefixes: [...new Set([...base, ...fromProfile])],
     unlockable,
     grant: String(env[UNLOCK_ENV] || ''),
     cwd,
     projectDir,
     profile,
+    profileAt,
+    // A built-in entry for the profile keeps its own unlock rule (or none): never loosened by the fence grant.
+    profileUnlock: base.includes(PROFILE_FILE) ? null : SELF_UNLOCK,
   };
 }
 
@@ -239,29 +267,49 @@ const under = (rel, prefix) => {
   return rel === p || rel.startsWith(`${p}/`);
 };
 
+/** The fenced profile's tag: one file, matched by landing (see PROFILE_FILE above), unlocked by ctx.profileUnlock. */
+const PROFILE_TAG = `${PROFILE_FILE} (the §16 profile)`;
+const PROFILE_WHY = 'the profile whose §16 adds protected paths; changing, moving or removing it would shrink the fence';
+const PROFILE_NAME = new RegExp(`(?:^|[\\\\/])${PROFILE_FILE.replace('.', '\\.')}[\\\\/]*$`, 'i');
+/** Does an absolute target land on the fenced profile — at its real path, or at the root entry itself (a link)? */
+function landsOnProfile(abs, real, ctx) {
+  if (!ctx.profile) return false;
+  if (real && fold(real) === fold(ctx.profile)) return true;
+  if (!ctx.profileAt) return false;
+  let at = abs;
+  try {
+    at = path.join(realTarget(path.dirname(abs)), path.basename(abs)); // lstat landing: the entry, not what it points at
+  } catch (_) {
+    /* the spelled path */
+  }
+  return fold(at) === fold(ctx.profileAt);
+}
+const profileClosed = (spelling, ctx, why) => (ctx.profile && PROFILE_NAME.test(spelling) ? { prefix: PROFILE_TAG, why: `${spelling} ${why}; this fails closed` } : null);
+
 /** The protected prefix a target is spelled into or lands in, or null. Undecidable + spelled = fenced. */
 function fenceOf(target, ctx, cwd = ctx.cwd) {
   const spelling = fwd(target);
   const spelled = ctx.prefixes.find((p) => spelling.startsWith(p) || spelling.includes(`/${p}`)) || null;
   const abs = resolveTarget(target, cwd);
-  if (abs === null) return spelled;
+  if (abs === null) return spelled || profileClosed(spelling, ctx, 'cannot be placed');
   let real;
   try {
     real = realTarget(abs);
   } catch (e) {
-    return spelled ? { prefix: spelled, why: `cannot be resolved (${e.code || e.message}); this fails closed` } : null;
+    return spelled ? { prefix: spelled, why: `cannot be resolved (${e.code || e.message}); this fails closed` } : profileClosed(spelling, ctx, `cannot be resolved (${e.code || e.message})`);
   }
   if (ctx.self && fold(real) === fold(ctx.self)) return { prefix: SELF_TAG, why: 'this file defines the protected set' };
   if (spelled) return spelled;
   const rel = relToRoot(real, ctx);
-  if (rel === null) return null;
-  return ctx.prefixes.find((p) => under(rel, p)) || null;
+  const inPrefix = rel === null ? null : ctx.prefixes.find((p) => under(rel, p));
+  if (inPrefix) return inPrefix;
+  return landsOnProfile(abs, real, ctx) ? { prefix: PROFILE_TAG, why: PROFILE_WHY } : null;
 }
 
 const prefixOf = (hit) => (hit && typeof hit === 'object' ? hit.prefix : hit);
 const grants = (ctx) => ctx.grant.split(',').map((s) => s.trim());
-const isOpen = (prefix, ctx) =>
-  prefix === SELF_TAG ? grants(ctx).includes(SELF_UNLOCK) : !!ctx.unlockable[prefix] && grants(ctx).includes(ctx.unlockable[prefix]);
+const unlockOf = (prefix, ctx) => (prefix === SELF_TAG ? SELF_UNLOCK : prefix === PROFILE_TAG ? ctx.profileUnlock || null : ctx.unlockable[prefix] || null);
+const isOpen = (prefix, ctx) => !!unlockOf(prefix, ctx) && grants(ctx).includes(unlockOf(prefix, ctx));
 
 /** An existing FILE with more than one hard link (0 otherwise, or when it cannot be stat'ed). */
 function hardLinks(target, ctx, cwd = ctx.cwd) {
@@ -700,38 +748,79 @@ function deny(hit, what, ctx) {
   return blocked(
     `BLOCKED: ${what} reaches the protected path "${prefix}"${why} (PIPELINE_PROFILE.md §4/§16). ` +
       'A write is judged by where it lands. This is a boundary event — stop and ask the human. ' +
-      (prefix === SELF_TAG
-        ? `(Unlockable via ${UNLOCK_ENV}=${SELF_UNLOCK} — human grant only.)`
-        : ctx.unlockable[prefix]
-          ? `(Unlockable via ${UNLOCK_ENV}=${ctx.unlockable[prefix]} — human grant only.)`
-          : ''),
+      (unlockOf(prefix, ctx) ? `(Unlockable via ${UNLOCK_ENV}=${unlockOf(prefix, ctx)} — human grant only.)` : ''),
   );
 }
 
-/** Commands that delete, move away or roll back a file they name (the profile rule above). */
-const PROFILE_REMOVER = /^(?:rm|unlink|del|erase|rd|rmdir|mv|move|ren|rename|Remove-Item|ri|Move-Item|mi|Rename-Item|rni|git\s+(?:-\S+\s+)*(?:rm|mv|checkout|restore|reset|switch))(?:\.exe)?(?=[\s"']|$)/i;
-
-/** A statement that removes, moves or restores the fenced profile, or null. A name that cannot be placed fails closed. */
-function profileRemoval(text, dirs, ctx) {
+/**
+ * A shell command that NAMES the fenced profile outside a read-only pipeline, or null (the profile rule above). It
+ * fails CLOSED: no list of removers is consulted — any statement that names the file and is not read-only is refused.
+ * The text judged: POSIX — every pipeline that is not read-only, plus every non-data heredoc body, plus data `cat`/`tee`
+ * bodies when something in the command runs code; not understood by the lexer, or the PowerShell tool — the whole text.
+ */
+const PROFILE_TOKENS_MAX = 256;
+function profileNamed(command, isPowerShell, dirs, ctx) {
   if (!ctx.profile) return null;
-  const hit = (tok) => ({ prefix: PROFILE_FILE, why: `${tok} is the profile whose §16 adds protected paths; removing, moving or restoring it would shrink the fence` });
-  for (const raw of String(text).split(SPLIT)) {
-    const head = statementHead(raw);
-    if (!PROFILE_REMOVER.test(head)) continue;
-    for (const tok of operandsOf(head)) {
-      if (!new RegExp(`(^|[\\\\/])${PROFILE_FILE.replace('.', '\\.')}$`, 'i').test(tok.trim())) continue;
-      if (/[$%`]/.test(tok)) return hit(tok);
-      for (const cwd of [ctx.cwd, ...underCds(tok, dirs)]) {
-        const abs = resolveTarget(tok, cwd);
-        if (abs === null) return hit(tok);
-        let real;
-        try {
-          real = realTarget(abs);
-        } catch (_) {
-          return hit(tok);
-        }
-        if (fold(real) === fold(ctx.profile)) return hit(tok);
+  let scope = command;
+  const split = isPowerShell ? null : splitShell(command);
+  if (split) {
+    const kept = split.pipes.filter((p) => !p.readOnly).map((p) => p.text);
+    const runs = RUNNER.test(kept.join('\n'));
+    scope = [...kept, ...split.docs.filter((h) => !h.kind || (runs && (h.kind === 'cat' || h.kind === 'tee'))).map((h) => h.body)].join('\n');
+  }
+  if (!scope.trim()) return null;
+  // Operands as written, and again with the quotes (then the backslashes) a shell splices out: `PROF""ILE`, `PROF\ILE`.
+  const pieces = new Set();
+  for (const text of [scope, scope.replace(/["']/g, ''), scope.replace(/["'\\]/g, '')]) {
+    for (const tok of operandsOf(text)) {
+      if (pieces.size >= PROFILE_TOKENS_MAX) break;
+      const t = tok.trim();
+      if (!t) continue;
+      pieces.add(t);
+      const eq = t.lastIndexOf('=');
+      if (eq !== -1) pieces.add(t.slice(eq + 1)); // of=…, --output=…, --git-dir=…
+      const colon = /^(?![A-Za-z]:[\\/])[^:]*:(.+)$/.exec(t);
+      if (colon) pieces.add(colon[1]); // REV:path
+      if (/^-[A-Za-z]./.test(t)) pieces.add(t.slice(2)); // a glued short option: -oFILE, -Cdir
+    }
+  }
+  const hit = (tok, why) => ({ prefix: PROFILE_TAG, why: `${tok} is ${PROFILE_WHY}${why ? `; ${why}` : ''}` });
+  // Bases a relative operand may be resolved against: the cwd, every cd, and every operand that is a directory
+  // (`git -C docs rm ../PIPELINE_PROFILE.md`, `tar -C`, `--work-tree=`).
+  const bases = [ctx.cwd, ...dirs];
+  for (const p of pieces) {
+    if (bases.length >= 24) break;
+    if (/[$%`]/.test(p) || /^-/.test(p) || DISCARD.test(p)) continue;
+    for (const from of [ctx.cwd, ...dirs]) {
+      const abs = resolveTarget(p, from);
+      if (abs === null) continue;
+      try {
+        if (fs.statSync(abs).isDirectory() && !bases.includes(abs)) bases.push(abs);
+      } catch (_) {
+        /* not a directory */
       }
+    }
+  }
+  for (const p of pieces) {
+    if (/[$%`]/.test(p)) {
+      if (/PIPELINE_PROFILE/i.test(p)) return hit(p, 'an operand that cannot be placed; this fails closed');
+      continue;
+    }
+    if (DISCARD.test(p)) continue;
+    const named = PROFILE_NAME.test(fwd(p));
+    for (const from of relativeTok(p) || /^\.{1,2}[\\/]/.test(p) ? bases : [ctx.cwd]) {
+      const abs = resolveTarget(p, from);
+      if (abs === null) {
+        if (named) return hit(p, 'it cannot be placed; this fails closed');
+        continue;
+      }
+      let real = null;
+      try {
+        real = realTarget(abs);
+      } catch (e) {
+        if (named) return hit(p, `it cannot be resolved (${e.code || e.message}); this fails closed`);
+      }
+      if (landsOnProfile(abs, real, ctx)) return hit(p, 'only a read-only pipeline (cat, grep, git show|diff|log …) may name it');
     }
   }
   return null;
@@ -744,9 +833,9 @@ function decideShell(command, isPowerShell, ctx) {
   const dirs = cdDirsOf(text, ctx);
   const links = linkStatements(text);
   const runsCode = isPowerShell || RUNS_CODE.test(command);
-  const removal = profileRemoval(text, dirs, ctx);
-  if (removal) {
-    const r = deny(removal, `this ${tool} command removes, moves or restores ${PROFILE_FILE}, which`, ctx);
+  const named = profileNamed(command, isPowerShell, cdDirsOf(command, ctx), ctx);
+  if (named) {
+    const r = deny(named, `this ${tool} command names ${PROFILE_FILE} outside a read-only pipeline, which`, ctx);
     if (r) return r;
   }
   for (const target of writes) {

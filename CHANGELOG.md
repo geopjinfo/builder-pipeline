@@ -32,6 +32,20 @@ versions independently of any project it is pasted into.
   person (or a fence grant) edits the profile; with §16 `protected` empty it stays writable, since an edit there
   can only add protection. Not seen: a glob that deletes it and a whole-tree reset, as for every protected path.
   Tests: `tests/protected-paths-profile.test.mjs`.
+- **The profile fence fails closed and fences exactly one file (security review of the above, three MEDIUM
+  findings).** (1) The shell rule no longer matches a list of remover words, which `/bin/rm`, `\rm`, `rm.exe`,
+  `git -C . rm`, `git -c k=v checkout`, `--git-dir=`, truncate, `find -delete`, `dd of=`, shred, install,
+  `cp /dev/null`, a bare `>` redirect and tee all got past: any pipeline that names the profile — by spelling or
+  by landing, after `=` or `:`, with quotes or backslashes spliced in, relative to any cd or directory operand — is
+  refused unless every stage is read-only (cat, grep, `git show|diff|log` …); a data heredoc body naming it is
+  not an operand. (2) The profile is no longer a bare-name prefix (which also fenced `docs/PIPELINE_PROFILE.md`,
+  `PIPELINE_PROFILE.md.bak` and a folder of that name, and let the fence grant open them): it is the root's one
+  file, compared by real path, and `BUILDER_UNLOCK=fence` opens exactly that file. (3) It is matched by landing
+  (a junction onto the root, a link to it), and a profile that is itself a link is fenced at the link and at its
+  real target; a profile-named path that cannot be placed or resolved fails closed. Known limit, documented in the
+  hook and `hooks/README.md`: the hook keeps no state, so a profile that disappears or turns malformed drops
+  §16's paths from the next call on — which is why the profile itself is fenced. Tests: the `finding 1/2/3`
+  groups in `tests/protected-paths-profile.test.mjs` (the real file-symlink case runs where the host may make one).
 
 ## [1.0.0] — 2026-11-14
 
