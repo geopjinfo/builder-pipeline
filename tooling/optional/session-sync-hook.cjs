@@ -13,7 +13,7 @@
  * the limit: that spend is a person's decision, and the session is where a person is.
  *
  * THE MERGE TRIGGER IS THIS SAME FILE. The post-merge block that `sync-hook.sh` installs runs
- * `node .claude/hooks/session-sync-hook.js --trigger merge` (after checking that this file and `hook-trust.cjs`
+ * `node .claude/hooks/session-sync-hook.cjs --trigger merge` (after checking that this file and `hook-trust.cjs`
  * equal their blobs at HEAD). One implementation means the merge path gets the same folder check, interpreter
  * lookup, spawn flags and environment, instead of a shell line that starts whatever interpreter a file names.
  * With `--trigger merge` it prints nothing.
@@ -47,7 +47,7 @@
  *   {
  *     "hooks": {
  *       "SessionStart": [
- *         { "hooks": [ { "type": "command", "command": "node .claude/hooks/session-sync-hook.js" } ] }
+ *         { "hooks": [ { "type": "command", "command": "node .claude/hooks/session-sync-hook.cjs" } ] }
  *       ]
  *     }
  *   }
