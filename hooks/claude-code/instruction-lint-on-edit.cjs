@@ -73,21 +73,20 @@ function trustLib() {
   throw new Error('hook-trust.cjs not found');
 }
 
-/** The lint script for this project: `<root>/scripts/instruction-lint.mjs`, else the installed package's; or null. */
+/**
+ * The lint script for this project: `<root>/scripts/instruction-lint.mjs` (folder layout), else the copy unpack
+ * vendored beside the hooks (package layout: `kit/instruction-lint.mjs` next to this file); or null. Never anything
+ * under node_modules (hook-trust.cjs).
+ */
 function defaultFind(root) {
-  const own = path.join(root, 'scripts', 'instruction-lint.mjs');
-  if (fs.existsSync(own)) return own;
-  const pkg = trustLib().packageDir(root);
-  const packaged = pkg && path.join(pkg, 'scripts', 'instruction-lint.mjs');
-  return packaged && fs.existsSync(packaged) ? packaged : null;
+  for (const f of [path.join(root, 'scripts', 'instruction-lint.mjs'), path.join(__dirname, 'kit', 'instruction-lint.mjs')]) if (fs.existsSync(f)) return f;
+  return null;
 }
 
-/** A project copy is checked against HEAD; a package file against the committed lock (hook-trust.cjs). */
+/** Either copy is a project file: checked against the project's HEAD, closure included. */
 function defaultTrust(file, root) {
-  const lib = trustLib();
-  const pkg = root && lib.packageDir(root);
-  if (pkg && !path.relative(pkg, file).startsWith('..')) return lib.trustedByLock(file, { root, pkg });
-  return lib.trusted(file, { base: path.resolve(path.dirname(file), '..') });
+  if (/(^|[\\/])node_modules([\\/]|$)/.test(file)) return { ok: false, reason: `${path.basename(file)} is under node_modules — a hook never runs code from there` };
+  return trustLib().trusted(file, { base: root || path.resolve(path.dirname(file), '..') });
 }
 
 function defaultRun(root, rel, script = path.join(root, 'scripts', 'instruction-lint.mjs')) {

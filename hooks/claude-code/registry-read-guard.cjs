@@ -76,11 +76,8 @@ function loadProfile(root) {
 /** How this project runs ledger-row: its scripts/ copy (folder layout), else the installed package (npx builder run). */
 function ledgerRowCommand(root) {
   if (fs.existsSync(path.join(root, 'scripts', 'ledger-row.mjs'))) return 'node scripts/ledger-row.mjs';
-  try {
-    return trustLib().packageDir(root) ? 'npx builder run ledger-row' : 'node scripts/ledger-row.mjs';
-  } catch {
-    return 'node scripts/ledger-row.mjs';
-  }
+  // The package layout vendors the hooks' scripts into kit/ beside this file; nothing under node_modules is loaded.
+  return fs.existsSync(path.join(__dirname, 'kit')) ? 'npx builder run ledger-row' : 'node scripts/ledger-row.mjs';
 }
 
 if (require.main === module) {
