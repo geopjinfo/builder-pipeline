@@ -16,6 +16,14 @@ versions independently of any project it is pasted into.
   `--models codex.<tier>=<model>` / `antigravity.<tier>=<model>` set those tools' models (unprefixed entries stay
   Claude Code's). Claude Code now installs through `adapters/lib/claude-code.cjs` with byte-identical output.
   Tests: `tests/native-tools.test.mjs`; dotBuilder-specific tests now use `opencode`.
+- **`builder inventory`, `builder choices`, `builder bootstrap`, `builder personas-check`.** The setup commands the
+  `builder-init` skill names. `inventory [--json] [--threshold n]` prints the worker report plus `kitInstalled`: the
+  kit's own earlier install (files in `builder.lock.json`, or kit-named items in an install from before the lock) is
+  no longer listed as project items, so a re-run raises no clash against the kit itself. `choices list|set|unset|check`
+  and `personas-check` run `scripts/choices.mjs` / `scripts/personas-check.mjs` in the project folder.
+  `bootstrap [--tool …]` installs only the `builder-init` skill, for the tools it detects (`.claude/` or `CLAUDE.md`;
+  `.codex/` or `AGENTS.md`; `.agents/`; Claude Code when nothing is found). The new command modules live in `cli/`.
+  Tests: `tests/cli-commands.test.mjs`.
 - **Per-harness renderers in `adapters/lib/`.** Pure modules (text in, `{ path, content }` out) for Claude Code (a
   move-compatible copy of the install transform, byte-identical for every persona), Codex (`.codex/agents/*.toml`,
   `.agents/skills/`, `.codex/hooks.json`) and Antigravity (`.agents/agents/*.md`, `.agents/skills/`), each checked

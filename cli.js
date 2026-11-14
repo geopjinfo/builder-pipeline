@@ -1064,6 +1064,23 @@ function cmdRun(args) {
   process.exit(r.status === null ? 1 : r.status);
 }
 
+// --------------------------- setup commands (cli/*.cjs) ---------------------
+/**
+ * An install from before builder.lock.json: no lock, but the kit's profile or pointer block is there. Its files at
+ * kit paths are the kit's (they upgrade as they always did) and are not compared as project items.
+ */
+function legacyInstall() {
+  if (fs.existsSync(path.join(CWD, LOCK_FILE))) return false;
+  if (fs.existsSync(path.join(CWD, 'PIPELINE_PROFILE.md'))) return true;
+  return [...new Set(Object.values(TOOLS).map((t) => t.pointer))].some((p) => {
+    const abs = path.join(CWD, p);
+    return fs.existsSync(abs) && fs.readFileSync(abs, 'utf8').includes(MARKER);
+  });
+}
+
+/** What the command modules under cli/ may use: the paths, the one place() files land through, and the lock. */
+const ctx = () => ({ CWD, KIT, RUN, VERSION, TOOLS, ADAPTERS, MARKER, DRY: () => DRY, die, place, kitPaths, writeLock, lockPrior, legacyInstall });
+
 // --------------------------- arg parsing ------------------------------------
 function die(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
@@ -1091,6 +1108,10 @@ function main() {
   if (cmd === 'features') return cmdFeatures();
   if (cmd === 'check-ledgers') return cmdCheckLedgers();
   if (cmd === 'check-targets') return cmdCheckTargets();
+  if (cmd === 'inventory') return require('./cli/inventory.cjs').cmdInventory(ctx(), argv.slice(1));
+  // The worker scripts already hold these commands' behaviour; the CLI runs them in the project folder.
+  if (cmd === 'choices' || cmd === 'personas-check') return cmdRun([cmd, ...argv.slice(1)]);
+  if (cmd === 'bootstrap') return require('./cli/bootstrap.cjs').cmdBootstrap(ctx(), argv.slice(1));
   if (cmd !== 'unpack' && cmd !== 'upgrade') {
     console.log(`builder kit ${VERSION}`);
     console.log('usage: node builder/cli.js <unpack|upgrade|targets|verify|features|check-ledgers|check-targets|--version> [--tool <list|all>] [--dry-run] [--no-extras] [--experimental]');
