@@ -1153,6 +1153,7 @@ function main() {
   // The worker scripts already hold these commands' behaviour; the CLI runs them in the project folder.
   if (cmd === 'choices' || cmd === 'personas-check') return cmdRun([cmd, ...argv.slice(1)]);
   if (cmd === 'bootstrap') return require('./cli/bootstrap.cjs').cmdBootstrap(ctx(), argv.slice(1));
+  if (cmd === 'doctor') return require('./cli/doctor.cjs').cmdDoctor(ctx(), argv.slice(1));
   if (cmd !== 'unpack' && cmd !== 'upgrade') {
     console.log(`builder kit ${VERSION}`);
     console.log('usage: node builder/cli.js <unpack|upgrade|targets|verify|features|check-ledgers|check-targets|--version> [--tool <list|all>] [--dry-run] [--no-extras] [--experimental]');
