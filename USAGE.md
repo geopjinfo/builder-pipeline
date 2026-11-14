@@ -148,6 +148,22 @@ For a fix or small feature that doesn't warrant the full phase list, use the FIX
 - `ledger-audit` (extras) — periodic "are our DONEs real" sweep; schedule it, drift compounds
   silently between audits.
 
+## Removing a tool, or the kit (`uninstall`)
+
+```
+npx builder uninstall --tool codex --dry-run   # what would go
+npx builder uninstall --tool codex             # drop one tool
+npx builder uninstall --all                    # drop the kit
+```
+
+It removes only what `builder.lock.json` says the kit wrote, and only files whose bytes still match the lock (each is
+backed up under `.builder/backup-<stamp>/` first). A file you edited since is kept and named. A file several tools
+share stays while one of them is still installed. The pointer block comes out of each instruction file (or is
+re-wired for the tools left), and your text around it stays. `PIPELINE_PROFILE.md`, the ledgers, `builder.choices.json`
+and the `.gitignore` lines are never touched. `--all` also removes the vendored hook scripts (`.claude/hooks/kit/`),
+any kit-locked `scripts/` copies and, once nothing is left to record, the lock. Uninstalled with npm too? Remove the
+dependency afterwards (`npm uninstall @geopjinfo/builder-pipeline`).
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
