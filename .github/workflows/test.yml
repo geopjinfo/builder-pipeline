@@ -1,0 +1,41 @@
+# The kit's own suite on every push, pull request and release tag: Linux and Windows, the Node floor (18) and a
+# current LTS (22). Zero dependencies, so there is no install step and nothing is fetched from a registry; the
+# suite is `node tests/run.mjs`. Linux also runs the cases a Windows box skips (sh-less fallback, symlinks).
+# This folder is for the kit repo only: package.json "files" does not ship it.
+name: test
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['18', '22']
+    steps:
+      # Byte-level tests compare files as committed: keep the checkout's line endings as they are in git.
+      - name: git settings for the fixtures
+        run: |
+          git config --global core.autocrlf false
+          git config --global user.name "kit ci"
+          git config --global user.email "kit-ci@example.invalid"
+          git config --global init.defaultBranch main
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: suite
+        run: node tests/run.mjs
