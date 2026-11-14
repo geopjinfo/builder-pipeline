@@ -18,7 +18,9 @@
  *
  * Fill PROTECTED below from your PIPELINE_PROFILE.md §4 (the DISCOVERY step tells the agent to
  * do this for you). Prefixes are repo-root-relative, forward slashes. `BUILDER_PROTECTED` (a comma
- * list in the hook process's environment) ADDS prefixes — it can never remove one.
+ * list in the hook process's environment) ADDS prefixes — it can never remove one. The profile's §16
+ * `protected` globs are read too and also only ADD (profileProtected below); while they add anything the
+ * profile itself is protected.
  *
  * WHAT IT JUDGES.
  *  - File tools (Write, Edit, MultiEdit, NotebookEdit — whose path is `notebook_path`): the path as SPELLED,
@@ -96,16 +98,86 @@ function selfPath() {
   }
 }
 
-/** The fence configuration: the filled PROTECTED list plus any BUILDER_PROTECTED additions. */
+/**
+ * PIPELINE_PROFILE.md §16 `protected` — ADD-ONLY. The profile's one `json pipeline-settings` block may list protected
+ * globs; each becomes a prefix here, ADDED to PROTECTED and BUILDER_PROTECTED. Nothing in the profile can remove a
+ * prefix, an unlock rule or this file's self-protection: the result is a union, and the profile is only ever read.
+ *
+ * Read as DATA by this file alone — no profile code is loaded (not scripts/lib/profile.cjs, never anything under
+ * node_modules), so the copy unpack puts in .claude/hooks/ judges the same with node_modules gone. A profile that
+ * is missing, unreadable, over PROFILE_MAX_BYTES, holds no block or more than one, is not JSON, is not an object, or
+ * whose `protected` is not an array of strings adds NOTHING: the hook is then exactly as strict as without it (the
+ * stricter of the two outcomes this file may choose between — it never adds less than the built-in list).
+ *
+ * A glob becomes the directory before its first wildcard (`src/**\/gen/*.ts` → `src/`, wider, never narrower). An
+ * entry a prefix cannot hold without fencing the whole project (`*.md`, `.env*`, `**`), a negation (`!x`), an
+ * unfilled placeholder (`<glob>`), an absolute path or one with a `..` segment is skipped, and the others still count.
+ *
+ * THE PROFILE FENCES ITSELF while §16 adds anything: a write to it, and an rm / mv / del / Remove-Item / Move-Item /
+ * git rm|mv|checkout|restore that names it, is refused (`BUILDER_UNLOCK=fence` opens it, as for this file) — else
+ * one edit could shrink the list this hook reads. With §16 `protected` empty the profile is NOT fenced: an edit there
+ * can only add protection, and the pipeline's own setup writes the profile. Not seen, stated plainly: a glob that
+ * deletes it (`rm *.md`), and a whole-tree reset (`git checkout .`, `git stash`) — residuals shared with every
+ * protected path; the pre-commit hook and CI are the backstop.
+ */
+const PROFILE_FILE = 'PIPELINE_PROFILE.md';
+const PROFILE_MAX_BYTES = 1024 * 1024;
+const SETTINGS_BLOCK = /```json[ \t]+pipeline-settings[ \t]*\r?\n([\s\S]*?)\r?\n```/g;
+
+/** One §16 glob as a root-relative prefix, or null when it cannot be one (see above). */
+function globPrefix(g) {
+  let p = fwd(String(g).trim()).replace(/^(?:\.\/)+/, '');
+  if (!p || /[<>]/.test(p) || p.startsWith('!') || p.startsWith('/') || /^[A-Za-z]:/.test(p) || p.split('/').includes('..')) return null;
+  const wild = p.search(/[*?[\]{}]/);
+  if (wild !== -1) p = p.slice(0, p.slice(0, wild).lastIndexOf('/') + 1);
+  return /^\.?\/?$/.test(p) ? null : p;
+}
+
+/** The prefixes §16 `protected` adds for a project, [] when the profile adds nothing. Never throws. */
+function profileProtected(projectDir) {
+  try {
+    const file = path.resolve(projectDir, PROFILE_FILE);
+    const st = fs.statSync(file);
+    if (!st.isFile() || st.size > PROFILE_MAX_BYTES) return [];
+    const blocks = [...fs.readFileSync(file, 'utf8').matchAll(SETTINGS_BLOCK)];
+    if (blocks.length !== 1) return [];
+    const raw = JSON.parse(blocks[0][1]);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+    const list = raw.protected;
+    if (list === undefined) return [];
+    if (!Array.isArray(list) || !list.every((g) => typeof g === 'string')) return [];
+    return [...new Set(list.map(globPrefix).filter(Boolean))];
+  } catch (_) {
+    return [];
+  }
+}
+
+/** The fence configuration: the filled PROTECTED list plus any BUILDER_PROTECTED additions plus §16 `protected`. */
 function config(env = process.env, cwd = process.cwd()) {
   const extra = String(env.BUILDER_PROTECTED || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const projectDir = env.CLAUDE_PROJECT_DIR || cwd;
+  const norm = (p) => fwd(p).replace(/^\.\//, '');
+  const base = [...new Set([...PROTECTED, ...extra].map(norm))];
+  const fromProfile = profileProtected(projectDir);
+  const unlockable = Object.fromEntries(Object.entries(UNLOCKABLE).map(([k, v]) => [fwd(k), v]));
+  let profile = null;
+  if (fromProfile.length) {
+    // The profile joins the fence. A built-in entry for it keeps its own unlock rule (or none): never loosened here.
+    if (!base.includes(PROFILE_FILE)) unlockable[PROFILE_FILE] = SELF_UNLOCK;
+    try {
+      profile = realTarget(path.resolve(projectDir, PROFILE_FILE));
+    } catch (_) {
+      profile = path.resolve(projectDir, PROFILE_FILE);
+    }
+  }
   return {
     self: selfPath(),
-    prefixes: [...new Set([...PROTECTED, ...extra].map((p) => fwd(p).replace(/^\.\//, '')))],
-    unlockable: Object.fromEntries(Object.entries(UNLOCKABLE).map(([k, v]) => [fwd(k), v])),
+    prefixes: [...new Set([...base, ...fromProfile, ...(fromProfile.length ? [PROFILE_FILE] : [])])],
+    unlockable,
     grant: String(env[UNLOCK_ENV] || ''),
     cwd,
-    projectDir: env.CLAUDE_PROJECT_DIR || cwd,
+    projectDir,
+    profile,
   };
 }
 
@@ -626,7 +698,7 @@ function deny(hit, what, ctx) {
   if (isOpen(prefix, ctx)) return null;
   const why = hit && typeof hit === 'object' && hit.why ? ` (${hit.why})` : '';
   return blocked(
-    `BLOCKED: ${what} reaches the protected path "${prefix}"${why} (PIPELINE_PROFILE.md §4). ` +
+    `BLOCKED: ${what} reaches the protected path "${prefix}"${why} (PIPELINE_PROFILE.md §4/§16). ` +
       'A write is judged by where it lands. This is a boundary event — stop and ask the human. ' +
       (prefix === SELF_TAG
         ? `(Unlockable via ${UNLOCK_ENV}=${SELF_UNLOCK} — human grant only.)`
@@ -636,6 +708,35 @@ function deny(hit, what, ctx) {
   );
 }
 
+/** Commands that delete, move away or roll back a file they name (the profile rule above). */
+const PROFILE_REMOVER = /^(?:rm|unlink|del|erase|rd|rmdir|mv|move|ren|rename|Remove-Item|ri|Move-Item|mi|Rename-Item|rni|git\s+(?:-\S+\s+)*(?:rm|mv|checkout|restore|reset|switch))(?:\.exe)?(?=[\s"']|$)/i;
+
+/** A statement that removes, moves or restores the fenced profile, or null. A name that cannot be placed fails closed. */
+function profileRemoval(text, dirs, ctx) {
+  if (!ctx.profile) return null;
+  const hit = (tok) => ({ prefix: PROFILE_FILE, why: `${tok} is the profile whose §16 adds protected paths; removing, moving or restoring it would shrink the fence` });
+  for (const raw of String(text).split(SPLIT)) {
+    const head = statementHead(raw);
+    if (!PROFILE_REMOVER.test(head)) continue;
+    for (const tok of operandsOf(head)) {
+      if (!new RegExp(`(^|[\\\\/])${PROFILE_FILE.replace('.', '\\.')}$`, 'i').test(tok.trim())) continue;
+      if (/[$%`]/.test(tok)) return hit(tok);
+      for (const cwd of [ctx.cwd, ...underCds(tok, dirs)]) {
+        const abs = resolveTarget(tok, cwd);
+        if (abs === null) return hit(tok);
+        let real;
+        try {
+          real = realTarget(abs);
+        } catch (_) {
+          return hit(tok);
+        }
+        if (fold(real) === fold(ctx.profile)) return hit(tok);
+      }
+    }
+  }
+  return null;
+}
+
 function decideShell(command, isPowerShell, ctx) {
   const tool = isPowerShell ? 'PowerShell' : 'Bash';
   const text = isPowerShell ? command : dataStripped(command); // a data heredoc body is not a write, a link or a cd
@@ -643,6 +744,11 @@ function decideShell(command, isPowerShell, ctx) {
   const dirs = cdDirsOf(text, ctx);
   const links = linkStatements(text);
   const runsCode = isPowerShell || RUNS_CODE.test(command);
+  const removal = profileRemoval(text, dirs, ctx);
+  if (removal) {
+    const r = deny(removal, `this ${tool} command removes, moves or restores ${PROFILE_FILE}, which`, ctx);
+    if (r) return r;
+  }
   for (const target of writes) {
     const hit = fenceOf(target, ctx);
     if (hit) {
@@ -713,7 +819,7 @@ function decide(input, ctx = config()) {
   return { block: false };
 }
 
-module.exports = { decide, config, mentionScope, splitShell, SELF_UNLOCK, linkStatements, statementHead, cdDirsOf, shellWriteTargets, fenceOf, realTarget, resolveTarget };
+module.exports = { decide, config, profileProtected, globPrefix, mentionScope, splitShell, SELF_UNLOCK, linkStatements, statementHead, cdDirsOf, shellWriteTargets, fenceOf, realTarget, resolveTarget };
 
 if (require.main === module) {
   let input = '';

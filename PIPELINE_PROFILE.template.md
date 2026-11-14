@@ -283,7 +283,8 @@ the expectation becomes the author of the requirement it audits, and the audit s
 
 The one block the pack's scripts read — exactly one. It holds the tier runner (full log to a file,
 ≤25-line digest), the ledger paths (keep them equal to §11), the model ids (§12), the protected globs
-(mirror §4) and the optional features. Replace every `<…>`: an unfilled placeholder fails validation.
+(mirror §4; the protected-paths hook reads them and only ADDS them to its own list — while any is set, this
+file is protected too, so a person edits it) and the optional features. Replace every `<…>`: an unfilled placeholder fails validation.
 Check it with `npx builder features` (folder layout: `node scripts/features.mjs`). **States:** `on` runs, and its required keys must be filled
 or the profile is invalid — never a silent skip · `off` prints `<feature>: not configured` and does
 nothing (it means *not told*, never *unimportant*) · `unmeasured` runs and every report says its
