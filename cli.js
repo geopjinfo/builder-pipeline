@@ -16,6 +16,14 @@
  *   node builder/cli.js features         (which optional checks are on, off, unmeasured or experimental)
  *   node builder/cli.js check-ledgers    (mechanical board/registry gates — wire into CI)
  *   node builder/cli.js check-targets    (qa-audit environment safety — wire into CI)
+ *   node builder/cli.js bootstrap [--tool …]        (only the builder-init skill — cli/bootstrap.cjs)
+ *   node builder/cli.js inventory [--json]          (project items vs the kit — cli/inventory.cjs)
+ *   node builder/cli.js choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
+ *   node builder/cli.js doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
+ *   node builder/cli.js personas-check | run <script> [args]
+ *
+ * unpack/upgrade read builder.choices.json: a kit skill or persona that clashes with a project item and has no
+ * recorded choice is skipped and reported, never installed (setupClashCheck below).
  *
  * --no-extras skips the optional utility skills in skills-extra/ (status-and-next, caveman,
  * graphify, ledger-audit — see skills-extra/README.md) and the personas they ship (skills-extra/<name>/agents/).
@@ -707,6 +715,7 @@ function cmdUnpack(tools) {
      THIS project's docs (not the kit's source project).
   2. Answer the agent's "⚠ CONFIRM" questions; then run: node builder/cli.js verify
   3. See which optional checks are on: node builder/cli.js features
+     and what each selected tool can and cannot hold: node builder/cli.js doctor
   4. Write a brief from specs/module-brief.template.md and start:
      "Build the <X> module through the pipeline."`);
 }
@@ -736,7 +745,8 @@ function cmdUpgrade(tools) {
   1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
      (PIPELINE_PROFILE.md, the board rules, the brief templates) against builder/ by hand where it matters.
   2. node builder/cli.js verify
-  3. node builder/cli.js features   — settings this release added default to off / not configured until §16 sets them.`);
+  3. node builder/cli.js features   — settings this release added default to off / not configured until §16 sets them.
+  4. node builder/cli.js doctor     — what each tool supports, partly supports or cannot hold.`);
 }
 
 function cmdTargets() {
@@ -1156,9 +1166,22 @@ function main() {
   if (cmd === 'doctor') return require('./cli/doctor.cjs').cmdDoctor(ctx(), argv.slice(1));
   if (cmd !== 'unpack' && cmd !== 'upgrade') {
     console.log(`builder kit ${VERSION}`);
-    console.log('usage: node builder/cli.js <unpack|upgrade|targets|verify|features|check-ledgers|check-targets|--version> [--tool <list|all>] [--dry-run] [--no-extras] [--experimental]');
-    console.log('       node builder/cli.js unpack --tool claude-code,codex');
-    console.log('       node builder/cli.js upgrade --tool claude-code --dry-run   (pass the same --tool/--models/--no-extras/--experimental as the original unpack)');
+    console.log(`usage: node builder/cli.js <command> [options]
+
+  setup
+    bootstrap [--tool <list>]           only the builder-init skill, for the detected (or named) tools
+    inventory [--json] [--threshold n]  the project's own skills/agents/personas/hooks and their overlap with the kit
+    choices list|set|unset|check        the per-item keep / kit / both decisions (builder.choices.json)
+    unpack --tool <list|all>            install (copy-if-absent; undecided clashes are skipped)
+    upgrade --tool <list|all>           refresh kit-owned files (backup first; --force over local edits)
+      [--dry-run] [--no-extras] [--experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
+  check
+    verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check
+  other
+    run [<script> [args]] | targets | --version
+
+  e.g. node builder/cli.js unpack --tool claude-code,codex
+       node builder/cli.js upgrade --tool claude-code --dry-run   (pass the same --tool/--models/--no-extras/--experimental as the original unpack)`);
     process.exit(cmd ? 1 : 0);
   }
 
