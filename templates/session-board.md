@@ -6,8 +6,8 @@ while they are in flight.
 
 **Why the bar is computed.** A hand-maintained progress bar is a claim nobody re-derives: the rows
 move and the bar does not, and the board then reports last week's number with this week's authority.
-`scripts/board-progress.mjs` makes it a *projection of the Status column* and rewrites only the block
-between the markers. `scripts/board-check-all.mjs` fails the gate on any stale board. The first time
+The `board-progress` script makes it a *projection of the Status column* and rewrites only the block
+between the markers. `board-check-all` fails the gate on any stale board. The first time
 that pair ran in the source project it found a board reading **0% while sitting at 8 of 12 done**.
 
 Wire both into the gate chain (profile §8):

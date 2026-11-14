@@ -140,6 +140,17 @@ versions independently of any project it is pasted into.
   the file and everything it requires hash to what the lock records — an edit in `node_modules` or an uncommitted
   lock gets "not run", as an uncommitted script does. `registry-read-guard` names `npx builder run ledger-row` in
   the package layout. Tests: `tests/package-hooks.test.mjs`.
+- **The docs the install points the agent to are install-neutral.** `DISCOVERY.md` §5 said `node builder/cli.js
+  verify`, §3 cited `builder/examples/…` and `builder/tooling/…`; `USAGE.md` had nine `node scripts/<x>.mjs`
+  commands; the persona library said `node scripts/personas-check.mjs`. They now say `npx builder …` /
+  `npx builder run <x>`, with one line for the folder layout. Tests: `tests/package-paths.test.mjs`.
+- **No installed file names a path that does not exist in the package layout.** `tasks/README.md` and the session
+  board template said unpack "installs `scripts/board-progress.mjs`"; personas and skills cited
+  `skills/references/…`, `skills/state-template.md`, `scripts/lib/…` and `skills/persona-detect.md` with no
+  location; builder-init named `PIPELINE_PROFILE.template.md` with no location; upgrade's next steps said "diff …
+  against builder/"; verify labelled its check `scripts/board-…` while checking the package. Kit-located paths are
+  now written `builder/<path>` (rewritten to wherever the kit is), the rest name the script or skill. Tests:
+  `tests/package-paths.test.mjs` (scans every installed Markdown file for codex, antigravity and Claude Code).
 
 ## [0.16.0] — 2026-11-12
 

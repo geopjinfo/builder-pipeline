@@ -14,7 +14,7 @@ point.
 
 > **Commands.** Written for the npm-package install: `npx builder <command>`, and a kit script as
 > `npx builder run <name>`. With the kit copied in as a `builder/` folder instead ([`UNPACK.md`](UNPACK.md)),
-> the same commands are `npx builder <command>` and `node scripts/<name>.mjs`.
+> run the CLI through `builder/cli.js` with Node, and a kit script from the project's `scripts/` copy.
 
 ## Running one module build
 
@@ -118,11 +118,11 @@ None of these wait for you unless they fail. Each is a script, and each prints
 
 | When | Command | What it means |
 |---|---|---|
-| P0 | `node scripts/orchestrator-check.mjs` | The session's model vs `models.orchestrator`. Exit 5 is a **warning**, never a refusal; no readable transcript is *unmeasured*, not a pass |
-| P1, before the planner | `node scripts/index-check.mjs` | Knowledge-index freshness. `0` fresh · `3` absent · `4` unmeasurable · `10` docs pending · `11` code behind · `12` both. With `features.graph` on, a non-zero exit that is not recorded in the run's state file **refuses the planner**: refresh (code refresh is free; doc embedding spends tokens, and above the automatic limit a person decides) or record the verdict. With it off: `graph: not configured`, and the run goes on |
-| P1 · P4 · P6 | `node scripts/output-check.mjs plan\|findings\|review <file>` | The plan, each findings block and the review have their fixed shape; a malformed one goes back to its seat |
-| End of P2 and P5 | `node scripts/claims-check.mjs --run <key>` | Every recorded count re-run, every `file:line` still points at its content, no retracted phrase, every owed note resolves |
-| P7 | `node scripts/handoff-pack.mjs <key>` then `node scripts/handoff-check.mjs <file>` | The handoff pack is generated from the board, run log and registry, then checked. **Close-out cannot finish on a failing pack** |
+| P0 | `npx builder run orchestrator-check` | The session's model vs `models.orchestrator`. Exit 5 is a **warning**, never a refusal; no readable transcript is *unmeasured*, not a pass |
+| P1, before the planner | `npx builder run index-check` | Knowledge-index freshness. `0` fresh · `3` absent · `4` unmeasurable · `10` docs pending · `11` code behind · `12` both. With `features.graph` on, a non-zero exit that is not recorded in the run's state file **refuses the planner**: refresh (code refresh is free; doc embedding spends tokens, and above the automatic limit a person decides) or record the verdict. With it off: `graph: not configured`, and the run goes on |
+| P1 · P4 · P6 | `npx builder run output-check plan\|findings\|review <file>` | The plan, each findings block and the review have their fixed shape; a malformed one goes back to its seat |
+| End of P2 and P5 | `npx builder run claims-check --run <key>` | Every recorded count re-run, every `file:line` still points at its content, no retracted phrase, every owed note resolves |
+| P7 | `npx builder run handoff-pack <key>` then `npx builder run handoff-check <file>` | The handoff pack is generated from the board, run log and registry, then checked. **Close-out cannot finish on a failing pack** |
 | After P7 | — | `run.end` is logged and the session stops. Follow-up work takes a new key, board and session |
 
 ## Interruptions and resumption
@@ -152,14 +152,14 @@ For a fix or small feature that doesn't warrant the full phase list, use the FIX
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `verify` fails on placeholders | profile never filled / half-filled | run `builder/DISCOVERY.md` prompt; answer the `⚠ CONFIRM` batch |
+| `verify` fails on placeholders | profile never filled / half-filled | run the kit's `DISCOVERY.md` prompt; answer the `⚠ CONFIRM` batch |
 | `verify` reports a §16 error, or a script refuses to start with a settings error | the `pipeline-settings` block is invalid: JSON syntax, more than one block, a feature `on` with a required key empty, an unknown feature name (usually a typo), a `<placeholder>` left in, `commands.tier` without `{tier}` | fix the path the error names. Never set a feature `on` to silence an error, and never delete the block — with no block every optional feature is off |
-| A run prints `<feature>: not configured` | that feature's state is `off` in §16 — the default for anything the project was not shown to have | expected if the project lacks the file or tool. To switch it on: install what it needs, set `state: "on"`, fill its required keys, run `npx builder verify`, then `node scripts/features.mjs` |
+| A run prints `<feature>: not configured` | that feature's state is `off` in §16 — the default for anything the project was not shown to have | expected if the project lacks the file or tool. To switch it on: install what it needs, set `state: "on"`, fill its required keys, run `npx builder verify`, then `npx builder run features` |
 | Planner not dispatched at P1 | the index gate saw a stale index and no recorded verdict | run the free code refresh; embed pending docs if within the limit (or decide, if above it); or record the verdict in the state file's `Graph:` line |
 | `orchestrator-check` exits 5 | the session was started on a different model from `models.orchestrator` | restart the session on the declared model, or proceed and note it — it is a cost and capability choice, not a correctness gate |
 | Claims check fails at the end of P2 or P5 | a stale count, a citation whose line moved, a retracted phrase, an owed note naming nothing | fix the record. Never widen the checker to pass a false record |
 | Handoff check refuses close-out | a section missing, an item without `RESPONSE REQUIRED`, a fill marker left, a cited id that does not exist | complete the pack; the check names each gap |
-| The pack is out of date (a newer release, or the installed files lag `builder/CHANGELOG.md`) | `unpack` copies only absent files, so an upgrade never overwrites installed ones | bump the dependency tag, run `npx builder upgrade --tool <your tools>` (it refreshes kit-owned files after a backup and keeps your local edits), read the CHANGELOG entries since your old version, then `npx builder verify` |
+| The pack is out of date (a newer release, or the installed files lag the kit's `CHANGELOG.md`) | `unpack` copies only absent files, so an upgrade never overwrites installed ones | bump the dependency tag, run `npx builder upgrade --tool <your tools>` (it refreshes kit-owned files after a backup and keeps your local edits), read the CHANGELOG entries since your old version, then `npx builder verify` |
 | Cost figures look wrong against the bill | the rate table is stale, or accounting is off / unavailable in this harness | compare `scripts/lib/pricing.cjs` and its version with the published rates; update the table and its version together. Em-dashes mean unmeasured, not free |
 | `pack tests: Node …` | Node older than 18 | upgrade Node; the pack's scripts and tests need 18 or newer |
 | Agent invents a permission key / state name | oracle path in profile §3 wrong, or oracle not listed | fix §3; the persona rule only bites if the oracle is findable |
@@ -170,7 +170,7 @@ For a fix or small feature that doesn't warrant the full phase list, use the FIX
 | Board rows DONE without test evidence | persona rules being paraphrased/trimmed | restore verbatim persona files; that rule is load-bearing (DESIGN §7). `npx builder check-ledgers` catches it mechanically — wire it into CI |
 | `npx builder check-targets` fails | safety gate for the `qa-audit` skill: a target whose DATASTORE is shared is marked destructive, an attach target does not declare `shared`, or a credential is embedded in the config | fix the config. Run it in CI — the rule must not depend on someone reading a doc |
 | Ledger drift (dangling `DEFERRED→id`, odd statuses) | hand-edited boards/registry | `npx builder check-ledgers` — 5 gates (LG-1…LG-5), exits non-zero for CI |
-| Board shows a percentage nobody believes | the bar was typed, not computed | `node scripts/board-check-all.mjs` (`--fix` to rewrite). Wire it into the gate chain — a bar looks like an output even when it is an input, which is how one board sat at "0%" with 8 of 12 rows done |
+| Board shows a percentage nobody believes | the bar was typed, not computed | `npx builder run board-check-all` (`--fix` to rewrite). Wire it into the gate chain — a bar looks like an output even when it is an input, which is how one board sat at "0%" with 8 of 12 rows done |
 | Pipeline "finishes" but reviewer never ran | orchestrator drifted from the playbook | ask for the review file's verdict; no verdict = not done, re-run Phase 6 |
 | Same blocker loops forever | upstream truth wrong (spec/brief/plan) | that's what two-strike escalation is for — fix the doc, not the code |
 
@@ -180,6 +180,6 @@ One module is a dozen or more agent dispatches: the planner, the builder in batc
 `features.builderBatch.rows` rows, the tester, four auditors, docs and the reviewer, plus
 loop-backs. Strong-model phases dominate cost; profile §12 is where you trade cost vs. rigor. Where
 the harness keeps transcripts and `features.costAccounting` is on, the board shows measured spend
-per seat. `node scripts/cost-window.mjs` and `node scripts/seat-peaks.mjs` compare runs before and
+per seat. `npx builder run cost-window` and `npx builder run seat-peaks` compare runs before and
 after a change. Judge any setting change over several runs, never one. Scaling guidance — what may
 be merged or skipped and what never — is in `DESIGN.md` §"Tuning".

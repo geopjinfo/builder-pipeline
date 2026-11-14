@@ -42,7 +42,7 @@ Ask, as ONE batched message (offer a recommended answer where the repo hints at 
 4. **Domain** — the core nouns and any rules that must never break (money, permissions, retention, safety).
 5. **Constraints** — offline/air-gapped, compliance, budget, team size, the AI tools in use.
 
-Then draft `PIPELINE_PROFILE.md` from `PIPELINE_PROFILE.template.md` using ONLY the answers: every decision the
+Then draft `PIPELINE_PROFILE.md` from `builder/PIPELINE_PROFILE.template.md` using ONLY the answers: every decision the
 answers do not settle is marked `⚠ CONFIRM`, never invented. Keep the answers verbatim in a short
 `## Interview` note at the end of your report — the persona detector reads them in Step 8.
 
@@ -117,7 +117,7 @@ with the human in one batched question, recommended answers given). `npx builder
 
 ## Step 8 — run the persona detector
 
-Run the `persona-detect` skill (`skills/persona-detect.md`). Greenfield: pass it the Step 2a interview answers
+Run the `persona-detect` skill (Step 6 installed it beside this one; the kit's copy is `builder/skills/persona-detect.md`). Greenfield: pass it the Step 2a interview answers
 verbatim. Brownfield: pass it the Step 2b reading notes and the Step 3 table. Its proposals go through its own
 confirm; this skill does not apply them.
 

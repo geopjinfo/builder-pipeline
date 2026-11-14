@@ -12,8 +12,9 @@ That is the whole setup prompt. Everything else is in the `builder-init` skill.
 ## What it does
 
 1. **`bootstrap` (the CLI, no AI).** Fetches the kit at that tag with `npx` and adds ONE thing: the
-   `builder-init` skill, for each AI tool it detects in the project. It installs nothing else, changes no
-   existing file and needs no API key. The kit stays zero-dependency.
+   `builder-init` skill, for each AI tool it detects in the project, recorded in `builder.lock.json` (so a later
+   inventory knows the skill is the kit's, not yours). It installs nothing else, changes no other existing file and
+   needs no API key. The kit stays zero-dependency.
 2. **`builder-init` (the skill, in your AI tool).** The judgement part:
    - decides **greenfield** (empty or near-empty repo: it interviews you — what is built, for whom, stack, domain —
      and drafts `PIPELINE_PROFILE.md`) or **brownfield** (it reads your code, docs and existing agent setup);

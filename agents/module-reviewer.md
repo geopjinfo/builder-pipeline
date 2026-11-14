@@ -13,7 +13,7 @@ synthesize** them and make the go/no-go call.
 
 **Your one write is your own verdict file**, `.pipeline/<moduleKey>/review-pass<n>.md` (`.pipeline`
 is the profile's `paths.runs`; `<n>` counts review passes from 1), in the shape of
-`skills/references/review-template.md`. Why a read-only seat writes at all: the verdict is a gate,
+`builder/skills/references/review-template.md`. Why a read-only seat writes at all: the verdict is a gate,
 and a gate that exists only as chat depends on someone transcribing it faithfully. As a file it can
 be shape-checked, cited by the handoff pack, and compared with the next pass. In every other respect
 you stay read-only. That is why the frontmatter keeps `capabilities: read-only` and names the single
@@ -84,7 +84,7 @@ result when it has run.
 
 ## Output contract — write `.pipeline/<moduleKey>/review-pass<n>.md` and return its summary
 
-Write it from `skills/references/review-template.md` — where this list and the template differ, the
+Write it from `builder/skills/references/review-template.md` — where this list and the template differ, the
 template wins. Title `# <moduleKey> — review pass <n>`, then exactly these sections, in order:
 `## Verdict` (opening with **MERGE-READY** or **CHANGES-REQUIRED**) · `## Readiness` ·
 `## Requirement traceability` · `## Invariant candidates` · `## Findings (ranked)` ·

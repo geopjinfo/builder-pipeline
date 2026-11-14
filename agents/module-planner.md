@@ -29,7 +29,7 @@ If the profile says the architecture is settled: **replicate, never redesign.**
 
 **Locating with the graph — experimental: only when `features.graphTrial` is `experimental-on`.**
 Your brief says whether the trial is on and carries the index verdict line from the pipeline's
-step 0. When it is on, locate sources with `skills/references/graph-query.md` exactly — including its
+step 0. When it is on, locate sources with `builder/skills/references/graph-query.md` exactly — including its
 closing `graph:` line — and open the source to verify every decision you cite. When it is off, or
 your brief carries no verdict, ignore this paragraph and locate with plain search and the project's
 summaries.

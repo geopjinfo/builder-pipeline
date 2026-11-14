@@ -68,7 +68,7 @@ For each section of `PIPELINE_PROFILE.md`:
 be true of this repository **now**, not of what the project might adopt later.
 
 - **`commands`** — `tier` is one command containing `{tier}` (for example your port of the tier runner
-  in `builder/examples/jest-tier-runner/`, or a `make test-{tier}` target — the interface is in that
+  in the kit's `examples/jest-tier-runner/`, or a `make test-{tier}` target — the interface is in that
   example's README); `tiers` lists the tier names that command
   accepts; `affected` and `typecheck` are commands or `null`. Take them from the scripts and CI
   config you read in step 1, never from memory. Each must run from the repo root.
@@ -84,7 +84,7 @@ be true of this repository **now**, not of what the project might adopt later.
 |---|---|---|
 | `claims` · `findingsSchema` · `reviewTemplate` · `handoffPack` · `rowReader` | nothing extra — on by default | `claims.retracted` (a retracted-phrases file, or `null`); `claims.jestBatch` (`{ "cacheDir" }`, only for a jest project whose count claims re-run slow suites); `handoffPack.tracker` only if a tracker with a closed status vocabulary exists |
 | `planSchema` | nothing extra — on by default | `sections`; `tables` (fixed headers); `taskColumns` (add `"Files"` to require each task row to name the files it edits); `oracle` only if a catalogue file exists to check plan keys against |
-| `graph` | an index tool installed **and** a check command meeting the exit-code contract (`builder/tooling/optional/README.md`) | `check`, `sync`, `syncFree`, `autoLimitKb` |
+| `graph` | an index tool installed **and** a check command meeting the exit-code contract (the kit's `tooling/optional/README.md`) | `check`, `sync`, `syncFree`, `autoLimitKb` |
 | `contractOracle` | an API contract file **and** a request/response transcript from a behavioural run | `spec`, `transcript`, `baseline`, `codeField`, `statusFamilies` |
 | `rules` | a syntax-tree rules runner installed and a rules config in the repo | `scan`, `baseline`, `ratcheted` |
 | `mutation` | a mutation tool configured, writing the mutation-testing report JSON | `tool`, `command`, `report`, `payloadPattern` |
@@ -94,7 +94,7 @@ be true of this repository **now**, not of what the project might adopt later.
 | `outboundGuard` | any step that sends an excerpt to a model (EXPERIMENTS.md §12–15) | `maxBytes`, `denyPaths`; `envFiles` (files whose values must never leave); `extraPatterns` for project-specific secret shapes |
 | `citations` | boards whose `Cites` column names ids in a scheme you can resolve mechanically — a requirements CSV, a directory of decision records, a gate list | `schemes` — one per id family: `name`, an anchored `pattern`, and one `source` (`{ csv, column }` · `{ dir, filePattern }` — `dir` one path or a list, ids merged · `{ files, idPattern }`) |
 | `lineCitations` | a catalogue file (keys, permissions, error codes) that code or docs cite by line number | `catalogues`, `roots`, `extensions`; `roster` only while a known backlog of line citations is being swept; `control` when the repo has no other `name.ext:N` citations to serve as the positive control |
-| `wiring` | a codebase with declared seams — queues and their dispatchers, event subscriptions, registered providers — that a pattern can inventory (see `builder/examples/wiring/`) | `roots`, `extensions`, `testPattern`, `kinds`; `allow` only for seams a person has ruled deliberately latent |
+| `wiring` | a codebase with declared seams — queues and their dispatchers, event subscriptions, registered providers — that a pattern can inventory (see the kit's `examples/wiring/`) | `roots`, `extensions`, `testPattern`, `kinds`; `allow` only for seams a person has ruled deliberately latent |
 | `instructionBudget` | an agent instruction file loaded into every session (`CLAUDE.md`, `AGENTS.md`, …) | `files`, `maxLines` |
 | `instructionLint` | agent instruction files that name repo paths, counts or sets | `files`; `ignorePaths` (run outputs, files kept elsewhere); `figures` (each with the command that computes it); `sets`; `baseline` (run `--refresh` once) |
 | `decisionIndex` | decision ids anchored as headings or decision-log rows and cited elsewhere | `roots`, `idPattern`, `out` |
@@ -127,7 +127,7 @@ Rules for the block:
 
 1. Save the filled `PIPELINE_PROFILE.md` (delete the template's leading note block).
 2. Run `npx builder verify` — fix every §16 error it names — then `npx builder features`
-   (with the kit copied in as a `builder/` folder: `node builder/cli.js verify` and `node builder/cli.js features`).
+   (kit copied in as a `builder/` folder instead of installed: run the same commands through `builder/cli.js` with Node).
 3. Report to the human: a one-screen summary of what you derived, the feature states, plus the
    full list of `⚠ CONFIRM` lines as questions to answer in one batch. Apply their answers and run
    both commands again.

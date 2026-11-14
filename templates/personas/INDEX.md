@@ -35,7 +35,7 @@ Delivery drafts it, product walks it, governance rules on it.
 
 ## Roster (machine-readable)
 
-The one block tools read. `node scripts/personas-check.mjs` holds it to the tables above and the
+The one block tools read. `npx builder personas-check` holds it to the tables above and the
 profile files. Only the human sets `confirmed` or `render` to `true`.
 
 ```json
