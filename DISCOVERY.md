@@ -77,7 +77,8 @@ be true of this repository **now**, not of what the project might adopt later.
   step created unless this repo already has its own.
 - **`models`** — `strong` and `mid` from the setup's confirmed mapping; `orchestrator` is the model
   the orchestrating session should run on, or `null` if nobody declared one.
-- **`protected`** — the same globs as §4, as a JSON array.
+- **`protected`** — the same globs as §4, as a JSON array. The protected-paths hook reads them too (add-only:
+  they join the hook's own list, never replace it), and while the list is non-empty the profile itself is protected.
 - **`features`** — one entry per feature, each with a `state`. Decide each from evidence:
 
 | Feature | Switch `on` only when this repo has | Keys to fill |

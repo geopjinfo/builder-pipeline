@@ -33,3 +33,6 @@ Rules of thumb:
   next session.
 - If your harness has its own hook/guard system (Cursor rules constraints, other CLIs' policy
   files), mirror the same protected list there — one source of truth: the profile.
+- `protected-paths.cjs` reads the profile's §16 `protected` globs itself, ADD-ONLY: they join its filled list and
+  `BUILDER_PROTECTED`, never remove one, and a missing or malformed profile adds nothing. While §16 adds
+  anything, `PIPELINE_PROFILE.md` is protected too (`BUILDER_UNLOCK=fence` opens it) — so a person edits §16.

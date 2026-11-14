@@ -17,6 +17,20 @@ versions independently of any project it is pasted into.
   byte-for-byte. Tests: `tests/invocation.test.mjs` scans every file in package.json `files` (red case included)
   and checks that a package-mode `unpack --tool all --experimental` installs no kit folder form.
 
+### Security
+
+- **The protected-paths hook also protects the profile's §16 `protected` globs, add-only.** `hooks/protected-paths.cjs`
+  reads the one `json pipeline-settings` block of `PIPELINE_PROFILE.md` as data (its own small parser — no profile
+  code is loaded, nothing from node_modules, so the `.claude/hooks/` copy works with node_modules gone) and ADDS
+  each glob as a prefix (the directory before its first wildcard). It can never remove the filled list, a
+  `BUILDER_PROTECTED` addition, an unlock rule or the hook's self-protection. A missing, unreadable, oversized or
+  malformed profile adds nothing — the hook is then exactly as strict as before. While §16 adds anything, the
+  profile itself is protected (writes, and rm / mv / del / Remove-Item / git rm|mv|checkout|restore naming it;
+  `BUILDER_UNLOCK=fence` opens it), so an agent cannot shrink the list the hook reads. Trade-off: from then on a
+  person (or a fence grant) edits the profile; with §16 `protected` empty it stays writable, since an edit there
+  can only add protection. Not seen: a glob that deletes it and a whole-tree reset, as for every protected path.
+  Tests: `tests/protected-paths-profile.test.mjs`.
+
 ## [1.0.0] — 2026-11-14
 
 First upstream release: the kit installs as a package from a git tag and drives Claude Code, Codex and Antigravity from one source. Smoke-tested 14 Nov in a brownfield sample: Antigravity loaded 17 skills and 10 agents; Codex discovered the 17 skills and read the module-reviewer agent (own-file write scope); the owner confirmed the sample personas. Since rc.2: the genericity test carries no source names.
