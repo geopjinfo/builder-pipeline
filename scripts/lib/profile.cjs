@@ -250,10 +250,15 @@ function realDeepest(p) {
 function logsProblem(logs, protectedGlobs, opts = {}) {
   if (typeof logs !== 'string' || !logs.trim()) return 'a non-empty project-relative folder';
   const shown = JSON.stringify(logs);
+  // Judged as written: the cap joins the raw value, so surrounding whitespace is refused, never trimmed away.
+  if (logs !== logs.trim()) return `must not start or end with whitespace (it is written as given), got ${shown}`;
   const p = logs.trim().replace(/\\/g, '/');
   if (/^(?:\/|~|[A-Za-z]:|\$|%)/.test(p) || /[$%`]/.test(p)) return `must be a literal project-relative folder, got ${shown}`;
   if (p.split('/').includes('..')) return `must stay inside the project (no .. segment), got ${shown}`;
   if (p.split('/').some((s) => s.includes(':'))) return `must not name a stream or a drive (a ':' in a segment), got ${shown}`;
+  // A segment Windows would rewrite (trailing dots or spaces, leading or inner whitespace runs at the ends) is refused,
+  // not normalised: the folder judged must be exactly the folder written.
+  if (p.split('/').some((s) => s && s !== '.' && s !== s.replace(/[. ]+$/, '').replace(/^\s+/, ''))) return `must not end a segment in a dot or a space, got ${shown}`;
   const fences = [];
   for (const h of LOG_FENCE_DIRS) fences.push({ segs: logSegs(h), what: `the hook folder ${h}/` });
   for (const g of Array.isArray(protectedGlobs) ? protectedGlobs : []) {
