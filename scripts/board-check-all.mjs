@@ -25,14 +25,26 @@ import { createRequire } from 'node:module';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const freshness = require('./lib/board-freshness.cjs');
 const profile = require('./lib/profile.cjs');
+const { projectRoot, runHint } = require('./lib/run-hint.cjs');
+
+/**
+ * The sibling scripts are found BESIDE this one, never under the working directory: installed as a package the
+ * project has no scripts/ folder, and a cwd-relative spawn crashed on every board.
+ */
+const sibling = (name) => fileURLToPath(new URL(`./${name}`, import.meta.url));
+const ROOT = projectRoot();
+process.chdir(ROOT); // board paths below are printed and passed relative to the project
+const CHILD = { encoding: 'utf8', cwd: ROOT, env: { ...process.env, BUILDER_PROJECT_ROOT: ROOT } };
+const FIX_HINT = runHint('board-check-all', fileURLToPath(import.meta.url), '--fix');
 
 const MARKER = '<!-- progress:auto start -->';
 /** The boards directory is §16 `paths.boards`; `tasks/` only when there is no profile to say otherwise. */
-const DIR = profile.load(process.cwd()).settings.paths?.boards || 'tasks';
+const DIR = profile.load(ROOT).settings.paths?.boards || 'tasks';
 
 const fix = process.argv.includes('--fix');
 
@@ -77,9 +89,9 @@ if (boards.length === 0 && only === null) {
 
 const stale = [];
 for (const board of boards) {
-  const args = ['scripts/board-progress.mjs', board];
+  const args = [sibling('board-progress.mjs'), board];
   if (!fix) args.push('--check');
-  const run = spawnSync(process.execPath, args, { encoding: 'utf8' });
+  const run = spawnSync(process.execPath, args, CHILD);
   const label = board.padEnd(34);
   if (run.status === 0) {
     console.log(`ok    ${label} ${(run.stdout ?? '').trim().split('\n').pop() ?? ''}`);
@@ -107,7 +119,7 @@ for (const board of allBoards) {
     continue;
   }
   if (fix) {
-    const run = spawnSync(process.execPath, ['scripts/board-render.mjs', board], { encoding: 'utf8' });
+    const run = spawnSync(process.execPath, [sibling('board-render.mjs'), board], CHILD);
     if (run.status === 0) {
       console.log(`fixed ${board.padEnd(34)} re-rendered`);
       continue;
@@ -118,12 +130,21 @@ for (const board of allBoards) {
   console.log(`STALE ${board.padEnd(34)} ${v.reason}`);
 }
 
+/**
+ * Under --fix a board or page that could NOT be rewritten is still stale: a child that failed (a missing script, a
+ * board it cannot parse) fails the run. Printing PASS after a crashed child was a false green.
+ */
+if (fix && (stale.length > 0 || staleRenders.length > 0)) {
+  console.error(`\nboard-check-all: FAIL — --fix could not rewrite ${[...stale, ...staleRenders.map((s) => s.board)].join(', ')}; see the errors above.`);
+  process.exit(1);
+}
+
 if (staleRenders.length > 0 && !fix) {
   console.error(
     `
 board-check-all: FAIL — ${staleRenders.length} rendered run board(s) stale.
 ` +
-      `Run \`node scripts/board-check-all.mjs --fix\`, then commit the re-rendered pages.`,
+      `Run \`${FIX_HINT}\`, then commit the re-rendered pages.`,
   );
   process.exit(1);
 }
@@ -131,7 +152,7 @@ board-check-all: FAIL — ${staleRenders.length} rendered run board(s) stale.
 if (stale.length > 0 && !fix) {
   console.error(
     `\nboard-check-all: FAIL — ${stale.length} of ${boards.length} board(s) stale.\n` +
-      `Run \`node scripts/board-check-all.mjs --fix\`, then commit the recomputed blocks.`,
+      `Run \`${FIX_HINT}\`, then commit the recomputed blocks.`,
   );
   process.exit(1);
 }

@@ -48,11 +48,33 @@ const USAGE = [
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
-const file = args.find((a) => !a.startsWith('--'));
-if (!file) {
+const given = args.find((a) => !a.startsWith('--'));
+if (!given) {
   console.error(USAGE);
   process.exit(2);
 }
+
+/**
+ * A board KEY (`rooms`) is `<paths.boards>/<key>.md` under the project (BUILDER_PROJECT_ROOT || cwd) — the form the
+ * board rules and board-render use; anything ending in `.md`, or an existing file, is a path as before.
+ */
+const { createRequire } = await import('node:module');
+const req = createRequire(import.meta.url);
+const { projectRoot, runHint } = req('./lib/run-hint.cjs');
+const { existsSync: exists } = await import('node:fs');
+const { fileURLToPath } = await import('node:url');
+let file = given;
+if (!given.endsWith('.md') && !exists(given)) {
+  const root = projectRoot();
+  const boards = req('./lib/profile.cjs').load(root).settings.paths?.boards || 'tasks';
+  file = `${boards}/${given}.md`;
+  if (!exists(`${root}/${file}`)) {
+    console.error(`board-progress: no board "${given}" — looked for ${file} (paths.boards); pass a key or a path to a .md board`);
+    process.exit(1);
+  }
+  if (process.cwd() !== root) process.chdir(root);
+}
+const HINT = runHint('board-progress', fileURLToPath(import.meta.url), file);
 
 const source = readFileSync(file, 'utf8');
 const eol = source.includes('\r\n') ? '\r\n' : '\n';
@@ -220,7 +242,7 @@ if (next === source) {
 }
 if (check) {
   console.error(
-    `board-progress: ${file} progress block is STALE — run \`node scripts/board-progress.mjs ${file}\`.`,
+    `board-progress: ${file} progress block is STALE — run \`${HINT}\`.`,
   );
   process.exit(1);
 }
