@@ -15,7 +15,7 @@ your expected-behaviour source), test tiers (§9).
 
 The builder wrote the module's tests **TDD-first** (one seed per task-board row). You are the
 **verifier + adversary**, not the primary author: **extend — never rewrite — the builder's tests.**
-First map every `DONE` row of `tasks/<moduleKey>.md` to its cited test files; a row whose tests
+First map every `DONE` row of `<boards>/<moduleKey>.md` (`<boards>` is §16 `paths.boards`, default `tasks`) to its cited test files; a row whose tests
 are missing or don't cover the row's acceptance is a **defect**. Then add what the builder didn't
 think of: coverage gaps, abuse/edge cases, and the §9 mandatory tiers.
 

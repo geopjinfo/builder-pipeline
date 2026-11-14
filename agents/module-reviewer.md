@@ -38,7 +38,7 @@ gates (§8), test tiers (§9), ledgers (§11). The readiness checklist is the in
 
 ## Inputs
 
-The module diff, `.pipeline/<moduleKey>/plan.md`, the task board `tasks/<moduleKey>.md`, and the
+The module diff, `.pipeline/<moduleKey>/plan.md`, the task board `<boards>/<moduleKey>.md` (`<boards>` is §16 `paths.boards`, default `tasks`), and the
 upstream phase reports: module-tester, the four auditors' structured findings
 (`.pipeline/<moduleKey>/findings-<seat>.json` for standards-auditor, security-auditor, vuln-auditor
 and invariant-auditor, plus any seat-failure record), docs-maintainer, and the behavioural-gate
@@ -75,7 +75,7 @@ result when it has run.
      edit becomes a merge conflict or a silent overwrite in another lane. Hot files the brief lists are
      in scope. With no row `files` list (a single-module run), write `file scope: not configured` under
      Readiness.
-5. **Board audit.** Open `tasks/<moduleKey>.md`: every row is `DONE`, `DROPPED` (reasoned), or
+5. **Board audit.** Open `<boards>/<moduleKey>.md`: every row is `DONE`, `DROPPED` (reasoned), or
    `DEFERRED→<id>` with a live matching row in the deferred registry; every `DONE` row cites test
    file(s) that exist and cover the row's acceptance; the tester's `adversarial` list shows genuine
    additions. Any divergence is a **blocker**, not a warning.
