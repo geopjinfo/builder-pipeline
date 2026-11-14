@@ -5,6 +5,8 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] — 2026-11-14
+
 ### Added
 
 - **Release candidates can be cut.** `tests/version.test.mjs` accepts a semver prerelease (`1.0.0-rc.1`) in
