@@ -19,6 +19,7 @@
  */
 const { ROW_ID, stripAnnotation, normalizeStatus } = require('./board-rows.cjs');
 const { csvCells } = require('./output-check.cjs');
+const { runHint } = require('./run-hint.cjs');
 
 const SECTIONS = [
   ['§A', 'progress'],
@@ -229,7 +230,7 @@ function renderPack(p) {
         : '- No registry row changed against the base.';
   return `# ${p.key} — handoff pack
 
-**From:** \`${sha}\` · ${version} · base \`${p.base}\` · generated ${p.date} by \`node scripts/handoff-pack.mjs\`
+**From:** \`${sha}\` · ${version} · base \`${p.base}\` · generated ${p.date} by \`${runHint('handoff-pack')}\`
 
 ## §A progress
 

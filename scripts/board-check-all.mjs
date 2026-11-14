@@ -1,5 +1,6 @@
 /**
- * `node scripts/board-check-all.mjs` — every task board that carries a computed progress block must be fresh.
+ * `npx builder run board-check-all` — every task board that carries a computed progress block must be fresh.
+ * (folder layout: node scripts/board-check-all.mjs in place of npx builder run board-check-all)
  *
  * WHY THIS EXISTS. `board-progress.mjs` makes the bar a projection instead of a claim, but only for
  * the board somebody remembered to re-run. A stale bar is worse than no bar: it reports a number
@@ -17,9 +18,9 @@
  * authority of a rendered document. So the rendered board must be no older than the newest of its
  * run log and its markdown. A board with no run log has nothing to be stale against and is skipped.
  *
- *   node scripts/board-check-all.mjs           check every marked board (exit 1 on any stale)
- *   node scripts/board-check-all.mjs --fix     rewrite every stale block, re-render every stale page
- *   node scripts/board-check-all.mjs --only <key>   <boards>/<key>.md alone (combines with --fix)
+ *   npx builder run board-check-all            check every marked board (exit 1 on any stale)
+ *   npx builder run board-check-all --fix     rewrite every stale block, re-render every stale page
+ *   npx builder run board-check-all --only <key>   <boards>/<key>.md alone (combines with --fix)
  */
 import { createRequire } from 'node:module';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

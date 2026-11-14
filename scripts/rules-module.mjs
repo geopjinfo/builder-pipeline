@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * `node scripts/rules-module.mjs [<target>] [--json]` — structural rule hits for one area of the code, each
+ * `npx builder run rules-module [<target>] [--json]` — structural rule hits for one area of the code, each
  * NEW or BASELINED with its written why. Interface and key: `scripts/lib/rules-module.cjs`.
+ * (folder layout: node scripts/rules-module.mjs in place of npx builder run rules-module)
  *
  * `features.rules.scan` is the command; `{target}` in it is replaced by the argument (a module directory,
  * a path). A target given to a scan command without `{target}` is refused rather than silently ignored.

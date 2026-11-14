@@ -1,9 +1,10 @@
 /**
  * A declared seam must have something on the other end of it. Rule and its WHY: scripts/lib/wiring.cjs.
  *
- *   node scripts/wiring-check.mjs                   inventory every seam, judge it, end in one verdict line
- *   node scripts/wiring-check.mjs --list            also print the whole inventory (joined / UNJOINED / not-evaluable)
- *   node scripts/wiring-check.mjs --allow <file>    judge against this allow file instead of features.wiring.allow
+ *   npx builder run wiring-check                    inventory every seam, judge it, end in one verdict line
+ *   npx builder run wiring-check --list            also print the whole inventory (joined / UNJOINED / not-evaluable)
+ *   npx builder run wiring-check --allow <file>    judge against this allow file instead of features.wiring.allow
+ * (folder layout: node scripts/wiring-check.mjs in place of npx builder run wiring-check)
  *
  * `--allow` exists so a red-proof test can point the check at a fixture allow file: proving the dead-waiver guard
  * fires must never mean editing the live allow file. Production runs never pass it.

@@ -1,5 +1,6 @@
 /**
- * `node scripts/board-render.mjs <moduleKey|path>` — render a task board as a live run board.
+ * `npx builder run board-render <moduleKey|path>` — render a task board as a live run board.
+ * (folder layout: node scripts/board-render.mjs in place of npx builder run board-render)
  *
  * WHAT IT PRODUCES. `tasks/<key>.html`: one self-contained page showing what is green, what is
  * blocking, what happened so far, which files were produced, which seat did it, on which model,
@@ -19,10 +20,10 @@
  * em-dash. THAT IS THE POINT: absence renders as absence. A zero would be a measurement nobody took.
  * S3 is Claude Code's transcript layout; on any other harness every seat renders as unmeasured.
  *
- *   node scripts/board-render.mjs tasks/<key>.md           write tasks/<key>.html
- *   node scripts/board-render.mjs <key> --open             …and open it
- *   node scripts/board-render.mjs --all                    every board carrying a run log
- *   node scripts/board-render.mjs <key> --json [--out <dir>] [--limit <bytes>]
+ *   npx builder run board-render tasks/<key>.md           write tasks/<key>.html
+ *   npx builder run board-render <key> --open             …and open it
+ *   npx builder run board-render --all                    every board carrying a run log
+ *   npx builder run board-render <key> --json [--out <dir>] [--limit <bytes>]
  *                                                          one JSON document per section (see page-docs.cjs)
  *   --transcripts <dir>                                    read S3 from <dir> instead of the harness default
  */

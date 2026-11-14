@@ -1,8 +1,9 @@
 /**
  * May this payload go to a model? The command-line door to scripts/lib/outbound-guard.cjs (rules and WHY there).
  *
- *   node scripts/outbound-check.mjs < payload.json        payload { "text": "…", "files": [{ "path", "content" }] }
- *   node scripts/outbound-check.mjs --files a.ts b.md     the named files, read from the project root
+ *   npx builder run outbound-check < payload.json        payload { "text": "…", "files": [{ "path", "content" }] }
+ *   npx builder run outbound-check --files a.ts b.md     the named files, read from the project root
+ * (folder layout: node scripts/outbound-check.mjs in place of npx builder run outbound-check)
  *
  * Prints `SEND <bytes> bytes`, or `NOT SENT` and one line per reason (file, line and kind — never the matched text).
  *

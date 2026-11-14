@@ -1,7 +1,8 @@
 /**
  * The root agent-instruction file stays under a line budget. Rule and its WHY: scripts/lib/instruction-budget.cjs.
  *
- *   node scripts/instruction-budget.mjs
+ *   npx builder run instruction-budget
+ * (folder layout: node scripts/instruction-budget.mjs in place of npx builder run instruction-budget)
  *
  * Prints `path  N/max` per listed file (`MISSING/max` for an absent one), then one verdict line.
  *

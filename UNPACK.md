@@ -1,5 +1,7 @@
 # 🔧 UNPACK — installing the builder kit into a project as a folder (secondary path)
 
+<!-- folder-layout: this whole document — every command on this page is the builder/ folder form (tests/invocation.test.mjs) -->
+
 > **Secondary.** The primary install is the npm package from a git tag — `npm i -D github:geopjinfo/builder-pipeline#<tag>`,
 > then the one setup prompt ([`README.md`](README.md) § Getting started). This page is the folder-copy path: a release
 > archive extracted as `builder/` and run as `node builder/cli.js <command>`, for a project without npm or a fetch.

@@ -1,5 +1,6 @@
 # Mechanical file placement for the builder kit — the no-Node fallback (Windows PowerShell 5.1+).
 # Usage:  powershell -File builder\scripts\unpack.ps1 <claude-code|codex>   (from the TARGET repo root)
+# folder-layout: this whole file — it runs from a builder/ folder copy, so its commands are the folder forms.
 # The scripts it installs need Node 18+ to run. `node builder/cli.js unpack` is the complete
 # installer (agent frontmatter transform, hooks, skill references, experimental files); use this
 # only where the CLI cannot run.
