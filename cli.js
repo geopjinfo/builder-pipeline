@@ -51,6 +51,8 @@ const VERSION = require('./package.json').version;
 // The batch orchestrator skill installs the same way and stays inert until features.orchestrator is on (scripts/orch.mjs
 // prints 'orchestrator: not configured' otherwise).
 const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator'];
+const ADAPTERS = require('./adapters/lib/index.cjs');
+const choicesLib = require('./scripts/lib/choices.cjs');
 
 // ---------------------------------------------------------------------------
 // Tool registry. Two install styles:
@@ -59,9 +61,12 @@ const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-ch
 //                gets a pointer block telling the agent how to run phases
 // Most modern CLIs read AGENTS.md, so they share that pointer (marker prevents dupes).
 // ---------------------------------------------------------------------------
+// A native tool names its adapter (adapters/lib/<id>.cjs): the adapter renders each persona and skill into the
+// harness's own format and says where it lands; cli.js does the writing.
 const TOOLS = {
   'claude-code': { style: 'native', pointer: 'CLAUDE.md', label: 'Claude Code (native subagents + skills)' },
-  codex:         { style: 'dotBuilder', pointer: 'AGENTS.md', label: 'OpenAI Codex CLI (AGENTS.md)' },
+  codex:         { style: 'native', pointer: 'AGENTS.md', label: 'OpenAI Codex CLI (native .codex/agents + .agents/skills, AGENTS.md)' },
+  antigravity:   { style: 'native', pointer: 'AGENTS.md', label: 'Google Antigravity (native .agents/agents + .agents/skills, AGENTS.md)' },
   opencode:      { style: 'dotBuilder', pointer: 'AGENTS.md', label: 'OpenCode (AGENTS.md)' },
   gemini:        { style: 'dotBuilder', pointer: 'GEMINI.md', label: 'Gemini CLI (GEMINI.md)' },
   cursor:        { style: 'dotBuilder', pointer: '.cursor/rules/builder-pipeline.mdc', mdc: true, label: 'Cursor (.cursor/rules)' },
@@ -171,10 +176,16 @@ function writeFile(abs, content) {
   fs.writeFileSync(abs, content);
 }
 
-/** Copies the CURRENT file to .builder/backup-<stamp>/<dst> before an upgrade overwrites it. */
+/** The run's backup folder stamp (UTC, to the second), fixed at first use. */
+function stamp() {
+  if (!UPGRADE.stamp) UPGRADE.stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  return UPGRADE.stamp;
+}
+
+/** Copies the CURRENT file to .builder/backup-<stamp>/<dst> before an upgrade (or a "kit" choice) overwrites it. */
 function backup(dst) {
   if (DRY) return;
-  const to = path.join(CWD, '.builder', `backup-${UPGRADE.stamp}`, dst);
+  const to = path.join(CWD, '.builder', `backup-${stamp()}`, dst);
   fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.copyFileSync(path.join(CWD, dst), to);
 }
@@ -183,19 +194,25 @@ function backup(dst) {
  * The one place a file lands. `owner` is 'kit' (the pack's own code and prose: refreshed by upgrade) or
  * 'project' (seeded once, then the project's: never touched again by either mode).
  */
-function place(dst, produce, owner) {
+function place(dst, produce, owner, replace = false) {
   const abs = path.join(CWD, dst);
   const exists = fs.existsSync(abs);
+  // Two tools can map one source to one destination (codex + antigravity share .agents/skills/, opencode + generic
+  // share .builder/): it is written and reported once.
+  if (UPGRADE.seen.has(lockKey(dst))) return;
+  UPGRADE.seen.add(lockKey(dst));
   if (MODE !== 'upgrade') {
-    if (exists) return log('skip (exists):', dst);
+    if (exists && !replace) {
+      // The kit's own file from an earlier install: lock it, so the next upgrade knows the kit wrote it.
+      if (owner === 'kit' && !lockPrior()[lockKey(dst)] && sameText(fs.readFileSync(abs), Buffer.from(produce()))) LOCK.next[lockKey(dst)] = shaOf(produce());
+      return log('skip (exists):', dst);
+    }
     const content = produce();
+    if (exists) backup(dst);
     if (!DRY) writeFile(abs, content);
     if (owner === 'kit') LOCK.next[lockKey(dst)] = shaOf(content);
-    return log(DRY ? 'would install:' : 'installed:', dst);
+    return log(exists ? (DRY ? 'would replace:' : 'replaced:') : DRY ? 'would install:' : 'installed:', dst);
   }
-  // Two tools can map one source to one destination (codex + opencode share .builder/): report it once.
-  if (UPGRADE.seen.has(dst)) return;
-  UPGRADE.seen.add(dst);
   if (!exists) {
     const content = produce();
     if (!DRY) writeFile(abs, content);
@@ -210,7 +227,7 @@ function place(dst, produce, owner) {
     return upgradeLog('unchanged', dst);
   }
   const locked = lockPrior()[lockKey(dst)];
-  if (locked && locked !== shaOf(current) && !FORCE) {
+  if (locked && locked !== shaOf(current) && !FORCE && !replace) {
     return upgradeLog('kept (local edit)', dst, `changed since the kit wrote it (${LOCK_FILE}) — move the change into the profile or an overlay, or re-run with --force`);
   }
   backup(dst);
@@ -254,17 +271,20 @@ function pointerSpan(text) {
  * The pointer block in an instruction file the user also writes in. Unpack appends it once. Upgrade replaces
  * only what lies between the markers, and only when that differs — the text around it is the user's.
  */
+const POINTERS_SEEN = new Set();
 function wirePointer(dst, block, wholeFile) {
   const abs = path.join(CWD, dst);
   const existing = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null;
+  // Several tools share one instruction file (codex, antigravity, opencode, generic): its block is wired once, and
+  // pointerBlock() writes it for every selected tool that reads that file.
+  if (POINTERS_SEEN.has(dst)) return;
+  POINTERS_SEEN.add(dst);
   if (MODE !== 'upgrade') {
     if (wholeFile) return place(dst, () => block + '\n', 'kit');
     if (existing !== null && existing.includes(MARKER)) return log('skip (wired):', dst);
     if (!DRY) writeFile(abs, (existing ? existing.replace(/\s*$/, '\n\n') : '') + block + '\n');
     return log(DRY ? 'would wire:' : 'wired:', dst);
   }
-  if (UPGRADE.seen.has(dst)) return;
-  UPGRADE.seen.add(dst);
   if (existing === null) {
     if (!DRY) writeFile(abs, block + '\n');
     return upgradeLog('added', dst, 'pointer block');
@@ -312,67 +332,85 @@ function experimentalAgentFiles() {
   return filesUnder(path.join('agents', 'experimental')).filter((f) => f.endsWith('.md'));
 }
 
-// Persona frontmatter is harness-NEUTRAL (capabilities + tier [+ effort]). Adapters that have a native
-// agent format transform it at install time; everyone else consumes it as-is (prompt text).
-const CAP_TO_CLAUDE_TOOLS = {
-  'read-only': 'Read, Grep, Glob, Bash',
-  code: 'Read, Grep, Glob, Edit, Write, Bash',
-  'test-only': 'Read, Grep, Glob, Edit, Write, Bash', // scope narrowed by the persona text itself
-  docs: 'Read, Grep, Glob, Edit, Write, Bash',
-  // A read-only seat that must write exactly ONE file of its own (the reviewer's review). The grant is only a
-  // grant if something holds it to that file: hooks/claude-code/reviewer-write-guard.cjs does.
-  'read-only+own-file': 'Read, Grep, Glob, Bash, Write',
-  // Reads and publishes a page; never edits the repo (experimental live-page keeper). The page's data store has
-  // its own tool, separate from the publishing one; the keeper's version-pinned reads and writes go through it.
-  publish: 'Bash, Read, Artifact, ArtifactData',
-};
-// Default tier→model mapping for adapters with a native model field. Override per install with
-// --models strong=<x>,mid=<y> (the setup-builder skill picks these by inspecting the user's
-// harness/subscription). Only harnesses with a native agent format need this — everyone else
-// records their mapping in PIPELINE_PROFILE.md §12 instead.
-let TIER_TO_CLAUDE_MODEL = { strong: 'opus', mid: 'sonnet', low: 'haiku' };
-const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+/// Persona frontmatter is harness-NEUTRAL (capabilities + tier [+ effort]). A native tool's adapter
+// (adapters/lib/<tool>.cjs) renders it into that harness's agent format at install time; every dotBuilder tool
+// consumes it as-is (prompt text).
+//
+// Tier → model per native tool. Claude Code defaults to opus/sonnet/haiku; Codex ships no defaults (an agent with no
+// `model` inherits the session's); Antigravity uses its adapter's pro/flash defaults. Override per install with
+// --models strong=<x>,mid=<y> (Claude Code) or --models codex.strong=<x>,antigravity.mid=<y> (the setup-builder skill
+// picks these by inspecting the user's harness/subscription). Everyone else records the mapping in
+// PIPELINE_PROFILE.md §12 instead.
+const TIER_TO_CLAUDE_MODEL = { strong: 'opus', mid: 'sonnet', low: 'haiku' };
+const MODELS = { 'claude-code': TIER_TO_CLAUDE_MODEL, codex: {}, antigravity: {} };
 
-function toClaudeAgent(content) {
-  const end = content.indexOf('---', 4);
-  if (end === -1) return content;
-  const fm = content.slice(4, end);
-  const get = (k) => ((fm.match(new RegExp(`^${k}: (.*)$`, 'm')) || [])[1] || '').split('#')[0].trim();
-  // `capabilities` may be one value or a comma list (`read-only, shell, publish`); `writes:` names the ONE file a
-  // read-only seat may write. Anything unrecognised falls back to read-only tools — a seat never gains write access
-  // by a typo.
-  const caps = (get('capabilities') || 'read-only').split(',').map((c) => c.trim()).filter(Boolean);
-  const writes = get('writes');
-  let tools = CAP_TO_CLAUDE_TOOLS['read-only'];
-  if (caps.includes('publish')) tools = CAP_TO_CLAUDE_TOOLS.publish;
-  else if (caps.length === 1 && CAP_TO_CLAUDE_TOOLS[caps[0]]) tools = CAP_TO_CLAUDE_TOOLS[caps[0]];
-  if (writes && caps.includes('read-only') && !caps.includes('publish')) tools = CAP_TO_CLAUDE_TOOLS['read-only+own-file'];
-  const tier = get('tier') || 'strong';
-  const effort = get('effort');
-  const lines = [
-    '---',
-    `name: ${get('name')}`,
-    `description: ${get('description')}`,
-    `tools: ${tools}`,
-    `model: ${TIER_TO_CLAUDE_MODEL[tier] || 'opus'}`,
-  ];
-  if (EFFORTS.has(effort)) lines.push(`effort: ${effort}`);
-  lines.push('---');
-  return lines.join('\n') + content.slice(end + 3);
+/** A path an adapter returns (always `/`) as this platform's relative path, so one file has one spelling. */
+const nativePath = (p) => path.join(...p.split('/'));
+
+/**
+ * One kit item, before it lands: whether it installs, where, and under which name. `decide()` is the clash check
+ * (cmdUnpack/cmdUpgrade set it); without one every item installs as planned.
+ */
+let decide = (entry) => entry;
+
+/** A persona through its tool's adapter, then kitPaths(). A "both" choice installs it renamed builder-<name>. */
+function installAgent(tool, src, file) {
+  const a = ADAPTERS[tool];
+  const text = fs.readFileSync(src, 'utf8');
+  const name = path.basename(file, '.md');
+  const out = a.renderAgent(text, { models: MODELS[tool], file });
+  const d = decide({ key: `agent:${name}`, kind: 'agent', name, dst: nativePath(out.path), produce: () => kitPaths(out.content) });
+  if (!d) return;
+  if (!d.rename) return place(nativePath(out.path), () => kitPaths(out.content), 'kit', d.replace);
+  const renamed = a.renderAgent(choicesLib.renameFrontmatter(text, d.rename), { models: MODELS[tool], file: path.join(path.dirname(file), `${d.rename}.md`) });
+  place(nativePath(renamed.path), () => kitPaths(renamed.content), 'kit');
 }
 
-function copyTransformed(src, dst, fn) {
-  place(dst, () => kitPaths(fn(fs.readFileSync(src, 'utf8'))), 'kit');
+/** A kit skill through its tool's adapter. Returns the folder it landed in (null when skipped). */
+function installSkill(tool, name, content) {
+  const a = ADAPTERS[tool];
+  const out = a.renderSkill(name, content);
+  const d = decide({ key: `skill:${name}`, kind: 'skill', name, dst: nativePath(out.path), produce: () => kitPaths(out.content) });
+  if (!d) return null;
+  const f = d.rename ? a.renderSkill(d.rename, choicesLib.renameFrontmatter(content, d.rename)) : out;
+  place(nativePath(f.path), () => kitPaths(f.content), 'kit', d.replace);
+  return path.dirname(nativePath(f.path));
 }
 
-function copyDirIfAbsent(srcDir, dstDir, skipTop = []) {
-  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
-    if (skipTop.includes(entry.name)) continue;
-    const src = path.join(srcDir, entry.name);
-    const dst = path.join(dstDir, entry.name);
-    if (entry.isDirectory()) copyDirIfAbsent(src, dst);
-    else copyIfAbsent(src, dst);
-  }
+/** A plain (dotBuilder) file: copied as-is, or renamed builder-<name> for a "both" choice. */
+function installPlain(kind, name, src, dst) {
+  const produce = () => kitPaths(fs.readFileSync(src, 'utf8'));
+  const d = decide({ key: `${kind}:${name}`, kind, name, dst, produce });
+  if (!d) return;
+  if (!d.rename) return place(dst, produce, 'kit', d.replace);
+  place(nativePath(d.dst), () => kitPaths(choicesLib.renameFrontmatter(fs.readFileSync(src, 'utf8'), d.rename)), 'kit');
+}
+
+/**
+ * An extra skill's whole folder (skills-extra/<name>/, minus its agents/), under `base`. SKILL.md goes through the
+ * tool's adapter (Claude Code: as-is) and the clash check; the folder follows SKILL.md's decision.
+ */
+function installExtraDir(tool, name, base) {
+  const srcDir = path.join(KIT, 'skills-extra', name);
+  const skillMd = path.join(srcDir, 'SKILL.md');
+  const render = (n, c) => (ADAPTERS[tool] ? ADAPTERS[tool].renderSkill(n, c).content : c);
+  const raw = fs.existsSync(skillMd) ? fs.readFileSync(skillMd, 'utf8') : null;
+  const dst0 = path.join(base, name);
+  const d = raw === null ? { name } : decide({ key: `skill:${name}`, kind: 'skill', name, dst: path.join(dst0, 'SKILL.md'), produce: () => kitPaths(render(name, raw)) });
+  if (!d) return;
+  const target = d.rename || name;
+  const walk = (from, to, top) => {
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      if (top && entry.name === 'agents') continue;
+      const src = path.join(from, entry.name);
+      const dst = path.join(to, entry.name);
+      if (entry.isDirectory()) walk(src, dst, false);
+      else if (top && entry.name === 'SKILL.md') {
+        place(dst, () => kitPaths(render(target, d.rename ? choicesLib.renameFrontmatter(raw, target) : raw)), 'kit', d.replace);
+      } else place(dst, () => (/\.md$/i.test(dst) ? kitPaths(fs.readFileSync(src, 'utf8')) : fs.readFileSync(src)), 'kit', d.replace);
+    }
+  };
+  walk(srcDir, path.join(base, target), true);
 }
 
 function extrasList() {
@@ -395,14 +433,29 @@ function extraAgentFiles() {
 }
 
 // --------------------------- pointer content -------------------------------
+/** The tools selected for this run (cmdUnpack/cmdUpgrade set it): a shared pointer file speaks for all of them. */
+let SELECTED = [];
+const DOT_PERSONAS = 'prompt files under `.builder/personas/` — when the playbook says "dispatch persona X", start a FRESH session whose first message is the persona file + `PIPELINE_PROFILE.md` + the distilled inputs the playbook names, and nothing else; never run two phases in one context; honour each persona\'s tool limits (read-only seats never edit; the tester edits test files only)';
+
 function pointerBlock(tool) {
   const native = TOOLS[tool].style === 'native';
-  const playbook = native
+  const nativeSharer = !native && SELECTED.find((t) => TOOLS[t] && TOOLS[t].style === 'native' && TOOLS[t].pointer === TOOLS[tool].pointer);
+  if (nativeSharer) return pointerBlock(nativeSharer);
+  let playbook = native
     ? 'the `build-module-pipeline` skill (auto-registered under `.claude/skills/`)'
     : '`.builder/playbooks/build-module-pipeline.md`';
-  const personas = native
+  let personas = native
     ? 'auto-registered subagents under `.claude/agents/` (dispatch by name)'
-    : 'prompt files under `.builder/personas/` — when the playbook says "dispatch persona X", start a FRESH session whose first message is the persona file + `PIPELINE_PROFILE.md` + the distilled inputs the playbook names, and nothing else; never run two phases in one context; honour each persona\'s tool limits (read-only seats never edit; the tester edits test files only)';
+    : DOT_PERSONAS;
+  if (native && tool !== 'claude-code') {
+    // AGENTS.md is read by Codex and Antigravity alike (and by the AGENTS.md dotBuilder tools): one block for every
+    // selected tool that reads it.
+    const sharing = [...new Set([tool, ...SELECTED])].filter((t) => TOOLS[t] && TOOLS[t].pointer === TOOLS[tool].pointer);
+    const dirs = sharing.filter((t) => TOOLS[t].style === 'native').map((t) => `\`${ADAPTERS[t].agentsDir}/\` (${t === 'codex' ? 'Codex' : 'Antigravity'})`);
+    playbook = 'the `build-module-pipeline` skill (under `.agents/skills/`)';
+    personas = `custom agents under ${dirs.join(' and ')} — spawn them by name; each seat's tool limits are written at the top of its instructions and the harness does not hold them per seat, so run \`git status --porcelain\` after every phase and revert anything outside the seat's limits`;
+    if (sharing.some((t) => TOOLS[t].style !== 'native')) personas += `. Other agents reading this file use the playbooks under \`.builder/playbooks/\` and the persona ${DOT_PERSONAS}`;
+  }
   const body = `${MARKER}
 ## Builder pipeline (module builds)
 
@@ -445,40 +498,58 @@ function installTool(tool) {
   console.log(`\n[${tool}] ${t.label}`);
   const references = filesUnder(path.join('skills', 'references'));
   if (t.style === 'native') {
-    for (const f of agentFiles()) copyTransformed(path.join(KIT, 'agents', f), path.join('.claude', 'agents', f), toClaudeAgent);
+    const a = ADAPTERS[tool];
+    for (const f of agentFiles()) installAgent(tool, path.join(KIT, 'agents', f), f);
     if (EXPERIMENTAL) {
-      for (const f of experimentalAgentFiles()) copyTransformed(path.join(KIT, 'agents', 'experimental', f), path.join('.claude', 'agents', f), toClaudeAgent);
+      for (const f of experimentalAgentFiles()) installAgent(tool, path.join(KIT, 'agents', 'experimental', f), f);
     }
-    for (const s of SKILLS) copyIfAbsent(path.join(KIT, 'skills', `${s}.md`), path.join('.claude', 'skills', s, 'SKILL.md'));
-    copyIfAbsent(path.join(KIT, 'skills', 'state-template.md'), path.join('.claude', 'skills', 'build-module-pipeline', 'references', 'state-template.md'));
-    for (const r of references) copyIfAbsent(path.join(KIT, 'skills', 'references', r), path.join('.claude', 'skills', 'build-module-pipeline', 'references', r));
+    let pipelineDir = null;
+    for (const s of SKILLS) {
+      const dir = installSkill(tool, s, fs.readFileSync(path.join(KIT, 'skills', `${s}.md`), 'utf8'));
+      if (s === 'build-module-pipeline') pipelineDir = dir;
+    }
+    // The pipeline skill's references sit beside it — wherever it landed (renamed for "both"); a skipped skill
+    // takes them with it, so nothing lands inside a project's own skill folder.
+    if (pipelineDir) {
+      copyIfAbsent(path.join(KIT, 'skills', 'state-template.md'), path.join(pipelineDir, 'references', 'state-template.md'));
+      for (const r of references) copyIfAbsent(path.join(KIT, 'skills', 'references', r), path.join(pipelineDir, 'references', r));
+    }
     /**
-     * Hooks: copied, never armed. Enabling one in `.claude/settings.json` is the user's deliberate act, and
-     * hooks are read at session start, so one added mid-session does not fire until the next session.
-     * `adapters/claude-code.md` names the event and matcher for each.
+     * Hooks: copied, never armed. Enabling one is the user's deliberate act (Claude Code: `.claude/settings.json`,
+     * read at session start; Codex: `.codex/hooks.json`, then the `/hooks` review). `adapters/<tool>.md` names the
+     * event and matcher for each. Antigravity gets none: its hook input and output differ from the kit's hooks.
      */
-    copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join('.claude', 'hooks', 'protected-paths.cjs'));
-    copyIfAbsent(path.join(KIT, 'hooks', 'board-render.cjs'), path.join('.claude', 'hooks', 'board-render.cjs'));
-    for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
-      copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
+    if (tool === 'claude-code') {
+      copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join('.claude', 'hooks', 'protected-paths.cjs'));
+      copyIfAbsent(path.join(KIT, 'hooks', 'board-render.cjs'), path.join('.claude', 'hooks', 'board-render.cjs'));
+      for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
+        copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
+      }
+    } else if (a.hooksDir) {
+      copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join(nativePath(a.hooksDir), 'protected-paths.cjs'));
+      const cfg = a.hooksConfig({ hooksDir: a.hooksDir });
+      if (cfg) {
+        console.log(`hooks: copied, not armed. To arm protected-paths, write ${cfg.path} with the block below, then trust it with /hooks:`);
+        console.log(cfg.content.replace(/\n$/, ''));
+      }
     }
   } else {
-    for (const f of agentFiles()) copyIfAbsent(path.join(KIT, 'agents', f), path.join('.builder', 'personas', f));
+    for (const f of agentFiles()) installPlain('agent', path.basename(f, '.md'), path.join(KIT, 'agents', f), path.join('.builder', 'personas', f));
     if (EXPERIMENTAL) {
       for (const f of experimentalAgentFiles()) copyIfAbsent(path.join(KIT, 'agents', 'experimental', f), path.join('.builder', 'personas', 'experimental', f));
     }
     for (const f of fs.readdirSync(path.join(KIT, 'skills')).filter((x) => x.endsWith('.md'))) {
-      copyIfAbsent(path.join(KIT, 'skills', f), path.join('.builder', 'playbooks', f));
+      installPlain('skill', path.basename(f, '.md'), path.join(KIT, 'skills', f), path.join('.builder', 'playbooks', f));
     }
     for (const r of references) copyIfAbsent(path.join(KIT, 'skills', 'references', r), path.join('.builder', 'playbooks', 'references', r));
   }
   if (!NO_EXTRAS) {
-    const base = t.style === 'native' ? path.join('.claude', 'skills') : path.join('.builder', 'skills');
-    for (const name of extrasList()) copyDirIfAbsent(path.join(KIT, 'skills-extra', name), path.join(base, name), ['agents']);
+    const base = t.style === 'native' ? path.dirname(path.dirname(nativePath(ADAPTERS[tool].skillPath('x')))) : path.join('.builder', 'skills');
+    for (const name of extrasList()) installExtraDir(tool, name, base);
     for (const { name, file } of extraAgentFiles()) {
       const src = path.join(KIT, 'skills-extra', name, 'agents', file);
-      if (t.style === 'native') copyTransformed(src, path.join('.claude', 'agents', file), toClaudeAgent);
-      else copyIfAbsent(src, path.join('.builder', 'personas', file));
+      if (t.style === 'native') installAgent(tool, src, file);
+      else installPlain('agent', path.basename(file, '.md'), src, path.join('.builder', 'personas', file));
     }
   }
   wirePointer(t.pointer, pointerBlock(tool), Boolean(t.mdc));
@@ -576,6 +647,7 @@ function cmdCheckTargets() {
   const skillInstalled = [
     path.join(CWD, '.claude', 'skills', 'qa-audit', 'SKILL.md'),
     path.join(CWD, '.builder', 'skills', 'qa-audit', 'SKILL.md'),
+    path.join(CWD, '.agents', 'skills', 'qa-audit', 'SKILL.md'),
   ].some((p) => fs.existsSync(p));
   if (!found.length) {
     if (skillInstalled) {
@@ -644,10 +716,10 @@ function cmdUnpack(tools) {
 function cmdUpgrade(tools) {
   if (!fs.existsSync(path.join(KIT, 'agents'))) die('kit incomplete: builder/agents/ not found next to cli.js');
   if (path.relative(CWD, KIT) === '') die('run from the TARGET repo root, not from inside builder/');
-  const installed = ['PIPELINE_PROFILE.md', path.join('.claude', 'agents'), path.join('.builder', 'personas')].some((p) => fs.existsSync(path.join(CWD, p)));
-  if (!installed) die('nothing to upgrade here (no PIPELINE_PROFILE.md, .claude/agents/ or .builder/personas/) — run unpack first');
+  const installed = ['PIPELINE_PROFILE.md', path.join('.claude', 'agents'), path.join('.codex', 'agents'), path.join('.agents', 'agents'), path.join('.builder', 'personas')].some((p) => fs.existsSync(path.join(CWD, p)));
+  if (!installed) die('nothing to upgrade here (no PIPELINE_PROFILE.md, .claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/) — run unpack first');
   MODE = 'upgrade';
-  UPGRADE.stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  stamp();
   console.log(`builder kit ${VERSION} — upgrade${DRY ? ' (dry run: nothing is written)' : ''}`);
   for (const tool of tools) installTool(tool);
   installCommon();
@@ -730,9 +802,8 @@ function cmdVerify() {
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
 
-  const claude = fs.existsSync(path.join(CWD, '.claude', 'agents', 'module-planner.md'));
-  const dot = fs.existsSync(path.join(CWD, '.builder', 'personas', 'module-planner.md'));
-  check(claude || dot, 'personas installed (.claude/agents/ or .builder/personas/)');
+  const personaAt = ['.claude/agents/module-planner.md', '.codex/agents/module-planner.toml', '.agents/agents/module-planner.md', '.builder/personas/module-planner.md'];
+  check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)');
 
   const wired = Object.values(TOOLS)
     .map((t) => t.pointer)
@@ -1030,12 +1101,15 @@ function main() {
 
   const m = argv.indexOf('--models');
   if (m !== -1 && argv[m + 1]) {
+    // `strong=x` is Claude Code's (as it always was); `codex.strong=x` / `antigravity.mid=y` name another native tool.
     for (const pair of argv[m + 1].split(',')) {
-      const [tier, model] = pair.split('=').map((s) => s.trim());
-      if (!['strong', 'mid', 'low'].includes(tier) || !model) die(`bad --models entry "${pair}" — use strong=<model>,mid=<model>[,low=<model>]`);
-      TIER_TO_CLAUDE_MODEL[tier] = model;
+      const [key, model] = pair.split('=').map((s) => s.trim());
+      const [tool, tier] = key.includes('.') ? key.split('.') : ['claude-code', key];
+      if (!MODELS[tool] || !['strong', 'mid', 'low'].includes(tier) || !model) die(`bad --models entry "${pair}" — use strong=<model>,mid=<model>[,low=<model>] (Claude Code), or codex.<tier>=<model> / antigravity.<tier>=<model>`);
+      MODELS[tool][tier] = model;
     }
     console.log(`model mapping: strong=${TIER_TO_CLAUDE_MODEL.strong}, mid=${TIER_TO_CLAUDE_MODEL.mid}, low=${TIER_TO_CLAUDE_MODEL.low} (native-format targets only; others record theirs in PIPELINE_PROFILE.md §12)`);
+    for (const t of ['codex', 'antigravity']) if (Object.keys(MODELS[t]).length) console.log(`model mapping (${t}): ${Object.entries(MODELS[t]).map(([k, v]) => `${k}=${v}`).join(', ')}`);
   }
 
   const i = argv.indexOf('--tool');
@@ -1044,8 +1118,9 @@ function main() {
   if (tools.includes('all')) tools = Object.keys(TOOLS).filter((k) => k !== 'generic');
   const unknown = tools.filter((t) => !TOOLS[t]);
   if (unknown.length) die(`unknown tool(s): ${unknown.join(', ')} — run 'node builder/cli.js targets'`);
-  if (cmd === 'upgrade') cmdUpgrade([...new Set(tools)]);
-  else cmdUnpack([...new Set(tools)]);
+  SELECTED = [...new Set(tools)];
+  if (cmd === 'upgrade') cmdUpgrade(SELECTED);
+  else cmdUnpack(SELECTED);
 }
 
 main();

@@ -42,7 +42,8 @@ const OLD = /node builder\/cli\.js|(?<![.\w@/-])builder\/(?:DISCOVERY|USAGE|UNPA
 describe('the kit names itself where it is installed', () => {
   test('red: installed as a package, every installed Markdown file and the next steps say npx builder and the package path', () => {
     const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
-    const r = run(cli, proj, ['unpack', '--tool', 'claude-code,codex']);
+    // opencode is a dotBuilder tool (codex installs natively now; tests/native-tools.test.mjs covers it in package mode).
+    const r = run(cli, proj, ['unpack', '--tool', 'claude-code,opencode']);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /npx builder verify/);
     assert.doesNotMatch(r.stdout, /node builder\/cli\.js/);
