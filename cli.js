@@ -58,7 +58,7 @@ const VERSION = require('./package.json').version;
 // queue refuses otherwise), so installing them changes nothing for a project that never opts in.
 // The batch orchestrator skill installs the same way and stays inert until features.orchestrator is on (scripts/orch.mjs
 // prints 'orchestrator: not configured' otherwise).
-const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator'];
+const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator', 'builder-init', 'persona-detect'];
 const ADAPTERS = require('./adapters/lib/index.cjs');
 const choicesLib = require('./scripts/lib/choices.cjs');
 
