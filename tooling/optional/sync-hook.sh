@@ -12,7 +12,7 @@
 # (default: main). autosync.py tees its own output into the index directory's .sync.log.
 #
 # The block runs the session-start hook with --trigger merge, from HOOKS_JS_DIR (default .claude/hooks), where
-# session-sync-hook.js and hook-trust.cjs must both be committed:
+# session-sync-hook.cjs and hook-trust.cjs must both be committed:
 #   HOOKS_JS_DIR=".claude/hooks" scripts/graphify/sync-hook.sh install
 #
 # Usage:
@@ -85,7 +85,7 @@ if [ -z "\${INDEX_SYNC_SKIP:-}" ]; then
     # environment. Here, before node starts it, only the hook file and hook-trust.cjs are checked: each must be a plain
     # file whose bytes are the blob at HEAD (HEAD is already the merge result, so a file the merge changed counts as committed).
     _gs_ok=1
-    for _gs_f in session-sync-hook.js hook-trust.cjs; do
+    for _gs_f in session-sync-hook.cjs hook-trust.cjs; do
       _gs_file="\$_gs_root/${HOOKS_JS_DIR}/\$_gs_f"
       _gs_have="\$(git hash-object -- "\$_gs_file" 2>/dev/null || true)"
       _gs_head="\$(git --no-replace-objects ls-tree HEAD -- "${HOOKS_JS_DIR}/\$_gs_f" 2>/dev/null | cut -f1 | cut -d' ' -f3)"
@@ -93,7 +93,7 @@ if [ -z "\${INDEX_SYNC_SKIP:-}" ]; then
     done
     if [ "\$_gs_ok" = 1 ] && command -v node >/dev/null 2>&1; then
       # Detached: autosync.py takes its lock, syncs code, and embeds docs only within the limit. The merge never waits.
-      CLAUDE_PROJECT_DIR="\$_gs_root" nohup node "\$_gs_root/${HOOKS_JS_DIR}/session-sync-hook.js" --trigger merge \\
+      CLAUDE_PROJECT_DIR="\$_gs_root" nohup node "\$_gs_root/${HOOKS_JS_DIR}/session-sync-hook.cjs" --trigger merge \\
         </dev/null >/dev/null 2>&1 &
     fi
   fi
