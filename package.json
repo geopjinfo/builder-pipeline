@@ -1,7 +1,40 @@
 {
-  "name": "builder-pipeline",
+  "name": "@geopjinfo/builder-pipeline",
   "version": "0.16.0",
-  "private": true,
+  "description": "Multi-agent builder pipeline for software projects: personas, skills, hooks and ledger checks for Claude Code, Codex, Antigravity and other agent tools.",
+  "//": "type commonjs: the kit runs its own .js files as CommonJS whatever the host package.json declares. A \"type\": \"module\" host otherwise loads cli.js and the hooks as ES modules and they fail on require().",
   "type": "commonjs",
-  "description": "The kit runs its own .js files as CommonJS whatever the host package.json declares. A \"type\": \"module\" host otherwise loads cli.js and the hooks as ES modules and they fail on require()."
+  "bin": {
+    "builder": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "adapters/",
+    "agents/",
+    "examples/",
+    "hooks/",
+    "oracles/",
+    "scripts/",
+    "skills/",
+    "skills-extra/",
+    "templates/",
+    "tooling/",
+    "CHANGELOG.md",
+    "DESIGN.md",
+    "DISCOVERY.md",
+    "EXPERIMENTS.md",
+    "PIPELINE_PROFILE.template.md",
+    "README.md",
+    "SETUP_PROMPT.md",
+    "UNPACK.md",
+    "USAGE.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geopjinfo/builder-pipeline.git"
+  }
 }
