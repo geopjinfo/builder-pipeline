@@ -5,6 +5,13 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-11-15
+
+### Changed
+
+- **Compact docs for people and agents.** README.md is now the short entry (install, setup prompt, commands, per-tool support); the deep dive moved verbatim to GUIDE.md. New FEATURES.md: one page listing every feature, how to use it, Claude Code / Codex / Antigravity support and its status. New llms.txt indexes the docs for agents. AGENTS.md / CLAUDE.md for agents working on the kit repo itself stay out of the package.
+- **The pipeline skill loads lighter.** skills/build-module-pipeline.md is 376 lines (was 726): the orchestration spine stays; detailed procedures moved verbatim to seven skills/references/ files, each linked where it was cut, installed for every tool. Tests: tests/skill-references.test.mjs; pack-prose checks read the playbook plus its references.
+
 ## [1.0.1] — 2026-11-14
 
 ### Fixed

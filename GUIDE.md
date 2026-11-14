@@ -292,7 +292,7 @@ builder-pipeline/   (the package; a folder copy is builder/)
 │                                    e2e-harness · qa-audit · repo-audit · adr
 ├── 🛡️ hooks/                     ← universal guards + claude-code/ (output cap · registry read
 │                                    guard · reviewer write guard) — copied, never armed
-├── 🔌 adapters/                  ← harness notes (claude-code · codex · generic), incl. what each
+├── 🔌 adapters/                  ← harness notes (claude-code · codex · antigravity · generic), incl. what each
 │                                    Claude-Code-only step becomes elsewhere
 ├── 🛟 scripts/                   ← board tooling (progress · check-all · render · watch) and the
 │                                    checkers: features · index-check · orchestrator-check ·
