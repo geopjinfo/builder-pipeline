@@ -3,6 +3,37 @@
 Codex has no persona-subagent registry, so the mapping preserves the kit's real invariant —
 **fresh, role-scoped context per phase** — using fresh sessions instead of subagents.
 
+## Native layout (`adapters/lib/codex.cjs`)
+
+Codex now has custom agents, repo skills and hooks. The renderer in `adapters/lib/codex.cjs` (pure: text in,
+`{ path, content }` out) produces the native form below; until `cli.js` wires it in, the `.builder/` placement in the
+next section is what `unpack` installs. Checked against the official docs on 2026-11-14:
+[subagents](https://developers.openai.com/codex/subagents), [skills](https://developers.openai.com/codex/skills),
+[hooks](https://developers.openai.com/codex/hooks), [AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
+(each now redirects to `learn.chatgpt.com/docs/…`).
+
+| Neutral source | Codex target |
+|---|---|
+| `agents/<name>.md` | `.codex/agents/<name>.toml`: `name`, `description`, `developer_instructions` (the persona body, with the seat's tool limits as its first paragraph); `model` only when `--models` maps the tier (no Codex defaults ship); `model_reasoning_effort` from `effort:` |
+| `skills/<name>.md` | `.agents/skills/<name>/SKILL.md` (frontmatter `name` + `description`). Antigravity reads the same folder; the files are written once |
+| guards | `.codex/hooks.json`: `protected-paths.cjs` on `PreToolUse` · `Bash`, its path resolved from `git rev-parse --show-toplevel`. Codex runs a project hook only after `/hooks` review, so writing the file arms nothing |
+| pointer | `AGENTS.md` |
+
+**What Codex does not do per agent, so the kit does not pretend it does.** The docs say `sandbox_mode` and
+`approval_policy` in a custom agent file do not override the parent session: every agent inherits the session's sandbox
+and approvals, and instructions do not create a read-only sandbox. So no `sandbox_mode` is written. A read-only seat is
+held by its instructions and by the post-phase `git status --porcelain` check below. The renderer also returns the
+seat's neutral `access` (`read-only`, `own-file`, `write`, `publish`) for the orchestrator to check against. An
+unrecognised capability is `read-only`.
+
+Not wired, each for a documented reason (the module's `unconfirmed` list):
+
+- `protected-paths.cjs` on `apply_patch`. Codex puts the patch text in `tool_input.command`; the hook judges file
+  tools by `tool_input.file_path`, so a patch would pass unjudged. Only `Bash` is registered.
+- The reviewer write guard and registry read guard. Both need the dispatching seat's name in the hook input, and the
+  tool-event field tables document none.
+- The Bash output cap. A `PostToolUse` hook can replace a result with feedback, not with a digest.
+
 ## File placement
 
 `node builder/cli.js unpack --tool codex --dry-run` prints every destination and is the authority.

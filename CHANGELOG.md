@@ -7,6 +7,12 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Per-harness renderers in `adapters/lib/`.** Pure modules (text in, `{ path, content }` out) for Claude Code (a
+  move-compatible copy of the install transform, byte-identical for every persona), Codex (`.codex/agents/*.toml`,
+  `.agents/skills/`, `.codex/hooks.json`) and Antigravity (`.agents/agents/*.md`, `.agents/skills/`), each checked
+  against the harness's official docs, which the module cites. What a harness cannot enforce is listed in the module's
+  `unconfirmed` export, and a capability typo stays read-only everywhere. `cli.js` does not use them yet. Docs:
+  `adapters/codex.md`, `adapters/antigravity.md`. Tests: `tests/adapters.test.mjs`.
 - **The kit is an installable package.** `package.json` is no longer private: name `@geopjinfo/builder-pipeline`, a
   `builder` command (`cli.js`), `files` (every folder and document the CLI reads; the kit's own `tests/` stay out),
   `engines.node >=18` (the floor `cli.js` enforces), `license` (UNLICENSED until one is chosen) and `repository`.
