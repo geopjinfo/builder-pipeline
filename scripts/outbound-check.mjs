@@ -17,13 +17,14 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const guard = require('./lib/outbound-guard.cjs');
 const profile = require('./lib/profile.cjs');
 
 const root = process.cwd();
 const loaded = profile.load(root);
 if (loaded.errors.length > 0) {
-  console.error('outbound-check: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`outbound-check: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

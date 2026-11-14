@@ -26,6 +26,7 @@ import { createRequire } from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const profile = require('./lib/profile.cjs');
 const { summarise, lines } = require('./lib/mutation-summary.cjs');
 
@@ -44,7 +45,7 @@ if (!feature.enabled) {
   process.exit(0);
 }
 if (!target || !/^[\w.@-]+$/.test(target)) {
-  console.error('usage: node scripts/mutation-step.mjs <module> [--summary]   (a plain name: letters, digits, _ . @ -)');
+  console.error(`usage: ${runHint('mutation-step')} <module> [--summary]   (a plain name: letters, digits, _ . @ -)`);
   process.exit(2);
 }
 

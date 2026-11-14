@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const { checkPlan, checkFindings, checkReview, csvColumn } = require('./lib/output-check.cjs');
 const profile = require('./lib/profile.cjs');
 
@@ -24,13 +25,13 @@ const argv = process.argv.slice(2);
 const [kind, file] = argv;
 const FEATURE = { plan: 'planSchema', findings: 'findingsSchema', review: 'reviewTemplate' };
 if (!FEATURE[kind] || !file) {
-  console.error('usage: node scripts/output-check.mjs <plan|findings|review> <file> [--diff-base <ref>]');
+  console.error(`usage: ${runHint('output-check')} <plan|findings|review> <file> [--diff-base <ref>]`);
   process.exit(2);
 }
 
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error('output-check: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`output-check: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

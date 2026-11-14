@@ -28,6 +28,7 @@ import { createRequire } from 'node:module';
 import { isAbsolute, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const profile = require('./lib/profile.cjs');
 const ratchet = require('./lib/ratchet.cjs');
 
@@ -42,7 +43,7 @@ const usage = (message) => {
 
 const root = process.cwd();
 const loaded = profile.load(root);
-if (loaded.errors.length > 0) usage(`PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs\n  ${loaded.errors.join('\n  ')}`);
+if (loaded.errors.length > 0) usage(`PIPELINE_PROFILE.md is invalid — run ${runHint('features')}\n  ${loaded.errors.join('\n  ')}`);
 const feature = profile.feature(loaded.settings, 'ratchets');
 if (!feature.enabled) {
   console.log(feature.line);

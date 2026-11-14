@@ -32,6 +32,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFile
 import { basename, dirname, join, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const { parseBoard } = require('./lib/board-parse.cjs');
 const { splitDocs, PAGE_DOC_LIMIT } = require('./lib/page-docs.cjs');
 const runLog = require('./lib/run-log.cjs');
@@ -773,7 +774,7 @@ if (invokedDirectly) {
 
   if (args.includes('--json')) {
     if (targets.length !== 1) {
-      console.error('board-render --json: name exactly one board — `node scripts/board-render.mjs <key> --json [--out <dir>] [--limit <bytes>]`.');
+      console.error(`board-render --json: name exactly one board — \`${runHint('board-render')} <key> --json [--out <dir>] [--limit <bytes>]\`.`);
       process.exit(1);
     }
     const { dir, ids } = renderJson(targets[0], { outDir, limit, transcripts });
@@ -790,7 +791,7 @@ if (invokedDirectly) {
       console.log(`board-render: ${renderBoard(key, { transcripts })}`);
     }
   } else if (targets.length === 0) {
-    console.error('board-render: name a board — `node scripts/board-render.mjs tasks/<key>.md` or `<key>`.');
+    console.error(`board-render: name a board — \`${runHint('board-render')} tasks/<key>.md\` or \`<key>\`.`);
     process.exit(1);
   } else {
     for (const target of targets) console.log(`board-render: ${renderBoard(target, { open, transcripts })}`);

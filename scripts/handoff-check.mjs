@@ -16,6 +16,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const lib = require('./lib/handoff-check.cjs');
 const profile = require('./lib/profile.cjs');
 
@@ -23,7 +24,7 @@ const profile = require('./lib/profile.cjs');
 export function settingsOrExit(tool) {
   const loaded = profile.load(process.cwd());
   if (loaded.errors.length > 0) {
-    console.error(`${tool}: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs`);
+    console.error(`${tool}: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
     for (const e of loaded.errors) console.error(`  ${e}`);
     process.exit(2);
   }
@@ -69,7 +70,7 @@ const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(proc
 if (isMain) {
   const file = process.argv[2];
   if (!file || file.startsWith('--')) {
-    console.error('usage: node scripts/handoff-check.mjs <pack.md>');
+    console.error(`usage: ${runHint('handoff-check')} <pack.md>`);
     process.exit(2);
   }
   const { settings, feature } = settingsOrExit('handoff-check');

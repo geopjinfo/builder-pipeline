@@ -27,6 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const { runHint } = require('./lib/run-hint.cjs');
 const sweep = require('./lib/worktree-sweep.cjs');
 const profile = require('./lib/profile.cjs');
 
@@ -39,13 +40,13 @@ const val = (n) => {
 const known = new Set(['--apply', '--idle-hours', '--target', '--keep', '--help', '-h']);
 const unknown = argv.filter((a, i) => a.startsWith('-') && !known.has(a) && !['--idle-hours', '--target', '--keep'].includes(argv[i - 1]));
 if (flag('--help') || flag('-h') || unknown.length) {
-  (unknown.length ? console.error : console.log)('usage: node scripts/worktree-sweep.mjs [--apply] [--idle-hours N] [--target <branch>] [--keep <name,...>]');
+  (unknown.length ? console.error : console.log)(`usage: ${runHint('worktree-sweep')} [--apply] [--idle-hours N] [--target <branch>] [--keep <name,...>]`);
   process.exit(unknown.length ? 2 : 0);
 }
 
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error('worktree-sweep: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`worktree-sweep: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

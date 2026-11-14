@@ -30,7 +30,10 @@ test('registry guard red: a listed seat reading the whole registry is blocked an
   for (const file_path of ['C:/repo/DEFERRED_TASKS.md', 'C:\\repo\\DEFERRED_TASKS.md', 'DEFERRED_TASKS.md', '/home/me/repo/deferred_tasks.md']) {
     const r = registryGuard.decide({ tool_name: 'Read', agent_type: 'module-builder', tool_input: { file_path } }, settings);
     assert.equal(r.block, true, file_path);
-    assert.match(r.reason, /node scripts\/ledger-row\.mjs registry <ID>/);
+    // With no run command given (run-hint.cjs not loadable) it names the script, not a layout.
+    assert.match(r.reason, /instead: ledger-row registry <ID>/);
+    const told = registryGuard.decide({ tool_name: 'Read', agent_type: 'module-builder', tool_input: { file_path } }, settings, { ledgerRow: 'node scripts/ledger-row.mjs' });
+    assert.match(told.reason, /node scripts\/ledger-row\.mjs registry <ID>/);
   }
   assert.equal(registryGuard.decide({ tool_name: 'Read', agent_type: 'module-builder', tool_input: { file_path: 'DEFERRED_TASKS.md', offset: 1, limit: 40 } }, settings).block, true);
 });
