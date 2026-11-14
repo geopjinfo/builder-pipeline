@@ -7,6 +7,9 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Release candidates can be cut.** `tests/version.test.mjs` accepts a semver prerelease (`1.0.0-rc.1`) in
+  `package.json` and as the newest released CHANGELOG heading (`## [1.0.0-rc.1]`); the two must still agree, and
+  `Unreleased`, a `v` prefix, a leading zero and build metadata are still refused.
 - **README is the getting-started guide.** What the kit is; install from a tag (`npm i -D github:geopjinfo/builder-pipeline#<tag>`);
   the one setup prompt for Claude Code, Codex and Antigravity; greenfield vs brownfield; what setup will and will not
   touch (your items win, `builder.choices.json`, `builder.lock.json`, local edits kept); updating; extending (profile,
