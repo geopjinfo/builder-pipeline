@@ -2,13 +2,14 @@
  * What the agent-instruction files state about the repo must still be true of it. Rules and their WHY:
  * scripts/lib/instruction-lint.cjs.
  *
- *   node scripts/instruction-lint.mjs                 the gate over every file in `files`
- *   node scripts/instruction-lint.mjs --files a b     only these files (the edit hook). No figure command runs in this
+ *   npx builder run instruction-lint                  the gate over every file in `files`
+ *   npx builder run instruction-lint --files a b     only these files (the edit hook). No figure command runs in this
  *                                                     mode (see below); sets naming other files are skipped; the
  *                                                     ratchet still applies
- *   node scripts/instruction-lint.mjs --list          also print every count claim and history phrase
- *   node scripts/instruction-lint.mjs --refresh       write the current ratchet counts to `baseline` (review the diff:
+ *   npx builder run instruction-lint --list          also print every count claim and history phrase
+ *   npx builder run instruction-lint --refresh       write the current ratchet counts to `baseline` (review the diff:
  *                                                     a raised count is a decision, never a side effect)
+ * (folder layout: node scripts/instruction-lint.mjs in place of npx builder run instruction-lint)
  *
  * Settings (PIPELINE_PROFILE.md §16): features.instructionLint.{state, files, ignorePaths, figures, sets, history,
  * baseline}. `files` are globs from the project root (`**` and `*` supported). `figures` are { file, pattern, command,

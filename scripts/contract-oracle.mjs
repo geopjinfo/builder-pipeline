@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * `node scripts/contract-oracle.mjs [--spec <file>] [--transcript <jsonl>] [--baseline <json>]`
- * `node scripts/contract-oracle.mjs --write-baseline [--accept "<key>"]… | --write-baseline --initial`
+ * `npx builder run contract-oracle [--spec <file>] [--transcript <jsonl>] [--baseline <json>]`
+ * `npx builder run contract-oracle --write-baseline [--accept "<key>"]… | --write-baseline --initial`
+ * (folder layout: node scripts/contract-oracle.mjs in place of npx builder run contract-oracle)
  *
  * After a behavioural test run that writes a request/response transcript: judge every served request
  * against the written contract. Classes and config: `scripts/lib/contract-oracle.cjs`; the contract format

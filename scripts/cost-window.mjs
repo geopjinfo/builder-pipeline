@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * `node scripts/cost-window.mjs --since <iso> --until <iso> [--rates <pricing.cjs>] [--json]`
+ * `npx builder run cost-window --since <iso> --until <iso> [--rates <pricing.cjs>] [--json]`
+ * (folder layout: node scripts/cost-window.mjs in place of npx builder run cost-window)
  *
  * Every token the harness recorded in a time window, by seat, priced at the current rate table — or at
  * another table passed with `--rates`, to compare like with like. It reads the transcripts directly: every

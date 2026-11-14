@@ -1,5 +1,6 @@
 /**
- * What this project has switched on — `node scripts/features.mjs`.
+ * What this project has switched on — `npx builder run features`.
+ * (folder layout: node scripts/features.mjs in place of npx builder run features)
  *
  * Loads PIPELINE_PROFILE.md from the current directory, prints one line per feature (the same sentence each step
  * prints when it runs), then every validation error. Silence about a feature must never read as "on and passing",

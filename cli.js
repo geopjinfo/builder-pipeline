@@ -2,25 +2,25 @@
 /*
  * builder-kit CLI — unpack the builder pipeline kit into the current repo.
  *
- * Zero dependencies; Node >= 18. Run from the TARGET repo root (the repo you unpacked the builder/
- * folder into):
+ * Zero dependencies; Node >= 18. Run from the TARGET repo root, as the package install runs it
+ * (folder layout: `node builder/cli.js <command>`, with the kit unpacked as a builder/ folder):
  *
- *   node builder/cli.js unpack --tool claude-code
- *   node builder/cli.js unpack --tool claude-code,codex
- *   node builder/cli.js unpack --tool all [--dry-run] [--no-extras] [--experimental]
- *   node builder/cli.js unpack --tool claude-code --models strong=opus,mid=haiku
- *   node builder/cli.js upgrade --tool claude-code [--dry-run]   (an install from an older kit release)
- *   node builder/cli.js --version
- *   node builder/cli.js targets
- *   node builder/cli.js verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
- *   node builder/cli.js features         (which optional checks are on, off, unmeasured or experimental)
- *   node builder/cli.js check-ledgers    (mechanical board/registry gates — wire into CI)
- *   node builder/cli.js check-targets    (qa-audit environment safety — wire into CI)
- *   node builder/cli.js bootstrap [--tool …]        (only the builder-init skill — cli/bootstrap.cjs)
- *   node builder/cli.js inventory [--json]          (project items vs the kit — cli/inventory.cjs)
- *   node builder/cli.js choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
- *   node builder/cli.js doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
- *   node builder/cli.js personas-check | run <script> [args]
+ *   npx builder unpack --tool claude-code
+ *   npx builder unpack --tool claude-code,codex
+ *   npx builder unpack --tool all [--dry-run] [--no-extras] [--experimental]
+ *   npx builder unpack --tool claude-code --models strong=opus,mid=haiku
+ *   npx builder upgrade --tool claude-code [--dry-run]   (an install from an older kit release)
+ *   npx builder --version
+ *   npx builder targets
+ *   npx builder verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
+ *   npx builder features         (which optional checks are on, off, unmeasured or experimental)
+ *   npx builder check-ledgers    (mechanical board/registry gates — wire into CI)
+ *   npx builder check-targets    (qa-audit environment safety — wire into CI)
+ *   npx builder bootstrap [--tool …]        (only the builder-init skill — cli/bootstrap.cjs)
+ *   npx builder inventory [--json]          (project items vs the kit — cli/inventory.cjs)
+ *   npx builder choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
+ *   npx builder doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
+ *   npx builder personas-check | run <script> [args]
  *
  * unpack/upgrade read builder.choices.json: a kit skill or persona that clashes with a project item and has no
  * recorded choice is skipped and reported, never installed (setupClashCheck below).
@@ -87,7 +87,7 @@ const TOOLS = {
 
 // --------------------------- where the kit lives ---------------------------
 /**
- * The kit's own prose says `builder/<file>` and `node builder/cli.js` — true when the kit is a folder copied into the
+ * The kit's own prose says `builder/<file>` and `node builder/cli.js` — true in the folder layout, a folder copied into the
  * project as `builder/`. Installed as a package it lives at `node_modules/@<scope>/builder-pipeline/` and runs as
  * `npx builder`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
  * installs into the project (Markdown) and every line the CLI prints goes through kitPaths(), so it names the kit

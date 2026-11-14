@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * `node scripts/index-check.mjs [--json]` — is the knowledge index fresh? The exit-code contract lives in
+ * `npx builder run index-check [--json]` — is the knowledge index fresh? The exit-code contract lives in
  * `scripts/lib/index-check.cjs`:
  *
  *   0 fresh · 1 error · 3 absent · 4 unmeasurable · 10 docs pending · 11 code behind · 12 both
+ *
+ * (folder layout: node scripts/index-check.mjs in place of npx builder run index-check)
  *
  * Runs `features.graph.check` (any index tool's own check command) through the platform shell. The command
  * either exits with a contract code or prints one JSON facts line; the facts, when present, decide. The

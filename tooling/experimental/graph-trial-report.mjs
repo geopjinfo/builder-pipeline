@@ -3,9 +3,10 @@
  * EXPERIMENTAL (`features.graphTrial`) — per-seat knowledge-index usage over one or more sessions.
  * CLAUDE CODE TRANSCRIPTS ONLY; see EXPERIMENTS.md, graph seat trial. Rule: graph-trial.cjs.
  *
- *   node scripts/experimental/graph-trial-report.mjs <sessionId>… [--dir <transcripts dir>] [--json]
+ *   npx builder run experimental/graph-trial-report <sessionId>… [--dir <transcripts dir>] [--json]
+ * (folder layout: node scripts/experimental/graph-trial-report.mjs in place of npx builder run experimental/graph-trial-report)
  *
- * Installed by `node builder/cli.js unpack --experimental` beside `graph-trial.cjs` in `scripts/experimental/`.
+ * In the folder layout, installed by `node builder/cli.js unpack --experimental` beside `graph-trial.cjs` in `scripts/experimental/`.
  *
  * Reads the harness transcripts, never the seats' own accounting: `<dir>/<session>.jsonl` for the orchestrator
  * (sidechain records excluded) and `<dir>/<session>/subagents/agent-*.jsonl` + `.meta.json` for every
@@ -28,13 +29,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const lib = (name) => [join(here, '..', 'lib', name), join(here, '..', '..', 'scripts', 'lib', name)].find((p) => existsSync(p));
 const profile = require(lib('profile.cjs'));
 const { transcriptDir } = require(lib('transcript-usage.cjs'));
+const { runHint } = require(lib('run-hint.cjs'));
 const { seatRow, withoutSidechain, summarise, renderMarkdown } = require(join(here, 'graph-trial.cjs'));
 
-const USAGE = 'usage: node scripts/experimental/graph-trial-report.mjs <sessionId>… [--dir <transcripts dir>] [--json]';
+const USAGE = `usage: ${runHint('experimental/graph-trial-report', '<sessionId>… [--dir <transcripts dir>] [--json]')}`;
 
 const loaded = profile.load(process.cwd());
 if (loaded.errors.length > 0) {
-  console.error('graph-trial-report: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs');
+  console.error(`graph-trial-report: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`);
   for (const e of loaded.errors) console.error(`  ${e}`);
   process.exit(2);
 }

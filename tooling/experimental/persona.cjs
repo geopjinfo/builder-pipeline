@@ -20,6 +20,8 @@
  */
 
 const DASH = '—';
+/** The run hint for this layout: run-hint.cjs beside an installed copy (scripts/lib/), or the pack's own. */
+const { runHint } = require([require('node:path').join(__dirname, '..', 'lib', 'run-hint.cjs'), require('node:path').join(__dirname, '..', '..', 'scripts', 'lib', 'run-hint.cjs')].find((p) => require('node:fs').existsSync(p)));
 const KEYS = ['<!-- generated:keys start -->', '<!-- generated:keys end -->'];
 const LOGIN = ['<!-- generated:login start -->', '<!-- generated:login end -->'];
 const BULLET = /^\s*(?:[-*+]|\d+[.)])\s+/;
@@ -125,7 +127,7 @@ function renderProfile({ column, keys, login = null, catalogue = 'the permission
   return `# ${column} ${DASH} role profile
 
 _The generated blocks come from the \`${column}\` column of \`${catalogue}\` and the seeded-login map, and are
-rewritten by \`node scripts/experimental/persona-gen.mjs\` ${DASH} never edit them by hand. The drafted sections are
+rewritten by \`${runHint('experimental/persona-gen')}\` ${DASH} never edit them by hand. The drafted sections are
 checked by \`persona-gen.mjs --check\`. A profile locates; it never rules: the catalogue and the project's
 decision records win on any disagreement._
 

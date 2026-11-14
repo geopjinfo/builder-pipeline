@@ -1,10 +1,11 @@
 /**
  * Every board row's `Cites` id must resolve to its source. Rule: scripts/lib/citations.cjs.
  *
- *   node scripts/citations-check.mjs                 every board in paths.boards (files named _*.md and README.md skipped)
- *   node scripts/citations-check.mjs <board.md> …    exactly these boards
+ *   npx builder run citations-check                  every board in paths.boards (files named _*.md and README.md skipped)
+ *   npx builder run citations-check <board.md> …    exactly these boards
  *   --list                                           every token with its verdict, scheme and path:line
  *   --json                                           machine-readable results
+ * (folder layout: node scripts/citations-check.mjs in place of npx builder run citations-check)
  *
  * Settings: paths.boards · features.citations.schemes — each { name, pattern, skip?, ignoreCase?, source } where
  * source is one of { csv, column } · { dir, filePattern } · { files: [paths], idPattern } (a directory entry in

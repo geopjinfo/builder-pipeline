@@ -3,10 +3,11 @@
  * EXPERIMENTAL (`features.personas`) — write or check one role profile per role column of the permission
  * catalogue. See EXPERIMENTS.md, role persona profiles. Rule: persona.cjs.
  *
- *   node scripts/experimental/persona-gen.mjs            write missing profiles; refresh the generated blocks of existing ones
- *   node scripts/experimental/persona-gen.mjs --check    exit 1 on any drift, missing or stray profile, or uncited drafted bullet
+ *   npx builder run experimental/persona-gen             write missing profiles; refresh the generated blocks of existing ones
+ *   npx builder run experimental/persona-gen --check    exit 1 on any drift, missing or stray profile, or uncited drafted bullet
+ * (folder layout: node scripts/experimental/persona-gen.mjs in place of npx builder run experimental/persona-gen)
  *
- * Installed by `node builder/cli.js unpack --experimental` beside `persona.cjs` in `scripts/experimental/`.
+ * In the folder layout, installed by `node builder/cli.js unpack --experimental` beside `persona.cjs` in `scripts/experimental/`.
  *
  * Settings (features.personas): catalogue · keyColumn · labelColumn · roleColumns · grant · out · logins ·
  * citationPattern. Paths resolve against the working directory.
@@ -26,17 +27,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const lib = (name) => [join(here, '..', 'lib', name), join(here, '..', '..', 'scripts', 'lib', name)].find((p) => existsSync(p));
 const profile = require(lib('profile.cjs'));
 const { csvCells } = require(lib('output-check.cjs'));
+const { runHint } = require(lib('run-hint.cjs'));
 const persona = require(join(here, 'persona.cjs'));
 
 const NAME = 'persona-gen';
-const USAGE = 'usage: node scripts/experimental/persona-gen.mjs [--check]';
+const USAGE = `usage: ${runHint('experimental/persona-gen', '[--check]')}`;
 const fail = (code, ...lines) => {
   for (const l of lines) console.error(l);
   process.exit(code);
 };
 
 const loaded = profile.load(process.cwd());
-if (loaded.errors.length > 0) fail(2, `${NAME}: PIPELINE_PROFILE.md is invalid — run node scripts/features.mjs`, ...loaded.errors.map((e) => `  ${e}`));
+if (loaded.errors.length > 0) fail(2, `${NAME}: PIPELINE_PROFILE.md is invalid — run ${runHint('features')}`, ...loaded.errors.map((e) => `  ${e}`));
 const feature = profile.feature(loaded.settings, 'personas');
 if (!feature.enabled) {
   console.log(feature.line);

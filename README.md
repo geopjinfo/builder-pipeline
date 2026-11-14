@@ -127,7 +127,7 @@ records, how to resume, and the troubleshooting table.
 
 ## ⌨️ Every command
 
-`npx builder <command>` (with the kit copied in as a `builder/` folder: `node builder/cli.js <command>` — see
+`npx builder <command>` (folder layout, with the kit copied in as a `builder/` folder: `node builder/cli.js <command>` — see
 [`UNPACK.md`](UNPACK.md)). `npx builder` with no command prints the same list.
 
 | Command | What it does |
@@ -170,7 +170,7 @@ The native targets are `claude-code`, `codex` and `antigravity`. The other `--to
 ## 📁 Copying the kit as a folder (secondary)
 
 Without npm, a release archive of the kit can be extracted at the project root as a `builder/` folder, and the
-commands run as `node builder/cli.js <command>` — the `builder/` folder form of `npx builder`. That path, and how to receive
+commands run as `node builder/cli.js <command>` — the folder layout (`builder/` folder) form of `npx builder`. That path, and how to receive
 a release archive safely, is in [`UNPACK.md`](UNPACK.md); the package install above is the primary path.
 
 ---

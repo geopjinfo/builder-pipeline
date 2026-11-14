@@ -5,6 +5,18 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every shipped file gives install-neutral commands.** The script and tool headers, the experimental
+  tools' usage and error lines, the generated handoff-pack header and persona profile, the hooks and examples
+  READMEs, `tooling/` docs, the profile template's §16 line and the not-installed templates (`developer-guide.md`,
+  `qa-targets.md`) now say `npx builder run <x>` / `npx builder <cmd>`, with one `(folder layout: …)` note each,
+  or print through `scripts/lib/run-hint.cjs`. `UNPACK.md` and the shell unpackers are folder-layout pages and
+  say so in their first lines. The Markdown the CLI installs (skills, personas, copied templates) keeps the folder
+  form in its source on purpose: install rewrites it in the package layout and leaves the folder layout
+  byte-for-byte. Tests: `tests/invocation.test.mjs` scans every file in package.json `files` (red case included)
+  and checks that a package-mode `unpack --tool all --experimental` installs no kit folder form.
+
 ## [1.0.0] — 2026-11-14
 
 First upstream release: the kit installs as a package from a git tag and drives Claude Code, Codex and Antigravity from one source. Smoke-tested 14 Nov in a brownfield sample: Antigravity loaded 17 skills and 10 agents; Codex discovered the 17 skills and read the module-reviewer agent (own-file write scope); the owner confirmed the sample personas. Since rc.2: the genericity test carries no source names.

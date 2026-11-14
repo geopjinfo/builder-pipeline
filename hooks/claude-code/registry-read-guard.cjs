@@ -4,8 +4,9 @@
  *
  * WHY. The deferred-work registry (`paths.registry`) grows for the life of a project, and a seat that reads
  * it whole pays for every byte again on each later turn of its dispatch. In one adopting project a single
- * builder dispatch read a registry of several hundred KB dozens of times. `node scripts/ledger-row.mjs
+ * builder dispatch read a registry of several hundred KB dozens of times. `npx builder run ledger-row
  * registry <ID>` prints just the row, with its section and its real header — everything the seat needed.
+ * (folder layout: node scripts/ledger-row.mjs in place of npx builder run ledger-row)
  *
  * WHO IS BLOCKED. Only the agent types listed in `features.registryGuard.seats`. Claude Code puts the
  * dispatching subagent's `agent_type` in the hook input; the orchestrator (main session) carries none and is

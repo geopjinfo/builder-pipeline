@@ -1,10 +1,11 @@
 /**
- * Records the overlap review's decisions — `node scripts/choices.mjs`.
+ * Records the overlap review's decisions — `npx builder run choices`.
+ * (folder layout: node scripts/choices.mjs in place of npx builder run choices)
  *
- *   node scripts/choices.mjs list [--json]
- *   node scripts/choices.mjs set <kind>:<name> <keep|kit|both> --by <who> [--project <path>[,<path>]] [--note <text>]
- *   node scripts/choices.mjs unset <kind>:<name>
- *   node scripts/choices.mjs check
+ *   npx builder run choices list [--json]
+ *   npx builder run choices set <kind>:<name> <keep|kit|both> --by <who> [--project <path>[,<path>]] [--note <text>]
+ *   npx builder run choices unset <kind>:<name>
+ *   npx builder run choices check
  *
  * Writes builder.choices.json at the project root (scripts/lib/choices.cjs). Only a person's confirmed answer goes
  * in — the `builder-init` skill calls `set` after the human said yes to that item, never before.

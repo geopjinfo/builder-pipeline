@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * `node scripts/gate-queue.mjs <command>` — the lite-split gate queue, `<boards>/_gate-queue.md`
+ * `npx builder run gate-queue <command>` — the lite-split gate queue, `<boards>/_gate-queue.md`
  * (feature `liteSplit`). Logic and rationale: scripts/lib/gate-queue.cjs.
+ * (folder layout: node scripts/gate-queue.mjs in place of npx builder run gate-queue)
  *
  *   add <key> --base <sha> [--tip <sha>] [--branch <b>] [--board <path>] [--dir <module dir>] [--batch <id>]
  *       → queues a lite-built module; files = `git diff --name-only base..tip`. Exit 3 at the cap.

@@ -3,10 +3,11 @@
  * Refresh shrink-only ratchet lists from measurement — the ONLY sanctioned way to move a bank. Rule:
  * scripts/lib/ratchet.cjs.
  *
- *   node scripts/ratchet-refresh.mjs                    dry run over every list: print what would drain
- *   node scripts/ratchet-refresh.mjs <name> …           only these lists
+ *   npx builder run ratchet-refresh                     dry run over every list: print what would drain
+ *   npx builder run ratchet-refresh <name> …           only these lists
  *   --write                                             apply: items (sorted) + count + measuredAt in one motion
  *   --json                                              machine-readable result
+ * (folder layout: node scripts/ratchet-refresh.mjs in place of npx builder run ratchet-refresh)
  *
  * Settings: features.ratchets.lists — [{ "name", "bank", "measured" }], paths relative to the project root.
  *   bank      { "items": [strings], "count": N, "measuredAt"?: string } — the list and its ceiling, one file
