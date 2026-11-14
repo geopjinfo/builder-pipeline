@@ -43,8 +43,11 @@
  *               folder before a write, a link or code is refused outright (reading after it is not);
  *      code     an interpreter (node, python, …), a heredoc, or the PowerShell tool: a path-shaped operand that is
  *               protected by spelling or by landing is refused — the Read tool is the route for reading. A DATA
- *               heredoc body (`cat >> notes.md <<'EOF'`, `git commit -F - <<'EOF'`) and a read-only pipeline are
- *               not code: naming a protected path there is not writing it (see mentionScope below);
+ *               heredoc body (`cat >> notes.md <<'EOF'`, `tee notes.md <<'EOF'`, `git commit -F - <<'EOF'`) and a
+ *               read-only pipeline are not code: naming a protected path there is not writing it (see mentionScope
+ *               below). A command made of data heredoc statements alone is also judged WITHOUT their bodies by the
+ *               writes, links and cd rules — a body quoting `ln -s` or `> protected/x` makes neither (dataStripped);
+ *               a link maker word is found anywhere in a statement, not only after a known lead (makersAnywhere);
  *  - This file itself: it defines the protected set, so it is protected whenever anything is (`BUILDER_UNLOCK=fence`).
  *  - Hard links: a write to an EXISTING file with more than one hard link is refused. There is no link to follow,
  *    so whether the same bytes also live under a protected path cannot be told — it fails CLOSED.
@@ -259,7 +262,35 @@ function linkStatements(command) {
     }
     for (const sub of text.matchAll(/\$\(([^()]*)\)|`([^`]*)`/g)) queue.push(sub[1] ?? sub[2]);
   }
+  for (const st of makersAnywhere(command)) if (out.length < 64) out.push(st);
   if (LINK_CALL.test(command)) out.push(command);
+  return out;
+}
+
+/**
+ * A maker WORD anywhere in a statement. The lead list above is a list of PREFIXES, and a prefix not on it hid the
+ * maker (`find … -exec ln -s …`, `flock`, `busybox`, `doas`, `ionice -c3`, a PowerShell `{ New-Item … }` block). The
+ * word is token-bounded (`kiln` is not `ln`) and starts a statement of its own, whose operands are judged exactly as
+ * at a head. Left out: a pipeline whose every stage is read-only (`grep -n "ln -s" <protected file>` reads, it links
+ * nothing) and the body of a DATA heredoc (it is written, not run) — unless the command is not inert, when the file
+ * it wrote may be what runs. Not understood by the lexer = the whole text (fails CLOSED). It only adds blocks.
+ */
+const MAKER_ANYWHERE = /(?:^|[\s;&|({`'"=])((?:mklink|ln|junction(?:64)?|fsutil(?:\.exe)?\s+hardlink)(?:\.exe)?(?=[\s"'`)}]|$)[^\n]*|(?:New-Item|ni)\s[^\n]*\b(?:SymbolicLink|Junction|HardLink)\b[^\n]*)/i;
+function makersAnywhere(command) {
+  const split = splitShell(command);
+  let text = command;
+  if (split) {
+    const kept = split.pipes.filter((p) => !p.readOnly).map((p) => p.text);
+    const runs = !inertData(split) || RUNS_SHELL_CODE.test(split.pipes.map((p) => p.text).join('\n'));
+    text = [...kept, ...split.docs.filter((h) => !h.kind || runs).map((h) => h.body)].join('\n');
+  }
+  const out = [];
+  // `find … -exec ln … \;` — the escaped terminator is an argument of find, not an operand of the maker (a bare `\`
+  // operand would resolve to the drive root and refuse every such link).
+  for (const raw of text.replace(/\\;|';'|";"/g, ' ').split(SPLIT)) {
+    const m = MAKER_ANYWHERE.exec(raw);
+    if (m && out.length < 64) out.push(m[1].trim());
+  }
   return out;
 }
 
@@ -369,15 +400,26 @@ function codeOperandFence(command, dirs, ctx) {
  * a line continuation, an unterminated quote or heredoc — returns the whole text: it fails CLOSED.
  */
 const READ_ONLY = /^(?:cat|ls|grep|egrep|fgrep|wc|head|tail|test|\[|stat|diff|echo|pwd|true|git[ \t]+(?:log|show|diff|status|blame|ls-files|grep|rev-parse|cat-file))(?=[ \t]|$)/;
-const READ_ONLY_WRITES = /(?:^|[\s'"])(?:--output\b|--open-files-in-pager\b|-O)/;
+// Options of those verbs that write a file or run a program: also `-O` bundled into a flag cluster (`-nO'cmd'`) and
+// git's unambiguous long-option prefixes (`--open=`, `--ou…`) — each runs a pager command or writes a file.
+const READ_ONLY_WRITES = /(?:^|[\s'"])(?:--op(?:e(?:n[\w-]*)?)?(?=[\s=]|$)|--ou[\w-]*|--output\b|-[A-Za-z0-9]*O)/;
 const HEREDOC_OP = String.raw`<<-?[ \t]*(?:'\w+'|"\w+"|\\\w+|\w+)`;
 const REDIRECT_TARGET = String.raw`(?:'[^']*'|"[^"]*"|[^\s'"<>|;&]+)`;
 const DATA_CAT = new RegExp(String.raw`^cat[ \t]+(?:>>?[ \t]*${REDIRECT_TARGET}[ \t]+${HEREDOC_OP}|${HEREDOC_OP}[ \t]+>>?[ \t]*${REDIRECT_TARGET})$`);
+// `tee [-a] FILE <<'EOF'`, the other redirect-only data form. Its stdout may be discarded; a pipe out of it is not data.
+const DATA_TEE = new RegExp(String.raw`^tee[ \t]+(?:-a[ \t]+)?${REDIRECT_TARGET}[ \t]+${HEREDOC_OP}(?:[ \t]+[12]?>[ \t]*\/dev\/null)?$`);
+const INTERPRETER = /(^|[\s;|&(])(python3?|node|deno|bun|perl|ruby|php|pwsh|powershell)([\s.]|$)/i;
+/** Code that may run what a data heredoc just wrote: an interpreter, or a shell (`bash f`, `sh f`, `source f`, `. f`, `| sh`). */
+const RUNS_SHELL_CODE = new RegExp(String.raw`${INTERPRETER.source}|(?:^|[\s;|&(\/\\])(?:bash|sh|zsh|dash|ksh|source|exec|eval)(?:\.exe)?(?=[\s;|&)]|$)|(?:^|[;&|\n]\s*)\.\s`, 'i');
 const DATA_GIT = new RegExp(String.raw`^git[ \t]+(?:commit|tag)(?:[ \t]+[\w.\/:@+=-]+)*?[ \t]+(?:-F[ \t]*-|--file(?:=|[ \t]+)-)(?:[ \t]+[\w.\/:@+=-]+)*[ \t]+${HEREDOC_OP}$`);
 const RUNNER = /(^|[\s;|&(])(python3?|node|deno|bun|perl|ruby|php|pwsh|powershell|bash|sh|zsh|dash|ksh|cmd|source|xargs|eval|iex|invoke-expression|start-process|npx|tsx|ts-node)([\s.]|$)|(^|[\s;|&])\.[ \t]+\S|(^|[\s;|(])&(?![&>])[ \t]/i;
 
 /** Quote-aware split into pipelines + heredoc bodies; null = not understood (the caller fails closed). */
 function splitShell(s) {
+  // bash ends a line on `\n` only, so a lone `\r` is part of a word to bash but a line end here, and stock bash
+  // compares a heredoc end line WITH its CR (`EOF\r` is not `EOF`): a body boundary the two disagree on. Any CR =
+  // not understood (fails CLOSED).
+  if (/\r/.test(s)) return null;
   const stmts = [];
   const docs = [];
   let raw = '';
@@ -517,19 +559,52 @@ function splitShell(s) {
       const t = st.raw.trim();
       for (const h of st.docs) {
         const literal = h.quoted || !/[$`\\]/.test(h.body);
-        h.kind = !literal || pipe.length !== 1 || st.docs.length !== 1 ? null : DATA_CAT.test(t) ? 'cat' : DATA_GIT.test(t) ? 'git' : null;
+        h.kind = !literal || pipe.length !== 1 || st.docs.length !== 1 ? null : DATA_CAT.test(t) ? 'cat' : DATA_TEE.test(t) ? 'tee' : DATA_GIT.test(t) ? 'git' : null;
       }
     }
   }
   const readOnly = (st) => {
     const t = st.raw.trim();
     const sinkless = st.bare.replace(/(^|\s)\d?>[ \t]*\/dev\/null(?=\s|$)/g, '$1').replace(/(^|\s)2>&1(?=\s|$)/g, '$1');
-    return st.docs.length === 0 && !/[<>]/.test(sinkless) && READ_ONLY.test(t) && !READ_ONLY_WRITES.test(t);
+    // Also judged with quotes and backslashes removed: `-n'O'cmd`, `-\O`, `--o"pen"` are -nO / --open to git.
+    return st.docs.length === 0 && !/[<>]/.test(sinkless) && READ_ONLY.test(t) && !READ_ONLY_WRITES.test(t) && !READ_ONLY_WRITES.test(t.replace(/['"\\]/g, ''));
   };
   return {
-    pipes: pipes.map((p) => ({ text: p.map((st) => st.raw).join(' | '), readOnly: p.some((st) => st.raw.trim()) && p.every((st) => !st.raw.trim() || readOnly(st)) })),
+    pipes: pipes.map((p) => ({
+      text: p.map((st) => st.raw).join(' | '),
+      readOnly: p.some((st) => st.raw.trim()) && p.every((st) => !st.raw.trim() || readOnly(st)),
+      // The pipeline IS one data heredoc statement: 'cat' | 'tee' | 'git' | null.
+      data: p.length === 1 && p[0].docs.length === 1 ? p[0].docs[0].kind || null : null,
+    })),
     docs,
   };
+}
+
+/**
+ * A command made of DATA heredoc statements and nothing else. A `git commit|tag -F -` statement runs config-driven
+ * code (hooks, fsmonitor, clean filters), so it is inert only as the WHOLE command — beside a `cat`/`tee` that may
+ * have just written that hook or config, it is not. Read-only pipelines do not count as inert here: `git grep -nO`,
+ * `--open=` and `git diff` with a diff.external run commands.
+ */
+function inertData(split) {
+  const live = split.pipes.filter((p) => p.text.trim());
+  return live.every((p) => p.data) && (live.length === 1 || live.every((p) => p.data !== 'git'));
+}
+
+/**
+ * The text the write-shape, link and `cd` stages read: the command without the bodies of its DATA heredocs (the
+ * redirect target stays in the statement and is judged by spelling and by landing as before). The whole text is kept
+ * when the lexer does not understand the command (fails CLOSED), when the command is not made of data statements
+ * alone (a deny list of runners — `./f`, `/bin/sh f`, `xargs`, `make`, `env` — would be a game the next spelling
+ * wins), and when it runs code (RUNS_SHELL_CODE, belt and braces). A non-data heredoc body is always kept.
+ */
+function dataStripped(command) {
+  const split = splitShell(command);
+  if (!split || !split.docs.some((h) => h.kind)) return command;
+  if (!inertData(split)) return command;
+  const statements = split.pipes.map((p) => p.text).join('\n');
+  if (RUNS_SHELL_CODE.test(statements)) return command;
+  return [statements, ...split.docs.filter((h) => !h.kind).map((h) => h.body)].join('\n');
 }
 
 /** The text the code rule reads: '' when nothing but data and read-only pipelines carried the trigger. */
@@ -540,7 +615,7 @@ function mentionScope(command) {
   const notData = split.docs.filter((h) => !h.kind);
   const runs = RUNNER.test(kept);
   if (!runs && notData.length === 0) return '';
-  const catBodies = runs ? split.docs.filter((h) => h.kind === 'cat').map((h) => h.body) : [];
+  const catBodies = runs ? split.docs.filter((h) => h.kind === 'cat' || h.kind === 'tee').map((h) => h.body) : [];
   return [kept, ...notData.map((h) => h.body), ...catBodies].join('\n');
 }
 
@@ -563,9 +638,10 @@ function deny(hit, what, ctx) {
 
 function decideShell(command, isPowerShell, ctx) {
   const tool = isPowerShell ? 'PowerShell' : 'Bash';
-  const writes = shellWriteTargets(command);
-  const dirs = cdDirsOf(command, ctx);
-  const links = linkStatements(command);
+  const text = isPowerShell ? command : dataStripped(command); // a data heredoc body is not a write, a link or a cd
+  const writes = shellWriteTargets(text);
+  const dirs = cdDirsOf(text, ctx);
+  const links = linkStatements(text);
   const runsCode = isPowerShell || RUNS_CODE.test(command);
   for (const target of writes) {
     const hit = fenceOf(target, ctx);
