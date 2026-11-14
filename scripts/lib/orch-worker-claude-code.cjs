@@ -76,8 +76,18 @@ function env(base, home, account, { guardDir = DEFAULT_GUARD_DIR, secondaryConfi
 function guardDirFaults(dir) {
   const faults = [];
   if (fs.existsSync(path.join(dir, 'CLAUDE.md'))) faults.push(`${dir}/CLAUDE.md exists (user memory)`);
+  // claude >= 2.1.318 writes plugins/store/<name>_builtin-<hash>.json (a usage counter for its own built-in
+  // CLAUDE.md/AGENTS.md plugin) on every run in this dir. That alone is not an installed plugin; anything else is.
+  const builtinOnly = (pdir) => {
+    const top = fs.readdirSync(pdir);
+    if (top.length !== 1 || top[0] !== 'store') return false;
+    const store = path.join(pdir, 'store');
+    if (!fs.statSync(store).isDirectory()) return false;
+    return fs.readdirSync(store, { withFileTypes: true }).every((e) => e.isFile() && /_builtin-[0-9a-f]+\.json$/i.test(e.name));
+  };
   try {
-    if (fs.readdirSync(path.join(dir, 'plugins')).length) faults.push(`${dir}/plugins is not empty`);
+    const pdir = path.join(dir, 'plugins');
+    if (fs.readdirSync(pdir).length && !builtinOnly(pdir)) faults.push(`${dir}/plugins is not empty`);
   } catch (_) {
     /* none */
   }

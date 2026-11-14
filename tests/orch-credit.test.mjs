@@ -633,3 +633,29 @@ describe('who left the worktree dirty, the queue a job is in, and when the credi
     assert.equal(credit.pressureLine(st), 'CREDIT-FILL: queue light jobs (code-reading, record-fixes, docs, sweeps, vuln-auditor) — $90.00 behind pace ($150.00 left, 15 day(s) to renewal): P5 docs of k1 (docs)');
   });
 });
+
+describe('credit guard dir: the CLI built-in plugin counter', () => {
+  const { guardDirFaults } = require('../scripts/lib/orch-worker-claude-code.cjs');
+  const guard = (files) => {
+    const d = join(tmp('guard'), 'g');
+    for (const [rel, body] of Object.entries(files)) {
+      mkdirSync(join(d, rel, '..'), { recursive: true });
+      writeFileSync(join(d, rel), body);
+    }
+    mkdirSync(d, { recursive: true });
+    return d;
+  };
+  const plugins = (d) => guardDirFaults(d).filter((f) => /plugins is not empty/.test(f));
+  test('green: plugins/store holding only *_builtin-<hex>.json is not a plugin', () => {
+    assert.deepEqual(plugins(guard({ 'plugins/store/claude-md_builtin-0a1b2c.json': '{}', 'plugins/store/agents-md_builtin-ff00.json': '{}' })), []);
+  });
+  test('red: any other file in plugins/store is refused', () => {
+    assert.equal(plugins(guard({ 'plugins/store/claude-md_builtin-0a1b.json': '{}', 'plugins/store/other.json': '{}' })).length, 1);
+  });
+  test('red: anything beside store in plugins is refused', () => {
+    assert.equal(plugins(guard({ 'plugins/store/x_builtin-0a.json': '{}', 'plugins/cache/p.json': '{}' })).length, 1);
+  });
+  test('red: a builtin-named folder in store is refused', () => {
+    assert.equal(plugins(guard({ 'plugins/store/x_builtin-0a.json/inner.txt': 'x' })).length, 1);
+  });
+});
