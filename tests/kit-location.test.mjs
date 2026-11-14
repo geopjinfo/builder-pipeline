@@ -79,3 +79,21 @@ describe('the kit names itself where it is installed', () => {
     assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /`builder\/DISCOVERY\.md`/);
   });
 });
+
+/**
+ * The documents a package user reads in place (from node_modules, or on the repository page) are never rewritten by
+ * the install, so they must already say `npx builder`. A line may still give the folder-copy form when it says so
+ * (it names the `builder/` folder); UNPACK.md is the folder-copy path itself, and CHANGELOG.md is history.
+ */
+describe('docs read in place speak to a package user', () => {
+  test('red: README, USAGE, DISCOVERY, DESIGN, SETUP_PROMPT, adapters and the folder READMEs say npx builder, not node builder/cli.js', () => {
+    const docs = ['README.md', 'USAGE.md', 'DISCOVERY.md', 'DESIGN.md', 'SETUP_PROMPT.md', 'hooks/README.md', 'skills-extra/README.md', ...readdirSync(join(PACK, 'adapters')).filter((f) => f.endsWith('.md')).map((f) => `adapters/${f}`)];
+    const bad = [];
+    for (const rel of docs) {
+      readFileSync(join(PACK, rel), 'utf8').split(/\r?\n/).forEach((line, i) => {
+        if (/node builder\/cli\.js|builder\/tests\/run\.mjs/.test(line) && !/`builder\/` folder|folder cop/.test(line)) bad.push(`${rel}:${i + 1}`);
+      });
+    }
+    assert.deepEqual(bad, []);
+  });
+});

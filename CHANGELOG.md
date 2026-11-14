@@ -7,6 +7,20 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **README is the getting-started guide.** What the kit is; install from a tag (`npm i -D github:geopjinfo/builder-pipeline#<tag>`);
+  the one setup prompt for Claude Code, Codex and Antigravity; greenfield vs brownfield; what setup will and will not
+  touch (your items win, `builder.choices.json`, `builder.lock.json`, local edits kept); updating; extending (profile,
+  overlays through choices, local hooks and gates); every command, one line each, matching the CLI usage; the per-tool
+  support table from `builder doctor`. `UNPACK.md` is marked the secondary, folder-copy path. The docs a package user
+  reads in place (USAGE, DISCOVERY, DESIGN, adapters, the hooks and extras READMEs) say `npx builder`, giving the
+  folder form where needed. Tests: `tests/kit-location.test.mjs` (docs read in place; every kit file an installed
+  document names is one the package ships).
+- **Genericity check.** `tests/genericity.test.mjs` scans every file the package ships for a source project's identity:
+  its names, registry / decision / ADR / ruling / plan-item id shapes, absolute drive and home paths, private IPv4
+  addresses and hostnames, and email addresses, with an exact-text allowlist for the kit's own neutral examples.
+- **Neutral defaults.** The personas and the playbook name the board as `<boards>/<moduleKey>.md` (§16
+  `paths.boards`, default `tasks`) instead of a fixed `tasks/`; `setup-builder` no longer sends a package user to the
+  kit's unshipped `tests/` (`--version` is the check there).
 - **unpack installs the setup and persona-detector skills** (`builder-init`, `persona-detect`) with the pipeline skills, so builder-init's last step finds the detector.
 - **Codex and Antigravity install natively; `--tool antigravity` is new.** `unpack`/`upgrade --tool codex` now
   writes `.codex/agents/*.toml` and `.agents/skills/`, `--tool antigravity` writes `.agents/agents/*.md` and

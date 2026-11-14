@@ -6,7 +6,7 @@
 > unfilled, those phases degrade to a **recorded skip**, which the reviewer treats as
 > CHANGES-REQUIRED until a human waives it. Absent evidence is never a pass.
 
-Installed by `node builder/cli.js unpack` alongside the pipeline (skip with `--no-extras`). Each is independent of
+Installed by `npx builder unpack` alongside the pipeline (skip with `--no-extras`). Each is independent of
 the pipeline — useful on its own, more useful together.
 
 | Skill | What it does | Portability notes |
@@ -28,14 +28,14 @@ the pipeline — useful on its own, more useful together.
   exit-code contract with one lock and an embed limit — `tooling/optional/`: `features.graph.check`
   = `sync.py --check`, `features.graph.sync` = `autosync.py --trigger p1`, `features.graph.syncFree`
   = `autosync.py --trigger p4 --no-embed`.
-- **ledger-audit / check-ledgers:** `node builder/cli.js check-ledgers` is the cheap mechanical gate (CI,
+- **ledger-audit / check-ledgers:** `npx builder check-ledgers` is the cheap mechanical gate (CI,
   every merge); the `ledger-audit` skill is the deep pass (per-module at close-out, repo-wide on
   a schedule).
 - **e2e-harness:** build it once the API contract exists (a pipeline-sized task); then wire
   `test:e2e` + `test:e2e:drift` into profile §2 and treat drift failures as merge blockers.
 - **qa-audit:** fill `PIPELINE_PROFILE.md` §14 at setup (requirement source, effect sources,
   environments, redaction fields, **conventions** and **disposable actors**) and start from
-  `templates/qa-targets.md` + `templates/requirement-pack.md`. Run `node builder/cli.js check-targets` in CI — a
+  `templates/qa-targets.md` + `templates/requirement-pack.md`. Run `npx builder check-targets` in CI — a
   shared datastore must be read-only and that cannot rest on prose. Build it AFTER `e2e-harness` — it
   reuses those scenarios through a second transport, so building it first means writing the suite twice.
   Wire `qa:run` into profile §2 as a release gate (not a per-commit one; it stands up infrastructure).
