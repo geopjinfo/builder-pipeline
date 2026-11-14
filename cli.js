@@ -17,7 +17,7 @@
  *   npx builder features         (which optional checks are on, off, unmeasured or experimental)
  *   npx builder check-ledgers    (mechanical board/registry gates — wire into CI)
  *   npx builder check-targets    (qa-audit environment safety — wire into CI)
- *   npx builder bootstrap [--tool …]        (only the builder-init skill — cli/bootstrap.cjs)
+ *   npx builder bootstrap [--tool …]        (the builder-init skill, + the kit as a devDependency when run via npx — cli/bootstrap.cjs)
  *   npx builder inventory [--json]          (project items vs the kit — cli/inventory.cjs)
  *   npx builder choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
  *   npx builder doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
@@ -1528,7 +1528,7 @@ function main() {
     console.log(`usage: node builder/cli.js <command> [options]
 
   setup
-    bootstrap [--tool <list>]           only the builder-init skill, for the detected (or named) tools
+    bootstrap [--tool <list>]           the builder-init skill for the detected (or named) tools; run via npx, adds the kit as a devDependency [--no-dependency]
     inventory [--json] [--threshold n]  the project's own skills/agents/personas/hooks and their overlap with the kit
     choices list|set|unset|check        the per-item keep / kit / both decisions (builder.choices.json)
     unpack --tool <list|all>            install (copy-if-absent; undecided clashes are skipped)

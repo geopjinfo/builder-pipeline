@@ -1,8 +1,9 @@
 'use strict';
 /*
  * `builder bootstrap [--tool <list>]` — the one mechanical step before the AI takes over: the `builder-init` skill,
- * and nothing else, for each AI tool the project uses. No personas, no pointer, no ledgers — builder-init decides
- * those with the human (SETUP_PROMPT.md).
+ * for each AI tool the project uses, and — run via npx from outside the project — the kit itself as a devDependency
+ * (ensureDependency below). No personas, no pointer, no ledgers — builder-init decides those with the human
+ * (SETUP_PROMPT.md).
  *
  * Detection (no --tool): `.claude/` or CLAUDE.md → Claude Code; `.codex/` or AGENTS.md → Codex; `.agents/` →
  * Antigravity. Codex and Antigravity read the same `.agents/skills/`, so either writes that one copy. Nothing
@@ -66,8 +67,82 @@ function cmdBootstrap(ctx, argv) {
   }
   // The lock records only what bootstrap wrote, marked as a bootstrap lock (cli.js writeLock): not an install.
   ctx.writeLock({ bootstrap: true });
+  if (!argv.includes('--no-dependency')) ensureDependency(ctx);
   console.log(`\n${ctx.DRY() ? 'Dry run — nothing written.' : 'Bootstrapped.'} Next: open your AI tool here and run the builder-init skill:`);
   for (const t of tools) console.log(`  ${t.padEnd(12)} ${HOW[t]}`);
 }
 
-module.exports = { cmdBootstrap, detect, BOOT_TOOLS };
+/**
+ * THE KIT RUN FROM OUTSIDE THE PROJECT. The setup prompt runs `npx github:<owner>/builder-pipeline#<tag> bootstrap`:
+ * npx fetches the kit into its own cache and runs it there. Every later command builder-init runs is `npx builder …`,
+ * which resolves the PROJECT's bin — and with the kit not in the project, the bare name reaches the unrelated registry
+ * package `builder`. So bootstrap, run from anywhere outside the project, adds the kit to the project as a
+ * devDependency at the spec npx fetched (one source of truth for the version: package.json), and installs it with
+ * npm when npm is on PATH; without npm the dependency is written and the human is told to run `npm install`.
+ * Run from the project's own node_modules or builder/ folder, the kit is already the project's: nothing is added.
+ * `--no-dependency` skips this step.
+ */
+function ensureDependency(ctx) {
+  const rel = path.relative(ctx.CWD, ctx.KIT);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return;
+  const own = JSON.parse(fs.readFileSync(path.join(ctx.KIT, 'package.json'), 'utf8'));
+  const spec = fetchedSpec(ctx.KIT, own);
+  const pkgFile = path.join(ctx.CWD, 'package.json');
+  let pkg = null;
+  if (fs.existsSync(pkgFile)) {
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+    } catch (e) {
+      console.log(`\nnote: package.json is not valid JSON (${e.message}) — add the kit yourself: npm install --save-dev ${spec}`);
+      return;
+    }
+  }
+  const listed = pkg && ['devDependencies', 'dependencies'].map((k) => pkg[k] && pkg[k][own.name]).find(Boolean);
+  const present = fs.existsSync(path.join(ctx.CWD, 'node_modules', ...own.name.split('/'), 'package.json'));
+  if (listed && present) return console.log(`\n${own.name} is already a dependency of this project (${listed}) — \`npx builder\` runs it.`);
+  if (ctx.DRY()) {
+    return console.log(`\n${listed ? '' : `would add ${own.name}@${spec} to package.json devDependencies, then `}would run: npm install${listed ? '' : ` --save-dev ${spec}`}`);
+  }
+  if (!listed) {
+    const next = pkg || { name: path.basename(ctx.CWD).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[._-]+/, '') || 'project', private: true };
+    next.devDependencies = { ...(next.devDependencies || {}), [own.name]: spec };
+    const eol = pkg && /\r\n/.test(fs.readFileSync(pkgFile, 'utf8')) ? '\r\n' : '\n';
+    fs.writeFileSync(pkgFile, JSON.stringify(next, null, 2).replace(/\n/g, eol) + eol);
+    console.log(`\n${pkg ? 'added' : 'created package.json with'} ${own.name} as a devDependency (${spec}) — later \`npx builder\` commands run this kit, not the registry's \`builder\``);
+  }
+  const args = listed ? ['install'] : ['install', '--save-dev', spec];
+  if (!npm(['--version'], ctx.CWD, 'pipe')) {
+    return console.log(`npm is not on PATH: run \`npm install\` in this folder before the builder-init skill runs \`npx builder\``);
+  }
+  console.log(`running: npm ${args.join(' ')}`);
+  if (!npm(args, ctx.CWD, 'inherit')) console.log(`npm install failed — run \`npm ${args.join(' ')}\` here yourself before the builder-init skill runs \`npx builder\``);
+}
+
+/**
+ * The spec npx fetched: npx (npm 7+) runs a package from `<cache>/_npx/<hash>/node_modules/<name>`, beside a
+ * package.json whose dependencies name the spec it was given. Anything else (a clone run by path) pins the release
+ * tag of this kit's own version on its repository.
+ */
+function fetchedSpec(kit, own) {
+  let dir = kit;
+  while (path.basename(path.dirname(dir)) !== 'node_modules' && path.dirname(dir) !== dir) dir = path.dirname(dir);
+  const root = path.dirname(path.dirname(dir));
+  try {
+    const p = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const s = (p.dependencies && p.dependencies[own.name]) || (p.devDependencies && p.devDependencies[own.name]);
+    if (typeof s === 'string' && s.trim()) return s.trim();
+  } catch (_) {
+    // no npx root: fall through to the repository tag
+  }
+  const repo = /github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?$/.exec(String((own.repository && own.repository.url) || own.repository || ''));
+  return repo ? `github:${repo[1]}#v${own.version}` : `${own.name}@${own.version}`;
+}
+
+/** Runs npm (npm.cmd through the shell on Windows); true when it exited 0. */
+function npm(args, cwd, stdio) {
+  const win = process.platform === 'win32';
+  const r = require('child_process').spawnSync(win ? 'npm.cmd' : 'npm', win ? args.map((a) => `"${a}"`) : args, { cwd, stdio, shell: win, windowsHide: true });
+  return !r.error && r.status === 0;
+}
+
+module.exports = { cmdBootstrap, detect, BOOT_TOOLS, fetchedSpec };
