@@ -138,7 +138,7 @@ test('codex hooks.json: the documented shape, protected-paths on Bash only', () 
   const j = JSON.parse(h.content);
   assert.deepEqual(Object.keys(j.hooks), ['PreToolUse']);
   const [group] = j.hooks.PreToolUse;
-  assert.equal(group.matcher, 'Bash');
+  assert.equal(group.matcher, 'Bash|mcp__.*');
   assert.equal(group.hooks[0].type, 'command');
   assert.match(group.hooks[0].command, /git rev-parse --show-toplevel\)\/\.codex\/hooks\/protected-paths\.cjs"$/);
 });
