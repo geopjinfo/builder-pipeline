@@ -4,10 +4,10 @@
   <img alt="agent-agnostic" src="https://img.shields.io/badge/agents-agnostic_by_design-critical?style=flat-square">
   <img alt="pipeline" src="https://img.shields.io/badge/pipeline-10_phases-blue?style=flat-square">
   <img alt="personas" src="https://img.shields.io/badge/personas-9_agents-8A2BE2?style=flat-square">
-  <img alt="harnesses" src="https://img.shields.io/badge/harnesses-10_supported-success?style=flat-square">
+  <img alt="harnesses" src="https://img.shields.io/badge/--tool_targets-11-success?style=flat-square">
   <img alt="deps" src="https://img.shields.io/badge/CLI_dependencies-zero-brightgreen?style=flat-square">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square&logo=node.js&logoColor=white">
-  <img alt="portable" src="https://img.shields.io/badge/install-release_archive-orange?style=flat-square">
+  <img alt="install" src="https://img.shields.io/badge/install-npm_from_a_git_tag-orange?style=flat-square">
   <img alt="inert" src="https://img.shields.io/badge/at_rest-100%25_inert-lightgrey?style=flat-square">
 </p>
 
@@ -17,12 +17,165 @@ agent pipeline that builds one feature module at a time — planned, coded TDD-f
 adversarially, audited in parallel, documented, and gate-reviewed — with durable ledgers so no
 work is silently lost and no "done" is unearned.
 
-> **Inert by design.** Nothing activates in a repo that merely *contains* `builder/` — no agents,
-> skills, hooks, or config register until you run the unpack CLI in the target repo. And the kit
-> never imports its source project's rules: `PIPELINE_PROFILE.md` is filled by reading the
-> **target** project's own docs (the [`DISCOVERY.md`](DISCOVERY.md) step).
+It ships as an npm package (`@geopjinfo/builder-pipeline`, installed from a git tag) with a zero-dependency Node
+CLI, `builder`. It works with **Claude Code, Codex and Antigravity** natively, and with any other agent that reads
+`AGENTS.md` (or its own rules file) through prompt files.
+
+> **Inert by design.** Installing the package activates nothing — no agents, skills, hooks or config register until
+> setup runs in the project. And the kit never imports its source project's rules: `PIPELINE_PROFILE.md` is filled
+> by reading **your** project's own docs (the [`DISCOVERY.md`](DISCOVERY.md) step).
 
 ---
+
+## 🚀 Getting started
+
+### 1. Install
+
+Node 18 or newer. From the project root, pin a release tag:
+
+```
+npm i -D github:geopjinfo/builder-pipeline#<tag>
+npx builder --version
+```
+
+The tag is the version: every project names exactly one, and nothing changes until you bump it. After the one
+fetch the kit runs offline.
+
+### 2. Paste the one setup prompt
+
+Open your AI tool at the project root and paste this line (from [`SETUP_PROMPT.md`](SETUP_PROMPT.md)), with `<tag>`
+replaced by the release you installed:
+
+```
+Set up builder in this project: run `npx github:geopjinfo/builder-pipeline#<tag> bootstrap`, then follow the builder-init skill.
+```
+
+`bootstrap` adds one thing — the `builder-init` skill, for each AI tool it detects — and the skill does the rest,
+with you confirming each decision.
+
+| Tool | Where `bootstrap` puts the skill | Run setup again later |
+|---|---|---|
+| Claude Code | `.claude/skills/builder-init/SKILL.md` | `/builder-init` |
+| Codex | `.agents/skills/builder-init/SKILL.md` | `$builder-init` |
+| Antigravity | `.agents/skills/builder-init/SKILL.md` | ask for the `builder-init` skill by name |
+
+Several tools in one project: `bootstrap` adds the skill for each; run `builder-init` from any one of them — the
+choices file is shared. Any other agent: `npx builder unpack --tool <target>` (see `npx builder targets`), then open
+[`DISCOVERY.md`](DISCOVERY.md) in it.
+
+### 3. Greenfield or brownfield
+
+`builder-init` decides from what is in the repository (`npx builder inventory` prints the evidence):
+
+- **Greenfield** — an empty or near-empty repository. The skill interviews you (what is built, for whom, stack,
+  domain) and drafts `PIPELINE_PROFILE.md` from your answers.
+- **Brownfield** — existing code, docs and agent setup. The skill reads them, lists every skill, agent, persona and
+  hook you already have, scores each against the kit, and shows one table — keep yours / use the kit's / keep both
+  (the kit's renamed `builder-<name>`) — with reasons, before anything is installed.
+
+Then it installs (`npx builder unpack`), fills the profile from your docs, verifies (`npx builder verify`) and runs
+the persona detector (`persona-detect`), which proposes personas for your project and makes none an agent until you
+confirm it.
+
+### 4. What setup will and will not touch
+
+| Will | Will not |
+|---|---|
+| add the kit's personas, skills and pointer block for the tools you chose | overwrite, rename or delete any of **your** skills, agents, personas or hooks — **your items win**: a clash nobody decided is skipped and reported, never installed |
+| record each keep / kit / both answer in **`builder.choices.json`** (commit it), so a later `upgrade` never undoes it | arm a hook — hooks are copied, never armed; enabling one is your act |
+| record what it wrote, file by file, in **`builder.lock.json`** (commit it) | touch the text around its pointer block in `CLAUDE.md` / `AGENTS.md` — only the marked block is the kit's |
+| seed the project-owned files once: `PIPELINE_PROFILE.md`, the boards, the deferred registry, the decision log, the brief templates | rewrite a project-owned file once it exists — not on `unpack`, not on `upgrade` |
+| append `.pipeline/` to `.gitignore` | copy the kit's scripts into the project (installed as a package they run from it: `npx builder run <name>`) |
+
+**Local edits are kept.** A kit-owned file you changed since the kit wrote it (the lock says so) is reported
+`kept (local edit)` on upgrade, not overwritten; `--force` overwrites it after a backup. Better: move the change
+into the profile or an overlay (below), where upgrades cannot reach it.
+
+### 5. Build a module
+
+Write a brief from `specs/module-brief.template.md` and tell the agent: *"Build the `<X>` module through the
+pipeline."* [`USAGE.md`](USAGE.md) is the operator's runbook from there — where the pipeline stops for you, what it
+records, how to resume, and the troubleshooting table.
+
+## ⬆️ Updating
+
+1. Read [`CHANGELOG.md`](CHANGELOG.md) for the entries between your tag and the new one.
+2. Bump the one dependency line: `npm i -D github:geopjinfo/builder-pipeline#<new-tag>`.
+3. Preview, then apply, with the same tools you installed for:
+
+   ```
+   npx builder upgrade --tool <your tools> --dry-run
+   npx builder upgrade --tool <your tools>
+   ```
+
+   Kit-owned files are refreshed, each backed up first to `.builder/backup-<stamp>/`; local edits are kept; your
+   choices are applied again; project-owned files are never touched.
+4. `npx builder verify`, `npx builder features` (settings a release adds default to off) and `npx builder doctor`.
+
+## 🧩 Extending
+
+- **The profile.** `PIPELINE_PROFILE.md` is the one file that makes the kit concrete: project facts in §1–§15, and in
+  §16 one `pipeline-settings` JSON block — commands (`commands.tier`, `typecheck`, …), paths (`paths.boards`,
+  `registry`, `decisions`, …), model tiers, protected globs and every optional feature on or off. Every persona and
+  every script reads it; nothing in the kit assumes a stack, a test runner or a folder layout of its own.
+- **Overlays.** Keep a project's own version of a kit skill or persona instead of editing the kit's: record `keep`
+  (yours only) or `both` (yours, plus the kit's as `builder-<name>`) with `npx builder choices set <kind>:<name>
+  <keep|kit|both> --by <you>`. Upgrades honour it.
+- **Local hooks and gates.** Your hooks stay yours; the kit's are copied, never armed (the settings blocks are in
+  `adapters/<tool>.md`). Wire `npx builder check-ledgers` (and `check-targets` with qa-audit) into CI beside your own
+  gates; an optional check the project cannot run prints `<feature>: not configured`, never a pass.
+
+## ⌨️ Every command
+
+`npx builder <command>` (with the kit copied in as a `builder/` folder: `node builder/cli.js <command>` — see
+[`UNPACK.md`](UNPACK.md)). `npx builder` with no command prints the same list.
+
+| Command | What it does |
+|---|---|
+| `bootstrap [--tool <list>]` | only the builder-init skill, for the detected (or named) tools |
+| `inventory [--json] [--threshold n]` | the project's own skills/agents/personas/hooks and their overlap with the kit |
+| `choices list\|set\|unset\|check` | the per-item keep / kit / both decisions (builder.choices.json) |
+| `unpack --tool <list\|all>` | install (copy-if-absent; undecided clashes are skipped) |
+| `upgrade --tool <list\|all>` | refresh kit-owned files (backup first; `--force` over local edits) |
+| &nbsp;&nbsp;`[--dry-run] [--no-extras] [--experimental] [--models strong=x,mid=y \| codex.<tier>=x \| antigravity.<tier>=x]` | options for `unpack` / `upgrade` |
+| `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
+| `features` | which optional checks are on, off, unmeasured or experimental |
+| `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why |
+| `check-ledgers` | the mechanical board / registry gates — wire into CI |
+| `check-targets` | qa-audit environment safety — wire into CI |
+| `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
+| `run [<script> [args]]` | a kit script, run in the project folder; no name lists them |
+| `targets` | the `--tool` values |
+| `--version` | the kit version |
+
+## 🔌 Per-tool support
+
+What `npx builder doctor --tool claude-code,codex,antigravity,generic` reports (run it in your project for the tools
+you installed; *partial* = the kit relies on instructions or a by-hand step there):
+
+| Feature | Claude Code | Codex | Antigravity | Any other agent (`generic` and the other prompt-file targets) |
+|---|---|---|---|---|
+| personas | supported — native subagents, `.claude/agents/` | supported — `.codex/agents/*.toml` | supported — `.agents/agents/*.md` | partial — prompt files in `.builder/personas/`, a fresh session per phase by hand |
+| skills | supported — `.claude/skills/` | supported — `.agents/skills/` | supported — `.agents/skills/` | partial — playbooks in `.builder/playbooks/` |
+| pointer | supported — `CLAUDE.md` | supported — `AGENTS.md` | partial — `AGENTS.md`; `GEMINI.md` is read too, order undocumented | supported — `AGENTS.md` (or the tool's rules file) |
+| per-seat tool limits | supported — a tools list per subagent | partial — sandbox not narrowable per agent; checked with `git status` after each phase | partial — whole-tool grants; checked with `git status` | partial — instruction-held |
+| model tiers | supported — `--models strong=…,mid=…,low=…` | partial — no kit defaults; `--models codex.<tier>=…` | partial — inherit / flash / pro | partial — recorded in profile §12 |
+| effort | supported | supported — `model_reasoning_effort` | unsupported | unsupported |
+| protected-paths hook | supported — copied, never armed | partial — Bash only (`apply_patch` not judged); copied, never armed | unsupported — not written | unsupported — the pre-commit hook in `hooks/` works with any tool |
+| reviewer-write / registry-read guards | supported — copied, never armed | unsupported — no agent name in hook input | unsupported | unsupported |
+| bash output cap | supported — copied, never armed | unsupported | unsupported | unsupported |
+
+The native targets are `claude-code`, `codex` and `antigravity`. The other `--tool` targets — `generic`, `opencode`, `gemini`, `cursor`, `copilot`, `windsurf`, `cline`, `aider` — install as prompt files under `.builder/`, each with its pointer in its own instruction or rules file (`npx builder targets` lists them).
+
+## 📁 Copying the kit as a folder (secondary)
+
+Without npm, a release archive of the kit can be extracted at the project root as a `builder/` folder, and the
+commands run as `node builder/cli.js <command>` — the `builder/` folder form of `npx builder`. That path, and how to receive
+a release archive safely, is in [`UNPACK.md`](UNPACK.md); the package install above is the primary path.
+
+---
+
+# How it works
 
 ## 🗺️ The pipeline at a glance
 
@@ -272,12 +425,12 @@ Every build checks the deferred registry on entry (did I unblock a row?) and upd
 ## 📦 What's in the box
 
 ```
-builder/
+builder-pipeline/   (the package; a folder copy is builder/)
 ├── 📖 README.md                  ← you are here
 ├── 🧠 DESIGN.md                  ← WHY it works — 22 principles + failure lessons
 ├── 🧪 EXPERIMENTS.md             ← unproven items and the measurement that decides each
-├── ⚡ SETUP_PROMPT.md            ← paste-into-agent bootstrap — drives the whole setup end-to-end
-├── 🔧 UNPACK.md                  ← receiving the pack + HOW to install (agent-executable)
+├── ⚡ SETUP_PROMPT.md            ← the one setup prompt (bootstrap, then the builder-init skill)
+├── 🔧 UNPACK.md                  ← the folder-copy install path (secondary)
 ├── 🕹️ USAGE.md                   ← HOW to operate — stop points, record points, troubleshooting
 ├── 🔍 DISCOVERY.md               ← agent prompt: fill the profile (§1–§16) from the TARGET project
 ├── ⚙️ cli.js                     ← zero-dep Node CLI: bootstrap · inventory · choices · unpack ·
@@ -314,116 +467,9 @@ builder/
 ├── 🧰 tooling/                   ← PORTING.md (the run economy) · optional/ (index sync with lock,
 │                                    limit and session hook; caveman) · experimental/ (live page
 │                                    shell · graph-trial report · persona generator)
-├── ✅ tests/                     ← the pack's own suite: node builder/tests/run.mjs
+├── ✅ tests/                     ← the kit's own suite (node tests/run.mjs in the kit repo; not shipped)
 └── 🗒️ CHANGELOG.md               ← kit version history
 ```
-
-## 🚀 Quick start
-
-> **⚡ Zero-thought path:** put `builder/` in the repo, then paste
-> [`SETUP_PROMPT.md`](SETUP_PROMPT.md) into your agent — it drives every step below
-> (detect harness → unpack → discovery incl. §16 → confirm batch → hardening offer → verify →
-> dry run), **generates a project-specific `DEVELOPER_GUIDE.md`** for your team, and installs
-> itself as the `setup-builder` skill for re-runs and upgrades. The manual steps:
-
-```mermaid
-flowchart LR
-    S1["📦 1. Extract the release<br/>archive + run pack tests"] --> S2["⚙️ 2. node builder/cli.js<br/>unpack --tool …"]
-    S2 --> S3["🔍 3. Run DISCOVERY.md<br/>(profile §1–§16)"] --> S4["✅ 4. verify +<br/>features"]
-    S4 --> S5["✍️ 5. Write brief +<br/>run the pipeline"]
-```
-
-**1.** Extract a release archive of the pack at the target repo root — never copy a working
-directory that contains `builder/.git` ([`UNPACK.md`](UNPACK.md) § Receive the pack). Then prove the
-pack itself works (Node 18 or newer):
-
-```
-node builder/tests/run.mjs
-```
-
-**2.** Unpack for your tool(s) — one command, safe to re-run, never overwrites:
-
-```
-node builder/cli.js unpack --tool <your-agent>
-```
-
-No target is privileged: personas ship with **harness-neutral frontmatter** (`capabilities` +
-`tier` + optional `effort`); an adapter with a native agent format transforms it at install time,
-every other harness consumes the same files as prompt text. Experimental items install only with
-`--experimental`.
-
-> **⬆️ Already on an older release?** Re-running `unpack` keeps every changed file. Extract the new
-> archive over `builder/`, then `node builder/cli.js upgrade --tool <your-agent> --dry-run`, then
-> without `--dry-run`: kit-owned files are refreshed (each backed up to `.builder/backup-<stamp>/`),
-> the profile and ledgers are never touched. Finish with `verify` + `features`
-> ([`UNPACK.md`](UNPACK.md) § Upgrading an existing install).
-
-<details>
-<summary><b>Supported <code>--tool</code> targets (11)</b></summary>
-
-| Target | Harness | Install style |
-|---|---|---|
-| `claude-code` | Claude Code | `.claude/agents/` + `.claude/skills/` (frontmatter transformed: capabilities/tier/effort → tools/model/effort) |
-| `codex` | OpenAI Codex CLI | `.codex/agents/*.toml` + `.agents/skills/` + pointer in `AGENTS.md`; hook copied to `.codex/hooks/`, `hooks.json` printed, not written |
-| `antigravity` | Google Antigravity | `.agents/agents/*.md` + `.agents/skills/` + pointer in `AGENTS.md`; no hooks |
-| `opencode` | OpenCode | `.builder/` + pointer in `AGENTS.md` |
-| `gemini` | Gemini CLI | `.builder/` + pointer in `GEMINI.md` |
-| `cursor` | Cursor | `.builder/` + rule in `.cursor/rules/*.mdc` |
-| `copilot` | GitHub Copilot | `.builder/` + `.github/copilot-instructions.md` |
-| `windsurf` | Windsurf | `.builder/` + `.windsurf/rules/` |
-| `cline` | Cline / Roo Code | `.builder/` + `.clinerules/` |
-| `aider` | aider | `.builder/` + pointer in `CONVENTIONS.md` |
-| `generic` | anything else | `.builder/` + pointer in `AGENTS.md` |
-
-Comma-separate several, or `--tool all`. Preview with `--dry-run`; list with
-`node builder/cli.js targets`; skip utility skills with `--no-extras`. Codex and Antigravity share
-`.agents/skills/` and `AGENTS.md`, written once when both are selected. `node builder/cli.js doctor`
-says, per tool, which kit features are supported, partial or unsupported there.
-
-</details>
-
-<details>
-<summary><b>Every command</b> (<code>node builder/cli.js …</code>, or <code>npx builder …</code> installed as a package)</summary>
-
-| Command | What it does |
-|---|---|
-| `bootstrap [--tool …]` | Installs only the `builder-init` skill, for the tools it detects (`.claude/`/`CLAUDE.md`, `.codex/`/`AGENTS.md`, `.agents/`; Claude Code if none) |
-| `inventory [--json] [--threshold n]` | Lists the project's own skills, agents, personas and hooks, greenfield/brownfield with evidence, and every overlap with the kit (the kit's own earlier install is not counted) |
-| `choices list\|set\|unset\|check` | Records the human's keep / kit / both per clashing kit item in `builder.choices.json` (`set <kind>:<name> <decision> --by <who>`) |
-| `unpack --tool …` | Installs, copy-if-absent; an undecided clash is skipped and reported, `kit` backs up and overwrites, `both` installs `builder-<name>` |
-| `upgrade --tool …` | Refreshes kit-owned files after a backup; keeps local edits (`--force` overwrites); applies the same choices |
-| `verify` · `features` | Install + profile check · which optional checks are on |
-| `doctor [--tool …] [--json]` | Per tool: each kit feature supported, partial or unsupported, and why |
-| `check-ledgers` · `check-targets` | The CI gates over the ledgers · the qa-audit target config |
-| `personas-check` | The persona roster check (`scripts/personas-check.mjs`) |
-| `run [<script> [args]]` · `targets` · `--version` | A kit script in the project folder · the `--tool` list · the version |
-
-</details>
-
-**3.** Open [`DISCOVERY.md`](DISCOVERY.md) in your AI agent — it fills `PIPELINE_PROFILE.md` from
-**this target project's own docs**, including §16 (commands, paths, models, protected globs, and
-each optional feature on or off from what the project actually has), and asks you only what docs
-can't answer.
-
-**4.** Check the result:
-
-```
-node builder/cli.js verify
-node scripts/features.mjs
-```
-
-`verify` confirms the install, that the profile is filled, and that the §16 settings block is
-valid. `features.mjs` prints every feature's state — `on`, `not configured`, `unmeasured`, or
-experimental. (Later, `check-ledgers` is the CI-ready gate over boards + registry, `check-targets`
-guards the qa-audit environment config so a shared datastore can never be audited destructively,
-and [`hooks/`](hooks/README.md) holds the opt-in guards.)
-
-**5.** Write a module brief from `specs/module-brief.template.md` and tell the agent:
-*"Build the `<X>` module through the pipeline."*
-
-From here, [`USAGE.md`](USAGE.md) is your operator's runbook — the stop points where the pipeline
-waits for you, the record points it writes, how to resume an interrupted build, and the
-troubleshooting table.
 
 ## 🎁 Bundled utility skills (optional)
 

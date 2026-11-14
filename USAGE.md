@@ -12,6 +12,10 @@ looks like from your side of the desk. The agent-facing mechanics live in the in
 pipeline **stops and waits for you**, what it **records** along the way, and what to do at each
 point.
 
+> **Commands.** Written for the npm-package install: `npx builder <command>`, and a kit script as
+> `npx builder run <name>`. With the kit copied in as a `builder/` folder instead ([`UNPACK.md`](UNPACK.md)),
+> the same commands are `npx builder <command>` and `node scripts/<name>.mjs`.
+
 ## Running one module build
 
 ### 1. Write the brief (5–15 minutes, the highest-leverage step)
@@ -150,22 +154,22 @@ For a fix or small feature that doesn't warrant the full phase list, use the FIX
 |---|---|---|
 | `verify` fails on placeholders | profile never filled / half-filled | run `builder/DISCOVERY.md` prompt; answer the `⚠ CONFIRM` batch |
 | `verify` reports a §16 error, or a script refuses to start with a settings error | the `pipeline-settings` block is invalid: JSON syntax, more than one block, a feature `on` with a required key empty, an unknown feature name (usually a typo), a `<placeholder>` left in, `commands.tier` without `{tier}` | fix the path the error names. Never set a feature `on` to silence an error, and never delete the block — with no block every optional feature is off |
-| A run prints `<feature>: not configured` | that feature's state is `off` in §16 — the default for anything the project was not shown to have | expected if the project lacks the file or tool. To switch it on: install what it needs, set `state: "on"`, fill its required keys, run `node builder/cli.js verify`, then `node scripts/features.mjs` |
+| A run prints `<feature>: not configured` | that feature's state is `off` in §16 — the default for anything the project was not shown to have | expected if the project lacks the file or tool. To switch it on: install what it needs, set `state: "on"`, fill its required keys, run `npx builder verify`, then `node scripts/features.mjs` |
 | Planner not dispatched at P1 | the index gate saw a stale index and no recorded verdict | run the free code refresh; embed pending docs if within the limit (or decide, if above it); or record the verdict in the state file's `Graph:` line |
 | `orchestrator-check` exits 5 | the session was started on a different model from `models.orchestrator` | restart the session on the declared model, or proceed and note it — it is a cost and capability choice, not a correctness gate |
 | Claims check fails at the end of P2 or P5 | a stale count, a citation whose line moved, a retracted phrase, an owed note naming nothing | fix the record. Never widen the checker to pass a false record |
 | Handoff check refuses close-out | a section missing, an item without `RESPONSE REQUIRED`, a fill marker left, a cited id that does not exist | complete the pack; the check names each gap |
-| The pack is out of date (a newer release, or the installed files lag `builder/CHANGELOG.md`) | `unpack` copies only absent files, so an upgrade never overwrites installed ones | extract the new release archive, run `node builder/tests/run.mjs`, run the `setup-builder` skill in upgrade mode, and diff changed kit files against installed ones by hand |
+| The pack is out of date (a newer release, or the installed files lag `builder/CHANGELOG.md`) | `unpack` copies only absent files, so an upgrade never overwrites installed ones | bump the dependency tag, run `npx builder upgrade --tool <your tools>` (it refreshes kit-owned files after a backup and keeps your local edits), read the CHANGELOG entries since your old version, then `npx builder verify` |
 | Cost figures look wrong against the bill | the rate table is stale, or accounting is off / unavailable in this harness | compare `scripts/lib/pricing.cjs` and its version with the published rates; update the table and its version together. Em-dashes mean unmeasured, not free |
 | `pack tests: Node …` | Node older than 18 | upgrade Node; the pack's scripts and tests need 18 or newer |
 | Agent invents a permission key / state name | oracle path in profile §3 wrong, or oracle not listed | fix §3; the persona rule only bites if the oracle is findable |
-| Personas don't load (Claude Code) | files not under `.claude/agents/` (unpack run from wrong dir) | re-run `node builder/cli.js unpack` from repo root; check `verify` |
+| Personas don't load (Claude Code) | files not under `.claude/agents/` (unpack run from wrong dir) | re-run `npx builder unpack` from repo root; check `verify` |
 | Other tools ignore the pipeline | pointer block missing from that tool's instruction file | re-run unpack for that `--tool`; check the file for the `builder-kit:pipeline` marker |
 | Coder edits a protected path | harness has no hook enforcement | add one (see `hooks/README.md`); meanwhile reject the diff and re-dispatch |
 | A hook registered today does nothing | harness hooks and settings are read at session start | start a new session |
-| Board rows DONE without test evidence | persona rules being paraphrased/trimmed | restore verbatim persona files; that rule is load-bearing (DESIGN §7). `node builder/cli.js check-ledgers` catches it mechanically — wire it into CI |
-| `node builder/cli.js check-targets` fails | safety gate for the `qa-audit` skill: a target whose DATASTORE is shared is marked destructive, an attach target does not declare `shared`, or a credential is embedded in the config | fix the config. Run it in CI — the rule must not depend on someone reading a doc |
-| Ledger drift (dangling `DEFERRED→id`, odd statuses) | hand-edited boards/registry | `node builder/cli.js check-ledgers` — 5 gates (LG-1…LG-5), exits non-zero for CI |
+| Board rows DONE without test evidence | persona rules being paraphrased/trimmed | restore verbatim persona files; that rule is load-bearing (DESIGN §7). `npx builder check-ledgers` catches it mechanically — wire it into CI |
+| `npx builder check-targets` fails | safety gate for the `qa-audit` skill: a target whose DATASTORE is shared is marked destructive, an attach target does not declare `shared`, or a credential is embedded in the config | fix the config. Run it in CI — the rule must not depend on someone reading a doc |
+| Ledger drift (dangling `DEFERRED→id`, odd statuses) | hand-edited boards/registry | `npx builder check-ledgers` — 5 gates (LG-1…LG-5), exits non-zero for CI |
 | Board shows a percentage nobody believes | the bar was typed, not computed | `node scripts/board-check-all.mjs` (`--fix` to rewrite). Wire it into the gate chain — a bar looks like an output even when it is an input, which is how one board sat at "0%" with 8 of 12 rows done |
 | Pipeline "finishes" but reviewer never ran | orchestrator drifted from the playbook | ask for the review file's verdict; no verdict = not done, re-run Phase 6 |
 | Same blocker loops forever | upstream truth wrong (spec/brief/plan) | that's what two-strike escalation is for — fix the doc, not the code |

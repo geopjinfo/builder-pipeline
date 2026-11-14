@@ -126,10 +126,10 @@ Rules for the block:
 ## 5. Finish
 
 1. Save the filled `PIPELINE_PROFILE.md` (delete the template's leading note block).
-2. Run `node builder/cli.js verify` — fix every §16 error it names — then
-   `node scripts/features.mjs`.
+2. Run `npx builder verify` — fix every §16 error it names — then `npx builder features`
+   (with the kit copied in as a `builder/` folder: `node builder/cli.js verify` and `node builder/cli.js features`).
 3. Report to the human: a one-screen summary of what you derived, the feature states, plus the
    full list of `⚠ CONFIRM` lines as questions to answer in one batch. Apply their answers and run
    both commands again.
-4. Then run the install verification checklist in `builder/UNPACK.md` Step 3, and finish with its
+4. Then run the install verification checklist in `UNPACK.md` (beside this file) Step 3, and finish with its
    Step-4 dry run (plan a tiny real module) before the first production pipeline run.

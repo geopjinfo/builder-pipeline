@@ -9,7 +9,7 @@ say, line by line, what each item becomes without this harness.
 
 ## File placement
 
-`node builder/cli.js unpack --tool claude-code --dry-run` prints every destination. It is the
+`npx builder unpack --tool claude-code --dry-run` prints every destination. It is the
 authority if this table and the CLI ever disagree.
 
 | Kit file | Target |

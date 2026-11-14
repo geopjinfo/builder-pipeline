@@ -1,4 +1,8 @@
-# 🔧 UNPACK — installing the builder kit into a project
+# 🔧 UNPACK — installing the builder kit into a project as a folder (secondary path)
+
+> **Secondary.** The primary install is the npm package from a git tag — `npm i -D github:geopjinfo/builder-pipeline#<tag>`,
+> then the one setup prompt ([`README.md`](README.md) § Getting started). This page is the folder-copy path: a release
+> archive extracted as `builder/` and run as `node builder/cli.js <command>`, for a project without npm or a fetch.
 
 <p align="center">
   <img alt="method" src="https://img.shields.io/badge/normal_path-CLI-blue?style=flat-square">
@@ -18,9 +22,9 @@ flowchart LR
     DISC --> VER["✅ cli.js verify +<br/>scripts/features.mjs"]
 ```
 
-**The zero-thought path:** paste [`SETUP_PROMPT.md`](SETUP_PROMPT.md) into your agent — it runs
-everything on this page (and the discovery + verify + dry-run after it) with two human
-checkpoints. What follows is the underlying mechanics.
+**With the folder in place,** `node builder/cli.js bootstrap` adds the `builder-init` skill; ask your agent to follow it
+and it drives the inventory, your choices, `unpack`, discovery and `verify` with you confirming each step. What follows
+is the underlying mechanics.
 
 ## Receive the pack
 

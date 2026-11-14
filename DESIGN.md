@@ -448,7 +448,7 @@ absent feature is said out loud: `<feature>: not configured`.
 - A feature switched **on** with a required key empty is a validation error, never a skip.
 - An **unknown feature name** is an error: a typo would otherwise switch a check off in silence.
 - A feature is never switched on without the file or tool it needs. The setup step reads the
-  project to decide, and `node builder/cli.js verify` holds the block to that.
+  project to decide, and `npx builder verify` holds the block to that.
 
 `node scripts/features.mjs` prints every feature's state, so "which checks ran?" has one answer.
 
