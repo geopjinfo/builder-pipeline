@@ -167,24 +167,33 @@ function writeLock() {
   if (DRY) return;
   const files = { ...lockPrior(), ...LOCK.next };
   const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
-  const lock = { kit: VERSION, files: sorted };
-  if (PACKAGED) {
-    lock.package = packageRecord();
-    if (!lock.package.verified) console.log(`\nnote: the installed package could not be verified against package-lock.json (${lock.package.reason}) — the hooks will not run package code until it is. Fix that, then run upgrade and commit ${LOCK_FILE}.`);
-  }
-  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify(lock, null, 2) + '\n');
+  fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify({ kit: VERSION, files: sorted }, null, 2) + '\n');
 }
 
 /**
- * Installed as a package, the hooks run the kit's scripts from node_modules — outside the project's repository and
- * writable by any agent, so neither "matches HEAD" nor a hash read from node_modules can vouch for them. The record
- * is anchored to the `integrity` in the project's package-lock.json: each script's hash comes from the published
- * tarball (npm's cache, checked against that integrity), and node_modules must match it (scripts/lib/
- * package-integrity.cjs). Unverifiable → `verified: false` with the reason and no hashes, and the hooks run no package
- * code (hooks/claude-code/hook-trust.cjs trustedByLock). Commit the lock with package-lock.json.
+ * The kit scripts the Claude Code hooks load or spawn, as entry points under scripts/ (their local requires come too).
+ *
+ * WHY VENDORED. A hook runs outside the permission prompt, so it runs only code that is committed in the project
+ * (hook-trust.cjs). Installed as a package, the kit's scripts are in node_modules — not in the project's repository
+ * and writable by any agent — so a hook never loads anything from there. Instead unpack/upgrade copy these few files
+ * next to the hooks (`.claude/hooks/kit/`, mirroring scripts/): kit-owned, locked, git-tracked, reviewable in the
+ * project's history, and checked against HEAD like any project file. The folder layout needs no copy: the hooks load
+ * the project's own scripts/. Codex gets only protected-paths.cjs, which loads no kit script.
  */
-function packageRecord() {
-  return require('./scripts/lib/package-integrity.cjs').packageRecord(CWD, KIT);
+const HOOK_SCRIPTS = ['lib/profile.cjs', 'lib/board-freshness.cjs', 'lib/bash-cap.cjs', 'lib/reanchor.cjs', 'board-render.mjs', 'instruction-lint.mjs'];
+const HOOK_KIT_DIR = path.join('.claude', 'hooks', 'kit');
+function hookScripts() {
+  const { closure } = require('./hooks/claude-code/hook-trust.cjs');
+  const scripts = path.join(KIT, 'scripts');
+  const rels = new Set();
+  for (const entry of HOOK_SCRIPTS) {
+    for (const file of closure(path.join(scripts, ...entry.split('/')))) {
+      const rel = path.relative(fs.realpathSync(scripts), file);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) die(`hook script ${entry} requires ${file}, outside scripts/`);
+      rels.add(rel);
+    }
+  }
+  return [...rels].sort();
 }
 
 function upgradeLog(status, dst, note = '') {
@@ -550,6 +559,8 @@ function installTool(tool) {
       for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
         copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
       }
+      // Package layout: the scripts the hooks run, vendored beside them (hookScripts above) — never node_modules.
+      if (PACKAGED) for (const rel of hookScripts()) copyIfAbsent(path.join(KIT, 'scripts', rel), path.join(HOOK_KIT_DIR, rel));
     } else if (a.hooksDir) {
       copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join(nativePath(a.hooksDir), 'protected-paths.cjs'));
       const cfg = a.hooksConfig({ hooksDir: a.hooksDir });

@@ -156,95 +156,44 @@ function trusted(entry, opts = {}) {
 }
 
 /**
- * THE KIT AS AN INSTALLED PACKAGE. Installed with npm, the kit's scripts live under
- * `node_modules/@geopjinfo/builder-pipeline/` — not in the project's repository and writable by any agent, so neither
- * "matches HEAD" nor a hash read from node_modules can vouch for them. The anchor is the `integrity` npm wrote into
- * the project's package-lock.json (the sha512 of the published tarball): unpack/upgrade take each script's hash from
- * that tarball, never from node_modules, and record `verified: true` only when node_modules matched it
- * (scripts/lib/package-integrity.cjs). A package file then runs only when package-lock.json and builder.lock.json
- * both match HEAD (changes to them are reviewed commits), the lock's `package.integrity` is the integrity
- * package-lock.json records, and the file and every local file it requires hash to what the lock records.
+ * THE KIT AS AN INSTALLED PACKAGE. Installed with npm, the kit's scripts live in node_modules — not in the project's
+ * repository and writable by any agent — so a hook NEVER loads anything from there (no hash taken in that tree can
+ * vouch for it). unpack/upgrade instead copy the few scripts the hooks use next to them, into a `kit/` folder beside
+ * this file (mirroring scripts/): kit-owned, locked, committed with the project, and checked against HEAD like any
+ * project file.
  */
-const PACKAGE = '@geopjinfo/builder-pipeline';
-const LOCK = 'builder.lock.json';
-
-/** The installed package's folder as seen from the project, or null (folder layout, or not installed). */
-function packageDir(root) {
-  try {
-    return path.dirname(require.resolve(`${PACKAGE}/package.json`, { paths: [root] }));
-  } catch {
-    return null;
-  }
-}
-
-/** sha256 of the text with CRLF read as LF — the hash the installer writes into the lock. */
-const textSha = (bytes) => crypto.createHash('sha256').update(Buffer.from(bytes).toString('utf8').replace(/\r\n/g, '\n')).digest('hex');
-
-/** `entry` (inside the package at `pkg`) is safe to run when the committed lock records it and its closure. */
-function trustedByLock(entry, { root, pkg, git = defaultGit } = {}) {
-  if (!fs.existsSync(entry)) return { ok: false, reason: `${path.basename(entry)} not found` };
-  const lockAbs = path.join(root, LOCK);
-  if (!fs.existsSync(lockAbs)) return { ok: false, reason: `${path.basename(entry)}: no ${LOCK} records the package (run the kit's unpack or upgrade, then commit the lock)` };
-  const npmLock = path.join(root, 'package-lock.json');
-  if (!fs.existsSync(npmLock)) return { ok: false, reason: `${path.basename(entry)}: no package-lock.json anchors the package` };
-  const v = verify([lockAbs, npmLock], { base: root, git });
-  if (!v.ok) return { ok: false, reason: `${path.basename(entry)}: ${LOCK} and package-lock.json cannot vouch for the package — ${v.reason}` };
-  let record;
-  let integrity;
-  try {
-    record = JSON.parse(fs.readFileSync(lockAbs, 'utf8')).package || {};
-    const pl = JSON.parse(fs.readFileSync(npmLock, 'utf8'));
-    integrity = (pl.packages?.[`node_modules/${PACKAGE}`] || pl.dependencies?.[PACKAGE] || {}).integrity;
-  } catch {
-    return { ok: false, reason: `${path.basename(entry)}: ${LOCK} or package-lock.json is not valid JSON` };
-  }
-  if (record.verified !== true) return { ok: false, reason: `${path.basename(entry)}: the package is not verified (${record.reason || `no package record in ${LOCK}`})` };
-  if (!integrity || record.integrity !== integrity) return { ok: false, reason: `${path.basename(entry)}: ${LOCK} was not made from the package package-lock.json records (run the kit's upgrade, then commit)` };
-  const recorded = record.files || {};
-  let base;
-  try {
-    base = fs.realpathSync(pkg);
-  } catch {
-    return { ok: false, reason: `${path.basename(entry)}: the package folder does not resolve` };
-  }
-  for (const file of closure(entry)) {
-    const rel = path.relative(base, file);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return { ok: false, reason: `${path.basename(entry)}: ${path.basename(file)} is outside the package` };
-    const key = rel.split(path.sep).join('/');
-    if (!recorded[key]) return { ok: false, reason: `${path.basename(entry)}: ${key} is not recorded in ${LOCK} (run the kit's upgrade, then commit the lock)` };
-    if (recorded[key] !== textSha(fs.readFileSync(file))) return { ok: false, reason: `${path.basename(entry)}: ${key} differs from ${LOCK}` };
-  }
-  return { ok: true };
-}
+const VENDORED = 'kit';
+const UNDER_NODE_MODULES = /(^|[\\/])node_modules([\\/]|$)/;
 
 /**
- * Find kit file `scripts/<rel>` for this project and check it: the project's copy (folder layout, checked against
- * HEAD), else the installed package's (checked against the committed lock), else the kit beside this hook (the kit's
- * own repository, checked against HEAD). The first that exists decides — a later one is never a fallback for an
- * untrusted earlier one.
+ * Find kit file `scripts/<rel>` for this project and check it against HEAD: the project's scripts/ copy (folder
+ * layout), else the copy vendored beside the hooks (package layout), else the kit beside this hook (the kit's own
+ * repository). The first that exists decides — a later one is never a fallback for an untrusted earlier one — and a
+ * file under node_modules, or one that requires a file there, is refused outright.
  * @returns {{ ok: true, file: string } | { ok: false, reason: string }}
  */
 function locate(root, hookDir, rel, opts = {}) {
-  const pkg = packageDir(root);
   const kit = path.join(hookDir, '..', '..');
   const candidates = [
-    [path.join(root, 'scripts', rel), (f) => trusted(f, { base: root, ...opts })],
-    ...(pkg ? [[path.join(pkg, 'scripts', rel), (f) => trustedByLock(f, { root, pkg, ...opts })]] : []),
-    [path.join(kit, 'scripts', rel), (f) => trusted(f, { base: kit, ...opts })],
+    [path.join(root, 'scripts', rel), root],
+    [path.join(hookDir, VENDORED, rel), root],
+    [path.join(kit, 'scripts', rel), kit],
   ];
-  for (const [candidate, check] of candidates) {
+  for (const [candidate, base] of candidates) {
     const file = path.resolve(candidate);
     if (!fs.existsSync(file)) continue;
-    const t = check(file);
+    const inModules = [file, ...closure(file)].find((f) => UNDER_NODE_MODULES.test(f));
+    if (inModules) return { ok: false, reason: `${path.basename(rel)}: ${inModules} is under node_modules — a hook never runs code from there` };
+    const t = trusted(file, { base, ...opts });
     return t.ok ? { ok: true, file } : t;
   }
   return { ok: false, reason: `${path.basename(rel)} not found` };
 }
 
 /**
- * Require `scripts/lib/<name>` — the project's copy, else the installed package's, else the kit's next to this hook —
- * only when trusted (locate() above). The project's copy is checked against the project root's repository, so a
- * `.git` planted under `scripts/` changes nothing.
+ * Require `scripts/lib/<name>` — the project's copy, else the copy vendored beside the hooks, else the kit's next to
+ * this hook — only when trusted (locate() above). A project copy is checked against the project root's repository,
+ * so a `.git` planted under `scripts/` changes nothing.
  * @returns {{ ok: true, module: any } | { ok: false, reason: string }}
  */
 function load(root, hookDir, name, opts = {}) {
@@ -252,4 +201,4 @@ function load(root, hookDir, name, opts = {}) {
   return r.ok ? { ok: true, module: require(r.file) } : r;
 }
 
-module.exports = { closure, verify, trusted, trustedByLock, packageDir, textSha, locate, load, PACKAGE, LOCK };
+module.exports = { closure, verify, trusted, locate, load, VENDORED };
