@@ -89,6 +89,25 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     assert.match(r.stdout, /never-written/);
   });
 
+  test('red: node_modules not installed (fresh clone) → the pointer block is not a dead path; "not configured", allowed', () => {
+    const { proj } = installed({ profile: LINT_ON });
+    rmSync(join(proj, 'node_modules'), { recursive: true, force: true });
+    // The hook runs its vendored copy — there is no scripts/ copy in the package layout.
+    assert.ok(existsSync(join(proj, ...HOOKS, 'kit', 'instruction-lint.mjs')));
+    assert.ok(!existsSync(join(proj, 'scripts', 'instruction-lint.mjs')));
+    assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /node_modules\/@geopjinfo\/builder-pipeline\//, 'the pointer cites the package');
+    const r = hook(proj, 'instruction-lint-on-edit.cjs', { tool_name: 'Edit', tool_input: { file_path: join(proj, 'CLAUDE.md') } });
+    assert.equal(r.status, 0);
+    assert.doesNotMatch(r.stdout, /"decision":"block"/, r.stdout);
+    assert.match(r.stdout, /not configured/, r.stdout);
+    assert.match(r.stdout, /npm install/, r.stdout);
+    // A real dead path beside it still blocks, and the uninstalled package is not reported as one.
+    writeFileSync(join(proj, 'CLAUDE.md'), `${readFileSync(join(proj, 'CLAUDE.md'), 'utf8')}\nRead \`docs/never-written.md\` first.\n`);
+    const dead = hook(proj, 'instruction-lint-on-edit.cjs', { tool_name: 'Edit', tool_input: { file_path: join(proj, 'CLAUDE.md') } });
+    assert.match(dead.stdout, /"decision":"block"/, dead.stdout);
+    assert.doesNotMatch(dead.stdout, /builder-pipeline\/[^`]*` does not exist/, dead.stdout);
+  });
+
   test('red: no vendored copy → "not found", never a fallback into node_modules', () => {
     const { proj } = installed();
     rmSync(join(proj, ...HOOKS, 'kit'), { recursive: true, force: true });

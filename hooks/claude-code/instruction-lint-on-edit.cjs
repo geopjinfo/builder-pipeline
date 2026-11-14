@@ -5,7 +5,8 @@
  * When the edited file is one of `features.instructionLint.files`, this runs `scripts/instruction-lint.mjs --files <it>`.
  * A FAIL is returned to the agent as a blocking PostToolUse decision carrying the lint's lines, so the author fixes a
  * dead path or a bare line reference in the same turn instead of leaving it for the gate. Any other file, a PASS,
- * the feature off, or the script missing → exit 0 with no output.
+ * the feature off → exit 0 with no output. No lint script, or a cited path inside a dependency that is not installed
+ * (a fresh clone before `npm install`) → a "not configured" note, never a block.
  *
  * FILTER FIRST, THEN TRUST, THEN SPAWN. The file is matched against `files` before anything is started, and the lint
  * script runs only when it and every local file it requires match HEAD (`hook-trust.cjs`) — a hook must not run code
@@ -60,11 +61,16 @@ function decide(input, { root, settings = null, untrusted = null, trust, run = d
   if (!matches(rel, feature.files ?? DEFAULT_FILES)) return { action: 'pass', reason: 'not an instruction file' };
   // The project's scripts/ copy (folder layout), else the installed package's (npm layout).
   const script = find(root);
-  if (!script) return { action: 'pass', reason: 'no lint script' };
+  if (!script) return { action: 'note', reason: `instruction-lint hook: not configured for ${rel} — no lint script (scripts/instruction-lint.mjs, or .claude/hooks/kit/instruction-lint.mjs from unpack); the edit is allowed` };
   const t = (trust || ((file) => defaultTrust(file, root)))(script);
   if (!t.ok) return { action: 'note', reason: `instruction-lint hook: not run for ${rel} — ${t.reason}` };
   const r = run(root, rel, script);
-  if (r.status !== 1) return { action: 'pass', reason: `lint exit ${r.status}` };
+  if (r.status !== 1) {
+    // A path inside a dependency that is not installed is "not configured", never a block — say so, allow the edit.
+    const unjudged = String(r.stdout ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => /not checked — not configured/.test(l));
+    if (unjudged.length) return { action: 'note', reason: `instruction-lint hook: not configured for ${rel} — ${unjudged.length} cited path(s) not checked; the edit is allowed:\n${unjudged.join('\n')}` };
+    return { action: 'pass', reason: `lint exit ${r.status}` };
+  }
   return { action: 'block', reason: `instruction-lint failed for ${rel} — fix it in this turn:\n${r.stdout.trim()}` };
 }
 
