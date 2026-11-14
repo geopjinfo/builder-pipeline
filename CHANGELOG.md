@@ -29,6 +29,9 @@ versions independently of any project it is pasted into.
 - **registry-read-guard no longer yields in silence.** When it cannot load its profile code (differs from HEAD, not
   found) or fails, a subagent's Read is still allowed, with one stderr line: `registry-read-guard: not judging this
   read — <why>`. The orchestrator's own reads stay quiet. Tests: `tests/package-hooks.test.mjs`.
+- **DESIGN.md, EXPERIMENTS.md and the adapter docs give install-neutral commands.** Their ~45 `node scripts/<x>.mjs`
+  examples now read `npx builder run <x>` (`experimental/<x>` included), with one `Commands.` note at the top of each
+  saying how the folder layout runs the same script, as USAGE.md already did. Tests: `tests/invocation.test.mjs`.
 
 ## [1.0.0-rc.1] — 2026-11-14
 

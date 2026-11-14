@@ -1,5 +1,8 @@
 # Adapter — Codex (and similar single-agent CLIs)
 
+> **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
+> kit copied in as a `builder/` folder ([`UNPACK.md`](../UNPACK.md)), run it from the project's `scripts/` copy with Node.
+
 Codex has no persona-subagent registry, so the mapping preserves the kit's real invariant —
 **fresh, role-scoped context per phase** — using fresh sessions instead of subagents.
 
@@ -97,10 +100,10 @@ Codex won't enforce tool scoping or model tiers per persona, so:
 
 ## The run board, while the run happens
 
-Start `node scripts/board-watch.mjs` in a second terminal when the board is materialised, and stop
+Start `npx builder run board-watch` in a second terminal when the board is materialised, and stop
 it at close-out. There is no after-tool-call hook here, so the watcher is the only automatic path.
 If it is not running, the page is only as fresh as the last explicit
-`node scripts/board-render.mjs <key>`.
+`npx builder run board-render <key>`.
 
 **The board file is the one progress surface.** Do not keep a parallel to-do list in the session.
 
@@ -108,16 +111,16 @@ If it is not running, the page is only as fresh as the last explicit
 
 | Claude Code step | Here |
 |---|---|
-| Instruction lint on edit | no post-edit hook. Run `node scripts/instruction-lint.mjs` before committing any instruction-file change; the P7 record gate runs it anyway |
+| Instruction lint on edit | no post-edit hook. Run `npx builder run instruction-lint` before committing any instruction-file change; the P7 record gate runs it anyway |
 | Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`), and never paste raw suite output into a phase |
-| Registry read guard hook | instruction only: seats read one row with `node scripts/ledger-row.mjs registry <ID>`; check a seat's transcript if in doubt |
+| Registry read guard hook | instruction only: seats read one row with `npx builder run ledger-row registry <ID>`; check a seat's transcript if in doubt |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the only change the reviewer may leave is its review file |
 | Re-anchor after compaction | unavailable. After any compaction, re-read `state.md`, the board's `phase:status` block and the open `FIX-n` rows by hand before the next dispatch (the playbook's rule) |
-| Session-start index refresh | unavailable. The P1 index gate (`node scripts/index-check.mjs`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
+| Session-start index refresh | unavailable. The P1 index gate (`npx builder run index-check`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
 | Subagent spawn depth 1 | not needed: fresh sessions cannot dispatch |
 | Prompt-cache TTL by replay | unavailable: no such settings are exposed |
 | `effort:` frontmatter | ignored. Use a per-run reasoning setting if your Codex version has one (profile §12) |
-| Orchestrator model check | `node scripts/orchestrator-check.mjs` prints `unmeasurable here`: no transcript it can read |
+| Orchestrator model check | `npx builder run orchestrator-check` prints `unmeasurable here`: no transcript it can read |
 | Per-seat cost accounting (`costAccounting`, `seat-peaks`, `cost-window`) | unavailable. The agents table renders em-dashes (see below) |
 | Live page · Workflow-driven runs · advisor A/B | unavailable |
 | Batch orchestrator (`orchestrator`, `scripts/orch.mjs`) | runs as is: plain Node over git, with every seat action a command template you fill for this harness (`launchCommand`, `stateCommand`, `stopCommand`, `usageCommand`). A primary-seat pipeline lane is its own session. The credit worker adapter ships for Claude Code only — keep `credit.enabled` false here until one exists for this harness |
