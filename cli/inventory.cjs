@@ -33,7 +33,24 @@ function projectView(cwd, kit, { lock = {}, legacy = false, threshold, withMode 
     if (!withMap.get(key).includes(p.project)) withMap.get(key).push(p.project);
   }
   const view = { items, kitItems, overlaps, clashes: [...withMap.keys()].sort(), kitInstalled: all.filter(isKit).map((it) => it.path), withMap };
-  return withMode ? { mode: inv.mode(cwd), ...view } : view;
+  if (!withMode) return view;
+  // The kit's own install is not evidence of a codebase: the files the lock records (its scripts/ copies in the folder
+  // layout, its hooks, its skills) and — for an install from before the lock — the scripts/ copies of kit scripts.
+  const exclude = new Set(Object.keys(lock));
+  if (legacy) {
+    const fs = require('fs');
+    const walk = (dir, rel) => {
+      if (!fs.existsSync(dir)) return;
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) walk(path.join(dir, e.name), `${rel}${e.name}/`);
+        else exclude.add(`${rel}${e.name}`);
+      }
+    };
+    walk(path.join(kit, 'scripts'), 'scripts/');
+    walk(path.join(kit, 'oracles'), 'scripts/oracles/');
+    walk(path.join(kit, 'tooling', 'experimental'), 'scripts/experimental/');
+  }
+  return { mode: inv.mode(cwd, { exclude, isKit }), ...view };
 }
 
 /** `builder inventory [--json] [--threshold n]` — what scripts/inventory.mjs prints, without the kit's own files. */

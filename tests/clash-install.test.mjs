@@ -116,14 +116,15 @@ describe('a recorded choice is applied', () => {
     assert.match(r.out, /both kept \(tester, .*\): skill:orchestrator/);
   });
 
+  // A non-seat persona (an extra skill's): "both" for a pipeline seat is refused (tests/setup-flow.test.mjs).
   test('both, for a codex persona: .codex/agents/builder-<name>.toml named builder-<name>', () => {
     const root = project();
-    write(root, '.codex/agents/module-planner.toml', 'name = "module-planner"\ndescription = "ours"\ndeveloper_instructions = "ours"\n');
-    choose(root, 'agent:module-planner', 'both');
-    const r = run(root, ['unpack', '--tool', 'codex', '--no-extras']);
+    write(root, '.codex/agents/repo-auditor.toml', 'name = "repo-auditor"\ndescription = "ours"\ndeveloper_instructions = "ours"\n');
+    choose(root, 'agent:repo-auditor', 'both');
+    const r = run(root, ['unpack', '--tool', 'codex']);
     assert.equal(r.status, 0, r.out);
-    assert.match(read(root, '.codex/agents/builder-module-planner.toml'), /^name = "builder-module-planner"$/m);
-    assert.match(read(root, '.codex/agents/module-planner.toml'), /description = "ours"/);
+    assert.match(read(root, '.codex/agents/builder-repo-auditor.toml'), /^name = "builder-repo-auditor"$/m);
+    assert.match(read(root, '.codex/agents/repo-auditor.toml'), /description = "ours"/);
   });
 
   test('a skipped pipeline skill takes its references with it — nothing lands in the project\'s folder', () => {

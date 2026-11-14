@@ -178,4 +178,25 @@ function applyChoices(plan, choices) {
   return { install, skip, report };
 }
 
-module.exports = { FILE, VERSION, DECISIONS, KINDS, PREFIX, validate, read, write, set, unset, applyChoices, renamedDst, renameFrontmatter, empty };
+/** Why "both" is refused for a pipeline seat, and what to choose instead — one sentence the CLI and unpack print. */
+const seatBoth = (key) =>
+  `${key}: "both" is not allowed for a pipeline seat — the pipeline skills and the reviewer write-guard dispatch it by name, so a kit seat renamed builder-<name> is never run and the project's same-name agent takes its place. Choose "keep" (the project's agent stays and the kit's seat is not installed; verify then fails until the seat is the kit's) or "kit" (the project's file is backed up, the kit's seat installed).`;
+
+/**
+ * The problems with recorded keys against what the kit can install (pure). `keys`: every `<kind>:<name>` the kit
+ * plans (inventory.cjs kitKeys); `seats`: the pipeline seat names (inventory.cjs pipelineSeats).
+ *   unknown  a key that names no kit item — it decides nothing, and the real clash stays undecided
+ *   seatBoth a pipeline seat recorded as "both"
+ */
+function checkKeys(choices, { keys, seats = [] }) {
+  const items = (choices && choices.items) || {};
+  const unknown = Object.keys(items).filter((k) => keys && !keys.has(k));
+  const both = Object.entries(items).filter(([k, c]) => c && c.decision === 'both' && /^(agent|persona):/.test(k) && seats.includes(k.split(':')[1])).map(([k]) => k);
+  return {
+    unknown,
+    seatBoth: both,
+    errors: [...unknown.map((k) => `${k}: names no kit item`), ...both.map(seatBoth)],
+  };
+}
+
+module.exports = { FILE, VERSION, DECISIONS, KINDS, PREFIX, validate, read, write, set, unset, applyChoices, renamedDst, renameFrontmatter, empty, checkKeys, seatBoth };

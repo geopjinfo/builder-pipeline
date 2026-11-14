@@ -34,7 +34,6 @@ const LOCATIONS = [
   { dir: '.builder/personas', kind: 'persona', tool: 'builder', layout: 'file', ext: ['.md'] },
   { dir: '.builder/playbooks', kind: 'playbook', tool: 'builder', layout: 'file', ext: ['.md'] },
   { dir: '.builder/skills', kind: 'skill', tool: 'builder', layout: 'dir' },
-  { dir: 'personas', kind: 'persona', tool: 'project', layout: 'file', ext: ['.md'] },
 ];
 
 /** Kinds that can stand in for one another. A hook never clashes with a skill; a persona and an agent are one seat. */
@@ -156,9 +155,57 @@ function scanLocation(root, loc) {
   return out;
 }
 
+/**
+ * The persona library's own files (persona-detect copies them into personas/): documentation and scaffolding, never
+ * a persona. Listing them put five non-personas in front of the human at a builder-init re-run.
+ */
+const PERSONA_LIBRARY = new Set(['index.md', 'usage.md', 'why.md', 'readme.md']);
+const PERSONA = { kind: 'persona', tool: 'project' };
+
+/**
+ * The project's personas. With a roster (personas/INDEX.md, scripts/lib/personas.cjs) the profiles it names are the
+ * personas — `personas/<set>/<id>.md` or the entry's `file`, named by the roster id. Without one, the set folders
+ * (personas/<set>/*.md) are walked. Either way a top-level `personas/<name>.md` that is not a library file
+ * (INDEX, USAGE, WHY, README, anything starting with `_`) is a project's own persona, as before.
+ */
+function scanPersonas(root) {
+  const base = path.join(root, 'personas');
+  if (!fs.existsSync(base)) return [];
+  const personas = require('./personas.cjs');
+  const out = [];
+  const seen = new Set();
+  const add = (rel, name) => {
+    const abs = path.join(base, ...rel.split('/'));
+    const key = posix(path.join('personas', rel));
+    if (seen.has(key) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) return;
+    seen.add(key);
+    out.push(describe(abs, key, PERSONA, name));
+  };
+  let roster = null;
+  try {
+    roster = personas.parseRoster(fs.readFileSync(path.join(base, 'INDEX.md'), 'utf8'));
+  } catch {
+    roster = null; // no INDEX.md, or no readable roster block: walk the set folders instead
+  }
+  if (roster && Array.isArray(roster.personas)) {
+    for (const entry of roster.personas) if (entry && entry.id) add(posix(personas.fileOf(entry)), entry.id);
+  } else {
+    for (const set of personas.SETS) {
+      for (const e of listDir(path.join(base, set))) {
+        if (e.isFile() && e.name.endsWith('.md') && !e.name.startsWith('_') && !PERSONA_LIBRARY.has(e.name.toLowerCase())) add(`${set}/${e.name}`, path.basename(e.name, '.md'));
+      }
+    }
+  }
+  for (const e of listDir(base)) {
+    if (e.isFile() && e.name.endsWith('.md') && !e.name.startsWith('_') && !PERSONA_LIBRARY.has(e.name.toLowerCase())) add(e.name, path.basename(e.name, '.md'));
+  }
+  // The roster id is the persona's name, whatever the profile's own heading says.
+  return out;
+}
+
 /** Every skill, agent, persona, playbook and hook the project already has, in a stable order. */
 function inventory(projectRoot) {
-  return LOCATIONS.flatMap((loc) => scanLocation(projectRoot, loc));
+  return [...LOCATIONS.flatMap((loc) => scanLocation(projectRoot, loc)), ...scanPersonas(projectRoot)];
 }
 
 /**
@@ -265,13 +312,16 @@ function manifestCounts(root, file) {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
     const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((d) => !/builder-pipeline$/.test(d));
     const scripts = Object.entries(pkg.scripts || {}).filter(([k, v]) => !(k === 'test' && /no test specified/.test(String(v))));
-    return deps.length > 0 || scripts.length > 0 || Boolean(pkg.main || pkg.bin || pkg.exports);
+    // `npm init -y` writes "main": "index.js" whether or not the file exists: only an entry point that is there counts.
+    const exists = (p) => typeof p === 'string' && fs.existsSync(path.join(root, p));
+    const bins = typeof pkg.bin === 'string' ? [pkg.bin] : Object.values(pkg.bin || {});
+    return deps.length > 0 || scripts.length > 0 || exists(pkg.main) || bins.some(exists) || Boolean(pkg.exports);
   } catch {
     return true; // unreadable is still somebody's file
   }
 }
 
-function countFiles(root) {
+function countFiles(root, exclude = new Set()) {
   let files = 0;
   let code = 0;
   const stack = [root];
@@ -281,6 +331,7 @@ function countFiles(root) {
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) stack.push(path.join(dir, e.name));
       } else if (e.isFile()) {
+        if (exclude.size && exclude.has(posix(path.relative(root, path.join(dir, e.name))))) continue; // the kit's own file
         files++;
         if (CODE_EXT.has(path.extname(e.name).toLowerCase())) code++;
       }
@@ -289,15 +340,31 @@ function countFiles(root) {
   return { files, code, capped: files >= WALK_CAP };
 }
 
+/** True when an instruction file holds nothing but the kit's own pointer block (unpack wrote it). */
+function onlyKitPointer(abs) {
+  try {
+    if (!fs.statSync(abs).isFile()) {
+      // A rules folder the kit wrote into holds only its builder-pipeline.* file.
+      return listDir(abs).every((e) => e.isFile() && /^builder-pipeline\./.test(e.name));
+    }
+    const text = fs.readFileSync(abs, 'utf8').replace(/<!-- builder-kit:pipeline -->[\s\S]*?<!-- \/builder-kit:pipeline -->/g, '');
+    return text.replace(/^---[\s\S]*?\n---\s*/, '').trim() === '';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Greenfield (being started: interview first) or brownfield (has code or its own agent setup: read first), with the
- * evidence so the skill can show its working and the human can overrule it.
+ * evidence so the skill can show its working and the human can overrule it. The kit's own install is not evidence:
+ *   opts.exclude  posix paths the kit installed (the lock's files) — not the project's code
+ *   opts.isKit    (item) => true for an item the kit installed — not one of the project's own items
  */
-function mode(projectRoot) {
-  const counts = countFiles(projectRoot);
+function mode(projectRoot, { exclude = new Set(), isKit = () => false } = {}) {
+  const counts = countFiles(projectRoot, exclude instanceof Set ? exclude : new Set(exclude));
   const manifests = MANIFESTS.filter((f) => fs.existsSync(path.join(projectRoot, f)));
   const countedManifests = manifests.filter((f) => manifestCounts(projectRoot, f));
-  const instructionFiles = INSTRUCTION_FILES.filter((f) => fs.existsSync(path.join(projectRoot, f)));
+  const instructionFiles = INSTRUCTION_FILES.filter((f) => fs.existsSync(path.join(projectRoot, f)) && !onlyKitPointer(path.join(projectRoot, f)));
   const hasSrc = ['src', 'lib', 'app', 'cmd', 'pkg'].filter((d) => {
     try {
       return fs.statSync(path.join(projectRoot, d)).isDirectory();
@@ -305,7 +372,7 @@ function mode(projectRoot) {
       return false;
     }
   });
-  const items = inventory(projectRoot).length;
+  const items = inventory(projectRoot).filter((it) => !isKit(it)).length;
   const evidence = {
     files: counts.files,
     codeFiles: counts.code,
@@ -334,4 +401,42 @@ function report(projectRoot, kitRoot, opts = {}) {
   return { mode: mode(projectRoot), items, kitItems, overlaps: pairs, clashes: [...new Set(pairs.map((p) => `${p.kitKind}:${p.kitName}`))].sort() };
 }
 
-module.exports = { LOCATIONS, SIMILAR, inventory, kitInventory, overlaps, mode, report, tokens, jaccard, frontmatter, triggers };
+/**
+ * Every `<kind>:<name>` the installer can plan — what a `builder.choices.json` key may name. A key outside this set
+ * decides nothing: the real clash stays undecided and is skipped in silence, so `choices set` refuses it.
+ */
+function kitKeys(kitRoot) {
+  const keys = new Set(kitInventory(kitRoot).map((k) => `${k.kind}:${k.name}`));
+  for (const e of listDir(path.join(kitRoot, 'agents', 'experimental'))) {
+    if (e.isFile() && e.name.endsWith('.md')) keys.add(`agent:${path.basename(e.name, '.md')}`);
+  }
+  return keys;
+}
+
+/**
+ * The pipeline seats: every kit persona (agents/*.md) a kit skill (skills/*.md) dispatches BY NAME, plus the reviewer
+ * the write-guard hook targets. Renaming one ("both" → builder-<name>) leaves the skills and the guard pointing at
+ * the old name — the project's same-name agent would then run as that seat — so a seat is the kit's or nothing.
+ */
+function pipelineSeats(kitRoot) {
+  const skills = listDir(path.join(kitRoot, 'skills'))
+    .filter((e) => e.isFile() && e.name.endsWith('.md'))
+    .map((e) => fs.readFileSync(path.join(kitRoot, 'skills', e.name), 'utf8'))
+    .join('\n');
+  const seats = new Set();
+  for (const e of listDir(path.join(kitRoot, 'agents'))) {
+    if (!e.isFile() || !e.name.endsWith('.md')) continue;
+    const name = path.basename(e.name, '.md');
+    if (new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(skills)) seats.add(name);
+  }
+  try {
+    const guard = fs.readFileSync(path.join(kitRoot, 'hooks', 'claude-code', 'reviewer-write-guard.cjs'), 'utf8');
+    const m = /const REVIEWER = ['"]([\w-]+)['"]/.exec(guard);
+    if (m) seats.add(m[1]);
+  } catch {
+    /* no guard shipped: nothing to add */
+  }
+  return [...seats].sort();
+}
+
+module.exports = { LOCATIONS, SIMILAR, inventory, kitInventory, overlaps, mode, report, tokens, jaccard, frontmatter, triggers, kitKeys, pipelineSeats };

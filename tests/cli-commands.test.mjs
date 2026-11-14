@@ -69,13 +69,13 @@ describe('builder inventory', () => {
 describe('builder choices', () => {
   test('red: set, list, check and unset work from the project root and write builder.choices.json there', () => {
     const { proj, cli } = project();
-    const set = run(cli, proj, ['choices', 'set', 'skill:code-review', 'keep', '--by', 'tester', '--note', 'ours is better']);
+    const set = run(cli, proj, ['choices', 'set', 'skill:caveman', 'keep', '--by', 'tester', '--note', 'ours is better']);
     assert.equal(set.status, 0, set.out);
     const file = JSON.parse(readFileSync(join(proj, 'builder.choices.json'), 'utf8'));
-    assert.equal(file.items['skill:code-review'].decision, 'keep');
-    assert.match(run(cli, proj, ['choices', 'list']).out, /skill:code-review\s+keep/);
+    assert.equal(file.items['skill:caveman'].decision, 'keep');
+    assert.match(run(cli, proj, ['choices', 'list']).out, /skill:caveman\s+keep/);
     assert.equal(run(cli, proj, ['choices', 'check']).status, 0);
-    assert.equal(run(cli, proj, ['choices', 'unset', 'skill:code-review']).status, 0);
+    assert.equal(run(cli, proj, ['choices', 'unset', 'skill:caveman']).status, 0);
     assert.deepEqual(JSON.parse(readFileSync(join(proj, 'builder.choices.json'), 'utf8')).items, {});
   });
 
