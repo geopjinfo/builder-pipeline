@@ -147,6 +147,20 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     assert.match(out(r), /npx builder run ledger-row registry/);
   });
 
+  test('red: registry-read-guard that cannot load its profile says so on stderr (one line) and allows', () => {
+    const { proj } = installed({ profile: { paths: { registry: 'DEFERRED_TASKS.md' }, features: { registryGuard: { state: 'on', seats: ['module-builder'] } } } });
+    const lib = join(proj, ...HOOKS, 'kit', 'lib', 'profile.cjs');
+    writeFileSync(lib, `${readFileSync(lib, 'utf8')}\n// edited\n`);
+    const r = hook(proj, 'registry-read-guard.cjs', { tool_name: 'Read', agent_type: 'module-builder', tool_input: { file_path: join(proj, 'DEFERRED_TASKS.md') } });
+    assert.equal(r.status, 0, out(r));
+    assert.match(r.stderr, /^registry-read-guard: not judging this read — .*profile\.cjs.*differs from HEAD/, r.stderr);
+    assert.equal(r.stderr.trim().split(/\r?\n/).length, 1, r.stderr);
+    // The orchestrator's own reads (no agent_type) are never judged: nothing to say there.
+    const main = hook(proj, 'registry-read-guard.cjs', { tool_name: 'Read', tool_input: { file_path: join(proj, 'DEFERRED_TASKS.md') } });
+    assert.equal(main.status, 0);
+    assert.equal(main.stderr, '');
+  });
+
   test('control: the folder layout vendors nothing — the hooks load the project scripts/', () => {
     const c = project('builder');
     assert.equal(run(c.cli, c.proj, ['unpack', '--tool', 'claude-code']).status, 0);
