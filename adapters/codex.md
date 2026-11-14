@@ -6,8 +6,10 @@ Codex has no persona-subagent registry, so the mapping preserves the kit's real 
 ## Native layout (`adapters/lib/codex.cjs`)
 
 Codex now has custom agents, repo skills and hooks. The renderer in `adapters/lib/codex.cjs` (pure: text in,
-`{ path, content }` out) produces the native form below; until `cli.js` wires it in, the `.builder/` placement in the
-next section is what `unpack` installs. Checked against the official docs on 2026-11-14:
+`{ path, content }` out) produces the native form below, and `unpack --tool codex` installs it (the `.builder/` placement
+further down is now only what the no-Node fallback `scripts/unpack.sh codex` writes). The hook script is copied to
+`.codex/hooks/` and the `hooks.json` block is printed, not written. `node builder/cli.js doctor --tool codex` lists
+what is partial or unsupported here. Checked against the official docs on 2026-11-14:
 [subagents](https://developers.openai.com/codex/subagents), [skills](https://developers.openai.com/codex/skills),
 [hooks](https://developers.openai.com/codex/hooks), [AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
 (each now redirects to `learn.chatgpt.com/docs/…`).
@@ -40,8 +42,9 @@ Not wired, each for a documented reason (the module's `unconfirmed` list):
 
 | Kit file | Target |
 |---|---|
-| `agents/*.md` (9) | `.builder/personas/*.md` |
-| `skills/*.md` + `skills/references/` | `.builder/playbooks/` |
+| `agents/*.md` (9) | `.codex/agents/*.toml` (no-Node fallback: `.builder/personas/*.md`) |
+| `skills/*.md` + `skills/references/` | `.agents/skills/<name>/SKILL.md` + `.agents/skills/build-module-pipeline/references/` (no-Node fallback: `.builder/playbooks/`) |
+| `hooks/protected-paths.cjs` | `.codex/hooks/protected-paths.cjs` — copied, never armed |
 | `templates/task-board.md` | `tasks/README.md` |
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |
 | `templates/module-brief.md` | `specs/module-brief.template.md` |

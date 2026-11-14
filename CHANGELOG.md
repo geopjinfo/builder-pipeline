@@ -37,6 +37,10 @@ versions independently of any project it is pasted into.
   no agent name in hooks; Antigravity: hooks not written, whole-tool grants, no effort; dotBuilder tools: prompt files
   and playbooks held by hand — followed by the adapter's own `unconfirmed` list word for word. A report: exit 0.
   Tests: `tests/doctor.test.mjs`.
+- **Usage text, next steps and README list every command.** `builder` with no command prints the setup / check /
+  other groups; the unpack and upgrade next steps add `doctor`; README gains the full command table and the
+  `codex`/`antigravity` rows; `adapters/codex.md` says the native layout is now what `unpack` installs.
+  Tests: `tests/cli-commands.test.mjs`.
 - **Per-harness renderers in `adapters/lib/`.** Pure modules (text in, `{ path, content }` out) for Claude Code (a
   move-compatible copy of the install transform, byte-identical for every persona), Codex (`.codex/agents/*.toml`,
   `.agents/skills/`, `.codex/hooks.json`) and Antigravity (`.agents/agents/*.md`, `.agents/skills/`), each checked

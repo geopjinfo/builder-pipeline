@@ -280,8 +280,10 @@ builder/
 ├── 🔧 UNPACK.md                  ← receiving the pack + HOW to install (agent-executable)
 ├── 🕹️ USAGE.md                   ← HOW to operate — stop points, record points, troubleshooting
 ├── 🔍 DISCOVERY.md               ← agent prompt: fill the profile (§1–§16) from the TARGET project
-├── ⚙️ cli.js                     ← zero-dep Node CLI: unpack · targets · verify · features ·
-│                                    check-ledgers · check-targets
+├── ⚙️ cli.js                     ← zero-dep Node CLI: bootstrap · inventory · choices · unpack ·
+│                                    upgrade · verify · features · doctor · check-ledgers ·
+│                                    check-targets · personas-check · run · targets
+├── 🧩 cli/                       ← the setup commands' modules (inventory · bootstrap · doctor)
 ├── 📄 PIPELINE_PROFILE.template.md ← the ONE per-project file; §16 = pipeline settings (JSON)
 ├── 🤖 agents/                    ← 9 generic personas + experimental/ (page-keeper)
 ├── 📜 skills/                    ← recipes (pipeline · lite split · scaffold · readiness-check ·
@@ -357,12 +359,13 @@ every other harness consumes the same files as prompt text. Experimental items i
 > ([`UNPACK.md`](UNPACK.md) § Upgrading an existing install).
 
 <details>
-<summary><b>Supported <code>--tool</code> targets (10)</b></summary>
+<summary><b>Supported <code>--tool</code> targets (11)</b></summary>
 
 | Target | Harness | Install style |
 |---|---|---|
 | `claude-code` | Claude Code | `.claude/agents/` + `.claude/skills/` (frontmatter transformed: capabilities/tier/effort → tools/model/effort) |
-| `codex` | OpenAI Codex CLI | `.builder/` + pointer in `AGENTS.md` |
+| `codex` | OpenAI Codex CLI | `.codex/agents/*.toml` + `.agents/skills/` + pointer in `AGENTS.md`; hook copied to `.codex/hooks/`, `hooks.json` printed, not written |
+| `antigravity` | Google Antigravity | `.agents/agents/*.md` + `.agents/skills/` + pointer in `AGENTS.md`; no hooks |
 | `opencode` | OpenCode | `.builder/` + pointer in `AGENTS.md` |
 | `gemini` | Gemini CLI | `.builder/` + pointer in `GEMINI.md` |
 | `cursor` | Cursor | `.builder/` + rule in `.cursor/rules/*.mdc` |
@@ -373,7 +376,27 @@ every other harness consumes the same files as prompt text. Experimental items i
 | `generic` | anything else | `.builder/` + pointer in `AGENTS.md` |
 
 Comma-separate several, or `--tool all`. Preview with `--dry-run`; list with
-`node builder/cli.js targets`; skip utility skills with `--no-extras`.
+`node builder/cli.js targets`; skip utility skills with `--no-extras`. Codex and Antigravity share
+`.agents/skills/` and `AGENTS.md`, written once when both are selected. `node builder/cli.js doctor`
+says, per tool, which kit features are supported, partial or unsupported there.
+
+</details>
+
+<details>
+<summary><b>Every command</b> (<code>node builder/cli.js …</code>, or <code>npx builder …</code> installed as a package)</summary>
+
+| Command | What it does |
+|---|---|
+| `bootstrap [--tool …]` | Installs only the `builder-init` skill, for the tools it detects (`.claude/`/`CLAUDE.md`, `.codex/`/`AGENTS.md`, `.agents/`; Claude Code if none) |
+| `inventory [--json] [--threshold n]` | Lists the project's own skills, agents, personas and hooks, greenfield/brownfield with evidence, and every overlap with the kit (the kit's own earlier install is not counted) |
+| `choices list\|set\|unset\|check` | Records the human's keep / kit / both per clashing kit item in `builder.choices.json` (`set <kind>:<name> <decision> --by <who>`) |
+| `unpack --tool …` | Installs, copy-if-absent; an undecided clash is skipped and reported, `kit` backs up and overwrites, `both` installs `builder-<name>` |
+| `upgrade --tool …` | Refreshes kit-owned files after a backup; keeps local edits (`--force` overwrites); applies the same choices |
+| `verify` · `features` | Install + profile check · which optional checks are on |
+| `doctor [--tool …] [--json]` | Per tool: each kit feature supported, partial or unsupported, and why |
+| `check-ledgers` · `check-targets` | The CI gates over the ledgers · the qa-audit target config |
+| `personas-check` | The persona roster check (`scripts/personas-check.mjs`) |
+| `run [<script> [args]]` · `targets` · `--version` | A kit script in the project folder · the `--tool` list · the version |
 
 </details>
 

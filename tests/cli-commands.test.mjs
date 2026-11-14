@@ -132,6 +132,20 @@ describe('builder bootstrap', () => {
   });
 });
 
+const COMMANDS = ['unpack', 'upgrade', 'bootstrap', 'inventory', 'choices', 'doctor', 'personas-check', 'run', 'targets', 'verify', 'features', 'check-ledgers', 'check-targets'];
+
+test('red: the usage text, the README command list and the next steps name every command', () => {
+  const { proj, cli } = project();
+  const usage = run(cli, proj, []);
+  assert.equal(usage.status, 0);
+  for (const c of COMMANDS) assert.match(usage.out, new RegExp(`\\b${c}\\b`), `usage: ${c}`);
+  const readme = readFileSync(join(PACK, 'README.md'), 'utf8');
+  for (const c of COMMANDS) assert.match(readme, new RegExp(`\`${c}[\\s\`]`), `README: ${c}`);
+  assert.match(readme, /`antigravity`/);
+  const next = run(cli, proj, ['unpack', '--tool', 'claude-code', '--dry-run']).out;
+  assert.match(next, /cli\.js doctor/);
+});
+
 test('builder personas-check runs the kit script in the project folder', () => {
   const { proj, cli } = project();
   const r = run(cli, proj, ['personas-check']);
