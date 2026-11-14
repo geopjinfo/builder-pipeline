@@ -5,6 +5,8 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] — 2026-11-15
+
 ### Fixed
 
 - **A fresh repo stays greenfield after persona-detect (N1).** `inventory`'s mode evidence no longer counts the
