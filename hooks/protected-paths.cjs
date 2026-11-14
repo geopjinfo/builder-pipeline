@@ -1317,40 +1317,106 @@ function decideShell(command, isPowerShell, ctx) {
 }
 
 /**
- * MCP FILE TOOLS (S4). An `mcp__<server>__<tool>` call is judged by every path-shaped key of its input (path, paths,
- * file_path, destination, target, source, new_path, … — also inside arrays and nested objects), exactly as a Write: by
- * spelling and by landing. A tool whose name reads as a read (read_*, list_*, get_*, search_*, …) and carries no
- * writing word is not judged; anything else is. A path that cannot be placed fails CLOSED.
+ * MCP TOOLS (S4). Every `mcp__<server>__<tool>` call is judged, read-named or not:
+ *   - SHELL: a tool whose action reads as running something (exec, run, shell, command, terminal, process, spawn)
+ *     or whose input carries a `command`/`cmd`/`script` string has that string judged as a Bash command AND as a
+ *     PowerShell command (decideShell) — either refusal refuses.
+ *   - PATHS: every value under a path-shaped key (path, paths, file_path, destination, target, source, repo_path,
+ *     cwd, uri, folder, location, to, from, …) and — fail closed, the key list is not trusted — every other string
+ *     that LOOKS like a path (a separator, a drive letter, a leading `~`, a `file://` URL, decoded), except prose
+ *     fields (content, text, body, message, old_string/new_string …). Each is judged by spelling and by landing.
+ *   - READS (read_*, list_*, get_*, search_* … with no writing word and no output/destination key) are allowed only
+ *     while every path they name lands outside the fence; an output/destination key makes a read a write.
+ *   - WRITES: a path that cannot be placed fails closed; a file-writing tool (write, edit, move, copy, delete …) with
+ *     no recognisable path fails closed while anything is protected.
+ *   - CAPS: more than 64 path values, or input nested deeper than 4 levels, is refused — never left half-checked.
  */
-const MCP_PATH_KEY = /^(?:path|paths|file|files|file_?path|file_?paths|file_?name|notebook_?path|destination|dest|destination_?path|target|target_?path|source|source_?path|src|new_?path|old_?path|directory|dir|output_?path|output_?file|out_?file)$/i;
+const MCP_PATH_KEY = /^(?:path|paths|file|files|file_?path|file_?paths|file_?name|notebook_?path|destination|dest|destination_?path|target|target_?path|source|source_?path|src|new_?path|old_?path|directory|dir|output|output_?path|output_?file|out_?file|repo_?path|cwd|uri|url|folder|location|to|from|save_?to|save_?path)$/i;
+const MCP_OUT_KEY = /^(?:output|output_?path|output_?file|out_?file|destination|dest|destination_?path|target|target_?path|save_?to|save_?path|to)$/i;
+const MCP_PROSE_KEY = /^(?:content|contents|text|body|message|description|title|summary|old_?string|new_?string|old_?text|new_?text|data|query|pattern|prompt|code|comment|note|notes|reason)$/i;
+const MCP_SHELL_KEY = /^(?:command|cmd|script|commands)$/i;
 const MCP_READ = /^(?:read|list|get|search|find|stat|view|show|glob|grep|directory_tree|tree|describe|query|fetch|count|head|tail)(?:_|$)/i;
 const MCP_WRITES = /write|edit|move|create|delete|remove|rename|copy|put|set|upload|patch|append|mkdir|make|exec|run|start|kill|replace|insert|update|save|apply|link|unzip|extract|download|touch|truncate/i;
-function mcpPaths(v, isPath, out, depth) {
-  if (out.length >= 64 || depth > 4) return out;
-  if (typeof v === 'string') {
-    if (isPath && v.trim()) out.push(v);
-  } else if (Array.isArray(v)) {
-    for (const x of v) mcpPaths(x, isPath, out, depth + 1);
-  } else if (v && typeof v === 'object') {
-    for (const [k, x] of Object.entries(v)) mcpPaths(x, MCP_PATH_KEY.test(k), out, depth + 1);
+const MCP_FILE_WRITES = /write|edit|move|copy|delete|remove|rename|mkdir|patch|append|save|upload|unzip|extract|download|touch|truncate|replace|apply|link/i;
+const MCP_RUNS = /exec|run|shell|command|terminal|process|spawn|eval/i;
+const MCP_MAX_PATHS = 64;
+const MCP_MAX_DEPTH = 4;
+const pathLike = (s) => !/[\r\n]/.test(s) && s.length <= 4096 && !/^[a-z][a-z0-9+.-]*:\/\//i.test(s.replace(/^file:/i, 'x:')) && (/[\\/]/.test(s) || /^[A-Za-z]:/.test(s) || /^~/.test(s));
+function fileUrl(s) {
+  if (!/^file:/i.test(s)) return s;
+  try {
+    return require('url').fileURLToPath(s);
+  } catch (_) {
+    try {
+      return decodeURIComponent(s.replace(/^file:\/*/i, WIN ? '' : '/'));
+    } catch (__) {
+      return s.replace(/^file:\/*/i, WIN ? '' : '/');
+    }
   }
-  return out;
+}
+/** Walk the input: { paths, shells, outKey, over } — `over` names a cap reached. */
+function mcpScan(ti) {
+  const r = { paths: [], shells: [], outKey: false, over: null };
+  const walk = (v, key, depth) => {
+    if (r.over) return;
+    if (depth > MCP_MAX_DEPTH) {
+      r.over = `input nested deeper than ${MCP_MAX_DEPTH} levels`;
+      return;
+    }
+    if (typeof v === 'string') {
+      const s = v.trim();
+      if (!s) return;
+      if (key && MCP_SHELL_KEY.test(key)) r.shells.push(s);
+      const named = key && MCP_PATH_KEY.test(key);
+      if (named && key && MCP_OUT_KEY.test(key)) r.outKey = true;
+      if (named ? !/^https?:\/\//i.test(s) : !(key && (MCP_PROSE_KEY.test(key) || MCP_SHELL_KEY.test(key))) && pathLike(s)) {
+        if (r.paths.length >= MCP_MAX_PATHS) r.over = `more than ${MCP_MAX_PATHS} path values`;
+        else r.paths.push(fileUrl(s));
+      }
+    } else if (Array.isArray(v)) {
+      for (const x of v) walk(x, key, depth + 1);
+    } else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) walk(x, k, depth + 1);
+    }
+  };
+  walk(ti, null, 0);
+  return r;
 }
 function decideMcp(tool, ti, ctx) {
   const action = tool.slice(tool.lastIndexOf('__') + 2);
-  if (MCP_READ.test(action) && !MCP_WRITES.test(action)) return { block: false };
-  for (const p of mcpPaths(ti, false, [], 0)) {
+  const scan = mcpScan(ti);
+  if (scan.over) return blocked(`BLOCKED: ${tool} has ${scan.over}, so the fence cannot check every path it names (PIPELINE_PROFILE.md §4/§16); a cap reached fails closed — split the call.`);
+  const runs = MCP_RUNS.test(action);
+  if (runs && !scan.shells.length) for (const v of Object.values(ti || {})) if (typeof v === 'string' && v.trim()) scan.shells.push(v.trim());
+  for (const command of scan.shells) {
+    for (const ps of [false, true]) {
+      const v = decideShell(command, ps, ctx);
+      if (v.block) return { ...v, reason: `${v.reason} (judged as the command ${tool} runs)` };
+    }
+  }
+  const read = MCP_READ.test(action) && !MCP_WRITES.test(action) && !scan.outKey;
+  for (const p of scan.paths) {
     if (resolveTarget(p, ctx.cwd) === null) {
+      const closed = closedSpelling(fwd(p), ctx, 'cannot be placed');
+      if (closed) {
+        const r = deny(closed, `${tool} on ${p}`, ctx);
+        if (r) return r;
+      }
+      if (read) continue;
       return blocked(`BLOCKED: ${tool} names ${p}, a path this hook cannot place on this machine, so it cannot rule out a protected path (PIPELINE_PROFILE.md §4/§16); this fails closed — spell a native absolute path or a project-relative one.`);
     }
     const hit = fenceOf(p, ctx);
     if (hit) {
-      const r = deny(hit, `${tool} on ${p}`, ctx);
-      if (r) return r;
+      const r = deny(hit, `${tool} ${read ? 'reads' : 'on'} ${p}, which`, ctx);
+      if (r) return read ? { ...r, reason: `${r.reason} Read it with the Read tool.` } : r;
       continue;
     }
+    if (read) continue;
     const n = hardLinks(p, ctx);
     if (n) return blocked(`BLOCKED: ${tool} on ${p}, an existing file with ${n} hard links. The same bytes live at another path this hook cannot see, which may be protected. Delete this name (one file) and write the file fresh, or ask the human.`);
+  }
+  if (!read && !runs && MCP_FILE_WRITES.test(action) && !scan.paths.length) {
+    return blocked(`BLOCKED: ${tool} reads as a file write but names no path this hook recognises, so it cannot rule out a protected path (PIPELINE_PROFILE.md §4/§16); this fails closed — pass the path under a key such as "path".`);
   }
   return { block: false };
 }
