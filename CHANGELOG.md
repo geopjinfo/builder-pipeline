@@ -24,6 +24,14 @@ versions independently of any project it is pasted into.
   `bootstrap [--tool …]` installs only the `builder-init` skill, for the tools it detects (`.claude/` or `CLAUDE.md`;
   `.codex/` or `AGENTS.md`; `.agents/`; Claude Code when nothing is found). The new command modules live in `cli/`.
   Tests: `tests/cli-commands.test.mjs`.
+- **`unpack` and `upgrade` apply `builder.choices.json`; an undecided clash is skipped, never installed.** Each kit
+  skill and persona (core, experimental and extras) is checked before it lands: it clashes when the project view pairs
+  it with a project item, or when its destination holds a file the kit did not write. No recorded choice → `skipped
+  (undecided clash)` plus a closing count; `keep` → not installed; `kit` → the project's file is backed up to
+  `.builder/backup-<stamp>/` and overwritten (in `unpack` too); `both` → installed as `builder-<name>` with its
+  frontmatter (or TOML) name renamed. A skipped `build-module-pipeline` takes its references with it. An invalid
+  choices file stops the install before anything is written. A project with no clash installs byte-for-byte as before.
+  Tests: `tests/clash-install.test.mjs`.
 - **Per-harness renderers in `adapters/lib/`.** Pure modules (text in, `{ path, content }` out) for Claude Code (a
   move-compatible copy of the install transform, byte-identical for every persona), Codex (`.codex/agents/*.toml`,
   `.agents/skills/`, `.codex/hooks.json`) and Antigravity (`.agents/agents/*.md`, `.agents/skills/`), each checked

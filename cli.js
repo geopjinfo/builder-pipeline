@@ -697,9 +697,11 @@ function cmdUnpack(tools) {
     console.log('note: builder/ contains a .git directory — this is a working copy of the pack\'s own repository, not a release.');
     console.log('      Unpacking works, but receive releases as an archive (see UNPACK.md) so the pack\'s history never lands in this repo.');
   }
+  setupClashCheck();
   for (const tool of tools) installTool(tool);
   installCommon();
   writeLock();
+  if (CLASH_SKIPPED.size) console.log(clashSummary());
   console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'}${EXPERIMENTAL ? ' Experimental files included.' : ''} Next steps:
   1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md (incl. §16 settings) from
      THIS project's docs (not the kit's source project).
@@ -721,9 +723,11 @@ function cmdUpgrade(tools) {
   MODE = 'upgrade';
   stamp();
   console.log(`builder kit ${VERSION} — upgrade${DRY ? ' (dry run: nothing is written)' : ''}`);
+  setupClashCheck();
   for (const tool of tools) installTool(tool);
   installCommon();
   writeLock();
+  if (CLASH_SKIPPED.size) console.log(clashSummary());
   const c = UPGRADE.counts;
   const backups = path.join('.builder', `backup-${UPGRADE.stamp}`);
   console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}.`);
@@ -1076,6 +1080,43 @@ function legacyInstall() {
     const abs = path.join(CWD, p);
     return fs.existsSync(abs) && fs.readFileSync(abs, 'utf8').includes(MARKER);
   });
+}
+
+/**
+ * The clash check, set up once per unpack/upgrade (before anything is written): the kit skills and personas that
+ * clash with a project item go through the recorded choices (builder.choices.json, scripts/lib/choices.cjs).
+ *
+ * A planned item clashes when the project view (cli/inventory.cjs — the kit's own earlier install excluded) pairs it
+ * with a project item, or when its destination holds a file the kit did not write (not in the lock, not the kit's
+ * content). No recorded choice → skipped and reported, never installed. "keep" → skipped. "kit" → backed up and
+ * overwritten. "both" → installed as builder-<name>. Everything else installs exactly as it did before.
+ */
+const CLASH_SKIPPED = new Set();
+function setupClashCheck() {
+  const loaded = choicesLib.read(CWD);
+  if (loaded.errors.length) die(`${choicesLib.FILE} is invalid — nothing installed:\n  ${loaded.errors.join('\n  ')}\n  (${RUN} choices check names each problem)`);
+  const legacy = legacyInstall();
+  const view = require('./cli/inventory.cjs').projectView(CWD, KIT, { lock: lockPrior(), legacy });
+  const printed = new Set();
+  decide = (entry) => {
+    const abs = path.join(CWD, entry.dst);
+    const foreign = !legacy && !lockPrior()[lockKey(entry.dst)] && fs.existsSync(abs) && !sameText(fs.readFileSync(abs), Buffer.from(entry.produce()));
+    const withPaths = [...new Set([...(view.withMap.get(entry.key) || []), ...(foreign ? [lockKey(entry.dst)] : [])])];
+    const clash = view.clashes.includes(entry.key) || foreign;
+    const r = choicesLib.applyChoices([{ key: entry.key, kind: entry.kind, name: entry.name, dst: entry.dst, clash, with: withPaths }], loaded.choices);
+    for (const line of r.report) if (!printed.has(line)) { printed.add(line); console.log(line); }
+    if (r.skip.length) {
+      if (r.skip[0].reason !== 'kept-project') CLASH_SKIPPED.add(entry.key);
+      return null;
+    }
+    return r.install[0];
+  };
+}
+
+/** The closing line for skipped clashes, or '' when there were none. */
+function clashSummary() {
+  if (!CLASH_SKIPPED.size) return '';
+  return `\n${CLASH_SKIPPED.size} kit item(s) skipped as undecided clashes (${[...CLASH_SKIPPED].sort().join(', ')}) — the project's item wins until a person decides: run the builder-init skill, or ${RUN} choices set <kind>:<name> <keep|kit|both> --by <you>, then re-run.`;
 }
 
 /** What the command modules under cli/ may use: the paths, the one place() files land through, and the lock. */
