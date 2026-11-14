@@ -84,9 +84,33 @@ const posixPath = (p) => p.split(path.sep).join('/');
 const KIT_REL = posixPath(path.relative(CWD, KIT)) || '.';
 const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder' : `node ${KIT_REL}/cli.js`;
 const KIT_ENTRY = /(?<![.\w@/-])builder\/(?=(?:cli\.js|[A-Z][A-Z_]*(?:\.template)?\.md|adapters|agents|examples|hooks|oracles|scripts|skills-extra|skills|templates|tooling|tests)\b)/g;
+/** Installed as a package, the kit's scripts run from it (`npx builder run <name>`) and are not copied into the project. */
+const PACKAGED = RUN === 'npx builder';
+/** Where the kit scripts are for this install: the package itself, or the project's scripts/ copies. */
+const SCRIPTS_HOME = PACKAGED ? path.join(KIT, 'scripts') : path.join(CWD, 'scripts');
 function kitPaths(text) {
   if (KIT_REL === 'builder') return text;
-  return text.replace(/\bnode builder\/cli\.js\b/g, RUN).replace(KIT_ENTRY, `${KIT_REL}/`);
+  let out = text.replace(/\bnode builder\/cli\.js\b/g, RUN).replace(KIT_ENTRY, `${KIT_REL}/`);
+  if (PACKAGED) {
+    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx builder run ${name}` : m));
+  }
+  return out;
+}
+
+/**
+ * The kit script a `builder run <name>` means: scripts/<name>.{mjs,cjs,js}, or tooling/experimental/<x> for
+ * `experimental/<x>` (installed as scripts/experimental/ by a folder copy). A name is one path segment (plus that
+ * prefix): nothing outside those two folders can be reached by it. null = no such script.
+ */
+function kitScript(name) {
+  const m = /^(experimental\/)?([A-Za-z0-9][\w-]*)$/.exec(String(name || ''));
+  if (!m) return null;
+  const dir = m[1] ? path.join(KIT, 'tooling', 'experimental') : path.join(KIT, 'scripts');
+  for (const ext of ['.mjs', '.cjs', '.js']) {
+    const f = path.join(dir, m[2] + ext);
+    if (fs.existsSync(f)) return f;
+  }
+  return null;
 }
 
 // --------------------------- small helpers ---------------------------------
@@ -461,17 +485,22 @@ function installCommon() {
    * script's `./lib/…` requires keep resolving), except the no-Node unpack fallbacks.
    */
   console.log('\n[common] scripts');
-  for (const rel of filesUnder('scripts')) {
+  if (PACKAGED) {
+    // Installed as a package the scripts run from it — `npx builder run <name>` — so a kit update reaches them with
+    // the version bump, and the project carries no copies to drift (plan BU-4).
+    console.log(`run from the package: ${RUN} run <name>   (list them: ${RUN} run)`);
+  }
+  for (const rel of PACKAGED ? [] : filesUnder('scripts')) {
     if (/^unpack\.(sh|ps1)$/.test(rel)) continue;
     copyIfAbsent(path.join(KIT, 'scripts', rel), path.join('scripts', rel));
   }
   // Contract-oracle adapters (one file per contract format). The oracle script looks in scripts/oracles/.
-  for (const rel of filesUnder('oracles')) {
+  for (const rel of PACKAGED ? [] : filesUnder('oracles')) {
     copyIfAbsent(path.join(KIT, 'oracles', rel), path.join('scripts', 'oracles', rel));
   }
   if (EXPERIMENTAL) {
     console.log('\n[experimental] shipped, unproven — see builder/EXPERIMENTS.md');
-    for (const rel of filesUnder(path.join('tooling', 'experimental'))) {
+    for (const rel of PACKAGED ? [] : filesUnder(path.join('tooling', 'experimental'))) {
       copyIfAbsent(path.join(KIT, 'tooling', 'experimental', rel), path.join('scripts', 'experimental', rel));
     }
   }
@@ -640,18 +669,18 @@ function cmdVerify() {
       : `left at a default path that §16 moved: ${twins.map(([, file, configured, key]) => `${file} (${key} says "${configured}")`).join(', ')} — a second, unreconciled ledger the checkers cannot see; move any content into the §16 copy, then delete it`,
   );
   check(
-    fs.existsSync(path.join(CWD, 'scripts', 'board-progress.mjs')) &&
-      fs.existsSync(path.join(CWD, 'scripts', 'board-check-all.mjs')),
+    fs.existsSync(path.join(SCRIPTS_HOME, 'board-progress.mjs')) &&
+      fs.existsSync(path.join(SCRIPTS_HOME, 'board-check-all.mjs')),
     'board scripts installed (scripts/board-{progress,check-all}.mjs)',
   );
   check(
-    fs.existsSync(path.join(CWD, 'scripts', 'board-render.mjs')) &&
-      fs.existsSync(path.join(CWD, 'scripts', 'board-watch.mjs')) &&
-      fs.existsSync(path.join(CWD, 'scripts', 'lib', 'board-parse.cjs')),
+    fs.existsSync(path.join(SCRIPTS_HOME, 'board-render.mjs')) &&
+      fs.existsSync(path.join(SCRIPTS_HOME, 'board-watch.mjs')) &&
+      fs.existsSync(path.join(SCRIPTS_HOME, 'lib', 'board-parse.cjs')),
     'run-board tooling installed (scripts/board-{render,watch}.mjs + scripts/lib/*.cjs)',
   );
   const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')];
-  const missing = checkers.filter((s) => !fs.existsSync(path.join(CWD, 'scripts', s)));
+  const missing = checkers.filter((s) => !fs.existsSync(path.join(SCRIPTS_HOME, s)));
   check(missing.length === 0, `checkers installed (scripts/{${checkers.join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
@@ -893,6 +922,32 @@ function cmdCheckLedgers() {
   process.exit(1);
 }
 
+// --------------------------- run --------------------------------------------
+/**
+ * `builder run <name> [args…]` — a kit script, run from the kit with the PROJECT as its working directory and
+ * BUILDER_PROJECT_ROOT naming it (a script that used to find the project as its own parent folder reads that).
+ * Its exit code is the command's. No name = the list of scripts.
+ */
+function cmdRun(args) {
+  const [name, ...rest] = args;
+  if (!name) {
+    const list = (dir, prefix) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.(mjs|cjs|js)$/.test(f)).map((f) => prefix + f.replace(/\.(mjs|cjs|js)$/, '')) : []);
+    const names = [...list(path.join(KIT, 'scripts'), ''), ...list(path.join(KIT, 'tooling', 'experimental'), 'experimental/')].sort();
+    console.log(`builder kit ${VERSION} — scripts (${RUN} run <name> [args]):`);
+    for (const n of names) console.log(`  ${n}`);
+    return;
+  }
+  const file = kitScript(name);
+  if (!file) die(`no kit script "${name}" — list them with: ${RUN} run`);
+  const r = require('child_process').spawnSync(process.execPath, [file, ...rest], {
+    cwd: CWD,
+    stdio: 'inherit',
+    env: { ...process.env, BUILDER_PROJECT_ROOT: CWD },
+  });
+  if (r.error) die(`${name}: ${r.error.message}`);
+  process.exit(r.status === null ? 1 : r.status);
+}
+
 // --------------------------- arg parsing ------------------------------------
 function die(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
@@ -913,6 +968,7 @@ function main() {
   EXPERIMENTAL = argv.includes('--experimental');
 
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return console.log(VERSION);
+  if (cmd === 'run') return cmdRun(argv.slice(1));
   if (cmd === 'targets') return cmdTargets();
   if (cmd === 'verify') return cmdVerify();
   if (cmd === 'features') return cmdFeatures();
