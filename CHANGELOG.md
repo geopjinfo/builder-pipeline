@@ -12,6 +12,14 @@ versions independently of any project it is pasted into.
   `engines.node >=18` (the floor `cli.js` enforces), `license` (UNLICENSED until one is chosen) and `repository`.
   Install from a tag: `npm i -D github:geopjinfo/builder-pipeline#<tag>`; `npx builder --version`. Tests:
   `tests/package.test.mjs`.
+- **`builder run <name> [args]`** runs a kit script from the package with the project as its working directory
+  (`BUILDER_PROJECT_ROOT` names it); no name lists them, a path-shaped or unknown name is refused. Installed as a
+  package, `unpack` copies no scripts or oracle adapters into the project, the installed prose says
+  `npx builder run <name>` instead of `node scripts/<name>.mjs`, and `verify` looks for the scripts in the package.
+  A kit copied in as `builder/` is unchanged. Tests: `tests/run-from-package.test.mjs`.
+- **The kit names itself where it is installed:** as a package, installed Markdown, the pointer block and CLI output
+  say `npx builder …` and `node_modules/<package>/<file>`; a `builder/` copy is byte-identical to before. Tests:
+  `tests/kit-location.test.mjs`.
 
 ### Security
 

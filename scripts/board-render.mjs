@@ -111,7 +111,11 @@ const td = (v, cls = '') => `<td${cls ? ` class="${cls}"` : ''}>${v}</td>`;
  * sight the grandparent stands in, which is the installer's default layout.
  */
 function resolveBoard(arg) {
-  const repoRoot = resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+  // Run from the package (`builder run`), the script's own parent is the package, not the project:
+  // BUILDER_PROJECT_ROOT names the project then.
+  const repoRoot = process.env.BUILDER_PROJECT_ROOT
+    ? resolve(process.env.BUILDER_PROJECT_ROOT)
+    : resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
   const boardPath = arg.endsWith('.md') ? resolve(arg) : join(repoRoot, boardsDirOf(repoRoot), `${arg}.md`);
   const key = basename(boardPath, '.md');
   return { boardPath, key, root: rootOf(dirname(boardPath)) };
