@@ -78,22 +78,22 @@ describe('extra personas — native install (claude-code)', () => {
   });
 });
 
-describe('extra personas — non-native install (codex)', () => {
+describe('extra personas — non-native install (opencode)', () => {
   let root;
   before(() => {
-    root = mkdtempSync(join(tmpdir(), 'pack-extras-codex-'));
+    root = mkdtempSync(join(tmpdir(), 'pack-extras-opencode-'));
     copyPack(root);
   });
   after(() => rmSync(root, { recursive: true, force: true }));
 
   test('--no-extras installs none of them', () => {
-    const r = unpack(root, '--tool', 'codex', '--no-extras');
+    const r = unpack(root, '--tool', 'opencode', '--no-extras');
     assert.equal(r.status, 0, r.out);
     for (const { file } of EXTRA_AGENTS) assert.ok(!existsSync(join(root, '.builder', 'personas', file)), `${file} installed with --no-extras`);
   });
 
   test('with extras: each lands verbatim in .builder/personas/', () => {
-    const r = unpack(root, '--tool', 'codex');
+    const r = unpack(root, '--tool', 'opencode');
     assert.equal(r.status, 0, r.out);
     for (const { skill, file } of EXTRA_AGENTS) {
       const installed = join(root, '.builder', 'personas', file);

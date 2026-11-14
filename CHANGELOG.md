@@ -7,6 +7,15 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Codex and Antigravity install natively; `--tool antigravity` is new.** `unpack`/`upgrade --tool codex` now
+  writes `.codex/agents/*.toml` and `.agents/skills/`, `--tool antigravity` writes `.agents/agents/*.md` and
+  `.agents/skills/`, both with the pointer in `AGENTS.md`, all rendered by `adapters/lib/` and passed through the
+  kit-path rewrite and the lock. Selecting both writes `.agents/skills/` once and one pointer block naming both agent
+  folders. Hooks stay copied, never armed: Codex gets `protected-paths.cjs` in `.codex/hooks/` and the
+  `.codex/hooks.json` block is printed, not written; Antigravity gets none. `--tool all` includes antigravity.
+  `--models codex.<tier>=<model>` / `antigravity.<tier>=<model>` set those tools' models (unprefixed entries stay
+  Claude Code's). Claude Code now installs through `adapters/lib/claude-code.cjs` with byte-identical output.
+  Tests: `tests/native-tools.test.mjs`; dotBuilder-specific tests now use `opencode`.
 - **Per-harness renderers in `adapters/lib/`.** Pure modules (text in, `{ path, content }` out) for Claude Code (a
   move-compatible copy of the install transform, byte-identical for every persona), Codex (`.codex/agents/*.toml`,
   `.agents/skills/`, `.codex/hooks.json`) and Antigravity (`.agents/agents/*.md`, `.agents/skills/`), each checked

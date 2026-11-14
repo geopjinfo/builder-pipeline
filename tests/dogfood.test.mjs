@@ -98,7 +98,7 @@ describe('adopter dogfood — a Python service with every optional feature off',
   test('unpack installs the checkers, the libs they require and the oracle adapters — and no experimental file', () => {
     const r = run(root, ['builder/cli.js', 'unpack', '--tool', 'codex', '--no-extras']);
     assert.equal(r.status, 0, r.out);
-    for (const f of ['scripts/features.mjs', 'scripts/claims-check.mjs', 'scripts/output-check.mjs', 'scripts/handoff-pack.mjs', 'scripts/lib/profile.cjs', 'scripts/lib/session-usage.cjs', 'scripts/lib/page-docs.cjs', 'scripts/oracles/openapi3.cjs', '.builder/playbooks/references/review-template.md']) {
+    for (const f of ['scripts/features.mjs', 'scripts/claims-check.mjs', 'scripts/output-check.mjs', 'scripts/handoff-pack.mjs', 'scripts/lib/profile.cjs', 'scripts/lib/session-usage.cjs', 'scripts/lib/page-docs.cjs', 'scripts/oracles/openapi3.cjs', '.agents/skills/build-module-pipeline/references/review-template.md']) {
       assert.ok(existsSync(join(root, f)), `not installed: ${f}`);
     }
     assert.ok(!existsSync(join(root, 'scripts', 'experimental')), 'experimental files installed without --experimental');
