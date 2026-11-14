@@ -41,12 +41,32 @@ function lib(root, name) {
 }
 
 /**
+ * The protected-paths fence's WHOLE prefix set for this project (its built-in PROTECTED, BUILDER_PROTECTED, §16), read
+ * from the fence hook installed beside this one — loaded only when it matches HEAD (hook-trust). No fence installed
+ * = [] (only §16 and the hook folders apply); a fence that is present but untrusted or that throws = { reason }, and
+ * the caller writes no log (fails closed).
+ */
+function fenceSet(root, env = process.env) {
+  const file = [path.join(__dirname, 'protected-paths.cjs'), path.join(__dirname, '..', 'protected-paths.cjs')].find((f) => fs.existsSync(f));
+  if (!file) return [];
+  try {
+    const rel = path.relative(root, file);
+    const base = rel.startsWith('..') || path.isAbsolute(rel) ? path.join(__dirname, '..', '..') : root;
+    const t = trustLib().trusted(file, { base });
+    if (!t.ok) return { reason: t.reason };
+    return require(file).config({ ...env, CLAUDE_PROJECT_DIR: root }, root).prefixes;
+  } catch (e) {
+    return { reason: e.message };
+  }
+}
+
+/**
  * @param {object} input     the hook input (`tool_name`, `tool_input.command`, `tool_response`)
  * @param {object} settings  merged pipeline settings
  * @param {{ root: string, env?: object, stamp?: string, pid?: number, bashCap?: object }} context
  * @returns {{ action: 'pass', reason: string } | { action: 'cap', logPath: string, log: string, output: object }}
  */
-function decide(input, settings, { root, env = {}, stamp = new Date().toISOString().replace(/[:.]/g, '-'), pid = process.pid, bashCap = null, profileLib = null }) {
+function decide(input, settings, { root, env = {}, stamp = new Date().toISOString().replace(/[:.]/g, '-'), pid = process.pid, bashCap = null, profileLib = null, fencePrefixes = undefined }) {
   const { digest, EXEMPT, LIMIT_BYTES } = bashCap ?? lib(root, 'bash-cap.cjs');
   if (!input || input.tool_name !== 'Bash') return { action: 'pass', reason: 'not a Bash call' };
   const feature = { state: 'off', limitBytes: LIMIT_BYTES, ...(settings?.features?.bashCap ?? {}) };
@@ -58,7 +78,9 @@ function decide(input, settings, { root, env = {}, stamp = new Date().toISOStrin
   // The log is written with fs, where the protected-paths fence cannot see it: a paths.logs that leaves the project
   // or sits in a protected glob or a hook folder writes nothing (profile validate() refuses it too).
   const logs = settings?.paths?.logs ?? 'logs';
-  const refused = (profileLib ?? lib(root, 'profile.cjs')).logsProblem(logs, settings?.protected);
+  const prefixes = fencePrefixes === undefined ? fenceSet(root, env) : fencePrefixes;
+  if (!Array.isArray(prefixes)) return { action: 'pass', refused: true, reason: `bashCap: no log written — the protected-paths fence's set could not be read (${prefixes?.reason ?? 'unknown'}), so paths.logs cannot be checked against it` };
+  const refused = (profileLib ?? lib(root, 'profile.cjs')).logsProblem(logs, settings?.protected, { root, prefixes });
   if (refused) return { action: 'pass', refused: true, reason: `bashCap: no log written — paths.logs ${refused}` };
   const r = input.tool_response;
   const res = typeof r === 'string' ? { stdout: r, stderr: '' } : { stdout: r?.stdout ?? '', stderr: r?.stderr ?? '' };

@@ -28,8 +28,8 @@
  *
  * Pure over text; `load()` is the only function that touches the filesystem.
  */
-const { existsSync, readFileSync } = require('node:fs');
-const { dirname, join, resolve } = require('node:path');
+const { existsSync, readFileSync, realpathSync } = require('node:fs');
+const { basename, dirname, isAbsolute, join, relative, resolve } = require('node:path');
 
 const SCHEMA = 2;
 const STATES = ['on', 'off', 'unmeasured', 'experimental-off', 'experimental-on'];
@@ -213,24 +213,66 @@ function strings(value, path, out = []) {
   return out;
 }
 
+/** A path as forward-slash segments with `.` and empty segments dropped (`a//./b\c/` → `a/b/c`). */
+const logSegs = (p) => String(p).replace(/\\/g, '/').split('/').filter((s) => s && s !== '.');
+const LOG_FENCE_DIRS = ['.claude/hooks', '.codex/hooks'];
+
+/** Real path of `p` (which may not exist yet): realpath of the deepest existing ancestor, plus the rest. Throws. */
+function realDeepest(p) {
+  const tail = [];
+  for (let head = resolve(p); ;) {
+    if (existsSync(head)) return join(realpathSync.native(head), ...tail);
+    const up = dirname(head);
+    if (up === head) return resolve(p);
+    tail.unshift(basename(head));
+    head = up;
+  }
+}
+
 /**
- * Why a `paths.logs` value is refused, or null: it must be a project-relative folder with no `..` segment, outside
- * `.claude/hooks/`, `.codex/hooks/` and every §16 `protected` glob's fixed prefix (case-insensitive).
+ * Why a `paths.logs` value is refused, or null. The bash cap writes there with fs, unseen by the protected-paths
+ * fence, so the folder must be project-relative (no drive, root, `~`, `$`), have no `..` segment anywhere, and lie
+ * outside `.claude/hooks/`, `.codex/hooks/`, every §16 `protected` glob's fixed prefix and every prefix in
+ * `opts.prefixes` (the fence's whole set: its built-in list and BUILDER_PROTECTED). Compared by SEGMENTS after
+ * normalising (`.claude//hooks`, `.claude/./hooks`, `.claude\hooks` are `.claude/hooks`), case-insensitively. With
+ * `opts.root` it is also judged by where it LANDS — the real path of its deepest existing ancestor, so a junction or
+ * symlink into a fence or a hook folder, or out of the project, is refused; a path that cannot be resolved is refused.
+ * @param {{ root?: string, prefixes?: string[] }} [opts]
  */
-function logsProblem(logs, protectedGlobs) {
+function logsProblem(logs, protectedGlobs, opts = {}) {
   if (typeof logs !== 'string' || !logs.trim()) return 'a non-empty project-relative folder';
+  const shown = JSON.stringify(logs);
   const p = logs.trim().replace(/\\/g, '/');
-  if (/^(?:\/|~|[A-Za-z]:|\$)/.test(p)) return `must be project-relative, got ${JSON.stringify(logs)}`;
-  if (p.split('/').includes('..')) return `must stay inside the project (no .. segment), got ${JSON.stringify(logs)}`;
-  const rel = `${p.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')}/`.toLowerCase();
-  for (const h of ['.claude/hooks/', '.codex/hooks/']) if (rel.startsWith(h)) return `must not be inside the hook folder ${h}, got ${JSON.stringify(logs)}`;
+  if (/^(?:\/|~|[A-Za-z]:|\$|%)/.test(p) || /[$%`]/.test(p)) return `must be a literal project-relative folder, got ${shown}`;
+  if (p.split('/').includes('..')) return `must stay inside the project (no .. segment), got ${shown}`;
+  const fences = [];
+  for (const h of LOG_FENCE_DIRS) fences.push({ segs: logSegs(h), what: `the hook folder ${h}/` });
   for (const g of Array.isArray(protectedGlobs) ? protectedGlobs : []) {
-    if (typeof g !== 'string') continue;
-    let pre = g.trim().replace(/\\/g, '/').replace(/^(?:\.\/)+/, '');
+    if (typeof g !== 'string' || g.trim().startsWith('!')) continue;
+    let pre = g.trim().replace(/\\/g, '/');
     const wild = pre.search(/[*?[\]{}]/);
     if (wild !== -1) pre = pre.slice(0, pre.slice(0, wild).lastIndexOf('/') + 1);
-    pre = pre.replace(/\/+$/, '');
-    if (pre && !pre.startsWith('!') && rel.startsWith(`${pre.toLowerCase()}/`)) return `must not be under the protected glob ${JSON.stringify(g)}, got ${JSON.stringify(logs)}`;
+    const segs = logSegs(pre);
+    if (!segs.length) continue; // no fixed folder (`*.md`): the fence skips such a glob too (globPrefix)
+    fences.push({ segs, what: `the protected glob ${JSON.stringify(g)}` });
+  }
+  for (const pre of Array.isArray(opts.prefixes) ? opts.prefixes : []) if (typeof pre === 'string' && logSegs(pre).length) fences.push({ segs: logSegs(pre), what: `the protected path ${JSON.stringify(pre)}` });
+  const inside = (segs) => fences.find((f) => f.segs.length <= segs.length && f.segs.every((s, i) => s.toLowerCase() === segs[i].toLowerCase()));
+  const spelled = inside(logSegs(p));
+  if (spelled) return `must not be under ${spelled.what}, got ${shown}`;
+  if (opts.root) {
+    let rel;
+    try {
+      const root = realDeepest(opts.root);
+      const real = realDeepest(join(opts.root, ...logSegs(p)));
+      const r = relative(root, real);
+      if (r.startsWith('..') || isAbsolute(r)) return `must land inside the project, got ${shown} (it resolves to ${real.replace(/\\/g, '/')})`;
+      rel = logSegs(r);
+    } catch (e) {
+      return `cannot be resolved (${e.code || e.message}); this fails closed, got ${shown}`;
+    }
+    const landed = inside(rel);
+    if (landed) return `must not land under ${landed.what}, got ${shown} (it resolves to ${rel.join('/')})`;
   }
   return null;
 }
