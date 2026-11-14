@@ -30,7 +30,8 @@
     "README.md",
     "SETUP_PROMPT.md",
     "UNPACK.md",
-    "USAGE.md"
+    "USAGE.md",
+    "llms.txt"
   ],
   "engines": {
     "node": ">=18"
