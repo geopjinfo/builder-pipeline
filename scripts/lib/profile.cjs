@@ -28,8 +28,8 @@
  *
  * Pure over text; `load()` is the only function that touches the filesystem.
  */
-const { existsSync, readFileSync } = require('node:fs');
-const { dirname, join, resolve } = require('node:path');
+const { existsSync, readFileSync, realpathSync } = require('node:fs');
+const { basename, dirname, isAbsolute, join, relative, resolve } = require('node:path');
 
 const SCHEMA = 2;
 const STATES = ['on', 'off', 'unmeasured', 'experimental-off', 'experimental-on'];
@@ -213,6 +213,87 @@ function strings(value, path, out = []) {
   return out;
 }
 
+/**
+ * A path as forward-slash segments, as Windows reads them: `.` and empty segments dropped, trailing dots and spaces
+ * cut from each segment (`.claude./hooks ` is `.claude/hooks`): `a//./b\c/` → `a/b/c`.
+ */
+const logSegs = (p) =>
+  String(p)
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((s) => (s === '..' ? s : s.replace(/[. ]+$/, '')))
+    .filter((s) => s && s !== '.');
+const LOG_FENCE_DIRS = ['.claude/hooks', '.codex/hooks'];
+
+/** Real path of `p` (which may not exist yet): realpath of the deepest existing ancestor, plus the rest. Throws. */
+function realDeepest(p) {
+  const tail = [];
+  for (let head = resolve(p); ;) {
+    if (existsSync(head)) return join(realpathSync.native(head), ...tail);
+    const up = dirname(head);
+    if (up === head) return resolve(p);
+    tail.unshift(basename(head));
+    head = up;
+  }
+}
+
+/**
+ * Why a `paths.logs` value is refused, or null. The bash cap writes there with fs, unseen by the protected-paths
+ * fence, so the folder must be project-relative (no drive, root, `~`, `$`), have no `..` segment anywhere, and lie
+ * outside `.claude/hooks/`, `.codex/hooks/`, every §16 `protected` glob's fixed prefix and every prefix in
+ * `opts.prefixes` (the fence's whole set: its built-in list and BUILDER_PROTECTED). Compared by SEGMENTS after
+ * normalising (`.claude//hooks`, `.claude/./hooks`, `.claude\hooks` are `.claude/hooks`), case-insensitively. With
+ * `opts.root` it is also judged by where it LANDS — the real path of its deepest existing ancestor, so a junction or
+ * symlink into a fence or a hook folder, or out of the project, is refused; a path that cannot be resolved is refused.
+ * @param {{ root?: string, prefixes?: string[] }} [opts]
+ */
+function logsProblem(logs, protectedGlobs, opts = {}) {
+  if (typeof logs !== 'string' || !logs.trim()) return 'a non-empty project-relative folder';
+  const shown = JSON.stringify(logs);
+  // Judged as written: the cap joins the raw value, so surrounding whitespace is refused, never trimmed away.
+  if (logs !== logs.trim()) return `must not start or end with whitespace (it is written as given), got ${shown}`;
+  const p = logs.trim().replace(/\\/g, '/');
+  if (/^(?:\/|~|[A-Za-z]:|\$|%)/.test(p) || /[$%`]/.test(p)) return `must be a literal project-relative folder, got ${shown}`;
+  if (p.split('/').includes('..')) return `must stay inside the project (no .. segment), got ${shown}`;
+  if (p.split('/').some((s) => s.includes(':'))) return `must not name a stream or a drive (a ':' in a segment), got ${shown}`;
+  // A segment Windows would rewrite (trailing dots or spaces, leading or inner whitespace runs at the ends) is refused,
+  // not normalised: the folder judged must be exactly the folder written.
+  if (p.split('/').some((s) => s && s !== '.' && s !== s.replace(/[. ]+$/, '').replace(/^\s+/, ''))) return `must not end a segment in a dot or a space, got ${shown}`;
+  const fences = [];
+  for (const h of LOG_FENCE_DIRS) fences.push({ segs: logSegs(h), what: `the hook folder ${h}/` });
+  for (const g of Array.isArray(protectedGlobs) ? protectedGlobs : []) {
+    if (typeof g !== 'string' || g.trim().startsWith('!')) continue;
+    let pre = g.trim().replace(/\\/g, '/');
+    const wild = pre.search(/[*?[\]{}]/);
+    if (wild !== -1) pre = pre.slice(0, pre.slice(0, wild).lastIndexOf('/') + 1);
+    const segs = logSegs(pre);
+    if (!segs.length) continue; // no fixed folder (`*.md`): the fence skips such a glob too (globPrefix)
+    fences.push({ segs, what: `the protected glob ${JSON.stringify(g)}` });
+  }
+  for (const pre of Array.isArray(opts.prefixes) ? opts.prefixes : []) if (typeof pre === 'string' && logSegs(pre).length) fences.push({ segs: logSegs(pre), what: `the protected path ${JSON.stringify(pre)}` });
+  // The cap writes into <logs>/bash: refused when that target is under a fence, or a fence equals it or sits under it.
+  const same = (a, b) => a.every((s, i) => s.toLowerCase() === b[i].toLowerCase());
+  const inside = (segs) => fences.find((f) => (f.segs.length <= segs.length ? same(f.segs, segs) : same(segs, f.segs)));
+  const spelled = inside([...logSegs(p), 'bash']);
+  if (spelled) return `must not be under ${spelled.what}, got ${shown}`;
+  if (opts.root) {
+    let rel;
+    try {
+      const root = realDeepest(opts.root);
+      const real = realDeepest(join(opts.root, ...logSegs(p), 'bash'));
+      const r = relative(root, real);
+      if (r.startsWith('..') || isAbsolute(r)) return `must land inside the project, got ${shown} (it resolves to ${real.replace(/\\/g, '/')})`;
+      rel = logSegs(r);
+      if (!rel.length) return `must not land on the project root, got ${shown}`;
+    } catch (e) {
+      return `cannot be resolved (${e.code || e.message}); this fails closed, got ${shown}`;
+    }
+    const landed = inside(rel);
+    if (landed) return `must not land under ${landed.what}, got ${shown} (it resolves to ${rel.join('/')})`;
+  }
+  return null;
+}
+
 /** @returns {string[]} every problem with a merged settings object */
 function validate(settings) {
   const errors = [];
@@ -226,6 +307,12 @@ function validate(settings) {
     errors.push('commands.tier: a command containing {tier}, or null');
   }
   if (settings.paths && !Array.isArray(settings.paths.citationRoots)) errors.push('paths.citationRoots: must be an array');
+  // The bash cap hook writes logs there with fs, unseen by the protected-paths fence: keep it inside the project and
+  // out of every protected glob and hook folder.
+  if (settings.paths && settings.paths.logs !== undefined) {
+    const why = logsProblem(settings.paths.logs, settings.protected);
+    if (why) errors.push(`paths.logs: ${why}`);
+  }
   /*
    * The run directory is fixed in schema 2. The board freshness gate, the watcher, the renderer's run-log reader and
    * the installer's .gitignore line all use `.pipeline`; a setting three of them ignored would put a run's pages in
@@ -587,4 +674,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, feature, merge, rootOf };
+module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, logsProblem, feature, merge, rootOf };

@@ -315,12 +315,15 @@ describe('the hook as Claude Code runs it', () => {
     assert.match(r.stderr, /BLOCKED: .*src\/core\//);
     assert.equal(run(notebook(`${P}/docs/x.ipynb`), { BUILDER_PROTECTED: 'docs/' }).status, 2);
     assert.equal(run(sh(`cd ${O}/j && echo x > a.ts`), { BUILDER_PROTECTED: '' }).status, 0);
-    assert.equal(spawnSync(process.execPath, [HOOK], { input: 'not json', encoding: 'utf8' }).status, 0); // malformed input → don't block
+    assert.equal(run({}, { BUILDER_PROTECTED: '', CLAUDE_PROJECT_DIR: out }).status, 0); // nothing protected → nothing to judge
+    // malformed input: allowed only while nothing is protected (S8, tests/fence-hardening.test.mjs)
+    assert.equal(spawnSync(process.execPath, [HOOK], { input: 'not json', cwd: out, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: out, BUILDER_PROTECTED: '' } }).status, 0);
+    assert.equal(spawnSync(process.execPath, [HOOK], { input: 'not json', cwd: out, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: out, BUILDER_PROTECTED: 'docs/' } }).status, 2);
   });
 
   test('the shipped settings snippet names every route the hook judges', () => {
     const text = require('node:fs').readFileSync(HOOK, 'utf8');
     const matcher = /"matcher": "([^"]+)"/.exec(text)[1].split('|');
-    for (const t of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell']) assert.ok(matcher.includes(t), t);
+    for (const t of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell', 'mcp__.*']) assert.ok(matcher.includes(t), t);
   });
 });

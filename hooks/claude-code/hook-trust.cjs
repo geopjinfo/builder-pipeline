@@ -166,17 +166,21 @@ const VENDORED = 'kit';
 const UNDER_NODE_MODULES = /(^|[\\/])node_modules([\\/]|$)/;
 
 /**
- * Find kit file `scripts/<rel>` for this project and check it against HEAD: the project's scripts/ copy (folder
- * layout), else the copy vendored beside the hooks (package layout), else the kit beside this hook (the kit's own
+ * Find kit file `scripts/<rel>` for this project and check it against HEAD: the copy vendored beside the hooks
+ * (package layout), else the project's scripts/ copy (folder layout), else the kit beside this hook (the kit's own
  * repository). The first that exists decides — a later one is never a fallback for an untrusted earlier one — and a
  * file under node_modules, or one that requires a file there, is refused outright.
+ *
+ * The vendored copy comes first because only a package install writes it: a project that moved from the folder layout
+ * to the package keeps its old scripts/ copies until `upgrade --prune` removes them, and a hook must run the release the
+ * package vendored, not the one the folder copy froze.
  * @returns {{ ok: true, file: string } | { ok: false, reason: string }}
  */
 function locate(root, hookDir, rel, opts = {}) {
   const kit = path.join(hookDir, '..', '..');
   const candidates = [
-    [path.join(root, 'scripts', rel), root],
     [path.join(hookDir, VENDORED, rel), root],
+    [path.join(root, 'scripts', rel), root],
     [path.join(kit, 'scripts', rel), kit],
   ];
   for (const [candidate, base] of candidates) {
@@ -191,7 +195,7 @@ function locate(root, hookDir, rel, opts = {}) {
 }
 
 /**
- * Require `scripts/lib/<name>` — the project's copy, else the copy vendored beside the hooks, else the kit's next to
+ * Require `scripts/lib/<name>` — the copy vendored beside the hooks, else the project's copy, else the kit's next to
  * this hook — only when trusted (locate() above). A project copy is checked against the project root's repository,
  * so a `.git` planted under `scripts/` changes nothing.
  * @returns {{ ok: true, module: any } | { ok: false, reason: string }}
