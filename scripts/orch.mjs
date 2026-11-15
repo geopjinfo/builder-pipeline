@@ -553,6 +553,11 @@ try {
       for (const seat of seats) if (!state.SEATS.includes(seat)) die(2, `refused: unknown seat ${JSON.stringify(pos[1])} (${state.SEATS.join('|')}|all)`);
       for (const seat of seats) {
         const u = pre.readUsage(seat, cfg.usageCommand);
+        if (u.pct === null) {
+          state.recordUsageUnknown(root(), pos[0], seat, u.lines);
+          console.log(`usage ${seat}=unknown — no "N% used" line in the usage output: ${u.lines.join(' | ')}`);
+          continue;
+        }
         state.recordUsage(root(), pos[0], seat, u.pct);
         console.log(`usage ${seat}=${u.pct}% · ${u.lines.join(' | ')}`);
       }

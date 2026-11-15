@@ -253,7 +253,9 @@ your CLI version before relying on it.
   `stopped`). Without it, `orch watch` still finishes on the result file and stalls on the clock.
 - **`stopCommand`**: `claude stop {session}` under the secondary config dir.
 - **`usageCommand`**: `claude -p "/usage"` under the seat's config dir is a local command (no model turn) whose
-  output carries "N% used" lines; the highest is recorded.
+  output carried "N% used" lines; the highest is recorded. Recent CLI versions print a cost and token summary
+  with no percentage: that reading is recorded as `usage.unknown` with its first lines, the seat stays unmeasured
+  (never 0%), and the next seat is read. Record a percentage by hand with `orch usage <run> <seat> <pct>`.
 - **Primary-seat pipeline lanes.** With spawn depth 1 a sub-agent cannot dispatch the pipeline's seats, so a
   primary-seat lane that runs a pipeline is its own session on the primary account; only a SOLO lane runs as a
   sub-agent of the orchestrating session.
