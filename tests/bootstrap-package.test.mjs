@@ -37,7 +37,7 @@ function npmStub({ present = true } = {}) {
   const dir = tmp('kit-npm-');
   if (present) {
     writeFileSync(join(dir, 'npm.cmd'), '@echo off\r\necho %*>> "%~dp0calls.txt"\r\nexit /b 0\r\n');
-    writeFileSync(join(dir, 'npm'), '#!/bin/sh\necho "$@" >> "$(dirname "$0")/calls.txt"\nexit 0\n');
+    writeFileSync(join(dir, 'npm'), '#!/bin/sh\necho "$@" >> "${0%/*}/calls.txt"\nexit 0\n');
     chmodSync(join(dir, 'npm'), 0o755);
   }
   return dir;

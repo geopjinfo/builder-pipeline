@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { hostname, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -40,6 +40,14 @@ try {
 } catch (e) {
   linkError = e.message;
 }
+/** Remove the link itself, never what it points at: a Windows junction is a directory entry, a POSIX symlink a file one. */
+const dropLink = (p) => {
+  try {
+    unlinkSync(p);
+  } catch {
+    rmdirSync(p);
+  }
+};
 after(() => {
   if (!linkError) {
     try {
@@ -326,7 +334,7 @@ describe('S6 — paths.logs is validated and the bash cap writes no log outside 
     try {
       assert.match(r.recheck(), /land/);
     } finally {
-      rmdirSync(join(proj, 'lg2', 'bash'));
+      dropLink(join(proj, 'lg2', 'bash'));
     }
   });
   test('red (6): trailing dots and spaces are cut per segment; a ":" in a segment is refused', () => {
@@ -344,7 +352,7 @@ describe('S6 — paths.logs is validated and the bash cap writes no log outside 
         assert.ok(why, name);
         assert.match(why, /land/);
       } finally {
-        rmdirSync(join(proj, name));
+        dropLink(join(proj, name));
       }
     }
     assert.equal(profile.logsProblem('logs/sub', ['core/fenced/**'], { root: proj, prefixes: ['core/fenced/'] }), null);
