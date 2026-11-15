@@ -32,8 +32,12 @@ const LOCAL = /\brequire\(\s*['"](\.{1,2}(?:\/[^'"]*)?)['"]\s*\)|\bfrom\s+['"](\
 
 /** The file Node would load for this specifier (`./b` → `b.js`, `./pkg` → `pkg/index.js`). Resolving executes nothing. */
 function resolveLocal(specifier, dir) {
+  // Resolved as an absolute path, so every Node release reads it alike: Node 18 resolves a bare `..` against
+  // `paths` wrongly and the parent folder's index.js would go unchecked. A specifier Node treats as a folder only
+  // (`.`, `..`, or one ending in `/`) keeps its trailing separator.
+  const abs = path.resolve(dir, specifier) + (/(?:^|\/)\.{1,2}$|\/$/.test(specifier) ? path.sep : '');
   try {
-    return require.resolve(specifier, { paths: [dir] });
+    return require.resolve(abs);
   } catch {
     return path.resolve(dir, specifier);
   }
