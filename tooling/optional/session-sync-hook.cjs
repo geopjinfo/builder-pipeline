@@ -107,8 +107,11 @@ function folderTrusted(root, dir) {
     encoding: 'utf8', timeout: 5000, windowsHide: true, env: cleanGitEnv(),
   });
   if (top.status !== 0 || !top.stdout.trim()) return false;
-  const repo = realpathSync(top.stdout.trim());
-  const relDir = path.relative(repo, realpathSync(dir)).split(path.sep).join('/');
+  // The OS spelling on both sides: git prints the final path, Node's JS realpath keeps a short (8.3) name or a subst
+  // drive as given, and the folder would look outside its own repository.
+  const real = (p) => { try { return realpathSync.native(p); } catch (_) { return realpathSync(p); } };
+  const repo = real(top.stdout.trim());
+  const relDir = path.relative(repo, real(dir)).split(path.sep).join('/');
   if (!relDir || relDir.startsWith('..')) return false;
   const listed = spawnSync(git, ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=', '-C', repo, 'ls-tree', '-z', '--name-only', 'HEAD', '--', `${relDir}/`], {
     encoding: 'utf8', timeout: 5000, windowsHide: true, env: cleanGitEnv(),
