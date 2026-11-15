@@ -80,30 +80,33 @@ function closure(entry, fsLike = fs) {
  * git by absolute path on Windows, found on PATH here: never a bare name, which Windows may first look for in the
  * current (agent-writable) folder. The NoDefaultCurrentDirectoryInExePath switch below is honoured by current Node;
  * Node 18 started a planted git.exe anyway, so the lookup does not rely on it. A PATH entry that is not absolute is
- * skipped (it would resolve against the current folder too).
+ * skipped (it would resolve against the current folder too); quotes around an entry are removed. No git.exe found
+ * on Windows → null, and the check fails closed ("no git repository") rather than trying a bare name.
  */
 let gitBin;
 function gitPath() {
   if (gitBin !== undefined) return gitBin;
-  gitBin = 'git';
-  if (process.platform === 'win32') {
-    for (const dir of String(process.env.PATH || process.env.Path || '').split(';')) {
-      if (!dir || !path.isAbsolute(dir)) continue;
-      const exe = path.join(dir, 'git.exe');
-      if (fs.existsSync(exe)) {
-        gitBin = exe;
-        break;
-      }
+  if (process.platform !== 'win32') return (gitBin = 'git');
+  gitBin = null;
+  for (const raw of String(process.env.PATH || process.env.Path || '').split(';')) {
+    const dir = raw.trim().replace(/^"(.*)"$/, '$1');
+    if (!dir || !path.isAbsolute(dir)) continue;
+    const exe = path.join(dir, 'git.exe');
+    if (fs.existsSync(exe)) {
+      gitBin = exe;
+      break;
     }
   }
   return gitBin;
 }
 
 function defaultGit(cwd, args) {
+  const bin = gitPath();
+  if (!bin) return { status: 1, stdout: '', stderr: 'git.exe not found on an absolute PATH entry' };
   process.env.NoDefaultCurrentDirectoryInExePath = '1';
   const env =Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/i.test(k)));
   env.GIT_NO_REPLACE_OBJECTS = '1';
-  return spawnSync(gitPath(), ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=', '-C', cwd, ...args], {
+  return spawnSync(bin, ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=', '-C', cwd, ...args], {
     encoding: 'utf8',
     timeout: 5000,
     windowsHide: true,
