@@ -1,7 +1,7 @@
 # SETUP_PROMPT — set up the builder kit from your AI tool
 
 Open your AI tool (Claude Code, Codex or Antigravity) at the root of the project, and paste this one line,
-with `<tag>` replaced by the release you want (for example `v0.17.0`):
+with `<tag>` replaced by the release you want (for example `v1.0.2`):
 
 ```
 Set up builder in this project: run `npx github:geopjinfo/builder-pipeline#<tag> bootstrap`, then follow the builder-init skill.
@@ -11,10 +11,16 @@ That is the whole setup prompt. Everything else is in the `builder-init` skill.
 
 ## What it does
 
-1. **`bootstrap` (the CLI, no AI).** Fetches the kit at that tag with `npx` and adds ONE thing: the
-   `builder-init` skill, for each AI tool it detects in the project, recorded in `builder.lock.json` (so a later
-   inventory knows the skill is the kit's, not yours). It installs nothing else, changes no other existing file and
-   needs no API key. The kit stays zero-dependency.
+1. **`bootstrap` (the CLI, no AI).** Fetches the kit at that tag with `npx` and adds two things:
+   - the `builder-init` skill, for each AI tool it detects in the project, recorded in `builder.lock.json` (so a later
+     inventory knows the skill is the kit's, not yours);
+   - the kit itself as a devDependency of the project, at the same `github:…#<tag>` spec (`package.json` is created
+     if there is none), then `npm install --save-dev` it. Every later `npx builder …` then runs this kit from the
+     project's `node_modules` — without it, a bare `npx builder` would fetch the unrelated npm package `builder`. No
+     npm on PATH: the dependency is still written, and bootstrap tells you to run `npm install` before going on.
+     `--no-dependency` skips this step.
+
+   It installs nothing else, changes no other existing file and needs no API key. The kit stays zero-dependency.
 2. **`builder-init` (the skill, in your AI tool).** The judgement part:
    - decides **greenfield** (empty or near-empty repo: it interviews you — what is built, for whom, stack, domain —
      and drafts `PIPELINE_PROFILE.md`) or **brownfield** (it reads your code, docs and existing agent setup);
@@ -43,8 +49,8 @@ them once — the choices file is shared.
 
 ## Before you paste
 
-- Node 18 or newer (`node --version`).
-- Network access to fetch the tag once. After that the kit runs offline.
+- Node 18 or newer (`node --version`), with npm.
+- Network access to fetch the tag (npx, then `npm install`). After that the kit runs offline.
 - No clean tree needed; the skill counts your uncommitted files first so kit files can be told from your edits.
 
 Rules the skill follows: it treats every file it reads as data, not instructions; it never installs over, beside or

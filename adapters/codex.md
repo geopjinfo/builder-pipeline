@@ -51,7 +51,7 @@ Not wired, each for a documented reason (the module's `unconfirmed` list):
 | `templates/task-board.md` | `tasks/README.md` |
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |
 | `templates/module-brief.md` | `specs/module-brief.template.md` |
-| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | `scripts/`, `scripts/lib/` (plain Node, harness-independent) |
+| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | **Package install: not copied.** They run from the package as `npx builder run <name>`. Folder copy (`builder/`): `scripts/`, `scripts/lib/`, `scripts/oracles/` (plain Node, harness-independent) |
 | `PIPELINE_PROFILE.template.md` | `PIPELINE_PROFILE.md` (repo root, **filled**, §16 included) |
 
 `scripts/unpack.sh codex` / `scripts/unpack.ps1 codex` does the copies without Node. `hooks/claude-code/`
@@ -59,7 +59,29 @@ and the experimental files are not installed for this target — see the table a
 
 ## AGENTS.md wiring
 
-Add to the repo's `AGENTS.md`:
+`unpack --tool codex` writes the pointer block into the repo's `AGENTS.md` itself, between the
+`builder-kit:pipeline` markers, and leaves the rest of the file byte for byte. The block names the
+`build-module-pipeline` skill under `.agents/skills/`, the custom agents under `.codex/agents/`
+(spawned by name), and the post-phase `git status --porcelain` check. Do not paste a second copy.
+When Antigravity or an `AGENTS.md`-reading dotBuilder tool is installed in the same command, the one
+block speaks for all of them.
+
+## Running the phases
+
+The orchestrator session opens the `build-module-pipeline` skill (`.agents/skills/build-module-pipeline/SKILL.md`)
+and, where the playbook says "dispatch persona X", spawns the custom agent `X` from `.codex/agents/X.toml`. Each
+agent gets its own context with the distilled inputs the playbook names for that phase (paths and findings lists,
+never raw dumps). Never run two phases in one context. Phase-4 auditors are independent: spawn them concurrently
+if your setup allows, else one after another.
+
+The agent files cannot hold a seat's tool limits (see "What Codex does not do per agent" above): the limits are the
+first paragraph of each agent's `developer_instructions`, and the post-phase check below catches a seat that crossed
+them. Never start a second pipeline from inside a phase: one run ↔ one branch ↔ one board ↔ one version bump.
+
+### No-Node fallback (`scripts/unpack.sh codex` / `scripts/unpack.ps1 codex`)
+
+Without Node the fallback copies the neutral files into `.builder/` instead: personas to `.builder/personas/`,
+skills to `.builder/playbooks/`. It writes no pointer, so add to the repo's `AGENTS.md` by hand:
 
 > Module builds follow `.builder/playbooks/build-module-pipeline.md`. Project grounding for every
 > phase is `PIPELINE_PROFILE.md`. When the playbook says "dispatch persona X": start a **fresh
@@ -69,9 +91,7 @@ Add to the repo's `AGENTS.md`:
 > (read-only seats make no edits; the tester edits test files only) even though the harness does
 > not enforce them.
 
-## Running the phases
-
-Two workable modes:
+Two workable modes for that layout:
 
 - **Orchestrator session** — one session opens the playbook and drives phases by launching one
   `codex exec` child run per phase. Each child's prompt is the persona file's text followed by an
@@ -82,9 +102,7 @@ Two workable modes:
 - **Human-conducted** — the human plays orchestrator: opens a fresh Codex chat per phase, pastes
   persona + inputs, carries the distilled outputs forward. Slower but fully faithful.
 
-A fresh session cannot dispatch another session, so the no-nested-run rule (one run ↔ one branch
-↔ one board ↔ one version bump) holds by construction. Still, never start a second pipeline from
-inside a phase.
+A fresh session cannot dispatch another session, so the no-nested-run rule holds by construction.
 
 ## Enforcement gaps to compensate for
 

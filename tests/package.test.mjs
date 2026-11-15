@@ -32,6 +32,7 @@ describe('package.json — an installable package', () => {
     const missing = readdirSync(PACK).filter((n) => !skip.has(n) && !n.startsWith('.') && !shipped.has(n));
     assert.deepEqual(missing, [], `not in "files": ${missing.join(', ')}`);
     assert.ok(!shipped.has('tests'), 'the kit\'s own suite is not part of an install');
+    assert.ok(!shipped.has('.github'), 'the kit repo\'s CI workflow is not part of an install');
     // The maintainer files speak to an agent working on the kit repo, not to a project that installs it.
     for (const f of ['AGENTS.md', 'CLAUDE.md', 'RELEASING.md']) assert.ok(!shipped.has(f), `${f} is for the kit repo only and must not ship`);
     // The doc map for agents ships, so an agent in a consuming project finds the kit's docs from node_modules.

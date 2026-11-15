@@ -9,14 +9,15 @@
  *   npx builder unpack --tool claude-code,codex
  *   npx builder unpack --tool all [--dry-run] [--no-extras] [--experimental]
  *   npx builder unpack --tool claude-code --models strong=opus,mid=haiku
- *   npx builder upgrade --tool claude-code [--dry-run]   (an install from an older kit release)
+ *   npx builder upgrade [--tool claude-code] [--dry-run] [--prune]   (an install from an older kit release)
+ *   npx builder uninstall --tool codex | --all [--dry-run]   (remove what the lock says the kit wrote)
  *   npx builder --version
  *   npx builder targets
  *   npx builder verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
  *   npx builder features         (which optional checks are on, off, unmeasured or experimental)
  *   npx builder check-ledgers    (mechanical board/registry gates — wire into CI)
  *   npx builder check-targets    (qa-audit environment safety — wire into CI)
- *   npx builder bootstrap [--tool …]        (only the builder-init skill — cli/bootstrap.cjs)
+ *   npx builder bootstrap [--tool …]        (the builder-init skill, + the kit as a devDependency when run via npx — cli/bootstrap.cjs)
  *   npx builder inventory [--json]          (project items vs the kit — cli/inventory.cjs)
  *   npx builder choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
  *   npx builder doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
@@ -39,7 +40,9 @@
  * are overwritten when their content differs from the pack, after a copy goes to
  * .builder/backup-<UTC stamp>/<same path>. Project-owned files — PIPELINE_PROFILE.md, the boards, the
  * registry, the decision log, the brief templates — are never touched once they exist. The pointer block is
- * re-wired only between its markers, so the user's own text around it is left byte-for-byte.
+ * re-wired only between its markers, so the user's own text around it is left byte-for-byte. A locked file this
+ * release no longer installs is reported stale; `--prune` backs it up and deletes it (leftovers()). The flags of the
+ * install are recorded in builder.lock.json and are upgrade's defaults.
  */
 'use strict';
 
@@ -138,7 +141,16 @@ const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
  * the set unpack installs.
  */
 let MODE = 'unpack';
-const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0 } };
+const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0, 'stale (removed from the kit)': 0, pruned: 0, 'removed (choice is no longer both)': 0 } };
+/** --prune: an upgrade backs up and deletes the lock-matched files the kit no longer installs (leftovers() below). */
+let PRUNE = false;
+/**
+ * The --models entries in force for this install: the ones builder.lock.json recorded, then this command's. Only the
+ * overrides are stored, so a later release that changes a default tier still reaches an install that never chose one.
+ */
+const MODEL_OVERRIDES = { 'claude-code': {}, codex: {}, antigravity: {} };
+/** Dsts a clash decision skipped this run (and skill folders, as `<dir>/`): not "removed from the kit". */
+const DECIDED_SKIP = new Set();
 
 /**
  * builder.lock.json — what the kit last wrote, per KIT-OWNED file: { kit: version, files: { "<dst>": "<sha256>" } }.
@@ -150,7 +162,7 @@ const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, 
  */
 const LOCK_FILE = 'builder.lock.json';
 let FORCE = false;
-const LOCK = { prior: null, next: {} };
+const LOCK = { prior: null, next: {}, drop: new Set() };
 const shaOf = (buf) => require('crypto').createHash('sha256').update(Buffer.from(buf).toString('utf8').replace(/\r\n/g, '\n')).digest('hex');
 function lockPrior() {
   if (LOCK.prior === null) {
@@ -168,13 +180,129 @@ const lockKey = (dst) => posixPath(dst);
  * nothing else). Such a lock is not an install: over an install from before the lock it must not turn every kit file
  * the lock does not list into a "foreign" clash (legacyInstall). The first unpack/upgrade drops the mark.
  */
-function writeLock({ bootstrap = false } = {}) {
+/**
+ * `install` records how the project installed the kit — { tools, models (the --models overrides), noExtras,
+ * experimental } — so `upgrade` repeats the same install without the flags being typed again (explicit flags still
+ * override), and a pointer file several tools share speaks for every tool installed, not only the latest command's.
+ * A write that names no record (bootstrap) keeps the one already there.
+ */
+function writeLock({ bootstrap = false, install = null } = {}) {
   if (DRY) return;
   const files = { ...lockPrior(), ...LOCK.next };
+  for (const k of LOCK.drop) delete files[k];
   const sorted = Object.fromEntries(Object.keys(files).sort().map((k) => [k, files[k]]));
-  const lock = { kit: VERSION, files: sorted };
+  const lock = { kit: VERSION };
+  const record = install || lockMeta().install;
+  if (record) lock.install = record;
+  lock.files = sorted;
   if (bootstrap && (!fs.existsSync(path.join(CWD, LOCK_FILE)) || lockMeta().bootstrap === true)) lock.bootstrap = true;
   fs.writeFileSync(path.join(CWD, LOCK_FILE), JSON.stringify(lock, null, 2) + '\n');
+}
+function installRecord() {
+  const models = Object.fromEntries(Object.entries(MODEL_OVERRIDES).filter(([, m]) => Object.keys(m).length));
+  return { tools: [...POINTER_TOOLS].sort(), models, noExtras: NO_EXTRAS, experimental: EXPERIMENTAL };
+}
+
+/**
+ * The tools a lock key belongs to, read from where each tool's adapter installs (null = common to every tool: the
+ * scripts/ copies of the folder layout, the oracles). A key shared by several tools (`.agents/skills/` for Codex and
+ * Antigravity, `.builder/` for the agent-file tools) names them all.
+ */
+function keyTools(key) {
+  const owners = [];
+  for (const [t, d] of Object.entries(TOOLS)) {
+    if (d.style === 'native') {
+      const a = ADAPTERS[t];
+      const prefixes = [a.agentsDir, a.skillPath('x').replace(/x\/SKILL\.md$/, ''), a.hooksDir].filter(Boolean).map((p) => p.replace(/\/?$/, '/'));
+      if (prefixes.some((p) => key.startsWith(p))) owners.push(t);
+    } else if (key.startsWith('.builder/')) owners.push(t);
+    if (d.pointer === key && !owners.includes(t)) owners.push(t);
+  }
+  return owners.length ? owners : null;
+}
+/** The tools a lock with no install record evidently installed: those that own a key no other tool shares. */
+function inferTools(files) {
+  const out = new Set();
+  for (const k of Object.keys(files)) {
+    const o = keyTools(k);
+    if (o && o.length === 1) out.add(o[0]);
+  }
+  return [...out];
+}
+
+/** A status line for the lifecycle passes below: the upgrade tally in upgrade, a plain line otherwise. */
+function say(status, dst, note = '') {
+  if (MODE === 'upgrade' && Object.prototype.hasOwnProperty.call(UPGRADE.counts, status)) return upgradeLog(status, dst, note);
+  const tag = DRY && /^(removed|pruned)\b/.test(status) ? `would be ${status}:` : `${status}:`;
+  console.log(`${`${tag} `.padEnd(24)}${dst}${note ? `  (${note})` : ''}`);
+}
+
+/** Backs `key` up (backup()), deletes it and every folder it leaves empty, up to the project root. */
+function removeKitFile(key) {
+  if (DRY) return;
+  backup(key);
+  const abs = path.join(CWD, ...key.split('/'));
+  fs.unlinkSync(abs);
+  for (let dir = path.dirname(abs); path.relative(CWD, dir) && !path.relative(CWD, dir).startsWith('..'); dir = path.dirname(dir)) {
+    if (fs.readdirSync(dir).length) break;
+    fs.rmdirSync(dir);
+  }
+}
+
+/**
+ * "both" installed the kit's item as `builder-<name>`; once the recorded choice for that item is no longer "both", that
+ * copy is a leftover of a decision the project changed. The item's name, or null.
+ */
+function renamedCopyOf(key, items) {
+  for (const seg of key.split('/')) {
+    const m = /^builder-(.+?)(?:\.(?:md|toml))?$/.exec(seg);
+    if (!m) continue;
+    const recorded = choicesLib.KINDS.map((k) => items[`${k}:${m[1]}`]).filter(Boolean);
+    if (recorded.length && !recorded.some((c) => c.decision === 'both')) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Prior lock keys this run did not write, for the tools this run installed. A release that drops a persona, a
+ * skill or a script (or a project that moved from the folder layout, whose scripts/ copies the package never writes)
+ * otherwise leaves the old file loading forever, locked as the kit's.
+ *   - a "both" copy whose choice changed → removed (backed up first), in unpack and upgrade alike;
+ *   - upgrade: still the kit's bytes → `stale (removed from the kit)`, and with --prune backed up, deleted and dropped
+ *     from the lock; edited since → kept and named; already gone → dropped from the lock.
+ */
+function leftovers(tools) {
+  const prior = lockPrior();
+  const items = (choicesLib.read(CWD).choices || {}).items || {};
+  const skipped = (key) => DECIDED_SKIP.has(key) || [...DECIDED_SKIP].some((d) => d.endsWith('/') && key.startsWith(d));
+  for (const key of Object.keys(prior).sort()) {
+    if (UPGRADE.seen.has(key) || LOCK.next[key] || skipped(key)) continue;
+    const owners = keyTools(key);
+    if (owners && !owners.some((t) => tools.includes(t))) continue;
+    const abs = path.join(CWD, ...key.split('/'));
+    if (!fs.existsSync(abs)) {
+      LOCK.drop.add(key);
+      continue;
+    }
+    const matches = shaOf(fs.readFileSync(abs)) === prior[key];
+    const renamed = renamedCopyOf(key, items);
+    if (renamed && matches) {
+      removeKitFile(key);
+      LOCK.drop.add(key);
+      say('removed (choice is no longer both)', key, `backed up first; ${choicesLib.FILE} no longer says "both" for ${renamed}`);
+      continue;
+    }
+    if (MODE !== 'upgrade') continue;
+    if (!matches) {
+      say('kept (local edit)', key, 'removed from the kit, and changed since the kit wrote it — move the change, then delete it by hand');
+    } else if (PRUNE) {
+      removeKitFile(key);
+      LOCK.drop.add(key);
+      say('pruned', key, 'backed up first');
+    } else {
+      say('stale (removed from the kit)', key, 'this release no longer installs it — re-run with --prune to back it up and delete it');
+    }
+  }
 }
 function lockMeta() {
   try {
@@ -212,8 +340,8 @@ function hookScripts() {
 
 function upgradeLog(status, dst, note = '') {
   UPGRADE.counts[status]++;
-  const tag = DRY && (status === 'updated' || status === 'added') ? `would be ${status}:` : `${status}:`;
-  console.log(`${tag.padEnd(24)}${dst}${note ? `  (${note})` : ''}`);
+  const tag = DRY && /^(updated|added|pruned|removed)\b/.test(status) ? `would be ${status}:` : `${status}:`;
+  console.log(`${`${tag} `.padEnd(24)}${dst}${note ? `  (${note})` : ''}`);
 }
 
 /** Line endings are not content: a checkout with autocrlf must not read every kit file as "changed". */
@@ -327,10 +455,21 @@ function wirePointer(dst, block, wholeFile) {
   // pointerBlock() writes it for every selected tool that reads that file.
   if (POINTERS_SEEN.has(dst)) return;
   POINTERS_SEEN.add(dst);
+  // The block is written in the file's own line endings: a CRLF file stays CRLF, not half and half.
+  const eol = eolOf(existing);
+  const fresh = withEol(block.slice(block.indexOf(MARKER)), eol);
   if (MODE !== 'upgrade') {
     if (wholeFile) return place(dst, () => block + '\n', 'kit');
-    if (existing !== null && existing.includes(MARKER)) return log('skip (wired):', dst);
-    if (!DRY) writeFile(abs, (existing ? existing.replace(/\s*$/, '\n\n') : '') + block + '\n');
+    if (existing !== null && existing.includes(MARKER)) {
+      // A shared pointer must speak for every tool installed: a later unpack for another tool re-wires the marked
+      // span when it differs (the user's text around it is left as it is).
+      const span = pointerSpan(existing);
+      if (span.unrecognised || sameText(Buffer.from(existing.slice(span.start, span.end)), Buffer.from(fresh))) return log('skip (wired):', dst);
+      backup(dst);
+      if (!DRY) writeFile(abs, existing.slice(0, span.start) + fresh + existing.slice(span.end));
+      return log(DRY ? 'would re-wire:' : 're-wired:', dst);
+    }
+    if (!DRY) writeFile(abs, (existing ? existing.replace(/\s*$/, eol + eol) : '') + withEol(block, eol) + eol);
     return log(DRY ? 'would wire:' : 'wired:', dst);
   }
   if (existing === null) {
@@ -340,12 +479,11 @@ function wirePointer(dst, block, wholeFile) {
   if (!existing.includes(MARKER)) {
     if (wholeFile) return upgradeLog('kept (by hand)', dst, 'file exists without the kit marker — add the block yourself');
     backup(dst);
-    if (!DRY) writeFile(abs, existing.replace(/\s*$/, '\n\n') + block + '\n');
+    if (!DRY) writeFile(abs, existing.replace(/\s*$/, eol + eol) + withEol(block, eol) + eol);
     return upgradeLog('added', dst, 'pointer block appended');
   }
   // A whole-file pointer (a rules file the kit owns outright) carries frontmatter before the marker; only the
   // marked part is compared and replaced either way.
-  const fresh = block.slice(block.indexOf(MARKER));
   const span = pointerSpan(existing);
   if (span.unrecognised) return upgradeLog('kept (by hand)', dst, 'pointer block not in a shape the kit wrote — replace it by hand from `unpack --dry-run`');
   const current = existing.slice(span.start, span.end);
@@ -354,6 +492,8 @@ function wirePointer(dst, block, wholeFile) {
   if (!DRY) writeFile(abs, existing.slice(0, span.start) + fresh + existing.slice(span.end));
   upgradeLog('updated', dst, 'pointer block only');
 }
+const eolOf = (text) => (text && /\r\n/.test(text) ? '\r\n' : '\n');
+const withEol = (s, eol) => (eol === '\n' ? s : s.replace(/\r?\n/g, eol));
 
 /** Files under a kit directory, recursively, as paths relative to that directory. Missing dir → none. */
 function filesUnder(dir) {
@@ -483,11 +623,16 @@ function extraAgentFiles() {
 // --------------------------- pointer content -------------------------------
 /** The tools selected for this run (cmdUnpack/cmdUpgrade set it): a shared pointer file speaks for all of them. */
 let SELECTED = [];
+/**
+ * The tools a pointer speaks for: every tool the lock records as installed plus this run's (uninstall: the ones left).
+ * A pointer file several tools share, written for the latest command alone, would drop the tools installed before.
+ */
+let POINTER_TOOLS = [];
 const DOT_PERSONAS = 'prompt files under `.builder/personas/` — when the playbook says "dispatch persona X", start a FRESH session whose first message is the persona file + `PIPELINE_PROFILE.md` + the distilled inputs the playbook names, and nothing else; never run two phases in one context; honour each persona\'s tool limits (read-only seats never edit; the tester edits test files only)';
 
 function pointerBlock(tool) {
   const native = TOOLS[tool].style === 'native';
-  const nativeSharer = !native && SELECTED.find((t) => TOOLS[t] && TOOLS[t].style === 'native' && TOOLS[t].pointer === TOOLS[tool].pointer);
+  const nativeSharer = !native && POINTER_TOOLS.find((t) => TOOLS[t] && TOOLS[t].style === 'native' && TOOLS[t].pointer === TOOLS[tool].pointer);
   if (nativeSharer) return pointerBlock(nativeSharer);
   let playbook = native
     ? 'the `build-module-pipeline` skill (auto-registered under `.claude/skills/`)'
@@ -498,7 +643,7 @@ function pointerBlock(tool) {
   if (native && tool !== 'claude-code') {
     // AGENTS.md is read by Codex and Antigravity alike (and by the AGENTS.md dotBuilder tools): one block for every
     // selected tool that reads it.
-    const sharing = [...new Set([tool, ...SELECTED])].filter((t) => TOOLS[t] && TOOLS[t].pointer === TOOLS[tool].pointer);
+    const sharing = [...new Set([tool, ...POINTER_TOOLS])].filter((t) => TOOLS[t] && TOOLS[t].pointer === TOOLS[tool].pointer);
     const dirs = sharing.filter((t) => TOOLS[t].style === 'native').map((t) => `\`${ADAPTERS[t].agentsDir}/\` (${t === 'codex' ? 'Codex' : 'Antigravity'})`);
     playbook = 'the `build-module-pipeline` skill (under `.agents/skills/`)';
     personas = `custom agents under ${dirs.join(' and ')} — spawn them by name; each seat's tool limits are written at the top of its instructions and the harness does not hold them per seat, so run \`git status --porcelain\` after every phase and revert anything outside the seat's limits`;
@@ -765,7 +910,8 @@ function cmdUnpack(tools) {
   setupClashCheck();
   for (const tool of tools) installTool(tool);
   installCommon(tools);
-  writeLock();
+  leftovers(tools);
+  writeLock({ install: installRecord() });
   if (CLASH_SKIPPED.size) console.log(clashSummary());
   else if (!DRY && !fs.existsSync(path.join(CWD, choicesLib.FILE))) {
     // Nothing to decide is still a decision on record: the setup commit carries the (empty) answers file, so the
@@ -798,12 +944,15 @@ function cmdUpgrade(tools) {
   setupClashCheck();
   for (const tool of tools) installTool(tool);
   installCommon(tools);
-  writeLock();
+  leftovers(tools);
+  writeLock({ install: installRecord() });
   if (CLASH_SKIPPED.size) console.log(clashSummary());
   const c = UPGRADE.counts;
   const backups = path.join('.builder', `backup-${UPGRADE.stamp}`);
-  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}.`);
-  if (c.updated > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
+  const stale = c['stale (removed from the kit)'];
+  const removed = c.pruned + c['removed (choice is no longer both)'];
+  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}${stale ? `, ${stale} stale (removed from the kit — --prune deletes them)` : ''}${removed ? `, ${removed} removed` : ''}.`);
+  if (c.updated > 0 || removed > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
   console.log(`Next steps:
   1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
      (PIPELINE_PROFILE.md, the board rules, the brief templates) against builder/PIPELINE_PROFILE.template.md
@@ -811,6 +960,101 @@ function cmdUpgrade(tools) {
   2. node builder/cli.js verify
   3. node builder/cli.js features   — settings this release added default to off / not configured until §16 sets them.
   4. node builder/cli.js doctor     — what each tool supports, partly supports or cannot hold.`);
+}
+
+/**
+ * `uninstall --tool <list> | --all [--dry-run]` — takes out what builder.lock.json says the kit wrote, for those tools.
+ *
+ * Only a file whose bytes still match its lock entry is removed (backed up first, like every overwrite); a file
+ * edited since is the project's now, so it is kept, named and dropped from the lock. A file several tools share goes
+ * only with the last tool that installs it (`.agents/skills/` stays while Codex or Antigravity remains). The pointer
+ * block is taken out of each instruction file — or re-wired for the tools left that share it — and the text around it
+ * is left as it is. Project-owned files (the profile, the ledgers, the choices) are never touched. `--all` also takes
+ * the common kit files (a folder layout's scripts/ copies) and, once nothing is left to lock, the lock itself.
+ */
+function cmdUninstall(argv) {
+  if (!fs.existsSync(path.join(CWD, LOCK_FILE))) die(`no ${LOCK_FILE} here — uninstall removes only what the kit recorded writing`);
+  const prior = lockPrior();
+  const meta = lockMeta();
+  const installed = ((meta.install && meta.install.tools) || inferTools(prior)).filter((t) => TOOLS[t]);
+  const all = argv.includes('--all');
+  const i = argv.indexOf('--tool');
+  let remove;
+  if (all) remove = installed.slice();
+  else if (i !== -1 && argv[i + 1]) {
+    remove = argv[i + 1].split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (remove.includes('all')) remove = Object.keys(TOOLS);
+    const unknown = remove.filter((t) => !TOOLS[t]);
+    if (unknown.length) die(`unknown tool(s): ${unknown.join(', ')} — run 'node builder/cli.js targets'`);
+  } else die('uninstall needs --tool <list> or --all');
+  const remaining = all ? [] : installed.filter((t) => !remove.includes(t));
+  const everything = remaining.length === 0;
+  MODE = 'uninstall';
+  stamp();
+  console.log(`builder kit ${VERSION} — uninstall ${everything ? 'every tool' : remove.join(', ')}${DRY ? ' (dry run: nothing is written)' : ''}`);
+  let removed = 0;
+  let kept = 0;
+  for (const key of Object.keys(prior).sort()) {
+    const owners = keyTools(key);
+    const goes = owners === null ? everything : owners.some((t) => remove.includes(t)) && !owners.some((t) => remaining.includes(t));
+    if (!goes) continue;
+    const abs = path.join(CWD, ...key.split('/'));
+    LOCK.drop.add(key);
+    if (!fs.existsSync(abs)) continue;
+    if (shaOf(fs.readFileSync(abs)) !== prior[key]) {
+      kept++;
+      say('kept (local edit)', key, 'changed since the kit wrote it — it is yours now; delete it by hand if unwanted');
+      continue;
+    }
+    removeKitFile(key);
+    removed++;
+    say(DRY ? 'would remove' : 'removed', key);
+  }
+  // The pointer blocks (a whole-file pointer is a locked kit file and went above).
+  POINTER_TOOLS = remaining;
+  for (const dst of [...new Set(remove.filter((t) => !TOOLS[t].mdc).map((t) => TOOLS[t].pointer))]) {
+    const abs = path.join(CWD, dst);
+    if (!fs.existsSync(abs)) continue;
+    const text = fs.readFileSync(abs, 'utf8');
+    const span = pointerSpan(text);
+    if (!span) continue;
+    if (span.unrecognised) {
+      say('kept (by hand)', dst, 'pointer block not in a shape the kit wrote — take it out by hand');
+      continue;
+    }
+    const eol = eolOf(text);
+    const sharer = remaining.find((t) => TOOLS[t].pointer === dst);
+    let next;
+    if (sharer) {
+      const block = pointerBlock(sharer);
+      next = text.slice(0, span.start) + withEol(block.slice(block.indexOf(MARKER)), eol) + text.slice(span.end);
+    } else {
+      const before = text.slice(0, span.start).replace(/\s*$/, '');
+      const after = text.slice(span.end).replace(/^\s*/, '');
+      next = before && after ? before + eol + eol + after : before ? before + eol : after;
+    }
+    if (next === text) continue;
+    if (!next.trim()) {
+      removeKitFile(dst);
+      say(DRY ? 'would remove' : 'removed', dst, 'it held only the pointer block');
+      continue;
+    }
+    if (!DRY) {
+      backup(dst);
+      writeFile(abs, next);
+    }
+    say(sharer ? (DRY ? 'would re-wire' : 're-wired') : DRY ? 'would strip' : 'stripped', dst, sharer ? `pointer block, for ${remaining.filter((t) => TOOLS[t].pointer === dst).join(', ')}` : 'pointer block only; the text around it is kept');
+  }
+  const own = ['PIPELINE_PROFILE.md', choicesLib.FILE, ...Object.values(ledgerPaths())].filter((p) => fs.existsSync(path.join(CWD, p)));
+  if (own.length) say('kept (project-owned)', own.join(', '));
+  if (!DRY) {
+    const left = Object.keys(prior).filter((k) => !LOCK.drop.has(k));
+    if (everything && left.length === 0) {
+      fs.unlinkSync(path.join(CWD, LOCK_FILE));
+      say('removed', LOCK_FILE, 'nothing left for it to record');
+    } else writeLock({ install: { ...(meta.install || { models: {}, noExtras: false, experimental: false }), tools: remaining.slice().sort() } });
+  }
+  console.log(`\n${DRY ? 'Dry run — nothing written. Would remove' : 'Uninstalled: removed'} ${removed} kit file(s)${kept ? `, kept ${kept} edited since the kit wrote them` : ''}.${removed && !DRY ? ` Each was backed up first under ${path.join('.builder', `backup-${UPGRADE.stamp}`)}/.` : ''} The .gitignore lines the kit added are left in place.`);
 }
 
 function cmdTargets() {
@@ -1227,6 +1471,8 @@ function setupClashCheck() {
     const r = choicesLib.applyChoices([{ key: entry.key, kind: entry.kind, name: entry.name, dst: entry.dst, clash, with: withPaths }], loaded.choices);
     for (const line of r.report) if (!printed.has(line)) { printed.add(line); console.log(line); }
     if (r.skip.length) {
+      DECIDED_SKIP.add(lockKey(entry.dst));
+      if (/(^|[\\/])SKILL\.md$/.test(entry.dst)) DECIDED_SKIP.add(`${lockKey(path.dirname(entry.dst))}/`);
       if (r.skip[0].reason !== 'kept-project') CLASH_SKIPPED.add(entry.key);
       return null;
     }
@@ -1262,7 +1508,9 @@ function main() {
   NO_EXTRAS = argv.includes('--no-extras');
   EXPERIMENTAL = argv.includes('--experimental');
   FORCE = argv.includes('--force');
+  PRUNE = argv.includes('--prune');
 
+  if (cmd === 'uninstall') return cmdUninstall(argv.slice(1));
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return console.log(VERSION);
   if (cmd === 'run') return cmdRun(argv.slice(1));
   if (cmd === 'targets') return cmdTargets();
@@ -1280,20 +1528,43 @@ function main() {
     console.log(`usage: node builder/cli.js <command> [options]
 
   setup
-    bootstrap [--tool <list>]           only the builder-init skill, for the detected (or named) tools
+    bootstrap [--tool <list>]           the builder-init skill for the detected (or named) tools; run via npx, adds the kit as a devDependency [--no-dependency]
     inventory [--json] [--threshold n]  the project's own skills/agents/personas/hooks and their overlap with the kit
     choices list|set|unset|check        the per-item keep / kit / both decisions (builder.choices.json)
     unpack --tool <list|all>            install (copy-if-absent; undecided clashes are skipped)
-    upgrade --tool <list|all>           refresh kit-owned files (backup first; --force over local edits)
-      [--dry-run] [--no-extras] [--experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
+    upgrade [--tool <list|all>]         refresh kit-owned files (backup first; --force over local edits);
+                                        names files this release dropped as stale, --prune deletes them (backup first)
+      [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
+    uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
   check
     verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check
   other
     run [<script> [args]] | targets | --version
 
   e.g. node builder/cli.js unpack --tool claude-code,codex
-       node builder/cli.js upgrade --tool claude-code --dry-run   (pass the same --tool/--models/--no-extras/--experimental as the original unpack)`);
+       node builder/cli.js upgrade --dry-run   (repeats the --tool/--models/--no-extras/--experimental builder.lock.json recorded)`);
     process.exit(cmd ? 1 : 0);
+  }
+
+  /**
+   * The install builder.lock.json recorded (writeLock) is upgrade's default: tools, the --models overrides,
+   * --no-extras and --experimental. A flag given here overrides it (`--extras` / `--no-experimental` switch a recorded
+   * one off). unpack takes its flags as typed — it is the command that sets them — but keeps the recorded --models
+   * overrides on record for the tools it does not re-render.
+   */
+  const recorded = lockMeta().install || null;
+  if (recorded) {
+    const upgrading = cmd === 'upgrade';
+    if (upgrading && !argv.includes('--no-extras') && !argv.includes('--extras')) NO_EXTRAS = recorded.noExtras === true;
+    if (upgrading && !argv.includes('--experimental') && !argv.includes('--no-experimental')) EXPERIMENTAL = recorded.experimental === true;
+    for (const [tool, map] of Object.entries(recorded.models || {})) {
+      if (!MODELS[tool] || !map || typeof map !== 'object') continue;
+      for (const [tier, model] of Object.entries(map)) {
+        if (!['strong', 'mid', 'low'].includes(tier) || typeof model !== 'string' || !model) continue;
+        if (upgrading) MODELS[tool][tier] = model;
+        MODEL_OVERRIDES[tool][tier] = model;
+      }
+    }
   }
 
   const m = argv.indexOf('--models');
@@ -1304,18 +1575,28 @@ function main() {
       const [tool, tier] = key.includes('.') ? key.split('.') : ['claude-code', key];
       if (!MODELS[tool] || !['strong', 'mid', 'low'].includes(tier) || !model) die(`bad --models entry "${pair}" — use strong=<model>,mid=<model>[,low=<model>] (Claude Code), or codex.<tier>=<model> / antigravity.<tier>=<model>`);
       MODELS[tool][tier] = model;
+      MODEL_OVERRIDES[tool][tier] = model;
     }
+  }
+  if ((m !== -1 && argv[m + 1]) || (cmd === 'upgrade' && Object.values(MODEL_OVERRIDES).some((o) => Object.keys(o).length))) {
     console.log(`model mapping: strong=${TIER_TO_CLAUDE_MODEL.strong}, mid=${TIER_TO_CLAUDE_MODEL.mid}, low=${TIER_TO_CLAUDE_MODEL.low} (native-format targets only; others record theirs in PIPELINE_PROFILE.md §12)`);
     for (const t of ['codex', 'antigravity']) if (Object.keys(MODELS[t]).length) console.log(`model mapping (${t}): ${Object.entries(MODELS[t]).map(([k, v]) => `${k}=${v}`).join(', ')}`);
   }
 
   const i = argv.indexOf('--tool');
-  if (i === -1 || !argv[i + 1]) die(`${cmd} requires --tool (see 'targets' for the list, or use 'all')`);
-  let tools = argv[i + 1].split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-  if (tools.includes('all')) tools = Object.keys(TOOLS).filter((k) => k !== 'generic');
+  const lockTools = recorded && Array.isArray(recorded.tools) ? recorded.tools.filter((t) => TOOLS[t]) : [];
+  let tools;
+  if (i !== -1 && argv[i + 1]) {
+    tools = argv[i + 1].split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (tools.includes('all')) tools = Object.keys(TOOLS).filter((k) => k !== 'generic');
+  } else if (cmd === 'upgrade' && lockTools.length) {
+    tools = lockTools.slice();
+    console.log(`tools: ${tools.join(', ')} (from ${LOCK_FILE}; --tool overrides)`);
+  } else die(`${cmd} requires --tool (see 'targets' for the list, or use 'all')${cmd === 'upgrade' ? ` — ${LOCK_FILE} records no tools to default to` : ''}`);
   const unknown = tools.filter((t) => !TOOLS[t]);
   if (unknown.length) die(`unknown tool(s): ${unknown.join(', ')} — run 'node builder/cli.js targets'`);
   SELECTED = [...new Set(tools)];
+  POINTER_TOOLS = [...new Set([...lockTools, ...SELECTED])];
   if (cmd === 'upgrade') cmdUpgrade(SELECTED);
   else cmdUnpack(SELECTED);
 }

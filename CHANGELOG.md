@@ -5,6 +5,35 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-11-15
+
+Fixes from four grounded audits (docs vs code, tests, security, install lifecycle) of 1.0.2.
+
+### Added
+
+- **`npx builder uninstall --tool <list> | --all [--dry-run]`** removes the kit's files for those tools and its pointer block; project-owned and locally edited files are kept and named.
+- **CI**: `.github/workflows` runs `node tests/run.mjs` on ubuntu + windows × Node 18/22 for pushes, pull requests and `v*` tags. Not in the package.
+- **Tests**: install lifecycle, bootstrap via the package, the gate-queue CLI on a temp git repo, unpack.sh/unpack.ps1 parity, greenfield + brownfield samples end to end, fence hardening, paths.logs segments.
+
+### Changed
+
+- **`upgrade` defaults to the install's own tools and flags**, recorded in `builder.lock.json`; `--tool` overrides. Files a release dropped are reported `stale`; `--prune` removes them. A shared pointer speaks for every installed tool, in its file's line endings.
+- **`bootstrap` run through npx adds the kit as a devDependency** at the fetched spec, so later `npx builder` runs this kit and not another package named builder.
+- **`tooling/optional/session-sync-hook` is `.cjs`**, so a `"type": "module"` project still runs it.
+- Docs match the code: package installs copy no scripts, Codex native layout, LG-0..LG-6, `unpack` needs `--tool`, pointer and .gitignore are automatic.
+
+### Fixed
+
+- After a folder → package move the vendored `.claude/hooks/kit/` copy wins over an old `scripts/` copy.
+- A changed `both` choice drops its renamed copy.
+- The autosync test no longer depends on a 5 s wall clock.
+
+### Security
+
+- **The protected-paths fence fails closed**: commands naming an outside path under any `cd`, Windows device / UNC forms and case, unplaceable shared segments, hook folders, glob deletes and whole-tree resets are judged; a hook crash blocks. MCP tools that run commands are judged as shell, path-shaped values under any key count (`file://` decoded), reads are judged too, and a file write with no path fails closed. The matcher includes `mcp__.*` (Claude Code settings and Codex hooks.json).
+- **The pre-commit hook reads §16 `protected` (add-only)** and matches prefixes literally.
+- **`paths.logs` is judged exactly as the bash cap writes it**: project-relative, no `..`, no `:`, no segment ending in a dot or a space, no surrounding whitespace, outside the fence's whole set (built-in, `BUILDER_PROTECTED`, §16) and hook folders, by spelling and by landing (junctions), and again after `mkdir`. Fails closed when the set cannot be read. Known limit: a junction swapped in after the last check is not caught (hooks/README.md).
+
 ## [1.0.2] — 2026-11-15
 
 ### Changed

@@ -1,5 +1,5 @@
 /**
- * The optional index refresh: `tooling/optional/autosync.py`, `sync.py --check` and `session-sync-hook.js`.
+ * The optional index refresh: `tooling/optional/autosync.py`, `sync.py --check` and `session-sync-hook.cjs`.
  *
  * WHY. Three triggers share one index. Without a lock, two of them embed the same backlog at once, which doubles the
  * spend and can corrupt the index. Without a limit, an unattended trigger spends an unbounded amount. And a sync
@@ -22,7 +22,7 @@ const PACK = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OPTIONAL = join(PACK, 'tooling', 'optional');
 const AUTOSYNC = join(OPTIONAL, 'autosync.py');
 const SYNC = join(OPTIONAL, 'sync.py');
-const HOOK = join(OPTIONAL, 'session-sync-hook.js');
+const HOOK = join(OPTIONAL, 'session-sync-hook.cjs');
 const indexCheck = require('../scripts/lib/index-check.cjs');
 
 function findPython() {
@@ -277,11 +277,13 @@ print(json.dumps(dict(written=written, exists=flag.exists(), missing=sync.load_p
   });
 });
 
-describe('session-sync-hook.js', () => {
+describe('session-sync-hook.cjs', () => {
+  // A wall-clock bound under the spawn timeout flakes on a loaded CI runner; the behaviour that matters is that
+  // the hook returned by itself (exit 0, not killed by the timeout) and wrote nothing.
+  const SPAWN_TIMEOUT_MS = 15_000;
   const node = (env) => {
-    const started = Date.now();
-    const r = spawnSync(process.execPath, [HOOK], { encoding: 'utf8', env, timeout: 15_000 });
-    return { status: r.status, stdout: r.stdout ?? '', ms: Date.now() - started };
+    const r = spawnSync(process.execPath, [HOOK], { encoding: 'utf8', env, timeout: SPAWN_TIMEOUT_MS });
+    return { status: r.status, stdout: r.stdout ?? '', timedOut: r.error?.code === 'ETIMEDOUT' || r.signal !== null };
   };
 
   /** An index with a recorded previous status; the "interpreter" is node running an empty script, so no Python is spawned. */
@@ -294,12 +296,25 @@ describe('session-sync-hook.js', () => {
     return cleanEnv({ CLAUDE_PROJECT_DIR: p.root, INDEX_PYTHON: process.execPath, INDEX_AUTOSYNC_SCRIPT: noop });
   }
 
+  test('red (I7): copied into a "type": "module" host it still runs — it is CommonJS by its own extension', () => {
+    const p = project();
+    const hooks = join(p.root, '.claude', 'hooks');
+    mkdirSync(hooks, { recursive: true });
+    writeFileSync(join(p.root, 'package.json'), '{ "type": "module" }\n');
+    const copy = join(hooks, 'session-sync-hook.cjs');
+    writeFileSync(copy, readFileSync(HOOK));
+    const r = spawnSync(process.execPath, [copy], { encoding: 'utf8', env: cleanEnv({ CLAUDE_PROJECT_DIR: p.root }), timeout: 15_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /require is not defined|ReferenceError/);
+  });
+
   test('no index: exits 0 at once and says nothing', () => {
     const p = project();
     const r = node(cleanEnv({ CLAUDE_PROJECT_DIR: p.root }));
+    assert.equal(r.timedOut, false, `the hook did not return within the ${SPAWN_TIMEOUT_MS} ms spawn timeout`);
     assert.equal(r.status, 0);
     assert.equal(r.stdout, '');
-    assert.ok(r.ms < 5000, `took ${r.ms} ms`);
+    assert.deepEqual(readdirSync(p.out), [], 'no index: nothing written, nothing started');
   });
 
   test('the previous run left docs above the limit: it says so, as SessionStart context', () => {
@@ -319,7 +334,7 @@ describe('session-sync-hook.js', () => {
   });
 });
 
-describe('session-sync-hook.js starts committed code only', { skip: NO_PYTHON }, () => {
+describe('session-sync-hook.cjs starts committed code only', { skip: NO_PYTHON }, () => {
   const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
   const pyExe = () => spawnSync(PY, ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).stdout.trim();
 
@@ -330,7 +345,7 @@ describe('session-sync-hook.js starts committed code only', { skip: NO_PYTHON },
     writeFileSync(join(p.root, '.gitignore'), 'graphify-out/\nran-*.txt\n');
     const hooks = join(p.root, '.claude', 'hooks');
     mkdirSync(hooks, { recursive: true });
-    writeFileSync(join(hooks, 'session-sync-hook.js'), readFileSync(HOOK));
+    writeFileSync(join(hooks, 'session-sync-hook.cjs'), readFileSync(HOOK));
     writeFileSync(join(hooks, 'hook-trust.cjs'), readFileSync(join(PACK, 'hooks', 'claude-code', 'hook-trust.cjs')));
     const dir = join(p.root, 'scripts', 'graphify');
     mkdirSync(dir, { recursive: true });
@@ -342,7 +357,7 @@ describe('session-sync-hook.js starts committed code only', { skip: NO_PYTHON },
     git(p.root, 'add', '-A');
     git(p.root, 'commit', '-qm', 'base');
     const run = (trigger = 'session') =>
-      spawnSync(process.execPath, [join(hooks, 'session-sync-hook.js'), '--trigger', trigger], {
+      spawnSync(process.execPath, [join(hooks, 'session-sync-hook.cjs'), '--trigger', trigger], {
         encoding: 'utf8',
         env: cleanEnv({ CLAUDE_PROJECT_DIR: p.root, INDEX_PYTHON: pyExe() }),
         timeout: 15_000,
@@ -384,7 +399,7 @@ describe('session-sync-hook.js starts committed code only', { skip: NO_PYTHON },
   test('red: an interpreter path recorded in the index directory is never used', async () => {
     const r = repo();
     writeFileSync(join(r.out, '.graphify_python'), pyExe()); // a working interpreter: the old hook would have run it
-    const res = spawnSync(process.execPath, [join(r.root, '.claude', 'hooks', 'session-sync-hook.js')], {
+    const res = spawnSync(process.execPath, [join(r.root, '.claude', 'hooks', 'session-sync-hook.cjs')], {
       encoding: 'utf8',
       env: cleanEnv({ CLAUDE_PROJECT_DIR: r.root, INDEX_TOOL_VENV: 'no-such-venv-for-this-test' }),
       timeout: 15_000,
