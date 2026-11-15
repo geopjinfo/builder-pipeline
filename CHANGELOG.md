@@ -5,6 +5,18 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.6] — 2026-11-15
+
+### Added
+
+- **Commit hygiene: commits and PRs carry human authors only.** The pointer block now tells every agent never to add a
+  `Co-Authored-By:` trailer for an AI agent or a "Generated with …" line. `hooks/commit-msg-no-ai-attribution.sh`
+  is the backstop: a git `commit-msg` hook that strips them from every commit whatever wrote it, keeps a human
+  co-author and never blocks. `npx builder git-hooks [--dry-run]` arms it in a clone (the folder git runs hooks from,
+  `core.hooksPath` honoured; no config change; an existing commit-msg hook is never overwritten — it is named with
+  the line to add). `doctor` reports `[repo] commit hygiene: armed | missing | foreign`. The kit repo arms it for
+  itself (RELEASING.md step 0). Tests: `tests/commit-hygiene.test.mjs`.
+
 ## [1.0.5] — 2026-11-15
 
 Found by the kit's first CI run (ubuntu + windows × Node 18 / 22), which was red on all four jobs.

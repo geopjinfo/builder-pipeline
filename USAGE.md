@@ -164,6 +164,24 @@ and the `.gitignore` lines are never touched. `--all` also removes the vendored 
 any kit-locked `scripts/` copies and, once nothing is left to record, the lock. Uninstalled with npm too? Remove the
 dependency afterwards (`npm uninstall @geopjinfo/builder-pipeline`).
 
+## Commits carry human authors only (`git-hooks`)
+
+The pointer block tells every agent: no `Co-Authored-By:` trailer for an AI agent and no "Generated with …" line in
+a commit message or PR body. Agents follow instructions most of the time; the git hook makes it hold every time.
+
+```
+npx builder git-hooks --dry-run   # where it would go
+npx builder git-hooks             # arm it in this clone
+npx builder doctor                # "[repo] commit hygiene: armed"
+```
+
+It copies `hooks/commit-msg-no-ai-attribution.sh` to the folder git runs hooks from (`core.hooksPath` when set,
+else `.git/hooks/`), changes no git config and writes nothing tracked. Git hooks are not pushed, so each clone arms
+it once. The hook removes a `Co-Authored-By:` line naming an agent (Claude, Codex, Copilot, Cursor, Gemini,
+Antigravity, ChatGPT/GPT, an @anthropic.com or @openai.com address, …) and the "Generated with <agent>" line, keeps a
+human co-author, and never blocks a commit. A commit-msg hook you already have is left alone: the command names it and
+prints the one line to add to it.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
