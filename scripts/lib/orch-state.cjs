@@ -213,11 +213,22 @@ function notice(root, runId, lane, kind = 'finish') {
 
 function recordUsage(root, runId, seat, pct) {
   if (!SEATS.includes(seat)) throw new Error(`unknown seat "${seat}" (${SEATS.join('|')})`);
-  if (!Number.isFinite(Number(pct))) throw new Error(`usage: a percentage, got ${JSON.stringify(pct)}`);
+  // Number(null) and Number('') are 0: an unmeasured seat must never be recorded as 0% used.
+  if (pct === null || pct === undefined || String(pct).trim() === '' || !Number.isFinite(Number(pct)))
+    throw new Error(`usage: a percentage, got ${JSON.stringify(pct)} — an unknown reading goes to recordUsageUnknown`);
   return update(root, runId, (s) => {
     s.usage[seat] = { pct: Number(pct), at: now() };
     return s.usage;
   }, { type: 'usage', data: { seat, pct: Number(pct) } });
+}
+
+/** A usage report with no percentage: kept with its raw lines; `s.usage` — what placement reads — is untouched. */
+function recordUsageUnknown(root, runId, seat, lines) {
+  if (!SEATS.includes(seat)) throw new Error(`unknown seat "${seat}" (${SEATS.join('|')})`);
+  return update(root, runId, (s) => {
+    s.usageUnknown = { ...(s.usageUnknown || {}), [seat]: { at: now(), lines } };
+    return s.usageUnknown[seat];
+  }, { type: 'usage.unknown', data: { seat, lines } });
 }
 
 function approve(root, runId, by) {
@@ -389,7 +400,7 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
 }
 
 module.exports = {
-  init, load, update, setLane, notice, snapshotLane, integrityBaseline, recordUsage, approve, setPaused, nextActions, placement, event, pauseFile,
+  init, load, update, setLane, notice, snapshotLane, integrityBaseline, recordUsage, recordUsageUnknown, approve, setPaused, nextActions, placement, event, pauseFile,
   envLaneCap, capacityOf, measuredLanes, isWaitP4,
   STATUSES, ACTIVE, SEATS, DEFAULTS, RUNNER_OF,
 };
