@@ -17,6 +17,15 @@ versions independently of any project it is pasted into.
   the line to add). `doctor` reports `[repo] commit hygiene: armed | missing | foreign`. The kit repo arms it for
   itself (RELEASING.md step 0). Tests: `tests/commit-hygiene.test.mjs`.
 
+### Fixed (from the 1.0.5 CI run)
+
+- **`board-render` could not find a board under a path with a space or a Windows short (8.3) name.** It derived its
+  own folder from `URL.pathname`, which keeps percent-escapes (`%20`, `RUNNER~1` → `%7E`); it now uses
+  `fileURLToPath`.
+- **`hook-trust` starts git by its absolute location on Windows.** Node 18 ignored the switch that stops Windows
+  from running a `git.exe` planted in the current folder (the planted program could only make the check fail,
+  never pass). git is now found on an absolute PATH entry; none found → the check fails closed.
+
 ## [1.0.5] — 2026-11-15
 
 Found by the kit's first CI run (ubuntu + windows × Node 18 / 22), which was red on all four jobs.
