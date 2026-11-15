@@ -8,6 +8,8 @@ so nothing reaches them until a tag exists and they bump to it.
 
 ## The routine
 
+0. **Once per clone of the kit repo:** `node cli.js git-hooks` — the kit keeps its own rule, commits carry human
+   authors only (no AI co-author trailers, no "Generated with" lines).
 1. **Work on a branch** in the kit repository — never on `main`. Small commits; each one with the suite green.
 2. **Suite green** from the kit root:
 

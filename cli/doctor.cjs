@@ -108,6 +108,8 @@ function cmdDoctor(ctx, argv) {
       for (const u of t.unconfirmed) console.log(`    - ${u}`);
     }
   }
+  const hygiene = require('./git-hooks.cjs').status(ctx.CWD, ctx.KIT);
+  console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 

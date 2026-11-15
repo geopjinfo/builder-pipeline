@@ -665,6 +665,9 @@ Module/feature builds go through the multi-agent builder pipeline.
   \`PIPELINE_PROFILE.md\` §16 \`paths\` (\`boards\`, \`registry\`, \`decisions\`) — read them there, not
   from memory; run artifacts in \`.pipeline/\` (gitignored), one handoff pack per run. The pipeline
   never merges — it hands MERGE-READY to a human.
+- **Commits and PRs carry human authors only:** never add a \`Co-Authored-By:\` trailer for an AI agent or a
+  "Generated with …" line to a commit message or PR body. The \`commit-msg\` hook strips them anyway
+  (\`node builder/cli.js git-hooks\` arms it in a clone).
 - **Utility skills** (if installed — see \`builder/skills-extra/README.md\`): \`status-and-next\`
   to open a session (verify state fresh, pick the next item, emit its brief), \`graphify\` for
   cheap scoped doc/architecture lookups (query the graph before re-reading big docs), \`caveman\`
@@ -1523,6 +1526,7 @@ function main() {
   if (cmd === 'choices' || cmd === 'personas-check') return cmdRun([cmd, ...argv.slice(1)]);
   if (cmd === 'bootstrap') return require('./cli/bootstrap.cjs').cmdBootstrap(ctx(), argv.slice(1));
   if (cmd === 'doctor') return require('./cli/doctor.cjs').cmdDoctor(ctx(), argv.slice(1));
+  if (cmd === 'git-hooks') return require('./cli/git-hooks.cjs').cmdGitHooks(ctx(), argv.slice(1));
   if (cmd !== 'unpack' && cmd !== 'upgrade') {
     console.log(`builder kit ${VERSION}`);
     console.log(`usage: node builder/cli.js <command> [options]
@@ -1536,6 +1540,7 @@ function main() {
                                         names files this release dropped as stale, --prune deletes them (backup first)
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
+    git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
   check
     verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check
   other

@@ -125,6 +125,7 @@ records, how to resume, and the troubleshooting table.
 | `unpack --tool <list\|all>` | install (copy-if-absent; undecided clashes are skipped) |
 | `upgrade [--tool <list\|all>] [--prune]` | refresh kit-owned files (backup first; `--force` over local edits); tools and flags default to the install's, recorded in the lock; files a release dropped are reported `stale`, `--prune` removes them |
 | `uninstall --tool <list> \| --all [--dry-run]` | remove the kit's files for those tools and its pointer block; project-owned and locally edited files are kept and named |
+| `git-hooks [--dry-run]` | arm the `commit-msg` hook in this clone: commits carry human authors only (agent `Co-Authored-By:` trailers and "Generated with" lines are stripped); never overwrites a hook already there |
 | &nbsp;&nbsp;`[--dry-run] [--no-extras] [--experimental] [--models strong=x,mid=y \| codex.<tier>=x \| antigravity.<tier>=x]` | options for `unpack` / `upgrade` |
 | `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
 | `features` | which optional checks are on, off, unmeasured or experimental |
