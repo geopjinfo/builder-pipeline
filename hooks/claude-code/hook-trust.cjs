@@ -76,11 +76,34 @@ function closure(entry, fsLike = fs) {
  * current folder before PATH, and that folder is agent-writable; it reads this variable from this process's own
  * environment, so it is set here, not only for the child.
  */
+/**
+ * git by absolute path on Windows, found on PATH here: never a bare name, which Windows may first look for in the
+ * current (agent-writable) folder. The NoDefaultCurrentDirectoryInExePath switch below is honoured by current Node;
+ * Node 18 started a planted git.exe anyway, so the lookup does not rely on it. A PATH entry that is not absolute is
+ * skipped (it would resolve against the current folder too).
+ */
+let gitBin;
+function gitPath() {
+  if (gitBin !== undefined) return gitBin;
+  gitBin = 'git';
+  if (process.platform === 'win32') {
+    for (const dir of String(process.env.PATH || process.env.Path || '').split(';')) {
+      if (!dir || !path.isAbsolute(dir)) continue;
+      const exe = path.join(dir, 'git.exe');
+      if (fs.existsSync(exe)) {
+        gitBin = exe;
+        break;
+      }
+    }
+  }
+  return gitBin;
+}
+
 function defaultGit(cwd, args) {
   process.env.NoDefaultCurrentDirectoryInExePath = '1';
   const env =Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/i.test(k)));
   env.GIT_NO_REPLACE_OBJECTS = '1';
-  return spawnSync('git', ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=', '-C', cwd, ...args], {
+  return spawnSync(gitPath(), ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=', '-C', cwd, ...args], {
     encoding: 'utf8',
     timeout: 5000,
     windowsHide: true,

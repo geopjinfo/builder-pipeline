@@ -31,6 +31,7 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { runHint } = require('./lib/run-hint.cjs');
@@ -116,7 +117,9 @@ function resolveBoard(arg) {
   // Run from the package (`builder run`), the script's own parent is the package, not the project:
   // BUILDER_PROJECT_ROOT names the project then.
   // Run from inside node_modules with no BUILDER_PROJECT_ROOT, the parent folder is the package: use the cwd then.
-  const self = dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  // fileURLToPath, not URL.pathname: the pathname keeps percent-escapes, so a project under a folder with a space
+  // (`%20`) or a Windows short name (`RUNNER~1` -> `%7E`) was looked for at a path that does not exist.
+  const self = dirname(fileURLToPath(import.meta.url));
   const repoRoot = process.env.BUILDER_PROJECT_ROOT
     ? resolve(process.env.BUILDER_PROJECT_ROOT)
     : /(^|[\\/])node_modules[\\/]/.test(self) ? resolve(process.cwd()) : resolve(self, '..');
