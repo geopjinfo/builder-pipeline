@@ -110,6 +110,19 @@ function matchesHead(bytes, head) {
  *   belong to — the project root for project files. Defaults to the first file's directory.
  * @returns {{ ok: true } | { ok: false, reason: string }}
  */
+/**
+ * The path the OS itself reports. git prints the repository's final path; Node's JS realpath keeps a subst drive or a
+ * Windows short (8.3) name such as RUNNER~1 as given, so the two spellings of one folder would compare as different
+ * folders and every file would look outside the repository. Both sides go through the native call.
+ */
+function realOf(p) {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return fs.realpathSync(p);
+  }
+}
+
 function verify(files, { base = files.length ? path.dirname(files[0]) : '.', git = defaultGit } = {}) {
   if (files.length === 0) return { ok: false, reason: 'nothing to verify' };
   const top = git(base, ['rev-parse', '--show-toplevel']);
@@ -118,7 +131,7 @@ function verify(files, { base = files.length ? path.dirname(files[0]) : '.', git
   // outside it, whatever path it was reached by.
   let repo;
   try {
-    repo = fs.realpathSync(top.stdout.trim());
+    repo = realOf(top.stdout.trim());
   } catch {
     return { ok: false, reason: 'cannot verify against HEAD (repository path does not resolve)' };
   }
@@ -127,7 +140,7 @@ function verify(files, { base = files.length ? path.dirname(files[0]) : '.', git
   for (const given of files) {
     let file;
     try {
-      file = fs.realpathSync(given);
+      file = realOf(given);
     } catch {
       return { ok: false, reason: `${path.basename(given)} does not resolve` };
     }
