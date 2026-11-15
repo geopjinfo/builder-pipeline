@@ -5,6 +5,24 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-11-15
+
+Found by the kit's first CI run (ubuntu + windows × Node 18 / 22), which was red on all four jobs.
+
+### Fixed
+
+- **Hooks refused committed code on a Windows short-name path or a subst drive.** `hook-trust` and the session-sync
+  hook compared the folder git reports (the final path) with Node's JS realpath, which keeps a short (8.3) name such
+  as `RUNNER~1` or a subst drive letter as given. One folder then read as two, every file was "outside the
+  repository", and the hooks fell back to not loading. Both sides now use the native realpath.
+- **Node 18: `require('..')` was not followed by `hook-trust`,** so a rewritten parent `index.js` went unchecked
+  there. Local requires are now resolved as absolute paths, the same on every Node release.
+
+### Tests
+
+- Linux: links are removed with `unlink` (not `rmdir`), and the npm stub no longer needs `dirname` on a PATH that
+  holds only the stub. Path assertions compare in the OS spelling.
+
 ## [1.0.4] — 2026-11-15
 
 ### Fixed
