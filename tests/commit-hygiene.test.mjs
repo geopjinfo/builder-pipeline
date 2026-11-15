@@ -77,7 +77,9 @@ describe('builder git-hooks', () => {
     const before = spawnSync(process.execPath, [CLI, 'doctor'], { cwd: repo, encoding: 'utf8' });
     assert.match(before.stdout, /commit hygiene: missing/);
     assert.equal(spawnSync(process.execPath, [CLI, 'git-hooks'], { cwd: repo, encoding: 'utf8' }).status, 0);
-    assert.equal(readFileSync(join(repo, '.git', 'hooks', 'commit-msg'), 'utf8'), readFileSync(HOOK, 'utf8'));
+    const armed = readFileSync(join(repo, '.git', 'hooks', 'commit-msg'), 'utf8');
+    assert.equal(armed, readFileSync(HOOK, 'utf8').replace(/\r\n/g, '\n'));
+    assert.ok(!armed.includes('\r'), 'armed with LF line endings, whatever the checkout');
     assert.match(spawnSync(process.execPath, [CLI, 'git-hooks'], { cwd: repo, encoding: 'utf8' }).stdout, /armed/);
     assert.match(spawnSync(process.execPath, [CLI, 'doctor'], { cwd: repo, encoding: 'utf8' }).stdout, /commit hygiene: armed/);
   });
