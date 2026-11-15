@@ -51,7 +51,9 @@ function cmdGitHooks(ctx, argv) {
   }
   if (dry) return console.log(`git-hooks: would copy hooks/${HOOK} to ${s.target} (--dry-run: nothing written)`);
   fs.mkdirSync(path.dirname(s.target), { recursive: true });
-  fs.copyFileSync(path.join(KIT, 'hooks', HOOK), s.target);
+  // LF always: a Windows checkout of the kit (core.autocrlf) holds this file with CRLF, and sh reads `\r` as part
+  // of every command.
+  fs.writeFileSync(s.target, fs.readFileSync(path.join(KIT, 'hooks', HOOK), 'utf8').replace(/\r\n/g, '\n'));
   try {
     fs.chmodSync(s.target, 0o755);
   } catch (_) {
