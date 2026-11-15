@@ -94,14 +94,22 @@ function preflight({ checks = [], testsMode: mode = 'local', cwd = process.cwd()
 }
 
 // --------------------------------------------------------------------------------------------- the hooks
-/** Run usageCommand for a seat; the highest "N% used" line wins (the one nearest its limit). */
+/**
+ * Run usageCommand for a seat; the highest "N% used" line wins (the one nearest its limit). Output with no such line
+ * (a CLI whose usage report prints costs or token counts, not a limit percentage) is UNKNOWN —
+ * `{ pct: null, unknown: true, lines: <first 5 raw lines> }` — never a throw: `orch usage-read` records it as a
+ * `usage.unknown` event, leaves the measured usage alone and goes on to the next seat.
+ */
 function readUsage(seat, usageCommand, { cwd = process.cwd() } = {}) {
   if (!usageCommand) throw new Error('refused: no usageCommand configured (features.orchestrator.usageCommand) — record usage by hand: orch usage <run> <seat> <pct>');
   const r = run(fill(usageCommand, { seat }), { cwd, timeout: 120000 });
   const lines = `${r.out}\n${r.err}`.split(/\r?\n/).filter((l) => /\d+(?:\.\d+)?% used/.test(l));
-  if (!lines.length) throw new Error(`usage ${seat}: no "N% used" line in the output (exit ${r.code})`);
+  if (!lines.length) {
+    const raw = `${r.out}\n${r.err}`.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 5);
+    return { pct: null, unknown: true, lines: raw.length ? raw : [`(no output, exit ${r.code})`] };
+  }
   const pcts = lines.map((l) => Number(/(\d+(?:\.\d+)?)% used/.exec(l)[1]));
-  return { pct: Math.max(...pcts), lines: lines.map((l) => l.trim()) };
+  return { pct: Math.max(...pcts), unknown: false, lines: lines.map((l) => l.trim()) };
 }
 
 // --------------------------------------------------------------------------------------------- link guard

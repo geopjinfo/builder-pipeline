@@ -1,6 +1,6 @@
 {
   "name": "@geopjinfo/builder-pipeline",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Multi-agent builder pipeline for software projects: personas, skills, hooks and ledger checks for Claude Code, Codex, Antigravity and other agent tools.",
   "//": "type commonjs: the kit runs its own .js files as CommonJS whatever the host package.json declares. A \"type\": \"module\" host otherwise loads cli.js and the hooks as ES modules and they fail on require().",
   "type": "commonjs",

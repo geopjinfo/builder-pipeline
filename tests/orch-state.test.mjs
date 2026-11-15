@@ -363,3 +363,32 @@ describe('gate-launch --resume of a WAIT-P4 lane', () => {
     assert.equal(done.status, 3, 'positive control: a DONE lane is never a plain launch either');
   });
 });
+
+describe('usage read: a report with no percentage is unknown, never 0%', () => {
+  const cmd = (text) => `node -e "console.log(${JSON.stringify(text).replace(/"/g, '\\"')})"`;
+  test('green: an "N% used" line still parses', () => {
+    const u = pre.readUsage('primary', cmd('Session: 42% used'));
+    assert.equal(u.pct, 42);
+    assert.equal(u.unknown, false);
+  });
+  test('red: output with no "% used" line returns unknown with its raw lines, no throw', () => {
+    const u = pre.readUsage('primary', cmd('Total cost: 0.12'));
+    assert.equal(u.pct, null);
+    assert.equal(u.unknown, true);
+    assert.deepEqual(u.lines, ['Total cost: 0.12']);
+  });
+  test('red: recordUsage refuses null and an empty string (Number() of both is 0)', () => {
+    const { root } = project();
+    state.init(root, 'un', lanes(1), { target: 'dev', preflightMode: 'parallel' });
+    for (const bad of [null, '', ' ', undefined]) assert.throws(() => state.recordUsage(root, 'un', 'primary', bad), /recordUsageUnknown/);
+  });
+  test('green: recordUsageUnknown keeps the lines and leaves the measured usage alone', () => {
+    const { root } = project();
+    state.init(root, 'uk', lanes(1), { target: 'dev', preflightMode: 'parallel' });
+    state.recordUsage(root, 'uk', 'primary', 30);
+    state.recordUsageUnknown(root, 'uk', 'primary', ['Total cost: 0.12']);
+    const s = state.load(root, 'uk');
+    assert.equal(s.usage.primary.pct, 30);
+    assert.deepEqual(s.usageUnknown.primary.lines, ['Total cost: 0.12']);
+  });
+});

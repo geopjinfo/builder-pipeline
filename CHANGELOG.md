@@ -5,6 +5,13 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-11-15
+
+### Fixed
+
+- **The credit guard dir accepts the CLI's own plugin counter.** claude 2.1.318 and later write `plugins/store/<name>_builtin-<hex>.json` (a usage counter for its built-in agent-rules plugin) on every run, so `guardDirFaults` refused every credit job after the first. A `plugins/` holding only `store/` with only such files is not an installed plugin; anything else still is. Tests: one green and three red cases in `tests/orch-credit.test.mjs`.
+- **`orch usage-read` survives a usage report with no percentage.** Output with no "N% used" line is recorded as a `usage.unknown` event with its first five lines; the measured usage is untouched and the next seat is read, where it used to abort the whole command. `recordUsage` refuses `null` and an empty string, which `Number()` turned into 0% used. Tests in `tests/orch-state.test.mjs`.
+
 ## [1.0.3] — 2026-11-15
 
 Fixes from four grounded audits (docs vs code, tests, security, install lifecycle) of 1.0.2.
