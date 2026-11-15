@@ -4,7 +4,7 @@
  * Every guard has a red case.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -600,7 +600,8 @@ describe('who left the worktree dirty, the queue a job is in, and when the credi
   test('red: --queue must be a worktree of this repository', () => {
     const { repo } = scratchRepo();
     const other = scratchRepo().repo;
-    assert.equal(credit.queueRootOf(repo, repo), join(repo, '.pipeline', 'credit'));
+    // git names the checkout in the OS spelling (a short 8.3 temp name comes back long)
+    assert.equal(credit.queueRootOf(repo, repo), join(realpathSync.native(repo), '.pipeline', 'credit'));
     assert.throws(() => credit.queueRootOf(other, repo), /not a worktree of this repository/);
     assert.throws(() => credit.queueRootOf(join(repo, 'nope'), repo), /does not exist/);
   });

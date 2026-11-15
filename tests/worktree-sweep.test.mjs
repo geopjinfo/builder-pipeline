@@ -27,7 +27,8 @@ const LATER = Date.now() + 7 * 3600 * 1000; // every file is "old" against this 
 
 /** A primary repo on branch `main` with a node_modules dir, worktrees created as siblings under one parent. */
 function rig() {
-  const parent = realpathSync(mkdtempSync(join(tmpdir(), 'wt-sweep-')));
+  // native: the OS spelling git prints back (a short 8.3 temp name, or a subst drive, comes back long)
+  const parent = realpathSync.native(mkdtempSync(join(tmpdir(), 'wt-sweep-')));
   temps.push(parent);
   const repo = join(parent, 'app');
   mkdirSync(repo);
