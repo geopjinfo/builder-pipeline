@@ -301,9 +301,14 @@ lane.
 10 majors, about 80 seconds and $7. It missed 4 of the 6 code and test fixes the auditors later raised, and caught
 two gaps no seat recorded: a race asserted as one fixed code, and edits outside the batch row's files. The planner
 and reviewer personas now check both, so the question this trial must answer is narrower: **does the review still
-find gaps those checks miss?** Run it on the next three FULL-track plans, blind, and score every finding against
-the lane's `FIX-n` rows and review passes. **Keep** if it prevents at least one FIX row per plan that the
-persona checks did not; **remove** otherwise.
+find gaps those checks miss?** Run it on the next three FULL-track plans, blind, from a directory holding only the
+plan and every file it cites (code, specs, profile, ledgers, test tree, sibling plans). The builder marks every
+decision the plan left open, as it is made, with a `GUESS:` comment in the code; at close-out, match the review's
+findings against that list, the lane's `FIX-n` rows and the planner's unrecorded contract changes. **Keep** if,
+across the three plans, the review named at least two-thirds of the `GUESS:` decisions, or at least one contract
+drift per plan that the planner did not record, or prevented a FIX row the persona checks did not; **remove**
+otherwise. (The earlier criterion, FIX rows alone, was retired after the sample run below: three well-formed plans
+built green first and left nothing to prevent.)
 
 **Sample run (2026-11, kit-internal: a four-module test service, not an adopting project).** Three FULL-track plans
 written by `module-planner` (7, 8 and 10 rows; $1.27–$1.90 and 4–7 minutes each), each reviewed blind from a bare

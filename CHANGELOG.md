@@ -7,6 +7,10 @@ versions independently of any project it is pasted into.
 
 ### Changed
 
+- **EXPERIMENTS.md §10 keep criterion measures what the review does.** FIX rows alone could not judge it (three
+  well-formed plans built green first); the criterion now also counts the builder's `GUESS:`-marked decisions the
+  review named and the planner's unrecorded contract drifts it caught, and fixes the review's context (every file the
+  plan cites). Doc-only.
 - **EXPERIMENTS.md §10 records a sample `planReview` run.** Three `module-planner` plans on a kit-internal test service,
   each reviewed blind and built: review at about a third of the planner's cost, 22 of 28 silently settled builder
   decisions named, four unrecorded contract drifts caught, zero FIX rows to prevent because every build was green
