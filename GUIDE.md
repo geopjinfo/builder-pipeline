@@ -298,7 +298,7 @@ builder-pipeline/   (the package; a folder copy is builder/)
 │                                    checkers: features · index-check · orchestrator-check ·
 │                                    claims-check · citations-check · line-citations-check ·
 │                                    output-check · handoff-pack / handoff-check · ledger-row ·
-│                                    decision-index · wiring-check · instruction-budget ·
+│                                    decision-index · wiring-check · spec-trace-check · instruction-budget ·
 │                                    ratchet-refresh · fix-rate · seat-peaks · cost-window ·
 │                                    contract-oracle · rules-module · mutation-step · orch (batch
 │                                    orchestrator: lanes, seats, merge queue, credit lane) + lib/

@@ -5,6 +5,19 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Spec-trace checker (`spec-trace-check`, `features.specTrace`, default off).** Every requirement id declared in
+  `features.specTrace.requirements` must have a test (a whole-token mention in a file under `tests` matching
+  `testPattern`) or a requirement-pack step under `packs` — one of the template's four verbs: `assert`,
+  `by-design <cite>`, `gap`, `skipped`. A plain mention in a pack is a note and traces nothing; a `by-design` step
+  without its citation is `UNCITED` and fails. An `UNTRACED` id fails the readiness gate (new item in
+  `skills/module-readiness-check.md`; P6 of the playbook and `references/gate-checks.md` name the check and its
+  `specTrace: not configured` line). Positive controls: requirement files declaring zero ids, or no test/pack file
+  read, fail rather than pass. Settings are validated at load (`idPattern` / `testPattern` regexes, path lists, and
+  `tests` or `packs` required while on). Tests: `tests/spec-trace.test.mjs` (library, settings, CLI on a fixture
+  project, readiness prose); `pack-prose` covers the new feature's not-configured branch.
+
 ## [1.0.6] — 2026-11-15
 
 ### Added
