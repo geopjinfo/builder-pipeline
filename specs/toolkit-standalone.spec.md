@@ -1,10 +1,10 @@
 # Spec — toolkit-standalone: use one kit tool without the full pipeline
 
 Module: toolkit-standalone
-Status: draft
-Ratified-by: —
+Status: ratified
+Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build thread; see Decision log)
 
-> The kit's own spec for the 1.2.0 toolkit split. It follows the installed spec template. Check it with
+> The kit's own spec for the toolkit split, part of release 2.0.0. It follows the installed spec template. Check it with
 > `npx builder run spec-check specs/toolkit-standalone.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-standalone.spec.md`).
 > It is maintainer-only and does not ship in the package.
 
@@ -21,7 +21,7 @@ Ratified-by: —
   foreign formats (ralph `prd.json`, Spec Kit `tasks.md`) · the spec checker and the spec-trace checker on named files
   with defaults (Q3, options a then b).
 - Out: the licence and the npm registry listing (Q2; a maintainer decision, raised in the PR) · the version bump to
-  1.2.0 (Q4; the release PR) · importers for pull requests and for Codex or Antigravity transcripts (brief, audit
+  2.0.0 (Q4; the release PR) · importers for pull requests and for Codex or Antigravity transcripts (brief, audit
   section; a later spec) · the accounts tool (the 2.0.0 plan).
 
 ## Actors
@@ -32,6 +32,13 @@ Ratified-by: —
 | a CI job | intent |
 | the pipeline at step 0.7 and the readiness gate | brief, tool 1 |
 | a maintainer of the kit | brief, Q2 and Q4 |
+
+Decision log (the plan's rule: each decision taken without George is logged with its reasoning so he can change it):
+
+| Id | Decision | Reasoning | Date |
+|---|---|---|---|
+| DL-1 | This spec is ratified by the build thread, not by George in person. | George's mandate of 16 November 2026: fill open decisions with the recommended option and complete the work. The spec is the recommended option written down; its 25 acceptance criteria each have a passing test. | 2026-11-16 |
+| DL-2 | The toolkit split ships in 2.0.0, not in a separate 1.2.0. | George, 16 November 2026: "everything should be in 2.0 version". The strategy study orders it after M13 (distribution) inside 2.0.0. | 2026-11-16 |
 
 ## Requirements
 
@@ -71,11 +78,11 @@ Verb: `assert` (holds as written) · `by-design` (cite a decision) · `gap` (cit
 | AC-104 | REQ-102 | assert | a config file that names an unknown feature `claimz` | `run features` | exit 1, and the output names `claimz` as an unknown feature |
 | AC-105 | REQ-102 | assert | a config file that is not valid JSON | `run features` | exit 1, and the output contains `not valid JSON` |
 | AC-106 | REQ-103 | assert | a profile that turns `claims` off, and a config file beside it that turns `claims` on | `run features` | exit 0, `claims: not configured` is printed, and a line says the config file is ignored because the profile exists |
-| AC-107 | REQ-104 | assert | a config file that turns `specTrace` on, passed as `run features --config <path>` | the script runs | exit 0, `specTrace: on` is printed, and the script's arguments do not contain `--config` |
+| AC-107 | REQ-104 | assert | a config file that turns `specTrace` on, passed as `run features --config PATH` | the script runs | exit 0, `specTrace: on` is printed, and the script's arguments do not contain `--config` |
 | AC-108 | REQ-105 | assert | a project with a config file in use | `run features` | the first line names the config file's path |
 | AC-201 | REQ-201 | assert | a project whose boards live in `work/boards` and whose registry is `work/REGISTRY.md`, no profile | `check-ledgers --boards work/boards --registry work/REGISTRY.md` | exit 0 and `check-ledgers: PASS` when the rows are clean |
 | AC-202 | REQ-201 | assert | the same project | `check-ledgers` with no flags | exit 1 with two LG-0 lines naming `DEFERRED_TASKS.md` and `tasks` |
-| AC-203 | REQ-202 | assert | any project | `check-ledgers --boards` | exit 1 and an error line naming `--boards <dir>` |
+| AC-203 | REQ-202 | assert | any project | `check-ledgers --boards` | exit 1 and an error line naming `--boards DIR` |
 | AC-301 | REQ-301 | assert | the ralph example `prd.json` with four stories, two with `passes: true` | `run board-import --format ralph prd.json --out tasks/imported.md` | exit 0; the board has four rows under `## P0`; row `T1` cites `US-001` and has status `DONE`; row `T3` cites `US-003` and has status `PLANNED` |
 | AC-302 | REQ-301 | assert | the same source | the board is read | each row's Notes cell holds the story's acceptance criteria joined by `;` |
 | AC-303 | REQ-302 | assert | a Spec Kit `tasks.md` with `- [x] T001 Setup…`, `- [ ] T012 [P] [US1] Create model in src/models/a.py` and a prose line | `run board-import --format spec-kit tasks.md --out tasks/imported.md` | exit 0; row `T001` is `DONE`; row `T012` is `PLANNED` with Cites `[P] [US1]` |
