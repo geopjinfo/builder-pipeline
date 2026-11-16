@@ -13,6 +13,8 @@
  * paths.registry · features.handoffPack.decisionIdPattern · features.claims.registryIdPattern.
  *
  * Exit 0 PASS (or the feature is off) · 1 FAIL · 2 usage, no such spec or an invalid profile.
+ * With the feature off, a spec named by its .md PATH is still checked, with the default settings (a module KEY is not:
+ * it needs `dir`). The first line then says `specAuthoring: not configured — checking <file> with defaults`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -43,12 +45,17 @@ if (isMain) {
     process.exit(2);
   }
   const feature = profile.feature(loaded.settings, 'specAuthoring');
-  if (!feature.enabled) {
+  const isPath = /\.md$/i.test(target);
+  if (!feature.enabled && !isPath) {
+    // A module key needs `dir` from the feature; with it off, step 0.7 records "not configured" as before (REQ-402).
     console.log(feature.line);
     process.exit(0);
   }
-  const file = /\.md$/i.test(target) ? target : join(feature.config.dir, `${target}.spec.md`);
+  const file = isPath ? target : join(feature.config.dir, `${target}.spec.md`);
   const shown = relative(process.cwd(), resolve(file)).split('\\').join('/');
+  // A spec named by its path needs nothing from the profile: the checker runs with the default id shape, and says
+  // so, so one spec can be checked in a project that never adopted the pipeline (REQ-401).
+  if (!feature.enabled) console.log(`${feature.line} — checking ${shown} with defaults`);
   if (!existsSync(file)) {
     console.error(`spec-check: no spec at ${shown} — author one from the installed spec template (the spec-author skill)`);
     process.exit(2);

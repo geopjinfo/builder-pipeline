@@ -666,14 +666,48 @@ function rootOf(dir) {
   return resolve(dir, '..');
 }
 
+/** The one settings block as bare JSON text (a config file, REQ-101): the same merge and validation as the §16 block. */
+function parseJson(text) {
+  let raw;
+  try {
+    raw = JSON.parse(String(text));
+  } catch (e) {
+    return { found: true, settings: clone(DEFAULTS), errors: [`pipeline-settings is not valid JSON: ${e.message}`] };
+  }
+  if (!isObject(raw)) return { found: true, settings: clone(DEFAULTS), errors: ['pipeline-settings must be a JSON object'] };
+  const settings = merge(DEFAULTS, raw);
+  return { found: true, settings, errors: validate(settings) };
+}
+
+/** The config file a project without a profile may use: `BUILDER_CONFIG` names it, else `<root>/builder.config.json`. */
+const CONFIG_FILE = 'builder.config.json';
+function configPath(root, env = process.env) {
+  if (env.BUILDER_CONFIG) return isAbsolute(env.BUILDER_CONFIG) ? env.BUILDER_CONFIG : resolve(root, env.BUILDER_CONFIG);
+  const local = join(root, CONFIG_FILE);
+  return existsSync(local) ? local : null;
+}
+
 /**
- * Read `PIPELINE_PROFILE.md` from a project root. No profile, or a profile without the block, yields the defaults
- * and `found: false` — every optional feature is then off and says so.
+ * Read the project's settings. `PIPELINE_PROFILE.md` is the source when it exists; a profile without the block yields
+ * the defaults and `found: false`. With no profile, the config file (`BUILDER_CONFIG`, else `builder.config.json`)
+ * is read as the bare JSON of the §16 block — same shape, same validation — so one kit tool runs in a project that
+ * never adopted the pipeline (REQ-101, REQ-102). A config file beside a profile is ignored and named in `notes`
+ * (REQ-103): two sources would be two truths. `source` is 'profile' | 'config' | 'defaults'.
  */
-function load(root = process.cwd(), file = 'PIPELINE_PROFILE.md') {
+function load(root = process.cwd(), file = 'PIPELINE_PROFILE.md', env = process.env) {
   const path = join(root, file);
-  if (!existsSync(path)) return { path, found: false, settings: clone(DEFAULTS), errors: [] };
-  return { path, ...parse(readFileSync(path, 'utf8')) };
+  const config = configPath(root, env);
+  if (existsSync(path)) {
+    const notes = config ? [`${relative(root, config).split('\\').join('/') || config} is ignored: ${file} exists and is the one source of settings`] : [];
+    return { path, source: 'profile', configPath: null, notes, ...parse(readFileSync(path, 'utf8')) };
+  }
+  if (config) {
+    if (!existsSync(config)) {
+      return { path, source: 'config', configPath: config, notes: [], found: false, settings: clone(DEFAULTS), errors: [`BUILDER_CONFIG names ${config}, which does not exist`] };
+    }
+    return { path, source: 'config', configPath: config, notes: [], ...parseJson(readFileSync(config, 'utf8')) };
+  }
+  return { path, source: 'defaults', configPath: null, notes: [], found: false, settings: clone(DEFAULTS), errors: [] };
 }
 
 /**
@@ -695,4 +729,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, logsProblem, feature, merge, rootOf };
+module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, CONFIG_FILE, parse, parseJson, load, configPath, validate, logsProblem, feature, merge, rootOf };
