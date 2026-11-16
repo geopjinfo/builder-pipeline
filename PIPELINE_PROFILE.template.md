@@ -41,6 +41,10 @@
 | `<e.g. workflow state machines>` | `<path>` | `<state names + legal transitions>` |
 | `<e.g. requirements tracker>` | `<path>` | `<requirement ids, module scope, acceptance criteria>` |
 
+> **No requirements tracker yet?** Switch on `features.specAuthoring` (§16): the `spec-author` skill writes one
+> ratified `<specs>/<key>.spec.md` per module — requirement rows, acceptance criteria, API contract — before
+> Phase 1, and that file is the module's row source here (`npx builder run spec-check <key> --rows` prints the rows).
+
 ## 4. Protected paths — agents must never edit
 
 | Path | Why | What to do instead |
@@ -319,6 +323,7 @@ error, because a typo would otherwise switch a check off in silence.
     "findingsSchema":   { "state": "on" },
     "reviewTemplate":   { "state": "on" },
     "handoffPack":      { "state": "on", "tracker": null },
+    "specAuthoring":    { "state": "off", "dir": "specs", "idPattern": "REQ-\\d+" },
     "rowReader":        { "state": "on" },
     "contractOracle":   { "state": "off", "adapter": "openapi3", "spec": null, "transcript": null, "baseline": null, "codeField": "code", "statusFamilies": {} },
     "rules":            { "state": "off", "runner": "ast-grep", "scan": null, "baseline": null, "ratcheted": [] },

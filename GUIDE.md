@@ -283,9 +283,9 @@ builder-pipeline/   (the package; a folder copy is builder/)
 ├── 📄 PIPELINE_PROFILE.template.md ← the ONE per-project file; §16 = pipeline settings (JSON)
 ├── 🤖 agents/                    ← 9 generic personas + experimental/ (page-keeper)
 ├── 📜 skills/                    ← recipes (pipeline · lite split · scaffold · readiness-check ·
-│                                    setup) + the batch orchestrator above them (opt-in)
+│                                    setup · spec-author) + the batch orchestrator above them (opt-in)
 │                                    + references/ (index query block, review template)
-├── 🧾 templates/                 ← ledger formats (module brief · task board · session board ·
+├── 🧾 templates/                 ← ledger formats (spec · module brief · task board · session board ·
 │                                    deferred registry · decision log · developer-guide generator ·
 │                                    orchestrator plan + worker brief)
 ├── 🎁 skills-extra/              ← optional utilities: caveman · graphify · ledger-audit ·

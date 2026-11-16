@@ -35,7 +35,9 @@ forbidden doc paths — changes there ride the handoff pack.
 > one is applied in-run as its own commit with the comment-only proof quoted; not granted in words = not
 > granted. None → omit.
 >
-> **1. Scope (planner grounds):** requirements `<ids / spec §s>`, tracker row(s) `<id>`.
+> **1. Scope (planner grounds):** requirements `<ids / spec §s>`, tracker row(s) `<id>`; with
+> `features.specAuthoring` on, the ratified spec `<specs>/<MODULE_KEY>.spec.md` (the pipeline's step 0.7 refuses a
+> draft).
 > Data: `<schema/tables/collections>`. Confirm fields against `<ERD / data spec>`.
 >
 > **2. Boundary decision (settle FIRST):** clean domain module, or does it need an edit to a
