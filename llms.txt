@@ -21,6 +21,7 @@
 
 - [skills/build-module-pipeline.md](skills/build-module-pipeline.md): the full per-module pipeline playbook
 - [skills/builder-init.md](skills/builder-init.md): setup from inside the AI tool (greenfield or brownfield)
+- [skills/spec-author.md](skills/spec-author.md): the opt-in spec authoring stage before Phase 1 (intent to requirement rows, acceptance criteria and an API contract; a person ratifies; templates/spec.md is its shape)
 - [skills/orchestrator.md](skills/orchestrator.md): the opt-in batch orchestrator above the pipeline
 - [skills/build-module-lite.md](skills/build-module-lite.md): the experimental lite split (build now, gate later)
 - [agents/](agents/): the nine neutral persona sources
