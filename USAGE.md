@@ -18,6 +18,17 @@ point.
 
 ## Running one module build
 
+### 0. Spec it first (opt-in, `features.specAuthoring`)
+
+When a module has an intent but no requirement rows, say *"Write the spec for `<moduleKey>`."* The
+`spec-author` skill interviews the intent into `specs/<moduleKey>.spec.md` — requirement rows,
+Given/When/Then acceptance criteria, an OpenAPI 3 contract, the oracle entries it would need (as
+*pending* amendments, never invented), and its open questions. Answer the questions, rule the
+amendments, then **you** flip `Status: ratified` and `Ratified-by:` and run
+`npx builder run spec-check <moduleKey> --ratified`. The pipeline's step 0.7 refuses a draft, so a run can
+never start on requirements nobody ratified. `--rows`, `--pack` and `--contract <out.json>` print the
+tracker rows, the requirement-pack skeleton and the contract file the later phases read.
+
 ### 1. Write the brief (5–15 minutes, the highest-leverage step)
 
 Copy `specs/module-brief.template.md` → `specs/briefs/<moduleKey>.md` and fill it. Delete lines
@@ -84,6 +95,10 @@ stateDiagram-v2
 **A. Deferred candidates (entry).** The pipeline lists registry rows this module might unblock
 and asks fold-in or defer-again per row. Rule each explicitly — there is deliberately no silent
 auto-folding. A fold-in becomes a planned board row; a defer-again is recorded with your ruling.
+
+**A½. Spec gate (entry, with `features.specAuthoring` on).** Step 0.7 runs `spec-check <key> --ratified`.
+A missing or draft spec stops the run before the planner is dispatched: author or finish the spec,
+ratify it yourself, say "resume". Nothing here is an agent failure — a ratification is a human act.
 
 **B. BLOCKERS (after planning, or any time).** Only `BLOCKING`-class items stop the run — a gap the
 docs already settle is decided and recorded, and a `NEEDS-RULING` item proceeds on a stated

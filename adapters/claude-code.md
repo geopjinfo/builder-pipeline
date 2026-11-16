@@ -20,7 +20,7 @@ authority if this table and the CLI ever disagree.
 | `agents/*.md` (9) | `.claude/agents/*.md`. **Frontmatter transformed at install:** the neutral `capabilities` / `tier` / `effort` become Claude Code's `tools` / `model` / `effort` (read-only → no Edit/Write; strong → opus, mid → sonnet unless `--models` says otherwise) |
 | `skills/build-module-pipeline.md` | `.claude/skills/build-module-pipeline/SKILL.md` |
 | `skills/references/*.md` (graph query block, review template) | beside the pipeline skill, `.claude/skills/build-module-pipeline/references/` |
-| `skills/scaffold-module.md` · `module-readiness-check.md` · `setup-builder.md` · `orchestrator.md` | `.claude/skills/<name>/SKILL.md` |
+| `skills/scaffold-module.md` · `module-readiness-check.md` · `setup-builder.md` · `orchestrator.md` · `spec-author.md` | `.claude/skills/<name>/SKILL.md` |
 | `templates/orchestrator-plan.md` · `orchestrator-worker-brief.md` | `specs/orchestrator-plan.template.md` · `specs/orchestrator-worker-brief.template.md` |
 | `templates/task-board.md` | `tasks/README.md` |
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |

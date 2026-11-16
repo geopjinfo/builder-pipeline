@@ -88,7 +88,8 @@ FIRST in any brief; the ordered action list LAST.
 ## Inputs
 
 A module key and its scope brief (written from the installed `module-brief` template). If scope is missing, pull it
-from the requirements oracle (profile §3) before starting. The brief pins the up-front decisions (boundary fork, exact
+from the requirements oracle (profile §3) before starting. With `features.specAuthoring` on, the oracle for this
+module is its ratified spec, `<specs>/<key>.spec.md` (the `spec-author` skill writes it; step 0.7 checks it). The brief pins the up-front decisions (boundary fork, exact
 catalogue keys, scope shape, dependency fallbacks) and requires the final **handoff pack** — one file under
 `<handoffs>`, sections §A–§F (step 7). A table in the chat report is not a handoff.
 
@@ -100,6 +101,7 @@ catalogue keys, scope shape, dependency fallbacks) and requires the final **hand
 | 0 | **Index freshness gate** | orchestrator | — | `index-check` (optional) |
 | 0b | Deferred sweep | orchestrator | — | `<registry>` |
 | 0.5 | **Track selection** | orchestrator | — | — |
+| 0.7 | **Spec gate** — the module's ratified spec exists | orchestrator — *deterministic, free* | — | `spec-check --ratified` (optional) |
 | 1 | Plan | `module-planner` | — | plan shape check · `builder/skills/references/graph-query.md` (experimental) |
 | 2 | Code | `module-builder`, in batches | — | `ledger-row` · claims check at the end |
 | 3 | Test | `module-tester` | — | mutation step (optional, non-blocking) |
@@ -165,6 +167,12 @@ line.
    does not protect is a fold-in by default; the human rules only the protected ones **fold-in vs defer-again** (no
    silent auto-folding of those). Ruled-in rows go to the planner; every candidate is recorded on the task board as a
    `C-n` row — `PLANNED` if folded in, `DROPPED` with the ruling if not.
+0.7. **Spec gate (entry)** — `node scripts/spec-check.mjs <key> --ratified` and branch on its **exit code**: `0` → put
+   the spec path in the planner's brief as its requirements source; `1` → **stop**: the spec is a draft or fails its
+   check, and a person ratifies it (run the `spec-author` skill, then ratify) — the planner is never dispatched to
+   invent what the spec left open; `2` with `no spec at` → stop the same way. `specAuthoring: not configured` → record
+   that line in `state.md` and go on: the brief's §1 scope is the requirements source, as before. Never let a missing
+   spec read as a pass.
 1. **Plan** — dispatch `module-planner`. It writes `<runs>/<key>/plan.md` and returns the path + a **triaged blocker
    list**. It also confirms-or-rejects the step-0.5 track and **authors the module digest** (profile §14) — the
    semantic model of this bounded context plus a list of `OPEN` **invariant candidates**: the things that might be
@@ -258,7 +266,9 @@ line.
    (`node scripts/claims-check.mjs --run <key> --extended`), and `node scripts/line-citations-check.mjs`, before the
    reviewer is dispatched: P3–P5 wrote counts and citations of their own.
 6. **Review** — dispatch `module-reviewer` with the diff ref, `plan.md`, and the structured upstream findings. It
-   verifies each finding's evidence, runs the readiness checklist, performs the requirements-alignment audit, audits
+   verifies each finding's evidence, runs the readiness checklist (its spec-trace item runs
+   `node scripts/spec-trace-check.mjs <requirements>`; an `UNTRACED` id fails readiness; feature off → record
+   `specTrace: not configured`), performs the requirements-alignment audit, audits
    the board, **writes `<runs>/<key>/review-pass<n>.md` itself** in the shape of
    `builder/skills/references/review-template.md` (the only file the reviewer may write), and returns **MERGE-READY**
    or **CHANGES-REQUIRED**. Before acting on the verdict, run
