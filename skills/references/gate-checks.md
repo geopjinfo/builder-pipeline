@@ -127,6 +127,18 @@ It refuses a finding missing any of `id` · `severity` · `location` · `cite` �
 reviewer's job is verifying evidence; that is mechanical only when the fields are guaranteed
 present.
 
+## P6 — the spec trace (`spec-trace-check.mjs`)
+
+Every requirement id in `features.specTrace.requirements` must have a test (any whole-token mention
+in a file under `features.specTrace.tests` matching `testPattern`) or a requirement-pack step under
+`features.specTrace.packs` — one of the four verbs in `templates/requirement-pack.md`: `assert`,
+`by-design <cite>`, `gap`, `skipped`. A plain mention in a pack is a note, not a step, and traces
+nothing; a `by-design` step with no citation fails, because the citation is what makes the
+divergence documented rather than quietly accepted. An `UNTRACED` id fails the readiness item: a
+requirement nobody traced has no outcome, however green the suite. Two positive controls: requirement
+files that declare zero ids fail, and a run that read no test or pack file fails. Feature off →
+`specTrace: not configured`.
+
 ## P6 — the review file's sections
 
 The reviewer writes `<runs>/<key>/review-pass<n>.md` in the shape of `builder/skills/references/review-template.md`:

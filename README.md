@@ -93,7 +93,9 @@ into the profile or an overlay ([`GUIDE.md`](GUIDE.md) § Extending), where upgr
 
 ### 5. Build a module
 
-Write a brief from `specs/module-brief.template.md` and tell the agent: *"Build the `<X>` module through the
+No requirement rows yet? With `features.specAuthoring` on, say *"Write the spec for `<X>`"* first: the `spec-author`
+skill turns the intent into `specs/<X>.spec.md` (requirement rows, acceptance criteria, API contract) for you to
+ratify, and the pipeline refuses to start on a draft. Then write a brief from `specs/module-brief.template.md` and tell the agent: *"Build the `<X>` module through the
 pipeline."* [`USAGE.md`](USAGE.md) is the operator's runbook from there — where the pipeline stops for you, what it
 records, how to resume, and the troubleshooting table.
 

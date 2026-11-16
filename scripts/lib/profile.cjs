@@ -49,6 +49,9 @@ const FEATURES = {
   findingsSchema: { defaults: { state: 'on' }, requires: [] },
   reviewTemplate: { defaults: { state: 'on' }, requires: [] },
   handoffPack: { defaults: { state: 'on', tracker: null, decisionIdPattern: 'D-\\d+', base: 'main' }, requires: [] },
+  /* The spec authoring stage before Phase 1 — scripts/spec-check.mjs, skills/spec-author.md. `dir` holds one
+   * `<key>.spec.md` per module; `idPattern` is the requirement-id shape its rows must use. */
+  specAuthoring: { defaults: { state: 'off', dir: 'specs', idPattern: 'REQ-\\d+' }, requires: ['dir', 'idPattern'] },
   rowReader: { defaults: { state: 'on' }, requires: [] },
   contractOracle: {
     defaults: { state: 'off', adapter: 'openapi3', spec: null, transcript: null, baseline: null, codeField: 'code', statusFamilies: {}, platformCodePattern: null },
@@ -66,6 +69,11 @@ const FEATURES = {
     requires: ['catalogues', 'roots'],
   },
   wiring: { defaults: { state: 'off', roots: [], extensions: [], testPattern: null, allow: null, kinds: [] }, requires: ['roots', 'extensions', 'kinds'] },
+  /* Every requirement id has a test or a requirement-pack step (assert · by-design · gap · skipped) — scripts/spec-trace-check.mjs. */
+  specTrace: {
+    defaults: { state: 'off', idPattern: 'REQ-\\d+', requirements: [], tests: [], testPattern: null, packs: [] },
+    requires: ['idPattern', 'requirements'],
+  },
   instructionBudget: { defaults: { state: 'off', files: [], maxLines: 200 }, requires: ['files', 'maxLines'] },
   /* What instruction files state about the repo must still be true of it — scripts/instruction-lint.mjs. */
   instructionLint: {
@@ -377,6 +385,8 @@ function validate(settings) {
     ['decisionIndex', 'idPattern'],
     ['graphTrial', 'callPattern'],
     ['personas', 'citationPattern'],
+    ['specTrace', 'idPattern'],
+    ['specTrace', 'testPattern'],
   ]) {
     const src = settings.features?.[name]?.[key];
     if (typeof src !== 'string') continue;
@@ -430,6 +440,17 @@ function validate(settings) {
       if (!isObject(e) || typeof e.name !== 'string') continue;
       if (seen.has(e.name)) errors.push(`features.${name}.${key}: the name "${e.name}" is used twice — names must be unique`);
       seen.add(e.name);
+    }
+  }
+  const trace = settings.features?.specTrace;
+  if (isObject(trace)) {
+    for (const k of ['requirements', 'tests', 'packs']) {
+      const v = trace[k];
+      if (v !== undefined && v !== null && (!Array.isArray(v) || v.some((p) => typeof p !== 'string' || !p))) errors.push(`features.specTrace.${k}: an array of non-empty paths`);
+    }
+    const none = (v) => !Array.isArray(v) || v.length === 0;
+    if (ACTIVE.has(trace.state) && none(trace.tests) && none(trace.packs)) {
+      errors.push('features.specTrace: needs "tests" or "packs" (or both) while the feature is on — a trace with nowhere to look traces nothing');
     }
   }
   const sweep = settings.features?.worktreeSweep;

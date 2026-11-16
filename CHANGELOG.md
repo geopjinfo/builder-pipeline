@@ -5,6 +5,33 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Spec-trace checker (`spec-trace-check`, `features.specTrace`, default off).** Every requirement id declared in
+  `features.specTrace.requirements` must have a test (a whole-token mention in a file under `tests` matching
+  `testPattern`) or a requirement-pack step under `packs` — one of the template's four verbs: `assert`,
+  `by-design <cite>`, `gap`, `skipped`. A plain mention in a pack is a note and traces nothing; a `by-design` step
+  without its citation is `UNCITED` and fails. An `UNTRACED` id fails the readiness gate (new item in
+  `skills/module-readiness-check.md`; P6 of the playbook and `references/gate-checks.md` name the check and its
+  `specTrace: not configured` line). Positive controls: requirement files declaring zero ids, or no test/pack file
+  read, fail rather than pass. Settings are validated at load (`idPattern` / `testPattern` regexes, path lists, and
+  `tests` or `packs` required while on). Tests: `tests/spec-trace.test.mjs` (library, settings, CLI on a fixture
+  project, readiness prose); `pack-prose` covers the new feature's not-configured branch.
+- **Spec authoring stage (opt-in, `features.specAuthoring`).** A stage before Phase 1 that turns an intent into one
+  ratified file per module, `<specs>/<key>.spec.md`: the intent verbatim, scope, actors, requirement rows
+  (`behaviour` · `refusal` · `effect` · `constraint`), Given/When/Then acceptance criteria (`assert` · `by-design`
+  citing a decision · `gap` citing a registry row), an OpenAPI 3 contract whose operations name the rows they serve
+  in `x-req`, oracle amendments (`pending` until a person rules — never invented into the rows) and open questions.
+  The `spec-author` skill (`skills/spec-author.md`) writes it and stops; a person ratifies. `templates/spec.md`
+  installs as `specs/spec.template.md`. `scripts/spec-check.mjs` holds the shape and the traceability both ways
+  (every row has a criterion, every operation names rows that exist and declares a 4xx, every non-constraint row is
+  reached by an operation), refuses a ratified spec with anything still open, and with `--ratified` refuses a draft.
+  `--rows` prints the §3 requirements-tracker rows, `--pack` the requirement-pack skeleton
+  (`templates/requirement-pack.md` shape), `--contract <out.json>` the document `features.contractOracle.spec`
+  points at. The pipeline gains step 0.7 (spec gate: exit code, never prose; `not configured` is recorded and the
+  brief's scope stands as before); the planner, the module brief, the requirement-pack template and profile §3 name
+  the spec as the module's row source. Tests: `tests/spec-check.test.mjs` (fixture `tests/fixtures/spec/`).
+
 ### Changed
 
 - **EXPERIMENTS.md §10 keep criterion measures what the review does.** FIX rows alone could not judge it (three
