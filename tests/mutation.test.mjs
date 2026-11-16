@@ -96,3 +96,16 @@ test('CLI: feature off prints not configured; a missing or unsafe module name is
   assert.equal(run(fx()).status, 2);
   assert.equal(run(fx(), ['items;echo']).status, 2);
 });
+
+test('a guard mutant on a payload line is logic — the split is by the mutant’s column, not the line’s text', () => {
+  const source = "if (limit < 1) return fail('limit', 'range', 'limit must be between 1 and 100');";
+  const r = { files: { 'src/q.js': { source, mutants: [
+    { status: 'Survived', mutatorName: 'EqualityOperator', replacement: 'limit <= 1', location: { start: { line: 1, column: 11 } } },
+    { status: 'Survived', mutatorName: 'StringLiteral', replacement: '""', location: { start: { line: 1, column: 47 } } },
+    { status: 'Survived', mutatorName: 'ConditionalExpression', replacement: 'false', location: { start: { line: 1 } } },
+  ] } } };
+  const s = summarise(r, { payloadPattern: '\\bfail\\(' });
+  assert.deepEqual(s.survivors.map((v) => v.kind), ['logic', 'payload', 'payload'], 'before the match → logic; on or after it → payload; no column → the line rule');
+  assert.equal(s.logic, 1);
+  assert.equal(s.payload, 2);
+});
