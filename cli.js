@@ -1337,10 +1337,32 @@ function ledgerPaths() {
   };
 }
 
-function cmdCheckLedgers() {
+/**
+ * `--boards <dir>` and `--registry <file>` name the ledgers in place of §16 `paths` and the defaults (REQ-201), so the
+ * gate runs over another tool's boards in a project that never adopted the pipeline. A flag without its value is a
+ * usage error (REQ-202), never a silent default.
+ */
+function ledgerFlags(args) {
+  const out = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--boards' || a === '--registry') {
+      const value = args[i + 1];
+      if (!value || value.startsWith('--')) die(`check-ledgers: ${a} needs a value — usage: ${RUN} check-ledgers [--boards <dir>] [--registry <file>]`);
+      out[a.slice(2)] = value.replace(/[\\/]+$/, '');
+      i++;
+    } else die(`check-ledgers: unknown argument "${a}" — usage: ${RUN} check-ledgers [--boards <dir>] [--registry <file>]`);
+  }
+  return out;
+}
+
+function cmdCheckLedgers(args = []) {
   const problems = [];
   const note = (file, row, rule, msg) => problems.push({ file, row, rule, msg });
-  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
+  const flags = ledgerFlags(args);
+  const paths = ledgerPaths();
+  const boardsDir = flags.boards ?? paths.boards;
+  const registryFile = flags.registry ?? paths.registry;
 
   // Registry first (boards cross-reference it)
   const regPath = path.join(CWD, registryFile);
@@ -1412,7 +1434,19 @@ function cmdCheckLedgers() {
  * Its exit code is the command's. No name = the list of scripts.
  */
 function cmdRun(args) {
-  const [name, ...rest] = args;
+  const [name, ...given] = args;
+  // `--config <path>` is the kit's, not the script's: it becomes BUILDER_CONFIG, the settings source a project without
+  // a profile uses (REQ-104). The script then sees only its own arguments.
+  const rest = [];
+  const env = { ...process.env, BUILDER_PROJECT_ROOT: CWD, BUILDER_KIT_ROOT: KIT };
+  for (let i = 0; i < given.length; i++) {
+    if (given[i] === '--config') {
+      const value = given[i + 1];
+      if (!value || value.startsWith('--')) die(`run: --config <path> needs the path of a settings file (the bare JSON of profile §16)`);
+      env.BUILDER_CONFIG = path.resolve(CWD, value);
+      i++;
+    } else rest.push(given[i]);
+  }
   if (!name) {
     const list = (dir, prefix) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.(mjs|cjs|js)$/.test(f)).map((f) => prefix + f.replace(/\.(mjs|cjs|js)$/, '')) : []);
     // One name per script: `page-shell.cjs` + `page-shell.mjs` are one runnable name (kitScript picks .mjs first).
@@ -1423,11 +1457,7 @@ function cmdRun(args) {
   }
   const file = kitScript(name);
   if (!file) die(`no kit script "${name}" — list them with: ${RUN} run`);
-  const r = require('child_process').spawnSync(process.execPath, [file, ...rest], {
-    cwd: CWD,
-    stdio: 'inherit',
-    env: { ...process.env, BUILDER_PROJECT_ROOT: CWD, BUILDER_KIT_ROOT: KIT },
-  });
+  const r = require('child_process').spawnSync(process.execPath, [file, ...rest], { cwd: CWD, stdio: 'inherit', env });
   if (r.error) die(`${name}: ${r.error.message}`);
   process.exit(r.status === null ? 1 : r.status);
 }
@@ -1522,7 +1552,7 @@ function main() {
   if (cmd === 'targets') return cmdTargets();
   if (cmd === 'verify') return cmdVerify();
   if (cmd === 'features') return cmdFeatures();
-  if (cmd === 'check-ledgers') return cmdCheckLedgers();
+  if (cmd === 'check-ledgers') return cmdCheckLedgers(argv.slice(1));
   if (cmd === 'check-targets') return cmdCheckTargets();
   if (cmd === 'inventory') return require('./cli/inventory.cjs').cmdInventory(ctx(), argv.slice(1));
   // The worker scripts already hold these commands' behaviour; the CLI runs them in the project folder.

@@ -28,7 +28,7 @@ describe('package.json — an installable package', () => {
   test('red: `files` ships every top-level folder and document the kit carries, and not its own tests', () => {
     assert.ok(Array.isArray(pkg.files), 'files missing: npm would fall back to .npmignore / everything');
     const shipped = new Set(pkg.files.map((f) => f.replace(/\/$/, '')));
-    const skip = new Set(['.git', 'node_modules', 'tests', 'package.json', '.gitignore', '.gitattributes', '.npmignore', '.claude', 'RELEASING.md', 'AGENTS.md', 'CLAUDE.md']);
+    const skip = new Set(['.git', 'node_modules', 'tests', 'package.json', '.gitignore', '.gitattributes', '.npmignore', '.claude', 'RELEASING.md', 'AGENTS.md', 'CLAUDE.md', 'specs']);
     const missing = readdirSync(PACK).filter((n) => !skip.has(n) && !n.startsWith('.') && !shipped.has(n));
     assert.deepEqual(missing, [], `not in "files": ${missing.join(', ')}`);
     assert.ok(!shipped.has('tests'), 'the kit\'s own suite is not part of an install');
