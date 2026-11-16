@@ -16,12 +16,27 @@
  *            most undetected mutants only emptied an error payload while branch logic was well tested;
  *            one assertion on the payload kills them, and it is still a real gap if a client reads it.
  *   logic    everything else. Each is a tester row with the assertion the survivor names.
- * With no pattern, every survivor is logic. The rule sorts the list; it never excuses a survivor, and it
- * errs toward logic (a payload built across several lines matches nothing) — more tester rows, never a
- * survivor waved through.
+ * With no pattern, every survivor is logic. The match is by position, not by line: a mutant before the matched
+ * payload text on its line (the guard in `if (x < 1) return fail(...)`) is logic. The rule sorts the list; it never
+ * excuses a survivor, and it errs toward logic (a payload built across several lines matches nothing) — more tester
+ * rows, never a survivor waved through.
  */
 
 const DETECTED = new Set(['Killed', 'Timeout']);
+
+/**
+ * The split rule. The pattern names the payload PART of a line (`detail:`, `fail(`), and the mutant must sit on or
+ * after that part: a mutant on the guard that precedes it on the same line (`if (limit < 1) return fail(...)` with
+ * `<` → `<=`) is a boundary mutant, and that is logic. Columns are 1-based in the report schema; a mutant with no
+ * column falls back to the line rule.
+ */
+function isPayload(pattern, lineText, column) {
+  if (!pattern) return false;
+  const at = lineText.search(pattern);
+  if (at === -1) return false;
+  if (typeof column !== 'number') return true;
+  return column - 1 >= at;
+}
 const UNDETECTED = new Set(['Survived', 'NoCoverage']);
 
 /**
@@ -47,7 +62,7 @@ function summarise(report, { payloadPattern = null } = {}) {
           mutator: m.mutatorName ?? null,
           replacement: m.replacement ?? null,
           status: m.status,
-          kind: payload && payload.test(lines[line - 1] ?? '') ? 'payload' : 'logic',
+          kind: isPayload(payload, lines[line - 1] ?? '', m.location?.start?.column) ? 'payload' : 'logic',
         });
       } else invalid += 1;
     }
