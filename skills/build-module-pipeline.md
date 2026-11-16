@@ -258,7 +258,9 @@ line.
    (`node scripts/claims-check.mjs --run <key> --extended`), and `node scripts/line-citations-check.mjs`, before the
    reviewer is dispatched: P3–P5 wrote counts and citations of their own.
 6. **Review** — dispatch `module-reviewer` with the diff ref, `plan.md`, and the structured upstream findings. It
-   verifies each finding's evidence, runs the readiness checklist, performs the requirements-alignment audit, audits
+   verifies each finding's evidence, runs the readiness checklist (its spec-trace item runs
+   `node scripts/spec-trace-check.mjs <requirements>`; an `UNTRACED` id fails readiness; feature off → record
+   `specTrace: not configured`), performs the requirements-alignment audit, audits
    the board, **writes `<runs>/<key>/review-pass<n>.md` itself** in the shape of
    `builder/skills/references/review-template.md` (the only file the reviewer may write), and returns **MERGE-READY**
    or **CHANGES-REQUIRED**. Before acting on the verdict, run
