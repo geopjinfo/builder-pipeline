@@ -5,6 +5,8 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-16
+
 ### Added
 
 - **Spec-trace checker (`spec-trace-check`, `features.specTrace`, default off).** Every requirement id declared in
