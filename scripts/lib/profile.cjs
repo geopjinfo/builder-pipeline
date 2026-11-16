@@ -49,6 +49,9 @@ const FEATURES = {
   findingsSchema: { defaults: { state: 'on' }, requires: [] },
   reviewTemplate: { defaults: { state: 'on' }, requires: [] },
   handoffPack: { defaults: { state: 'on', tracker: null, decisionIdPattern: 'D-\\d+', base: 'main' }, requires: [] },
+  /* The spec authoring stage before Phase 1 — scripts/spec-check.mjs, skills/spec-author.md. `dir` holds one
+   * `<key>.spec.md` per module; `idPattern` is the requirement-id shape its rows must use. */
+  specAuthoring: { defaults: { state: 'off', dir: 'specs', idPattern: 'REQ-\\d+' }, requires: ['dir', 'idPattern'] },
   rowReader: { defaults: { state: 'on' }, requires: [] },
   contractOracle: {
     defaults: { state: 'off', adapter: 'openapi3', spec: null, transcript: null, baseline: null, codeField: 'code', statusFamilies: {}, platformCodePattern: null },

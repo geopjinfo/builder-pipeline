@@ -8,7 +8,7 @@ proves routing; a refused one proves a rule.
 
 | Source | For |
 |---|---|
-| The module's requirement rows | the rules to assert, verbatim |
+| The module's requirement rows | the rules to assert, verbatim (with `features.specAuthoring` on: its ratified spec; `spec-check <module> --pack` prints this pack's skeleton from it) |
 | Its section in the spec/BRD | intent behind the rule |
 | Its state machine | which transitions are legal — the rest must be refused |
 | **The deferral registry** | what is knowingly NOT built |

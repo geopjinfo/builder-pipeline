@@ -61,7 +61,9 @@ const VERSION = require('./package.json').version;
 // queue refuses otherwise), so installing them changes nothing for a project that never opts in.
 // The batch orchestrator skill installs the same way and stays inert until features.orchestrator is on (scripts/orch.mjs
 // prints 'orchestrator: not configured' otherwise).
-const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator', 'builder-init', 'persona-detect'];
+// spec-author installs the same way and stays inert until features.specAuthoring is on (scripts/spec-check.mjs prints
+// 'specAuthoring: not configured' otherwise).
+const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator', 'builder-init', 'persona-detect', 'spec-author'];
 const ADAPTERS = require('./adapters/lib/index.cjs');
 const choicesLib = require('./scripts/lib/choices.cjs');
 
@@ -778,6 +780,7 @@ function installCommon(tools = []) {
   copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join(boards, 'README.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), registry, own);
   copyIfAbsent(path.join(KIT, 'templates', 'module-brief.md'), path.join('specs', 'module-brief.template.md'), own);
+  copyIfAbsent(path.join(KIT, 'templates', 'spec.md'), path.join('specs', 'spec.template.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-plan.md'), path.join('specs', 'orchestrator-plan.template.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-worker-brief.md'), path.join('specs', 'orchestrator-worker-brief.template.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'decision-log.md'), decisions, own);

@@ -175,10 +175,12 @@ builder/skills/scaffold-module.md
                                → .claude/skills/scaffold-module/SKILL.md
 builder/skills/module-readiness-check.md
                                → .claude/skills/module-readiness-check/SKILL.md
+builder/skills/spec-author.md  → .claude/skills/spec-author/SKILL.md
 builder/templates/task-board.md → tasks/README.md           (create tasks/ dir)
 builder/templates/deferred-registry.md → DEFERRED_TASKS.md  (repo root; keep header, empty table)
 builder/templates/decision-log.md → DECISIONS.md            (repo root; keep header, empty index)
 builder/templates/module-brief.md → specs/module-brief.template.md  (or wherever briefs live)
+builder/templates/spec.md      → specs/spec.template.md            (the spec-author skill's shape)
 builder/templates/session-board.md
                                → tasks/_session-board.template.md  (cross-run delivery boards)
 ```
