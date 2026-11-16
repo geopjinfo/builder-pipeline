@@ -132,10 +132,10 @@ records, how to resume, and the troubleshooting table.
 | `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
 | `features` | which optional checks are on, off, unmeasured or experimental |
 | `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why |
-| `check-ledgers` | the mechanical board / registry gates — wire into CI |
+| `check-ledgers [--boards <dir>] [--registry <file>]` | the mechanical board / registry gates — wire into CI; the flags name another tool's ledgers in place of §16 `paths` |
 | `check-targets` | qa-audit environment safety — wire into CI |
 | `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
-| `run [<script> [args]]` | a kit script, run in the project folder; no name lists them |
+| `run [<script> [args]] [--config <path>]` | a kit script, run in the project folder; no name lists them; `--config` names a settings file for a project with no profile (below) |
 | `targets` | the `--tool` values |
 | `--version` | the kit version |
 
@@ -157,6 +157,29 @@ you installed; *partial* = the kit relies on instructions or a by-hand step ther
 | bash output cap | supported — copied, never armed | unsupported | unsupported | unsupported |
 
 The native targets are `claude-code`, `codex` and `antigravity`. The other `--tool` targets — `generic`, `opencode`, `gemini`, `cursor`, `copilot`, `windsurf`, `cline`, `aider` — install as prompt files under `.builder/`, each with its pointer in its own instruction or rules file (`npx builder targets` lists them).
+
+## 🧰 One tool, without the pipeline
+
+Each kit tool also runs in a project that never adopted the pipeline. The checks that are on by default
+(`check-ledgers`, `output-check`, `claims-check`, `fix-rate`, `inventory`) need nothing. An opt-in check reads its
+settings from a file when there is no `PIPELINE_PROFILE.md`: `builder.config.json` in the project root, or the file
+`--config <path>` (`BUILDER_CONFIG`) names. The file holds the bare JSON of profile §16 and is validated the same way;
+when a profile exists it is the one source and the file is ignored and said. `npx builder run features` names the source
+in use.
+
+```
+npx builder run features --config kit.json
+npx builder check-ledgers --boards work/boards --registry work/REGISTRY.md
+npx builder run board-import --format ralph prd.json --out tasks/imported.md
+npx builder run spec-check specs/orders.spec.md
+npx builder run spec-trace-check docs/requirements.md --tests tests --packs packs
+```
+
+`board-import` writes another tool's task file (ralph `prd.json`, Spec Kit `tasks.md`) as a kit build board: what the
+source states is kept, what the importer infers is marked `⚠ CONFIRM`, every unmapped line is listed, and a DONE whose
+source names no test keeps an empty evidence cell so `check-ledgers` reports it (LG-5). `spec-check` on a `.md` path and
+`spec-trace-check` on named files with `--tests` / `--packs` run with the default settings while their feature is off,
+and say so on their first line. The spec for this is `specs/toolkit-standalone.spec.md` in the repository.
 
 ## 📚 Documentation
 

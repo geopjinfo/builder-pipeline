@@ -5,6 +5,25 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **One tool, without the pipeline (`specs/toolkit-standalone.spec.md`, REQ-101 to REQ-405).** Each kit tool runs in a
+  project that never adopted the pipeline. *Settings without a profile:* with no `PIPELINE_PROFILE.md`, the settings
+  loader reads `builder.config.json` in the project root, or the file `BUILDER_CONFIG` names, as the bare JSON of §16,
+  with the same validation; a profile beside a config file wins and the file is reported as ignored;
+  `npx builder run <script> --config <path>` sets `BUILDER_CONFIG`; `features` names the source in use.
+  *Ledger gate paths:* `check-ledgers --boards <dir> --registry <file>`; a flag without its value is a usage error.
+  *Board import (`scripts/board-import.mjs`):* a ralph `prd.json` or a Spec Kit `tasks.md` written as a build board
+  with `## P0`, the progress markers, `## Inferred` and `## Unmapped`; stated values kept, inferred ones marked
+  `⚠ CONFIRM`, a DONE whose source names no test keeps an empty evidence cell so `check-ledgers` reports it under LG-5;
+  refuses an unknown format, a missing or invalid source, and an existing output without `--force`, writing nothing.
+  *Spec checkers on named files:* `spec-check <file>.md` and `spec-trace-check <requirements> --tests <path>
+  [--packs <path>]` run with the default settings while their feature is off and say so on the first line; a module
+  key, or no named file, still prints `not configured`, so step 0.7 and the readiness gate are unchanged.
+  README § "One tool, without the pipeline", FEATURES.md rows, llms.txt, and a no-profile paragraph in
+  `skills/spec-author.md`. `specs/` is maintainer-only (package skip list). Tests: `tests/toolkit-standalone.test.mjs`
+  (one test per acceptance criterion).
+
 ## [1.1.0] — 2026-11-16
 
 ### Added
