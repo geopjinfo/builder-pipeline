@@ -32,6 +32,31 @@ versions independently of any project it is pasted into.
   brief's scope stands as before); the planner, the module brief, the requirement-pack template and profile §3 name
   the spec as the module's row source. Tests: `tests/spec-check.test.mjs` (fixture `tests/fixtures/spec/`).
 
+### Changed
+
+- **EXPERIMENTS.md §10 keep criterion measures what the review does.** FIX rows alone could not judge it (three
+  well-formed plans built green first); the criterion now also counts the builder's `GUESS:`-marked decisions the
+  review named and the planner's unrecorded contract drifts it caught, and fixes the review's context (every file the
+  plan cites). Doc-only.
+- **EXPERIMENTS.md §10 records a sample `planReview` run.** Three `module-planner` plans on a kit-internal test service,
+  each reviewed blind and built: review at about a third of the planner's cost, 22 of 28 silently settled builder
+  decisions named, four unrecorded contract drifts caught, zero FIX rows to prevent because every build was green
+  first. Call: keep off; the note proposes counting silently settled decisions in the next trial. Doc-only.
+- **EXPERIMENTS.md §5 says what `mutationGate` is.** The flag is a recorded intent, not a gate: nothing in
+  `mutation-step.mjs` reads it, so `experimental-on` never blocks a run. The entry now says so, ties the eventual
+  threshold to the logic-only score, and records a kit-internal sample run (two small modules, 87.8/75.6% → 97.6/94.4%
+  after the step's own survivor rows were written; logic-only never under 91.9%; call: keep off). Doc-only.
+
+### Fixed
+
+- **The mutation step's payload/logic split is by the mutant's position, not the line's text.** `mutation-summary.cjs`
+  classified every survivor on a line matching `features.mutation.payloadPattern` as payload, so a boundary mutant on
+  the guard of a one-line `if (limit < 1) return fail(...)` (`<` → `<=`) was folded into the single payload row
+  instead of becoming a tester row. It now compares the mutant's `location.start.column` with the pattern's match
+  position on that line: before the match is logic, on or after it is payload, and a mutant with no column keeps the
+  line rule. Measured on a sample run, 4 of 22 "payload" survivors were such guard mutants. Test: `mutation`
+  (a guard mutant on a payload line is logic).
+
 ## [1.0.6] — 2026-11-15
 
 ### Added

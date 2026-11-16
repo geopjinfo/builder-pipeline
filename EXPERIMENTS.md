@@ -144,20 +144,37 @@ primary sources.
 ## 5. Blocking mutation threshold — `mutationGate` (experimental)
 
 **What ships.** The mutation **step** (`features.mutation`, P3, non-blocking — its score is a `gate`
-event, logic survivors become tester rows, payload survivors become one row). No threshold ships.
+event, logic survivors become tester rows, payload survivors become one row). No threshold ships, and
+**the flag enforces nothing**: `features.mutationGate.state` is a recorded intent that `npx builder run
+features` reports, not a branch in `mutation-step.mjs`. Switching it on does not make the step block.
 
 **Opt in.** Configure `features.mutation` and run the step. Switch
 `features.mutationGate.state` to `"experimental-on"` only once the measurement below has produced a
-threshold.
+threshold — and then a blocking branch still has to be written, with its own red test, before the
+flag gates anything.
 
 **Measurement.** After **two runs that logged a `mutation` gate event**, set a blocking threshold
 from those measured scores, with **payload survivors counted apart from logic survivors** (the
-threshold applies to logic). If both runs score high (roughly 85% or above), close this entry: the
-gate would not be needed.
+threshold applies to the logic-only score: detected over detected plus logic survivors). If both runs
+score high (roughly 85% or above), close this entry: the gate would not be needed.
+
+**Sample run (2026-11, kit-internal, two small modules, not an adopting project).** Baseline scores
+87.8% and 75.6%; after the step's own `LOGIC` and `PAYLOAD` rows were written as tests, 97.6% and 94.4%.
+The lowest logic-only score at any point was 91.9%: 16 of the 22 survivors on the 75.6% run were
+error-payload lines. A threshold on the overall score would have blocked that run over one assertion
+type; a threshold on the logic-only score at 85% would never have fired. The remaining logic survivors
+at the end were equivalent mutants (a regex anchor already guarded by `Number()`, a string literal
+whose two values take the same branch), so the suite's ceiling was 94–98%, not 100%. Call recorded:
+**keep off**. The non-blocking step produced the whole gain on its own. A second kit-internal sample (three freshly built
+modules, 303 to 177 mutants each) scored 71.8%, 76.8% and 81.9% overall and 84.7%, 85.1% and 86.7% logic-only on
+their first run: right at the 85% line, so a gate there would have blocked one of three first runs over 23 logic
+survivors that the step had already turned into tester rows. An adopting project's two runs are still owed before
+the entry is closed.
 
 **Risk.** A threshold chosen before a measurement is a number nobody measured. In one adopting
 project most surviving mutants were error-payload assertions, so a naive threshold would mostly fail
-runs over one assertion type rather than over weak logic tests.
+runs over one assertion type rather than over weak logic tests. The sample run above reproduced that
+shape exactly.
 
 ## 6. Builder batches — `builderBatch` (unmeasured, on by default)
 
@@ -284,9 +301,30 @@ lane.
 10 majors, about 80 seconds and $7. It missed 4 of the 6 code and test fixes the auditors later raised, and caught
 two gaps no seat recorded: a race asserted as one fixed code, and edits outside the batch row's files. The planner
 and reviewer personas now check both, so the question this trial must answer is narrower: **does the review still
-find gaps those checks miss?** Run it on the next three FULL-track plans, blind, and score every finding against
-the lane's `FIX-n` rows and review passes. **Keep** if it prevents at least one FIX row per plan that the
-persona checks did not; **remove** otherwise.
+find gaps those checks miss?** Run it on the next three FULL-track plans, blind, from a directory holding only the
+plan and every file it cites (code, specs, profile, ledgers, test tree, sibling plans). The builder marks every
+decision the plan left open, as it is made, with a `GUESS:` comment in the code; at close-out, match the review's
+findings against that list, the lane's `FIX-n` rows and the planner's unrecorded contract changes. **Keep** if,
+across the three plans, the review named at least two-thirds of the `GUESS:` decisions, or at least one contract
+drift per plan that the planner did not record, or prevented a FIX row the persona checks did not; **remove**
+otherwise. (The earlier criterion, FIX rows alone, was retired after the sample run below: three well-formed plans
+built green first and left nothing to prevent.)
+
+**Sample run (2026-11, kit-internal: a four-module test service, not an adopting project).** Three FULL-track plans
+written by `module-planner` (7, 8 and 10 rows; $1.27–$1.90 and 4–7 minutes each), each reviewed blind from a bare
+directory holding only the plan, the code and the specs it cites, then built as written. The review cost $0.44–$0.69
+and 87–120 seconds per plan (about a third of the planner's cost) and returned 17–26 findings. Every build was green
+on its first run, so there was **no FIX row for the review to prevent** and the keep criterion above could not be
+met; what the review did instead was name 22 of the 28 decisions the builder settled silently (helper exports for a
+test seed, a clock that must move, detail strings, intra-operation ordering, fixture order for a permission matrix)
+and four contract drifts the planner had made without recording them (a factory signature widened against the
+"byte-identical" convention, an interface changed against the brief, a settable clock against "a fixed clock in
+every test"). Two cautions from the run: the review context must include every file the plan cites (the profile,
+the ledgers, the test tree, sibling plans) or a fifth of its findings are "the cited file is missing"; and a plan
+whose close-out steps write ledgers outside the lane draws three findings per plan that are not defects. Call
+recorded: **keep off**; the criterion as written measures FIX rows, and three green-first builds produced none, so
+the next trial should also count the builder's silently settled decisions (mark each in the code as it is made, then
+match the list against the findings).
 
 **Risk.** A reviewer graded against a feature-spec standard over-corrects: on a rationale document, about half of
 one trial's findings were dropped as the wrong standard. Give it the implementation-readiness standard only.
