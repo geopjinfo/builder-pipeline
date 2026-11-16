@@ -28,13 +28,13 @@ describe('package.json — an installable package', () => {
   test('red: `files` ships every top-level folder and document the kit carries, and not its own tests', () => {
     assert.ok(Array.isArray(pkg.files), 'files missing: npm would fall back to .npmignore / everything');
     const shipped = new Set(pkg.files.map((f) => f.replace(/\/$/, '')));
-    const skip = new Set(['.git', 'node_modules', 'tests', 'package.json', '.gitignore', '.gitattributes', '.npmignore', '.claude', 'RELEASING.md', 'AGENTS.md', 'CLAUDE.md']);
+    const skip = new Set(['.git', 'node_modules', 'tests', 'package.json', '.gitignore', '.gitattributes', '.npmignore', '.claude', 'RELEASING.md', 'AGENTS.md', 'CLAUDE.md', 'PIPELINE_PROFILE.md', 'DECISIONS.md', 'DEFERRED_TASKS.md', 'specs']);
     const missing = readdirSync(PACK).filter((n) => !skip.has(n) && !n.startsWith('.') && !shipped.has(n));
     assert.deepEqual(missing, [], `not in "files": ${missing.join(', ')}`);
     assert.ok(!shipped.has('tests'), 'the kit\'s own suite is not part of an install');
     assert.ok(!shipped.has('.github'), 'the kit repo\'s CI workflow is not part of an install');
     // The maintainer files speak to an agent working on the kit repo, not to a project that installs it.
-    for (const f of ['AGENTS.md', 'CLAUDE.md', 'RELEASING.md']) assert.ok(!shipped.has(f), `${f} is for the kit repo only and must not ship`);
+    for (const f of ['AGENTS.md', 'CLAUDE.md', 'RELEASING.md', 'PIPELINE_PROFILE.md', 'DECISIONS.md', 'DEFERRED_TASKS.md', 'specs']) assert.ok(!shipped.has(f), `${f} is for the kit repo only and must not ship`);
     // The doc map for agents ships, so an agent in a consuming project finds the kit's docs from node_modules.
     for (const f of ['llms.txt', 'FEATURES.md', 'GUIDE.md']) assert.ok(shipped.has(f), `${f} must ship`);
     for (const f of shipped) assert.ok(existsSync(join(PACK, f)), `"files" names ${f}, which does not exist`);
