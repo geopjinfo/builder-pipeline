@@ -1,0 +1,864 @@
+{
+  "capturedAt": "2026-11-16",
+  "from": "scripts/lib/orch-state.cjs placement() at v1.1.0",
+  "at": "2026-11-16T12:00:00.000Z",
+  "defaults": {
+    "stallMinutes": 90,
+    "usageStaleMinutes": 30,
+    "seats": [
+      "primary"
+    ],
+    "limits": {
+      "secondary": 80,
+      "primary": 60
+    }
+  },
+  "cases": [
+    {
+      "name": "primary: first lane, nothing measured",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {}
+      },
+      "running": 0,
+      "expected": {
+        "seat": "primary",
+        "why": "primary: first lane, usage unmeasured"
+      }
+    },
+    {
+      "name": "primary: second lane, nothing measured",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {}
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: primary usage unmeasured in 30 min — orch usage-read golden primary (or orch usage golden primary <pct>)"
+      }
+    },
+    {
+      "name": "primary: all fresh under limits",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "secondary": {
+            "pct": 40,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "primary",
+        "why": "primary at 20% under its limit 60%"
+      }
+    },
+    {
+      "name": "primary: first seat at its limit, second under",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 80,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "primary",
+        "why": "primary at 20% under its limit 60%"
+      }
+    },
+    {
+      "name": "primary: first seat over, second over",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 90,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 70,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: primary at 70% (limit 60%) — no new lanes"
+      }
+    },
+    {
+      "name": "primary: first seat stale, second fresh",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 10,
+            "at": "2026-11-16T11:15:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "primary",
+        "why": "primary at 20% under its limit 60%"
+      }
+    },
+    {
+      "name": "primary: first seat fresh over, second stale",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 85,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 10,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: primary usage unmeasured in 30 min — orch usage-read golden primary (or orch usage golden primary <pct>)"
+      }
+    },
+    {
+      "name": "primary: custom limits, first under its own",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "limits": {
+          "secondary": 95,
+          "primary": 10
+        },
+        "usage": {
+          "secondary": {
+            "pct": 90,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: primary at 20% (limit 10%) — no new lanes"
+      }
+    },
+    {
+      "name": "primary: first lane, first seat stale over limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "primary": {
+            "pct": 99,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 0,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: primary usage unmeasured in 30 min — orch usage-read golden primary (or orch usage golden primary <pct>)"
+      }
+    },
+    {
+      "name": "primary: first lane, first seat stale under limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "primary": {
+            "pct": 5,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 0,
+      "expected": {
+        "seat": "primary",
+        "why": "primary: first lane, usage unmeasured"
+      }
+    },
+    {
+      "name": "primary: exactly at the limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 80,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 60,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: primary at 60% (limit 60%) — no new lanes"
+      }
+    },
+    {
+      "name": "primary: one below the limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 79,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 59,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "primary",
+        "why": "primary at 59% under its limit 60%"
+      }
+    },
+    {
+      "name": "secondary+primary: first lane, nothing measured",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {}
+      },
+      "running": 0,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary: first lane, usage unmeasured"
+      }
+    },
+    {
+      "name": "secondary+primary: second lane, nothing measured",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {}
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: secondary usage unmeasured in 30 min — orch usage-read golden secondary (or orch usage golden secondary <pct>)"
+      }
+    },
+    {
+      "name": "secondary+primary: all fresh under limits",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "secondary": {
+            "pct": 40,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary at 40% under its limit 80%"
+      }
+    },
+    {
+      "name": "secondary+primary: first seat at its limit, second under",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 80,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "primary",
+        "why": "primary at 20% under its limit 60%"
+      }
+    },
+    {
+      "name": "secondary+primary: first seat over, second over",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 90,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 70,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: secondary at 90% (limit 80%) and primary at 70% (limit 60%) — no new lanes"
+      }
+    },
+    {
+      "name": "secondary+primary: first seat stale, second fresh",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 10,
+            "at": "2026-11-16T11:15:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: secondary usage unmeasured in 30 min — orch usage-read golden secondary (or orch usage golden secondary <pct>)"
+      }
+    },
+    {
+      "name": "secondary+primary: first seat fresh over, second stale",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 85,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 10,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: primary usage unmeasured in 30 min and secondary at 85% (limit 80%) — orch usage-read golden primary (or orch usage golden primary <pct>)"
+      }
+    },
+    {
+      "name": "secondary+primary: custom limits, first under its own",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "limits": {
+          "secondary": 95,
+          "primary": 10
+        },
+        "usage": {
+          "secondary": {
+            "pct": 90,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary at 90% under its limit 95%"
+      }
+    },
+    {
+      "name": "secondary+primary: first lane, first seat stale over limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 99,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 0,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: secondary usage unmeasured in 30 min — orch usage-read golden secondary (or orch usage golden secondary <pct>)"
+      }
+    },
+    {
+      "name": "secondary+primary: first lane, first seat stale under limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 5,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 0,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary: first lane, usage unmeasured"
+      }
+    },
+    {
+      "name": "secondary+primary: exactly at the limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 80,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 60,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: secondary at 80% (limit 80%) and primary at 60% (limit 60%) — no new lanes"
+      }
+    },
+    {
+      "name": "secondary+primary: one below the limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary",
+          "primary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 79,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 59,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary at 79% under its limit 80%"
+      }
+    },
+    {
+      "name": "secondary: first lane, nothing measured",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {}
+      },
+      "running": 0,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary: first lane, usage unmeasured"
+      }
+    },
+    {
+      "name": "secondary: second lane, nothing measured",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {}
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: secondary usage unmeasured in 30 min — orch usage-read golden secondary (or orch usage golden secondary <pct>)"
+      }
+    },
+    {
+      "name": "secondary: all fresh under limits",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "secondary": {
+            "pct": 40,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary at 40% under its limit 80%"
+      }
+    },
+    {
+      "name": "secondary: first seat at its limit, second under",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 80,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: secondary at 80% (limit 80%) — no new lanes"
+      }
+    },
+    {
+      "name": "secondary: first seat over, second over",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 90,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 70,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: secondary at 90% (limit 80%) — no new lanes"
+      }
+    },
+    {
+      "name": "secondary: first seat stale, second fresh",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 10,
+            "at": "2026-11-16T11:15:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: secondary usage unmeasured in 30 min — orch usage-read golden secondary (or orch usage golden secondary <pct>)"
+      }
+    },
+    {
+      "name": "secondary: first seat fresh over, second stale",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 85,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 10,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: secondary at 85% (limit 80%) — no new lanes"
+      }
+    },
+    {
+      "name": "secondary: custom limits, first under its own",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "limits": {
+          "secondary": 95,
+          "primary": 10
+        },
+        "usage": {
+          "secondary": {
+            "pct": 90,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 20,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary at 90% under its limit 95%"
+      }
+    },
+    {
+      "name": "secondary: first lane, first seat stale over limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 99,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 0,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-UNKNOWN: secondary usage unmeasured in 30 min — orch usage-read golden secondary (or orch usage golden secondary <pct>)"
+      }
+    },
+    {
+      "name": "secondary: first lane, first seat stale under limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 5,
+            "at": "2026-11-16T11:15:00.000Z"
+          }
+        }
+      },
+      "running": 0,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary: first lane, usage unmeasured"
+      }
+    },
+    {
+      "name": "secondary: exactly at the limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 80,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 60,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": null,
+        "why": "USAGE-HOLD: secondary at 80% (limit 80%) — no new lanes"
+      }
+    },
+    {
+      "name": "secondary: one below the limit",
+      "state": {
+        "runId": "golden",
+        "usageStaleMinutes": 30,
+        "seats": [
+          "secondary"
+        ],
+        "usage": {
+          "secondary": {
+            "pct": 79,
+            "at": "2026-11-16T11:55:00.000Z"
+          },
+          "primary": {
+            "pct": 59,
+            "at": "2026-11-16T11:55:00.000Z"
+          }
+        }
+      },
+      "running": 1,
+      "expected": {
+        "seat": "secondary",
+        "why": "secondary at 79% under its limit 80%"
+      }
+    }
+  ]
+}
