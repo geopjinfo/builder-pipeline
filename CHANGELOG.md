@@ -5,6 +5,29 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M5 delegation rulebook (2.0.0 line)
+
+- **`skills/references/account-selection.md` — the rulebook for choosing an account (REQ-501; plan M5, D8, D29).**
+  Kit-neutral, in Simplified Technical English: ready only and the `note` as a rule; the content class against the
+  project's visibility; the role against the account's `roles` and the headless roles; the task-to-account table;
+  parallel lanes spread over accounts; the soft limit, `NEEDS-IT-ONLY` and the needs-account mark; the pays order
+  with `api-key` last and announced; `LIMIT`, `BUDGET`, `AUTH` holds with the one retry and never a retry loop;
+  `OVERLOAD` in place; never a resume across accounts; a worker's answer is a draft; say which account did what;
+  shadow mode; never a bypass flag or a worker without the repo hooks. It names only `features.<x>` keys the loader
+  knows. `skills/orchestrator.md` §3 points at it.
+- **The brief's `Account:` line (REQ-502).** `templates/orchestrator-worker-brief.md` carries
+  `- Account: <account> (worker <worker>, pays <pays>)`; `scripts/lib/orch-plan.cjs` `renderBrief()` fills it from the
+  placement with the lane facts (rows, files, worktree, branch, target, result) and leaves the judgement placeholders;
+  `orch brief <run> <lane> [--write]` prints the skeleton or writes it once at the lane's brief path (never over an
+  existing brief, exit 3).
+- **The account side of a launch in the prose.** The playbook's P4 dispatch names the account each auditor runs on;
+  `adapters/claude-code.md`, `adapters/codex.md` and `adapters/antigravity.md` each carry a "Worker recipe"
+  subsection: how a lane on an account of that worker starts, its flags and environment, and what the kit cannot
+  enforce there.
+- Tests: `tests/account-selection.test.mjs` (the rulebook ships and is pointed at, its feature and registry keys,
+  the instruction-lint rules over it, the vocabulary, the template line, the P4 sentence, the adapter recipes),
+  `tests/orch-plan.test.mjs` (`renderBrief` and `orch brief`), `tests/pack-prose.test.mjs` (the features names).
+
 ### Added — M3 placement over accounts (2.0.0 line)
 
 - **`placement()` walks the account list (REQ-301 to REQ-304; plan decisions D1, D3, D24).** A run records its

@@ -277,6 +277,30 @@ your CLI version before relying on it.
   directly. A version manager that swaps Node may also drop the globally installed CLI; reinstall it per Node
   version.
 
+### Worker recipe (a lane on a Claude Code account)
+
+How a lane starts on an account whose `worker` is `claude-code` (`features.accounts`; the rulebook is
+`skills/references/account-selection.md`):
+
+- **Start.** `npx builder run orch gate-launch <run> <lane>` prints the launch line: the account, its `maxTurns` and
+  `timeoutMinutes`, the `--settings` pin and the filled command (the account's own `command`, else `launchCommand`).
+  Run that line; never a line you typed yourself.
+- **Environment.** `CLAUDE_CONFIG_DIR` is the account's dir (`accounts/<name>/` under the accounts home, or the
+  account's `configDir`). Every inherited `CLAUDE*` variable is cleared, and no API key or auth token is in the
+  environment: a plan account signs in through its own store, a key account through `apiKeyHelper` in the account's
+  own `settings.json`. The pin (`--settings <run>/pins/<lane>.settings.json`) carries the account's env block, its
+  config dir, its `baseUrl` and the deny rules of a path-root account; it never carries a key.
+- **Flags.** Headless: `claude -p --output-format json --json-schema <schema file> --permission-mode <the project's mode>
+  --permission-prompts none --max-turns <maxTurns>`; the runner owns the wall-clock timeout (`timeoutMinutes`).
+  Interactive terminal lane: the same config dir and pin, the project's permission mode, a first message pointing at
+  `{brief}` and `{result}`. Resume: `--resume <id>` under the same config dir only — a resume on another account
+  starts a copy with no memory of the lane.
+- **What the kit cannot enforce here.** The folder trust prompt (open each lane folder once by hand); what the model
+  does inside the permission mode you chose; a hook or env block the account's user-scope settings add (the settings
+  scan refuses the keys it knows, not every key); the subscription's own rate-limit clock (a `LIMIT` hold reads the
+  reset time the harness reports); a sign-in that expired between the assessment and the launch (the `AUTH` hold
+  then names `claude auth login`).
+
 **The credit worker** (`credit.worker: "claude-code"`, `scripts/lib/orch-worker-claude-code.cjs`) runs
 `claude -p --output-format stream-json --verbose` with the prompt on stdin, `--permission-mode dontAsk` and an exact
 allow list, `--strict-mcp-config`, `--setting-sources project` (your repo's hooks and fences still apply; user and
