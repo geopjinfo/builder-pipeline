@@ -107,3 +107,10 @@ describe('REQ-1601 — the reporter rows of the FEATURES table', () => {
     assert.match(r.stdout, /^reporterSummary: experimental-off — not enabled; its measurement is EXPERIMENTS\.md §22 · decision: not yet measured/m);
   });
 });
+
+describe('REQ-1811 to REQ-1813 — the tree hygiene rows print off by default', () => {
+  test('red: ignoreCheck, sizeCheck and secretScan print not configured', () => {
+    const r = run(project());
+    for (const name of ['ignoreCheck', 'sizeCheck', 'secretScan']) assert.match(r.stdout, new RegExp(`^${name}: not configured$`, 'm'));
+  });
+});

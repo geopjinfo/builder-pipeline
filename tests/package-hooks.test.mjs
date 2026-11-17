@@ -193,3 +193,40 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     assert.ok(existsSync(join(c.proj, 'scripts', 'lib', 'profile.cjs')));
   });
 });
+
+describe('REQ-1815 — the secret-scan pre-commit hook', () => {
+  const SH = spawnSync('sh', ['-c', 'exit 0']).status !== 0 ? 'no POSIX sh on this machine' : false;
+  const AWS_SHAPE = `AKIA${'Q'.repeat(16)}`;
+  const armed = (profile) => {
+    const p = installed({ profile });
+    const arm = run(p.cli, p.proj, ['git-hooks', '--secret-scan']);
+    assert.equal(arm.status, 0, out(arm));
+    assert.ok(existsSync(join(p.proj, '.git', 'hooks', 'pre-commit')));
+    assert.ok(existsSync(join(p.proj, ...HOOKS, 'secret-scan-precommit.sh')), 'unpack copied the hook, never armed');
+    return p;
+  };
+  test('red: AC-1815 unpack copies the hook; `git-hooks --secret-scan` arms it; a staged key shape fails the commit naming the kind and the file, never the text', { skip: SH }, () => {
+    const { proj } = armed({ features: { secretScan: { state: 'on' } } });
+    writeFileSync(join(proj, 'config.js'), `const k = '${AWS_SHAPE}';\n`);
+    git(proj, 'add', '-A');
+    const c = git(proj, 'commit', '-q', '-m', 'leak');
+    assert.notEqual(c.status, 0, 'the commit is rejected');
+    assert.match(c.stderr, /BLOCKED: a staged change carries a secret shape/);
+    assert.match(c.stderr, /config\.js — AWS access key/);
+    assert.equal(c.stderr.includes(AWS_SHAPE), false);
+    assert.doesNotMatch(readFileSync(join(proj, '.git', 'hooks', 'pre-commit'), 'utf8'), /BUILDER_UNLOCK/, 'no unlock variable exists');
+  });
+  test('red: AC-1815 with the file in allow the commit succeeds; a second arm is idempotent; a foreign pre-commit is left alone (exit 1)', { skip: SH }, () => {
+    const { proj, cli } = armed({ features: { secretScan: { state: 'on', allow: ['fixtures/*'] } } });
+    mkdirSync(join(proj, 'fixtures'), { recursive: true });
+    writeFileSync(join(proj, 'fixtures', 'sample.txt'), `${AWS_SHAPE}\n`);
+    git(proj, 'add', '-A');
+    const c = git(proj, 'commit', '-q', '-m', 'fixture');
+    assert.equal(c.status, 0, c.stderr);
+    assert.match(out(run(cli, proj, ['git-hooks', '--secret-scan'])), /git-hooks: armed — pre-commit scans the staged lines/);
+    writeFileSync(join(proj, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+    const foreign = run(cli, proj, ['git-hooks', '--secret-scan']);
+    assert.equal(foreign.status, 1);
+    assert.match(out(foreign), /is not the kit's hook — left as it is/);
+  });
+});
