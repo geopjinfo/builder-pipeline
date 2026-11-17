@@ -22,11 +22,6 @@
  * Lanes
  *   preflight [--run R]               the project's checks; exit 0 parallel, 6 single-lane only
  *   claim <run> <lane> | release <run> [lane] | claims
- *   gate-launch <run> <lane> [--resume]   the pre-launch gate: content policy, settings scan, worktree, --settings pin
- *   worktree <run> <lane>             create the lane worktree (fresh branch, include files copied, sparse on path roots)
- *                                     before a secondary-seat launch: refuses a lane `next` does not say to launch,
- *                                     or one placed on the primary seat; records the git config/hooks baseline;
- *                                     prints the lane's paths and the filled launchCommand. --resume also takes the
  *   gate-launch <run> <lane> [--resume] [--max-budget-usd N]
  *                                     before a terminal-worker launch: refuses a lane `next` does not say to launch,
  *                                     or one placed on the orchestrating session's own account; refuses an account
@@ -34,7 +29,6 @@
  *                                     line, or a failed smoke re-run; records the git config/hooks baseline; prints
  *                                     the lane's paths, the account, its caps and the filled launch command
  *                                     (--max-budget-usd is a backstop, never a cap). An api-key account's launch
- *                                     writes `account.paid` and a decision-log row. --resume also takes the
  *                                     writes `account.paid` and a decision-log row. Then the pre-launch gate of the
  *                                     placed account (REQ-401 to REQ-404, REQ-703): content policy, settings scan,
  *                                     the lane worktree (fresh branch, include files, sparse on path roots) and the
@@ -61,6 +55,9 @@
  *                                     is older than usageStaleMinutes; status, next, claim and gate-launch always do
  *                                     next also prints ADD-LANES (capacity), SELF-AUDIT <lane> (a WAIT-P4 lane while
  *                                     the credit lane is busy with other work) and CREDIT-FILL (spend behind pace)
+ * Board loop (features.boardLoop, experimental-off — EXPERIMENTS.md §17)
+ *   loop <board.md> [--more-passes N]   place the loop runner on a ready account (M3 placement seam), record the job
+ *                                     (kind loop, account, cap) and run it; status shows passes and the stop reason
  *   wait <run> [--timeout 110] [--from N]   block until the run logs an event (exit 0) or the timeout (exit 9)
  *   lease <run> --holder <name> [--ttl 300]  take/renew the run lease; another holder's live lease → exit 3
  *     --holder <name> on claim|set|approve|enqueue|merge|notice: refused (exit 3) while another holder's lease is live
@@ -77,9 +74,6 @@
  *   remote add <run> <machine> --host H [--user U] --root <remoteRoot> | remote preflight <run> <machine>
  *   remote place <run> <lane> <machine> | remote launch <run> <lane> --settings <pin> --base <branch> [--model M]
  *   remote poll <run> <lane> | remote cancel <run> <lane>      the flag off prints "remoteLanes: not configured"
- * Board loop (features.boardLoop, experimental-off — EXPERIMENTS.md §17)
- *   loop <board.md> [--more-passes N]   place the loop runner on a ready account (M3 placement seam), record the job
- *                                     (kind loop, account, cap) and run it; status shows passes and the stop reason
  * Credit lane (only with features.orchestrator.credit.enabled)
  *   credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget 0.50] [--allow-missing]
  *               [--queue <worktree>]  the queue the job goes into (default: the job worktree's own)
@@ -104,7 +98,6 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { runHint } = require('./lib/run-hint.cjs');
@@ -121,17 +114,11 @@ const credit = require('./lib/orch-credit.cjs');
 const snapshots = require('./lib/orch-snapshot.cjs');
 const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
-const policy = require('./lib/account-policy.cjs');
-const acct = require('./lib/orch-accounts.cjs');
-const acct = require('./lib/orch-accounts.cjs');
-const policy = require('./lib/account-policy.cjs');
-const accountPaths = require('./lib/account-paths.cjs');
+const orchLoop = require('./lib/orch-loop.cjs');
+const boardLoop = require('./lib/board-loop.cjs');
 const remote = require('./lib/orch-remote.cjs');
-const orchLoop = require('./lib/orch-loop.cjs');
-const boardLoop = require('./lib/board-loop.cjs');
-const orchLoop = require('./lib/orch-loop.cjs');
-const boardLoop = require('./lib/board-loop.cjs');
 const acct = require('./lib/orch-accounts.cjs');
+const policy = require('./lib/account-policy.cjs');
 const accountPaths = require('./lib/account-paths.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
@@ -238,104 +225,6 @@ function creditLines() {
   return lines.filter(Boolean).join('\n') || null;
 }
 
-const cc = () => require('./lib/orch-worker-claude-code.cjs');
-const accountsCfg = () => profile.feature(settings, 'accounts').config;
-/** The registry account a terminal-worker lane runs on (the 1.0 secondary seat through legacyView), or null = no policy. */
-function laneAccount() {
-  const name = legacy.accounts && legacy.accounts.secondary;
-  if (!name) return null;
-  return profile.accounts.list(settings).find((a) => a.name === name) || null;
-}
-const readText = (file) => {
-  try {
-    return fs.readFileSync(file, 'utf8');
-  } catch {
-    return null;
-  }
-};
-/** Create the lane worktree when it is absent; an existing one is checked against the roots (REQ-402, REQ-405). */
-function laneWorktree(s, l, roots) {
-  if (fs.existsSync(l.worktree)) {
-    if (roots) {
-      const have = pre.sparseRoots(l.worktree);
-      const same = have && have.length === roots.length && roots.every((r) => have.includes(r));
-      if (!same) die(3, `E_PATH_ROOTS: worktree ${l.worktree} is not a sparse checkout of the roots ${roots.join(', ')} — remove it (or re-create it with orch worktree) before the launch`);
-    }
-    return { worktree: l.worktree, branch: l.branch, created: false, sparse: roots };
-  }
-  const include = (accountsCfg().worktree || {}).include || [];
-  try {
-    return { ...pre.createLaneWorktree({ repo: s.repo, worktree: l.worktree, branch: l.branch, base: s.target || 'HEAD', roots, include }), created: true };
-  } catch (e) {
-    die(3, e.message);
-  }
-  return null;
-}
-/**
- * The pre-launch gate of a lane (REQ-401 to REQ-404, REQ-703): exits 3 with the check lines on any fault; else creates
- * the worktree when absent, writes the --settings pin (0600) and returns { pinFile, roots }. No account = no policy.
- */
-function policyGate(s, run, lane, l) {
-  const account = laneAccount();
-  if (!account) return { pinFile: null, roots: null };
-  const home = accountPaths.home();
-  const ap = accountPaths.paths(home, account.name, account);
-  const checks = pre.launchChecks({ account, paths: ap, homeExists: fs.existsSync(home) });
-  if (checks.length) {
-    for (const c of checks) console.log(`CHECK ${c.check}: ${c.message}`);
-    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: checks.map((c) => c.check) });
-    process.exit(3);
-  }
-  const projectDir = s.repo || process.cwd();
-  const roots = policy.pathRoots(account);
-  const lockFiles = (() => {
-    try {
-      return Object.keys(JSON.parse(fs.readFileSync(path.join(projectDir, 'builder.lock.json'), 'utf8')).files || {});
-    } catch {
-      return [];
-    }
-  })();
-  const entries = [
-    { file: path.join(projectDir, '.claude', 'settings.json'), role: 'project' },
-    { file: path.join(projectDir, '.claude', 'settings.local.json'), role: 'project' },
-    ...(l.worktree && fs.existsSync(l.worktree) ? [{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }] : []),
-    { file: ap.settingsFile, role: 'account' },
-  ];
-  const faults = policy.check(
-    account,
-    { visibility: settings.visibility, decisionIdPattern: profile.feature(settings, 'handoffPack').config.decisionIdPattern, decisionsPath: settings.paths.decisions, lockFiles, canDeny: account.worker === 'claude-code' },
-    [...(l.ownedFiles || []), ...(l.hotFiles || [])],
-    readText(path.join(projectDir, settings.paths.decisions)),
-    policy.readSettingsFiles(entries),
-  );
-  if (faults.length) {
-    for (const f of faults) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
-    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: faults.map((f) => f.code) });
-    process.exit(3);
-  }
-  let denyPaths = [];
-  if (l.worktree && s.repo) {
-    laneWorktree(s, l, roots);
-    if (roots) denyPaths = policy.denyPathsFor(pre.trackedFiles(s.repo, s.target || 'HEAD'), roots);
-  } else if (roots) die(3, `E_PATH_ROOTS: account ${account.name} has path roots (${roots.join(', ')}) and run ${run} records no repo or worktree for ${lane} — a path-root account launches only in a sparse worktree`);
-  // the worktree's own settings files exist only now: scan them too before the pin is written
-  if (l.worktree && fs.existsSync(l.worktree) && !entries.some((e) => e.role === 'worktree')) {
-    const late = policy.check(account, { lockFiles, canDeny: true, visibility: 'public' }, [], null, policy.readSettingsFiles([{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }]));
-    if (late.length) {
-      for (const f of late) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
-      state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: late.map((f) => f.code) });
-      process.exit(3);
-    }
-  }
-  let accountSettings = null;
-  try {
-    accountSettings = JSON.parse(fs.readFileSync(ap.settingsFile, 'utf8'));
-  } catch {
-    /* none: the scan above already judged an unreadable one */
-  }
-  const pinFile = path.join(store.runDir(root(), run), 'pins', `${lane}.settings.json`);
-  cc().writePin(pinFile, cc().pin({ account, configDir: ap.configDir, accountSettings, denyPaths }));
-  return { pinFile, roots };
 /**
  * The readiness assessment (REQ-307, REQ-309): every probe and usage reader of every account, written to the
  * accounts-readiness record. Forced before a placement; otherwise only when the last assessment is stale. A fault in
@@ -757,27 +646,6 @@ try {
         for (const line of g.lines) console.error(line);
         if (g.code === 3) process.exit(3);
       }
-      if (!resume && acts.some((a) => a.startsWith(`LAUNCH ${lane}:`) && / on primary \(/.test(a))) die(3, `REFUSED launch ${run}/${lane}: placed on the primary seat — start it on the primary account (a sub-agent for a solo lane, its own session for a pipeline lane), not with the secondary launcher`);
-      // M4: the account's content policy, the settings scan and the --settings pin (REQ-401 to REQ-404, REQ-703).
-      const gate = policyGate(s, run, lane, l);
-      if (!l.integrity) state.integrityBaseline(root(), run, lane); // a resume keeps the first baseline: a change from an earlier attempt is never laundered
-      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch, settings: gate.pinFile };
-      const template = cfg.launchCommand || legacy.launchCommand;
-      let launch = template ? pre.fill(template, vars) : null;
-      if (launch && gate.pinFile && !String(template).includes('{settings}')) launch = cc().withSettings(launch, gate.pinFile);
-      out({ name: l.name, worktree: l.worktree, branch: l.branch, brief: l.brief, result: l.result, settings: gate.pinFile, sparse: gate.roots, launch });
-      break;
-    }
-    case 'worktree': {
-      // create a lane's worktree the hygienic way (REQ-405): a fresh branch, the include files copied, sparse on a path-root account
-      const [run, lane] = pos;
-      const s = state.load(root(), run);
-      const l = s.lanes[lane];
-      if (!l) die(2, `no lane ${lane}`);
-      if (!l.worktree || !s.repo) die(3, `refused: run ${run} records no repo or worktree path for ${lane} — re-init with --repo`);
-      const account = laneAccount();
-      const r = laneWorktree(s, l, account ? policy.pathRoots(account) : null);
-      console.log(`${r.created ? 'created' : 'exists'} ${r.worktree} on ${r.branch}${r.fresh === false ? ' (branch existed, no worktree held it)' : ''}${r.sparse ? ` · sparse: ${r.sparse.join(', ')}` : ''}${r.copied && r.copied.length ? ` · copied: ${r.copied.join(', ')}` : ''}${r.missing && r.missing.length ? ` · not found: ${r.missing.join(', ')}` : ''}`);
       // the account the lane goes to: the placement `next` made (a resume keeps the lane's own)
       const placed = resume && l.seat ? l.seat : state.placementNow(root(), s).seat;
       const acc = state.accountOf(s, placed);
@@ -864,7 +732,7 @@ try {
       const l = s.lanes[lane];
       if (!l) die(2, `no lane ${lane}`);
       const installed = path.join(s.repo || process.cwd(), 'specs', 'orchestrator-worker-brief.template.md');
-      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'orchestrator-worker-brief.md');
+      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'templates', 'orchestrator-worker-brief.md');
       const placed = l.seat || state.placementNow(root(), s).seat || null;
       const account = placed ? laneRegistryAccount(s, l) || state.accountOf(s, placed) : null;
       const text = planLib.renderBrief(fs.readFileSync(templateFile, 'utf8'), { run, lane: { ...l, name: lane }, rows: s.rows || [], target: s.target, account });
@@ -1130,30 +998,6 @@ try {
       for (const id of runIds()) state.setPaused(root(), id, false);
       console.log('RESUMED — run `status` for relaunch actions');
       break;
-    case 'remote': {
-      const [sub, run, a, b] = pos;
-      if (!remote.featureOn(settings)) {
-        console.log(remote.notConfigured());
-        process.exit(0);
-      }
-      const rf = profile.feature(settings, 'remoteLanes').config;
-      const env = process.env;
-      if (sub === 'add') out(remote.addMachine(root(), run, a, { host: flags.host, user: flags.user === true ? null : flags.user || null, remoteRoot: flags.root }));
-      else if (sub === 'preflight') out(remote.preflight(root(), run, a, { env }));
-      else if (sub === 'place') out(remote.place(root(), run, a, b, { settings }).line);
-      else if (sub === 'launch') {
-        const acct = (settings.features.accounts && settings.features.accounts.accounts) || {};
-        const l = state.load(root(), run).lanes[a];
-        const maxTurns = Number(flags['max-turns']) || (l && l.account && acct[l.account] && acct[l.account].maxTurns) || null;
-        const r = remote.launch(root(), run, a, { env, settingsFile: flags.settings === true ? null : flags.settings ? path.resolve(flags.settings) : null, base: flags.base, maxTurns, model: flags.model === true ? null : flags.model || null });
-        out(r);
-        if (!r.ok) process.exit(3);
-      } else if (sub === 'poll') {
-        const r = remote.poll(root(), run, a, { env });
-        out(r);
-        console.log(`next poll in ${rf.remotePollSeconds}s`);
-      } else if (sub === 'cancel') out(remote.cancel(root(), run, a, { env }));
-      else die(2, 'usage: remote add|preflight|place|launch|poll|cancel …');
     case 'loop': {
       const bl = profile.feature(settings, 'boardLoop');
       if (!bl.enabled) {
@@ -1178,6 +1022,32 @@ try {
           orchLoop.recordLoop(root(), key, { status: 'error', error: e.message });
           die(2, `loop ${key}: ${e.message}`);
         });
+      break;
+    }
+    case 'remote': {
+      const [sub, run, a, b] = pos;
+      if (!remote.featureOn(settings)) {
+        console.log(remote.notConfigured());
+        process.exit(0);
+      }
+      const rf = profile.feature(settings, 'remoteLanes').config;
+      const env = process.env;
+      if (sub === 'add') out(remote.addMachine(root(), run, a, { host: flags.host, user: flags.user === true ? null : flags.user || null, remoteRoot: flags.root }));
+      else if (sub === 'preflight') out(remote.preflight(root(), run, a, { env }));
+      else if (sub === 'place') out(remote.place(root(), run, a, b, { settings }).line);
+      else if (sub === 'launch') {
+        const acct = (settings.features.accounts && settings.features.accounts.accounts) || {};
+        const l = state.load(root(), run).lanes[a];
+        const maxTurns = Number(flags['max-turns']) || (l && l.account && acct[l.account] && acct[l.account].maxTurns) || null;
+        const r = remote.launch(root(), run, a, { env, settingsFile: flags.settings === true ? null : flags.settings ? path.resolve(flags.settings) : null, base: flags.base, maxTurns, model: flags.model === true ? null : flags.model || null });
+        out(r);
+        if (!r.ok) process.exit(3);
+      } else if (sub === 'poll') {
+        const r = remote.poll(root(), run, a, { env });
+        out(r);
+        console.log(`next poll in ${rf.remotePollSeconds}s`);
+      } else if (sub === 'cancel') out(remote.cancel(root(), run, a, { env }));
+      else die(2, 'usage: remote add|preflight|place|launch|poll|cancel …');
       break;
     }
     case 'credit': {
