@@ -5,6 +5,21 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-11-17
+
+### Breaking
+
+- **2.0.0: accounts replace seats (REQ-107; D22, D33).** The 1.0 keys `features.orchestrator.seats`, `limits`,
+  `secondaryConfigDir` and `credit` are gone. `features.accounts` holds the registry instead: one entry per account
+  with its worker, who pays, content class, roles, config dir, start command and budget. While the orchestrator is
+  on, a profile that still carries the 1.0 keys is refused at load; while it is off, the loader prints one warning.
+  Both name the fix: `npx builder accounts migrate` rewrites the `pipeline-settings` block once (`primary` as the
+  session account, `secondary` as a Claude Code account, `credit` as an `api-key` account), writes
+  `PIPELINE_PROFILE.md.bak` first, changes nothing on a second run, and refuses while a run holds a LAUNCHED or
+  STALLED lane. `npx builder doctor` prints one advisory row `profile: legacy seats, run npx builder accounts
+  migrate` until the rewrite is done; its exit code is unchanged. GUIDE § Accounts carries the migration note. The
+  version bump to 2.0.0 is in this release.
+
 ### Added
 
 - **Install one tool group (`specs/toolkit-unpack-groups.spec.md`, REQ-801 to REQ-811).** `npx builder unpack --tool
@@ -81,19 +96,6 @@ versions independently of any project it is pasted into.
   RELEASING.md checks the badges in step 2 and publishes to the npm registry after the tag (`npm pack --dry-run`, `npm
   publish --access public`; the tag and the registry version match; the first registry release is 2.0.0). Tests:
   `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
-### Breaking
-
-- **2.0.0: accounts replace seats (REQ-107; D22, D33).** The 1.0 keys `features.orchestrator.seats`, `limits`,
-  `secondaryConfigDir` and `credit` are gone. `features.accounts` holds the registry instead: one entry per account
-  with its worker, who pays, content class, roles, config dir, start command and budget. While the orchestrator is
-  on, a profile that still carries the 1.0 keys is refused at load; while it is off, the loader prints one warning.
-  Both name the fix: `npx builder accounts migrate` rewrites the `pipeline-settings` block once (`primary` as the
-  session account, `secondary` as a Claude Code account, `credit` as an `api-key` account), writes
-  `PIPELINE_PROFILE.md.bak` first, changes nothing on a second run, and refuses while a run holds a LAUNCHED or
-  STALLED lane. `npx builder doctor` prints one advisory row `profile: legacy seats, run npx builder accounts
-  migrate` until the rewrite is done; its exit code is unchanged. GUIDE § Accounts carries the migration note. The
-  version bump to 2.0.0 lands in the release PR only.
-
 ### Added — M7 docs, doctor and changelog (2.0.0 line)
 
 - **`doctor` accounts rows (REQ-701, REQ-107; D22, D37).** After the tool blocks, an `[accounts]` section with one
