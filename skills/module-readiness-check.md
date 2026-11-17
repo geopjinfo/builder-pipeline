@@ -56,7 +56,7 @@ the offending location.
       forced-failure rollback test exists and passes.
 - [ ] Absence assertions carry positive controls (the tester's positive-control rule).
 - [ ] **Spec trace** — every requirement id the module declares has a test or a requirement-pack step
-      (`assert` · `by-design <cite>` · `gap` · `skipped`): run `npx builder run spec-trace-check <requirements>`;
+      (`assert` · `by-design <cite>` · `gap` · `skipped`): run `npx builder-pipeline run spec-trace-check <requirements>`;
       an `UNTRACED` id fails this item. Feature off → record `specTrace: not configured` (not a pass).
 
 ## Ledgers (§11)

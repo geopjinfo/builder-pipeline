@@ -29,7 +29,7 @@ function status(cwd, kit) {
   const dir = hooksDir(cwd);
   if (!dir) return { state: 'no-git', note: 'not a git repository' };
   const target = path.join(dir, 'commit-msg');
-  if (!fs.existsSync(target)) return { state: 'missing', target, note: 'commit-msg hook not armed — run `npx builder git-hooks`' };
+  if (!fs.existsSync(target)) return { state: 'missing', target, note: 'commit-msg hook not armed — run `npx builder-pipeline git-hooks`' };
   const ours = fs.readFileSync(path.join(kit, 'hooks', HOOK), 'utf8');
   const theirs = fs.readFileSync(target, 'utf8');
   if (sameText(ours, theirs)) return { state: 'armed', target, note: 'commit-msg strips AI attribution' };

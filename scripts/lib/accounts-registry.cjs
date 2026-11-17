@@ -25,7 +25,7 @@
  *                   (fallback: the plan accounts a refused api-key job may fall back to, in order; [] = none)
  *
  * LEGACY. `seats`, `limits`, `secondaryConfigDir` and `credit` left `features.orchestrator` in 2.0.0. A profile that
- * still carries them is refused while the orchestrator is active (the message names `npx builder accounts migrate`)
+ * still carries them is refused while the orchestrator is active (the message names `npx builder-pipeline accounts migrate`)
  * and loads with one warning otherwise (D33). `migrate()` rewrites them into accounts once. Placement reads the
  * account list itself (M3, orch-state.cjs); `legacyView()` still derives the 1.0 shape for the credit lane's headless
  * runner and the golden fixture, so every 1.0 placement decision is reproduced exactly (REQ-106).
@@ -50,7 +50,7 @@ const HEADLESS_ROLES = Object.freeze(['module-tester', 'module-reviewer', 'stand
 /** An account that may hold a lane (the builder role): no roles listed, or module-builder among them. */
 const placeable = (a) => !Array.isArray(a.roles) || a.roles.length === 0 || a.roles.includes('module-builder');
 const LEGACY_KEYS = Object.freeze(['seats', 'limits', 'secondaryConfigDir', 'credit']);
-const MIGRATE_HINT = 'npx builder accounts migrate';
+const MIGRATE_HINT = 'npx builder-pipeline accounts migrate';
 
 /** The 1.0 orchestrator keys and their defaults, kept here for `legacyView` and `migrate` only. */
 const LEGACY_DEFAULTS = Object.freeze({
@@ -143,7 +143,7 @@ function validateAccounts(settings, opts = {}) {
     // REQ-105: a secret never lives in §16, whatever the key. The kind of match is named, never the text.
     for (const [p, v] of strings(raw, atA().replace(/\.$/, ''))) {
       const hit = patterns.find(([, re]) => re.test(v));
-      if (hit) errors.push(`${p}: holds a secret-shaped value (${hit[0]}) — a key enters through \`npx builder accounts key ${name}\`, never the profile`);
+      if (hit) errors.push(`${p}: holds a secret-shaped value (${hit[0]}) — a key enters through \`npx builder-pipeline accounts key ${name}\`, never the profile`);
     }
     if (!WORKERS.includes(a.worker)) errors.push(`${atA('worker')}: ${active || a.worker !== null ? `one of ${WORKERS.join(' | ')}` : 'required'} (got ${JSON.stringify(a.worker)})`);
     if (a.worker === 'session') sessions += 1;

@@ -1,5 +1,5 @@
 /**
- * Tool groups — which group of the kit each installed file belongs to (`npx builder unpack --tools <group>[,<group>]`).
+ * Tool groups — which group of the kit each installed file belongs to (`npx builder-pipeline unpack --tools <group>[,<group>]`).
  *
  * The kit is a set of tools. A project that runs its own orchestrator wants the audit gates and nothing else; a team
  * that writes specs wants the spec stage alone. `--tools` names the groups to install, and every file `unpack` or

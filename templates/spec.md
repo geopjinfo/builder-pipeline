@@ -6,7 +6,7 @@ Ratified-by: —
 
 > One spec per module, authored before Phase 1 by the `spec-author` skill and ratified by a person. It is
 > the requirements oracle for this module (profile §3): the planner, the tester's requirement pack and the
-> reviewer's alignment audit read these rows **verbatim**. Check it with `npx builder run spec-check <module key>`
+> reviewer's alignment audit read these rows **verbatim**. Check it with `npx builder-pipeline run spec-check <module key>`
 > (folder layout: `node scripts/spec-check.mjs <module key>`); the pipeline refuses a draft. Keep every table
 > header exactly as written — the checker reads them.
 

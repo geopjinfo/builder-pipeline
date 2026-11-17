@@ -3,8 +3,8 @@
  * orch — the batch orchestrator's fixed steps (feature `orchestrator`). Judgement lives in skills/orchestrator.md;
  * everything mechanical is here, so a killed orchestrating session resumes from the state file, not from memory.
  *
- *   npx builder run orch <command> …       (not through npm run: some shells' npm drops --flags)
- * (folder layout: node scripts/orch.mjs in place of npx builder run orch)
+ *   npx builder-pipeline run orch <command> …       (not through npm run: some shells' npm drops --flags)
+ * (folder layout: node scripts/orch.mjs in place of npx builder-pipeline run orch)
  *
  * Plan → lanes
  *   digest <artifact.md|.html> [--out plan.md] [--run R] [--title T]

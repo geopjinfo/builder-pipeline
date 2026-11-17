@@ -2,16 +2,16 @@
  * The claims checker at the end of the build and docs phases. Checks: re-run counts, anchored citations,
  * retracted phrases, unresolved NEEDS-RULING / owed notes. Rules: scripts/lib/claims-check.cjs.
  *
- *   npx builder run claims-check --run <key>
+ *   npx builder-pipeline run claims-check --run <key>
  *       <boards>/<key>.md + <runs>/<key>/{plan,state,review*}.md + <handoffs>/*<key>*handoff*.md
  *       + the counts in <runs>/<key>/claims.jsonl
- *   npx builder run claims-check --files <a> <b> … [--claims <claims.jsonl>]
+ *   npx builder-pipeline run claims-check --files <a> <b> … [--claims <claims.jsonl>]
  *       exactly these documents (no claims file unless --claims is given)
  *   --no-run-counts      skip re-running claim commands (citations / retracted / owed only)
  *   --only <kinds>       comma list of count,citation,retracted,owed,unanchored,named
  *   --extended           also UNANCHORED + NAMED on DONE board rows (off by default; CLAIMS_EXTENDED=1 does
  *                        the same, for shells that drop flags passed through a package-manager script)
- * (folder layout: node scripts/claims-check.mjs in place of npx builder run claims-check)
+ * (folder layout: node scripts/claims-check.mjs in place of npx builder-pipeline run claims-check)
  *
  * Settings (PIPELINE_PROFILE.md): paths.boards · paths.runs · paths.handoffs · paths.decisions · paths.registry ·
  * paths.citationRoots (empty → every top-level directory present, except node_modules, .git and dot-directories) ·

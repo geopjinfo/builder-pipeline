@@ -1,6 +1,6 @@
 /**
- * What this project has switched on — `npx builder run features`.
- * (folder layout: node scripts/features.mjs in place of npx builder run features)
+ * What this project has switched on — `npx builder-pipeline run features`.
+ * (folder layout: node scripts/features.mjs in place of npx builder-pipeline run features)
  *
  * Loads PIPELINE_PROFILE.md from the current directory (or, without one, the config file named by BUILDER_CONFIG or
  * builder.config.json — REQ-101), prints one line per feature (the same sentence each step

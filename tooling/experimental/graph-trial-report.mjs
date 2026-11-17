@@ -3,8 +3,8 @@
  * EXPERIMENTAL (`features.graphTrial`) — per-seat knowledge-index usage over one or more sessions.
  * CLAUDE CODE TRANSCRIPTS ONLY; see EXPERIMENTS.md, graph seat trial. Rule: graph-trial.cjs.
  *
- *   npx builder run experimental/graph-trial-report <sessionId>… [--dir <transcripts dir>] [--json]
- * (folder layout: node scripts/experimental/graph-trial-report.mjs in place of npx builder run experimental/graph-trial-report)
+ *   npx builder-pipeline run experimental/graph-trial-report <sessionId>… [--dir <transcripts dir>] [--json]
+ * (folder layout: node scripts/experimental/graph-trial-report.mjs in place of npx builder-pipeline run experimental/graph-trial-report)
  *
  * In the folder layout, installed by `node builder/cli.js unpack --experimental` beside `graph-trial.cjs` in `scripts/experimental/`.
  *

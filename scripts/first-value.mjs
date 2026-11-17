@@ -1,8 +1,8 @@
 /**
  * Measure time to first value from packing the kit to running its first check.
  *
- *   npx builder run first-value [--json] [--keep]
- * (folder layout: node scripts/first-value.mjs in place of npx builder run first-value)
+ *   npx builder-pipeline run first-value [--json] [--keep]
+ * (folder layout: node scripts/first-value.mjs in place of npx builder-pipeline run first-value)
  *
  * Exit 0 success · 1 a step failed · 2 bad arguments.
  */
@@ -48,8 +48,8 @@ try {
   const tarball = readdirSync(temp).find((name) => name.endsWith('.tgz'));
   if (!tarball) throw new Error('pack produced no tarball');
   run('install', 'npm', ['install', '--no-audit', '--no-fund', '--prefer-offline', join(temp, tarball)]);
-  run('inventory', 'npx', ['--no', 'builder', 'inventory']);
-  run('claimsCheck', 'npx', ['--no', 'builder', 'run', 'claims-check', '--files', 'README.md']);
+  run('inventory', 'npx', ['--no', 'builder-pipeline', 'inventory']);
+  run('claimsCheck', 'npx', ['--no', 'builder-pipeline', 'run', 'claims-check', '--files', 'README.md']);
   const seconds = (performance.now() - start) / 1000;
   if (args.includes('--json')) {
     console.log(JSON.stringify({ seconds, steps, node: process.version }));

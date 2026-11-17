@@ -1,6 +1,6 @@
 # EXPERIMENTS — shipped, not proven
 
-> **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
+> **Commands.** Written for the npm-package install: a kit script runs as `npx builder-pipeline run <name>`. With the
 > kit copied in as a `builder/` folder ([`UNPACK.md`](UNPACK.md)), run it from the project's `scripts/` copy with Node.
 
 Every item here is in the pack because it has a reasoned case and a way to measure it — and none has
@@ -20,7 +20,7 @@ how to switch it on, the **exact measurement** that promotes or removes it, and 
 to replace. Record the call — keep, stop, or change a parameter — as a decision in `paths.decisions`,
 with the numbers and the runs they came from, and update this file.
 
-`npx builder run features` prints the current state of each, with its decision beside it. `npx builder run experiments`
+`npx builder-pipeline run features` prints the current state of each, with its decision beside it. `npx builder-pipeline run experiments`
 prints every section's decision, `--check` refuses a blank or an unsupported keep, `--matrix` prints the trial matrix,
 and `--record <n> --row "| … |"` is how a scheduled run appends its measurement.
 
@@ -28,9 +28,9 @@ and `--record <n> --row "| … |"` is how a scheduled run appends its measuremen
 
 ## 1. Script-driven run and a live page — `livePage` (experimental)
 
-**What ships.** `npx builder run board-render <key> --json` (one JSON document per board section,
+**What ships.** `npx builder-pipeline run board-render <key> --json` (one JSON document per board section,
 split never truncated); `tooling/experimental/page-shell.cjs` (a read-only live page that reads those
-documents; `npx builder run experimental/page-shell <key>` writes it); `agents/experimental/page-keeper.md` (a read + shell + publish seat that refreshes the
+documents; `npx builder-pipeline run experimental/page-shell <key>` writes it); `agents/experimental/page-keeper.md` (a read + shell + publish seat that refreshes the
 page and never writes). The pipeline skill itself is unchanged: a script-driven run replaces the
 orchestrator's P2 → P6.5 turns with a workflow script that dispatches the same seats, with
 schema-checked outputs and the same FIX loop.
@@ -43,7 +43,7 @@ page, and there is nothing to switch on.
 **Measurement.** One ADDITIVE run. Its first scripted step probes that a script-dispatched seat
 actually receives the publish tool; if not, the refresh becomes an orchestrator step at each phase
 gate, and those orchestrator turns are counted. After P7, compare against a comparable skill-driven
-run: cost (`npx builder run cost-window --since <iso> --until <iso>` over each run's window), `FIX-n`
+run: cost (`npx builder-pipeline run cost-window --since <iso> --until <iso>` over each run's window), `FIX-n`
 rows raised, and the verdict. **Promote** if FIX rows and verdict are no worse and cost is not higher.
 **Remove** otherwise.
 
@@ -73,7 +73,7 @@ Code transcripts only.
 expression over the Bash command, with backslashes normalised to `/`. Capture 1 is the subcommand.
 Put in it only the subcommands the return line counts as calls. Resolve the block's placeholder
 commands for your index tool first. A pointer with no runnable command measures nothing. After each
-run: `npx builder run experimental/graph-trial-report <sessionId>…`.
+run: `npx builder-pipeline run experimental/graph-trial-report <sessionId>…`.
 
 **Measurement.** Two runs with the trial on **and** a control group: comparable runs with it off,
 where no graph instruction reaches the seats by any other route (the brief, the profile). For each
@@ -104,7 +104,7 @@ whose P2 start commit and board rows are recorded. In a dedicated session, repla
 commit in isolated worktrees, dispatching only the builder over the same rows — once as the pipeline
 runs it today, once on the mid-tier model with the strong model as advisor. Then run the same P3/P4
 seats over both results and compare: `FIX-n` rows raised, defects caught, and builder cost
-(`npx builder run cost-window`). **Promote** only if loop-backs do not grow and cost falls.
+(`npx builder-pipeline run cost-window`). **Promote** only if loop-backs do not grow and cost falls.
 **Remove** otherwise.
 
 **Risk.** Quality lost in P2 surfaces as extra loop-backs in P3–P6, where it costs more than it
@@ -135,7 +135,7 @@ saved. A replay of one run is a small sample; say so in the decision.
   only the `grant` value, so an "active" flag column would pass for a role.
 - `logins` is optional.
 
-Set `state` to `"experimental-on"` and run `npx builder run experimental/persona-gen`. Draft profiles
+Set `state` to `"experimental-on"` and run `npx builder-pipeline run experimental/persona-gen`. Draft profiles
 only for the roles a run touches, and add `persona-gen.mjs --check` to the run's gates. The
 orchestrator attaches the touched roles' profiles to the `security-auditor` and `invariant-auditor`
 dispatches.
@@ -155,7 +155,7 @@ primary sources.
 
 **What ships.** The mutation **step** (`features.mutation`, P3, non-blocking — its score is a `gate`
 event, logic survivors become tester rows, payload survivors become one row). No threshold ships, and
-**the flag enforces nothing**: `features.mutationGate.state` is a recorded intent that `npx builder run
+**the flag enforces nothing**: `features.mutationGate.state` is a recorded intent that `npx builder-pipeline run
 features` reports, not a branch in `mutation-step.mjs`. Switching it on does not make the step block.
 
 **Opt in.** Configure `features.mutation` and run the step. Switch
@@ -192,15 +192,15 @@ shape exactly.
 
 **What ships.** P2 dispatches the builder in batches of at most `features.builderBatch.rows` board
 rows (default 5), a fresh dispatch each, the builder reading its rows through
-`npx builder run ledger-row board <key> <ROW…>`.
+`npx builder-pipeline run ledger-row board <key> <ROW…>`.
 
 **Why it is on.** Every turn re-reads the whole context window, so the long tail of a dispatch that
 has built many rows costs more per turn than a fresh dispatch's startup.
 
 **Measurement.** *Before:* over a window of runs without batching,
-`npx builder run seat-peaks --since <iso> --until <iso> --seat module-builder` — median, p90 and max
+`npx builder-pipeline run seat-peaks --since <iso> --until <iso> --seat module-builder` — median, p90 and max
 peak context per builder dispatch, turns per dispatch — and builder cost per row from
-`npx builder run cost-window` over the same window. *After:* the next run whose P2 has more rows
+`npx builder-pipeline run cost-window` over the same window. *After:* the next run whose P2 has more rows
 than one batch, same commands over its window. **Keep** if the p90 peak **and** builder cost per row
 both fall. Otherwise raise `rows` and say why, or set the feature `off`.
 
@@ -213,7 +213,7 @@ across batches can conflict. Keep coupled rows in one batch.
 
 **What ships.** In the loop-back, `FIX-n` rows are grouped by file area. Each group goes to its own
 builder dispatch carrying only the `file:line` list, cites, minimal fixes and the tests to run — no
-plan, no board history. `npx builder run fix-rate [boards…]` measures the fix-of-fix rate: the share
+plan, no board history. `npx builder-pipeline run fix-rate [boards…]` measures the fix-of-fix rate: the share
 of `FIX-n` rows that repair another `FIX-n` row of the same board. Its rule counts a row only when a
 repair cue sits near the reference — a mere mention of another FIX row is not a repair.
 
@@ -221,10 +221,10 @@ repair cue sits near the reference — a mere mention of another FIX row is not 
 plan pays for context a localized fix does not need.
 
 **Measurement.** Before the first use, record the baseline:
-`npx builder run fix-rate <boards>/<recent-run>.md …` over your recent run boards. After **two runs
-that looped back through the lane**, run `npx builder run fix-rate <boards>/<key1>.md <boards>/<key2>.md`.
+`npx builder-pipeline run fix-rate <boards>/<recent-run>.md …` over your recent run boards. After **two runs
+that looped back through the lane**, run `npx builder-pipeline run fix-rate <boards>/<key1>.md <boards>/<key2>.md`.
 **Keep** if the rate is at or below the baseline **and** loop-back cost did not rise
-(`npx builder run cost-window` over the loop-back phases). Otherwise set the feature `off` and
+(`npx builder-pipeline run cost-window` over the loop-back phases). Otherwise set the feature `off` and
 return to one whole-list re-dispatch with the plan.
 
 **Read the rate against the board before you trust it — it under-counts in one specific way.** The
@@ -251,7 +251,7 @@ which shows up exactly as a rising fix-of-fix rate. A lane judged on zero loop-b
 plus the free checks, then the module is queued `BUILT-UNGATED` and the run stops), `build-module-lite-gate-batch`
 (every later phase — drift, the four auditors on each module's own diff, docs, ledger audit, review, the
 behavioural gate, the release commit, close-out — over up to `cap` queued modules), and
-`npx builder run gate-queue`, which records each finished phase with the sha it was proven at and re-opens it
+`npx builder-pipeline run gate-queue`, which records each finished phase with the sha it was proven at and re-opens it
 when that module's code moves afterwards. The bar does not move: nothing merges until the batch closes it `GATED`.
 
 **Opt in.** Set `features.liteSplit.state` to `"experimental-on"`; tune `cap` (hard limit of open modules),
@@ -259,8 +259,8 @@ when that module's code moves afterwards. The bar does not move: nothing merges 
 bookkeeping, or as docs that re-open no module phase). Off, `gate-queue` refuses and the lite skills do not run.
 
 **Measurement.** Over **one full batch of at least `trigger` modules**, compare against the same number of full
-runs: total orchestrator + seat wall clock (`npx builder run cost-window`), fix rows per module
-(`npx builder run fix-rate`), and how many checks `gate-queue status` re-opened after a fix. **Keep** if wall
+runs: total orchestrator + seat wall clock (`npx builder-pipeline run cost-window`), fix rows per module
+(`npx builder-pipeline run fix-rate`), and how many checks `gate-queue status` re-opened after a fix. **Keep** if wall
 clock fell and fix rows per module did not rise; **stop** if late findings forced rework in modules built on top
 of the flawed one more than once per batch. One real module has been through both halves so far — not a batch.
 
@@ -293,7 +293,7 @@ inject repo facts confirmed over three sessions. It supports a fixed range of ha
 trial lane worktrees only**, with micro-skills off. It is a dev-time tool: nothing of it ships to an air-gapped
 host.
 
-**Measurement.** First check the meter: `npx builder run cost-window` over a recent week must price every
+**Measurement.** First check the meter: `npx builder-pipeline run cost-window` over a recent week must price every
 dispatch and name every seat. An `unpriced` count or an `unknown` seat means the rate table or the transcript
 reader is behind, and no comparison is valid until it is fixed. Then take the baseline over two comparable lanes
 without the plugin (`cost-window`, `seat-peaks`, `fix-rate`) and repeat over two lanes with it. **Keep** if cost
@@ -369,7 +369,7 @@ check exists for that; a lane that fails it is a stall, never a degraded run.
 ---
 
 **§12–15 share one door.** Each sends a short excerpt to a cheap model (a Haiku-class subagent on the session's own
-provider). Every payload goes through `scripts/lib/outbound-guard.cjs` (`npx builder run outbound-check` from a
+provider). Every payload goes through `scripts/lib/outbound-guard.cjs` (`npx builder-pipeline run outbound-check` from a
 shell), so `features.outboundGuard` must be `on` before any of them is switched on. The guard refuses, and never
 redacts: a denied file, a secret-shaped string, a value from `envFiles`, or a payload over `maxBytes` means NOT
 SENT, and the step goes on without advice. A failed or timed-out call is also "no advice". None of the four may block
@@ -450,7 +450,7 @@ Off, the reviewer reads the findings in dispatch order, as today.
 
 **Measurement.** Three modules with the feature on and three comparable modules with it off. For each module
 record: accepted findings per auditor family, reviewer loop-backs (`FIX-n` rows raised by the review pass), and cost
-per task (`npx builder run cost-window` over the review window). **Keep** if accepted findings rise, loop-backs do
+per task (`npx builder-pipeline run cost-window` over the review window). **Keep** if accepted findings rise, loop-backs do
 not rise, and cost per task stays inside the module budget. **Drop** otherwise.
 
 **Risk.** A family view can hide a cross-family defect: a security finding that is also an invariant break is read
@@ -460,7 +460,7 @@ once, in one list. The reviewer still reads every finding.
 
 ## 17. Board loop on a throwaway project — `boardLoop` (planned, experimental)
 
-**What ships.** `features.boardLoop` (M9): `npx builder run board-loop` and `orch loop`. The orchestrator loops one brief through Stage 0 to Stage 5 on a
+**What ships.** `features.boardLoop` (M9): `npx builder-pipeline run board-loop` and `orch loop`. The orchestrator loops one brief through Stage 0 to Stage 5 on a
 throwaway project without a person between the stages. The board stays the one progress surface.
 
 **Opt in.** Set `features.boardLoop.state` to `experimental-on` in `PIPELINE_PROFILE.md` §16, on a throwaway project only,
@@ -468,7 +468,7 @@ with `features.boardLoop.promptFile`, `gate` and `maxPasses` filled.
 The test bed is a small project of four to six aider polyglot exercises, each with its unit tests as the gate.
 
 **Measurement.** Over one loop of every exercise, record: pass rate (exercises whose unit tests pass), cost per
-exercise (`npx builder run cost-window`, or `unmeasured` when the harness keeps no record), turns per stage,
+exercise (`npx builder-pipeline run cost-window`, or `unmeasured` when the harness keeps no record), turns per stage,
 timeouts, and silent failures (a stage that ended without a verdict and without an error). Write the numbers in
 this section with the project commit sha. Promotion is the maintainer's call, made on these numbers.
 
@@ -491,7 +491,7 @@ counts exist to show that.
 board and worker adapter as a local lane.
 
 **Opt in.** Set `features.remoteLanes.state` to `experimental-on` in `PIPELINE_PROFILE.md` §16, then add one machine with
-`npx builder run orch remote add` and run its preflight.
+`npx builder-pipeline run orch remote add` and run its preflight.
 
 **Measurement.** One local lane and one remote lane on the same project and the same exercises. For each lane
 record: pass rate, wall time from `LAUNCH` to the verdict, ssh failures (a connection that dropped or was refused),
@@ -577,7 +577,7 @@ orchestrator-driven build run is owed.
 how fast a new project gets its first result from the kit, and how often the default-on checks are wrong.
 
 **Time to first value.** `scripts/first-value.mjs` creates an empty git repository in a temporary folder, installs
-the kit from an npm pack of the checkout, runs `npx builder inventory` and `npx builder run claims-check --files`
+the kit from an npm pack of the checkout, runs `npx builder-pipeline inventory` and `npx builder-pipeline run claims-check --files`
 there, and prints the wall time. The test fails above 300 s.
 
 | Date | Commit | Node | Wall time (s) |

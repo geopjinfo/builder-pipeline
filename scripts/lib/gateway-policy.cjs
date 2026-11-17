@@ -223,7 +223,7 @@ function driftRow(home, cfgIn = {}) {
   const marker = readMarker(cfg.appliedFile);
   const d = drift(policy, marker);
   if (!d.length) return null;
-  return `gateway policy drift: ${d.join(', ')} — run npx builder accounts policy dry-run, then npx builder accounts policy apply`;
+  return `gateway policy drift: ${d.join(', ')} — run npx builder-pipeline accounts policy dry-run, then npx builder-pipeline accounts policy apply`;
 }
 
 module.exports = { KNOWN, DEFAULT_KIND, DEFAULT_VERSION, GatewayError, defaults, urlFault, validatePolicy, subscriptionFault, readToken, client, readPolicy, drift, readMarker, run, usageSnapshot, driftRow, sha256 };

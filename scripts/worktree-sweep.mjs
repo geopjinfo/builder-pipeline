@@ -2,8 +2,8 @@
 /**
  * Remove finished `git worktree`s after their branch has merged. Rule and its WHY: scripts/lib/worktree-sweep.cjs.
  *
- *   npx builder run worktree-sweep [--apply] [--idle-hours N] [--target <branch>] [--keep <name,...>]
- * (folder layout: node scripts/worktree-sweep.mjs in place of npx builder run worktree-sweep)
+ *   npx builder-pipeline run worktree-sweep [--apply] [--idle-hours N] [--target <branch>] [--keep <name,...>]
+ * (folder layout: node scripts/worktree-sweep.mjs in place of npx builder-pipeline run worktree-sweep)
  *
  * Dry run unless --apply: prints KEEP (with every reason) or SWEEP per worktree, then one summary line. With
  * --apply each SWEEP worktree has its backup dirs copied under <logs>/backups/worktrees-<date>/, a node_modules link
