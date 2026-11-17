@@ -176,3 +176,16 @@ describe('REQ-1511 — the capacity advisory row', () => {
     assert.doesNotMatch(doctor.capacityRows(process.cwd(), 'linux')[0].note, /unmeasured/);
   });
 });
+
+describe('builder doctor reporter row (REQ-1613)', () => {
+  test('red: the --json report carries an advisory reporter section with one row, and the text report prints it', () => {
+    const d = doctorWith({}, {});
+    const section = JSON.parse(d.json.stdout).find((t) => t.section === 'reporter');
+    assert.ok(section, 'the --json report carries a reporter section');
+    assert.equal(section.advisory, true);
+    assert.equal(section.rows.length, 1);
+    assert.equal(section.rows[0].feature, 'reporter');
+    assert.match(section.rows[0].note, /reporter: not configured/);
+    assert.match(d.text.out, /\[reporter\] features\.reporter — advisory/);
+  });
+});

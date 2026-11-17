@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -136,4 +136,23 @@ test('REQ-1514 the template §16 block carries capacity off with perLaneMb null 
   assert.equal(raw.features.capacity.state, 'off');
   assert.equal(raw.features.capacity.perLaneMb, null);
   assert.equal(profile.FEATURES.capacity.defaults.perLaneMb, null);
+});
+
+describe('REQ-1601 — features.reporter rules', () => {
+  const withReporter = (reporter) => profile.parse('```json pipeline-settings\n' + JSON.stringify({ schema: 2, features: { reporter: { state: 'on', ...reporter } } }) + '\n```\n');
+  test('red: AC-1601a a channel of kind email is invalid and the message prints the allowed set', () => {
+    const r = withReporter({ channels: [{ kind: 'email' }] });
+    assert.ok(r.errors.some((e) => /features\.reporter\.channels\[0\]\.kind: one of stdout \| file \| webhook \| command/.test(e)), r.errors.join('\n'));
+  });
+  test('red: AC-1601b a webhook with a literal url is invalid, names urlEnv or urlFile, and never echoes the URL', () => {
+    const r = withReporter({ channels: [{ kind: 'webhook', format: 'slack', url: 'https://hooks.example.test/T000/B000/secretpart' }] });
+    const text = r.errors.join('\n');
+    assert.match(text, /urlEnv|urlFile/);
+    assert.ok(!text.includes('secretpart') && !text.includes('hooks.example.test'), text);
+  });
+  test('red: AC-1601d alertOn outside the closed set is invalid and the message prints the set', () => {
+    const r = withReporter({ channels: [{ kind: 'stdout' }], alertOn: ['email'] });
+    assert.ok(r.errors.some((e) => /stall, failed, conflict, rate-limit, limit, run-complete/.test(e)), r.errors.join('\n'));
+    assert.deepEqual(withReporter({ channels: [{ kind: 'stdout' }], alertOn: ['stall'] }).errors, []);
+  });
 });

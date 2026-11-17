@@ -368,6 +368,8 @@ error, because a typo would otherwise switch a check off in silence.
     "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
     "capacity":         { "state": "off", "perLaneMb": null, "reserveCores": 2, "maxLoadPerCore": 1.0, "minFreeMb": 1024, "minDiskMb": 2048, "intervalSeconds": 60, "ttlSeconds": 180, "riseAfterTicks": 3, "holdMaxMinutes": 60, "explainAfterTicks": 10 },
     "orchestrator":     { "state": "off", "target": null, "primaryLaunch": "manual", "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null },
+    "reporter":         { "state": "off", "channels": [], "intervalMinutes": 30, "onlyOnChange": true, "heartbeatEvery": 4, "alertOn": [], "alertPollSeconds": 30, "maxBytes": 3500, "timeoutMs": 10000, "reportsDir": ".pipeline/reports" },
+    "reporterSummary":  { "state": "experimental-off" },
     "accounts":         { "state": "off", "softLimitPct": 80, "usageStaleMinutes": 30, "accounts": {} }
   }
 }
