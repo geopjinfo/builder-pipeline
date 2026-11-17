@@ -1,8 +1,8 @@
 /**
  * Refuse a handoff pack until every section is complete. Rules: scripts/lib/handoff-check.cjs.
  *
- *   npx builder run handoff-check <paths.handoffs>/<date>-<key>-handoff.md
- * (folder layout: node scripts/handoff-check.mjs in place of npx builder run handoff-check)
+ *   npx builder-pipeline run handoff-check <paths.handoffs>/<date>-<key>-handoff.md
+ * (folder layout: node scripts/handoff-check.mjs in place of npx builder-pipeline run handoff-check)
  *
  * Settings (PIPELINE_PROFILE.md): paths.decisions (a file or a directory of .md files — any decision id either
  * mentions counts as existing) · paths.registry · features.claims.registryIdPattern ·

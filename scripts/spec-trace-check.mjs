@@ -1,14 +1,14 @@
 /**
  * Every requirement id must have a test or a requirement-pack step. Rule: scripts/lib/spec-trace.cjs.
  *
- *   npx builder run spec-trace-check                      every id in features.specTrace.requirements
- *   npx builder run spec-trace-check <requirements.md> …  exactly these requirement files (one module's register)
+ *   npx builder-pipeline run spec-trace-check                      every id in features.specTrace.requirements
+ *   npx builder-pipeline run spec-trace-check <requirements.md> …  exactly these requirement files (one module's register)
  *   --tests <path> · --packs <path>                       trace sources named here (repeatable) in place of §16's; with
  *                                                         the feature off, named requirement files plus one of these
  *                                                         run the check with the default id pattern, and say so
  *   --list                                                every requirement with its verdict and traces
  *   --json                                                machine-readable results
- * (folder layout: node scripts/spec-trace-check.mjs in place of npx builder run spec-trace-check)
+ * (folder layout: node scripts/spec-trace-check.mjs in place of npx builder-pipeline run spec-trace-check)
  *
  * Settings: features.specTrace — idPattern (the id shape) · requirements (files or folders that declare ids) ·
  * tests + testPattern (test files: any whole-token mention traces) · packs (requirement-pack files: a step traces —

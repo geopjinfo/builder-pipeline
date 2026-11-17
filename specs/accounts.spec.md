@@ -29,7 +29,7 @@ The plan artifact https://claude.ai/artifact/FLZ6L6YJqhq8Jd3uV3pvdJ is the sourc
   the refusal of 1.0 `seats`, `limits`, `secondaryConfigDir` and `credit`, and `accounts migrate`.
 - In: M2a Readiness assessment — pure `assess(account, probes, usage, now)`, built-in Claude Code and Codex probes,
   the Codex `rate_limits` reader, usage sources, the OAuth-expiry probe, redaction.
-- In: M2b Report command and foreign probes — `npx builder accounts [--json]`, Antigravity and gateway probes, the
+- In: M2b Report command and foreign probes — `npx builder-pipeline accounts [--json]`, Antigravity and gateway probes, the
   snapshot reader, working with the orchestrator off.
 - In: M3 Placement over accounts — `placement()`, percent and USD budgets, soft and hard limits, `classifyError`,
   OVERLOAD backoff, shadow placement, budget warnings, 1.0 state read-only.
@@ -42,7 +42,7 @@ The plan artifact https://claude.ai/artifact/FLZ6L6YJqhq8Jd3uV3pvdJ is the sourc
 - In: M7 Docs, doctor and changelog — doctor rows, GUIDE, FEATURES, README, llms.txt, the CHANGELOG Breaking section,
   the 2.0.0 bump in the release PR.
 - In: M8 Cross-family second opinion — `familyReview` and `routerHint`, experimental-off, measured first.
-- In: M9 Loop runner above a board — `npx builder run board-loop` and `orch loop`, caps and named stops, one commit
+- In: M9 Loop runner above a board — `npx builder-pipeline run board-loop` and `orch loop`, caps and named stops, one commit
   per passing pass, scope control, commit trailers, the aider-polyglot measurement.
 - In: M10 Accounts command — `accounts add`, `note`, `key`, `key --remove`, `remove`, `list`, `migrate`; key entry
   and storage; named refusal codes; leases.
@@ -103,7 +103,7 @@ decision id from DECISIONS.md.
 |---|---|---|---|---|
 | REQ-101 | The kit shall list `features.accounts` in the FEATURES table with the default off. When the profile loads with `accounts.state: on`, the kit shall validate every account. If an account lacks `worker` or `pays`, then the kit shall refuse the profile and name the account and the field. | account owner | refusal | D7 |
 | REQ-102 | The kit shall accept `pays` in subscription, gateway, free or api-key; `content` in public, scratch, any, or a list of path roots; `roles` only from the persona roles the orchestrator knows; and `worker` in claude-code, codex or session. The session worker is the orchestrating session itself; it is never spawned, and at most one account carries it. If a value is outside its set, or two accounts carry worker session, then the kit shall refuse the profile and print the allowed set. | account owner | refusal | D36 |
-| REQ-103 | While `features.orchestrator` is on, if a profile still carries `seats`, `limits`, `secondaryConfigDir` or `credit`, then the kit shall refuse it at load with a message that names the keys found and `npx builder accounts migrate`, and shall not half-load it. While the orchestrator is off, the kit shall load that profile with one warning line and run every other checker. | account owner | refusal | D22, D33 |
+| REQ-103 | While `features.orchestrator` is on, if a profile still carries `seats`, `limits`, `secondaryConfigDir` or `credit`, then the kit shall refuse it at load with a message that names the keys found and `npx builder-pipeline accounts migrate`, and shall not half-load it. While the orchestrator is off, the kit shall load that profile with one warning line and run every other checker. | account owner | refusal | D22, D33 |
 | REQ-104 | The kit shall ship no file that names a real account, host or key file. A separate secret-shape scan shall cover the shipped files and `tests/fixtures`. | kit checkers | constraint | D9, D18 |
 | REQ-105 | The §16 account settings shall never hold a secret. If a value matches an outbound-guard secret shape, then the kit shall refuse the profile and name the account and the kind of match, never the text. | account owner | constraint | D2 |
 | REQ-106 | When `accounts migrate` runs, the kit shall rewrite the legacy keys into an equivalent account list once, write a backup, and change nothing outside §16. A second run on a migrated profile shall change nothing. If an orchestrator run is live, then migrate shall refuse and name the run. | account owner | behaviour | D22, D34 |
@@ -113,7 +113,7 @@ decision id from DECISIONS.md.
 | REQ-202 | The assessment shall never carry an env value or a key. If a probe prints a secret-shaped string, then the rendered assessment shall carry the redaction marker in its place. | kit checkers | constraint | D2 |
 | REQ-203 | The kit shall parse usage as "$X of $Y" from `usageCommand`, from the gateway snapshot JSON (`spend`, `maxBudget`, `budgetResetAt`), and from the Codex session `rate_limits`. A Claude plan account has no reader; the kit shall report it unmeasured, never 0 %. No headless surface prints a Claude percentage. | orchestrating session | behaviour | D3, D43 |
 | REQ-204 | While `features.accounts` is on and `features.orchestrator` is off, the `accounts` command shall print the report and exit 0. | account owner | behaviour | D25 |
-| REQ-205 | While `features.accounts` is off, `npx builder accounts` shall print `accounts: not configured` and exit 0. While it is on, the report shall follow the shape of `gh auth status`: one block per account, exit 1 when any account is not ready, exit 0 with `--json`. | account owner | behaviour | D7, D25 |
+| REQ-205 | While `features.accounts` is off, `npx builder-pipeline accounts` shall print `accounts: not configured` and exit 0. While it is on, the report shall follow the shape of `gh auth status`: one block per account, exit 1 when any account is not ready, exit 0 with `--json`. | account owner | behaviour | D7, D25 |
 | REQ-206 | While an account has `smokeCommand`, the kit shall mark it ready for a writing role only while its last smoke pass is younger than `smokeMaxAgeHours`. When the pass is older, the kit shall report ready (read-only: smoke stale). | orchestrating session | behaviour | D31 |
 | REQ-207 | The kit shall read each worker's version from `versionCommand`. If there is no `versionCommand`, then the version shall be unmeasured. | orchestrating session | behaviour | D4 |
 | REQ-208 | The kit shall ship built-in probes. Claude Code: `claude auth status` (JSON `authMethod` and `configDirectory`, exit 1 when signed out), or a key file plus `apiKeyHelper` in the account settings. Codex: `codex login status` read from stderr and the exit code (ChatGPT login, API key or not logged in; no plan tier). Antigravity: a models call under a timeout; the words "sign in" in the output mean not ready. Gateway: wrapper present, not marked closed, gateway key present. | orchestrating session | behaviour | D43, D53 |
@@ -218,14 +218,14 @@ code, or the exact effect. The plan's test name closes each Then in brackets.
 | AC-101a | REQ-101 | assert | `accounts.state: on` and an account missing `worker` or `pays` | the profile loads | the profile is invalid and the error names the account and the field (profile.test, features.test) |
 | AC-101b | REQ-101 | assert | the shipped FEATURES table | features.test reads the row for accounts | the default is off (features.test) |
 | AC-102a | REQ-102 | assert | an account with a value outside its set, or two accounts with worker session | the profile loads | the profile is refused and the message prints the allowed set (profile.test) |
-| AC-103a | REQ-103 | assert | a 1.0 orch fixture profile with the orchestrator on | the profile loads | the profile is invalid, the message names the keys found and `npx builder accounts migrate`, and no step runs (profile.test) |
+| AC-103a | REQ-103 | assert | a 1.0 orch fixture profile with the orchestrator on | the profile loads | the profile is invalid, the message names the keys found and `npx builder-pipeline accounts migrate`, and no step runs (profile.test) |
 | AC-103b | REQ-103 | assert | the same 1.0 profile with the orchestrator off | claims-check runs | it completes and stderr carries exactly one warning line (cli-commands.test) |
 | AC-104a | REQ-104 | assert | the shipped files | genericity.test scans them | only the three neutral example names appear (genericity.test) |
 | AC-104b | REQ-104 | assert | a planted secret shape in a fixture | secret-shapes.test runs | the test fails and names the file (secret-shapes.test) |
 | AC-105a | REQ-105 | assert | a §16 value that matches an outbound-guard secret shape | the profile loads | the profile is refused naming the account and the kind of match, and the text is absent from the output (profile.test) |
 | AC-106a | REQ-106 | assert | each 1.0 orch fixture and the golden placement fixture | migrate runs and the orch suite runs against the result | placements equal the golden fixture, a `.bak` exists, the file is byte-identical outside §16, and a second run changes nothing (accounts-migrate.test) |
 | AC-106b | REQ-106 | assert | a live run in the state dir | migrate runs | it refuses and names the run (accounts-migrate.test) |
-| AC-107a | REQ-107 | assert | a project on a 1.0 profile | `builder doctor` runs | one row reads `profile: legacy seats, run npx builder accounts migrate` and the exit code is unchanged (doctor.test) |
+| AC-107a | REQ-107 | assert | a project on a 1.0 profile | `builder doctor` runs | one row reads `profile: legacy seats, run npx builder-pipeline accounts migrate` and the exit code is unchanged (doctor.test) |
 | AC-107b | REQ-107 | assert | the release files | release-check runs | the version 2.0.0 and the CHANGELOG Breaking section agree (release-check) |
 | AC-108a | REQ-108 | assert | a held lease on an account | `accounts remove` runs | it refuses naming the pid (accounts-cli.test) |
 | AC-108b | REQ-108 | assert | a lease whose pid is gone | `accounts remove` runs | the report says stale lease and the command proceeds (accounts-cli.test) |
@@ -234,8 +234,8 @@ code, or the exact effect. The plan's test name closes each Then in brackets.
 | AC-203a | REQ-203 | assert | each usage shape: usageCommand text, gateway snapshot JSON, Codex rate_limits | the reading is parsed | the reading is the computed percent, or null where nothing is readable (accounts.test, codex-usage.test) |
 | AC-203b | REQ-203 | assert | a Claude plan account | assess runs | the reading is unmeasured, never 0 % (accounts.test) |
 | AC-204a | REQ-204 | assert | accounts on and the orchestrator off | the `accounts` command runs | it prints the report and exits 0 (cli-commands.test) |
-| AC-205a | REQ-205 | assert | `features.accounts` off | `npx builder accounts` runs | it prints `accounts: not configured` and exits 0 (cli-commands.test) |
-| AC-205b | REQ-205 | assert | accounts on with one not-ready account | `npx builder accounts` runs | one block per account in the `gh auth status` shape and exit 1; with `--json` exit 0 (cli-commands.test, pack-prose.test) |
+| AC-205a | REQ-205 | assert | `features.accounts` off | `npx builder-pipeline accounts` runs | it prints `accounts: not configured` and exits 0 (cli-commands.test) |
+| AC-205b | REQ-205 | assert | accounts on with one not-ready account | `npx builder-pipeline accounts` runs | one block per account in the `gh auth status` shape and exit 1; with `--json` exit 0 (cli-commands.test, pack-prose.test) |
 | AC-206a | REQ-206 | assert | a smoke pass 3 days old with 48 h allowed | the account is assessed | the state is ready (read-only: smoke stale) (accounts.test) |
 | AC-207a | REQ-207 | assert | a versionCommand stub printing 1.2.3 | the account is assessed | the assessment carries version 1.2.3; with no versionCommand it carries unmeasured (accounts.test) |
 | AC-208a | REQ-208 | assert | fixtures for each probe state of Claude Code, Codex, Antigravity and gateway accounts | each account is assessed | each account shows the state and the reason the devbox tool would (accounts-probes.test) |
@@ -353,7 +353,7 @@ code, or the exact effect. The plan's test name closes each Then in brackets.
 | AC-1210a | REQ-1210 | assert | a remote whose clock is one hour ahead | events are written | their order follows the sequence number, and the remote time is stored as `remoteTs` (orch-remote.test) |
 | AC-1211a | REQ-1211 | assert | the flag `remoteLanes` | `features` runs | it prints `remoteLanes: experimental-off` and names §18, and pack-prose finds the §18 measurement text (features.test, pack-prose.test) |
 | AC-1301a | REQ-1301 | assert | the package files | package.test runs | `package.json` says MIT and a LICENSE file with the MIT text is present, and they agree (package.test) |
-| AC-1302a | REQ-1302 | assert | the shipped files | the invocation test scans them | no `npx builder` form remains outside the CHANGELOG, and the only bin is `builder-pipeline` (invocation.test, package.test) |
+| AC-1302a | REQ-1302 | assert | the shipped files | the invocation test scans them | no form of the dropped `builder` bin remains outside the CHANGELOG history, and the only bin is `builder-pipeline` (bin-rename.test, invocation.test, package.test) |
 | AC-1303a | REQ-1303 | assert | the README | readme-figures.test runs | each badge value equals the value counted from its source (readme-figures.test) |
 | AC-1304a | REQ-1304 | assert | the shipped docs | pack-prose runs | the old sentence and badge are absent and the proof statement is present in README and DESIGN (pack-prose.test) |
 | AC-1305a | REQ-1305 | assert | README, FEATURES, GUIDE and hooks/README | pack-prose runs | the sentence "fail-closed on Claude Code; CI gates and reports on Codex and Antigravity" is present and the word "natively" is absent from the guard rows (pack-prose.test) |

@@ -12,7 +12,7 @@ deletes rows. That is fine where nobody else is looking and unacceptable anywher
 team database is a SHARED target. The single most likely way to cause an incident with this tool
 is to mark such a target destructive because "it's my local app".
 
-`shared: true` forces read-only, and `npx builder check-targets` (folder layout: `node builder/cli.js check-targets`) fails the build if a
+`shared: true` forces read-only, and `npx builder-pipeline check-targets` (folder layout: `node builder/cli.js check-targets`) fails the build if a
 shared target is marked destructive — so the rule survives someone editing this file in a hurry.
 
 ## Shape

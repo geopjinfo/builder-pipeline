@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The loop runner above a board — `npx builder run board-loop <account> <board>` and `orch loop <board>` share it
+ * The loop runner above a board — `npx builder-pipeline run board-loop <account> <board>` and `orch loop <board>` share it
  * (plan M9, REQ-901 to REQ-907, REQ-909 to REQ-915; D17, D44, D48, D52). `features.boardLoop`, experimental-off:
  * EXPERIMENTS.md §17 holds the measurement that decides its future.
  *

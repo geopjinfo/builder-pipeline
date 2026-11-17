@@ -1,13 +1,13 @@
 /**
- * The evidence programme in one place — `npx builder run experiments` (plan M14, REQ-1401, REQ-1402, REQ-1405; D57).
+ * The evidence programme in one place — `npx builder-pipeline run experiments` (plan M14, REQ-1401, REQ-1402, REQ-1405; D57).
  *
- *   npx builder run experiments                 one line per EXPERIMENTS.md section: number, flag, default state, decision
- *   npx builder run experiments --check         exit 1 when a section has no decision row, or a keep without a number
- *   npx builder run experiments --matrix        the trial matrix: feature, section, test bed, command, keep rule, decision
- *   npx builder run experiments --record <n> --row "| … |" [--file <EXPERIMENTS.md>]
+ *   npx builder-pipeline run experiments                 one line per EXPERIMENTS.md section: number, flag, default state, decision
+ *   npx builder-pipeline run experiments --check         exit 1 when a section has no decision row, or a keep without a number
+ *   npx builder-pipeline run experiments --matrix        the trial matrix: feature, section, test bed, command, keep rule, decision
+ *   npx builder-pipeline run experiments --record <n> --row "| … |" [--file <EXPERIMENTS.md>]
  *                                               append one measurement row to the table of section n (the flag stays)
  *   --json                                      machine-readable
- * (folder layout: node scripts/experiments.mjs in place of npx builder run experiments)
+ * (folder layout: node scripts/experiments.mjs in place of npx builder-pipeline run experiments)
  *
  * Reads the kit's own EXPERIMENTS.md (beside scripts/) unless --file names another. Exit 0 · 1 a check failed · 2 usage.
  */

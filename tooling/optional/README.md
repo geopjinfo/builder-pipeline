@@ -31,7 +31,7 @@ this folder as **one example**.
 | `11` | code behind |
 | `12` | both |
 
-`npx builder run index-check` (folder layout: `node scripts/index-check.mjs`) runs it and prints the verdict. At P1 the orchestrator branches on
+`npx builder-pipeline run index-check` (folder layout: `node scripts/index-check.mjs`) runs it and prints the verdict. At P1 the orchestrator branches on
 it: with the feature on, a non-zero exit refuses the planner until the index is refreshed or the
 verdict is recorded in the run's state file (`Graph:` line). A refusal whose reason is written down
 is a decision; a planner grounded on a stale index without anyone saying so is not.

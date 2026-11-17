@@ -1,6 +1,6 @@
 # 🧠 DESIGN — why the pipeline is shaped this way
 
-> **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
+> **Commands.** Written for the npm-package install: a kit script runs as `npx builder-pipeline run <name>`. With the
 > kit copied in as a `builder/` folder ([`UNPACK.md`](UNPACK.md)), run it from the project's `scripts/` copy with Node.
 
 <p align="center">
@@ -141,7 +141,7 @@ agent's transcript. Consequences:
 - Token cost stays flat per phase instead of compounding.
 
 The same reasoning covers ledgers: a seat that needs one registry row reads that row
-(`npx builder run ledger-row registry <ID>`), not the whole file. Every later turn of that seat
+(`npx builder-pipeline run ledger-row registry <ID>`), not the whole file. Every later turn of that seat
 pays again for whatever it read once.
 
 ### 4. The five-clause operating contract (in every persona, verbatim)
@@ -358,7 +358,7 @@ is the only one that exercises the running application. Some defects are only re
 session type that in-process stubs cannot mint, a rate limiter that is real, a cache the app talks
 to over a socket. A pipeline whose every phase is a code reader has a second ceiling under the
 first one. Where the project has an API contract, phase 6.5 also judges every served response
-against it (`npx builder run contract-oracle`): a document compared with itself cannot see a route
+against it (`npx builder-pipeline run contract-oracle`): a document compared with itself cannot see a route
 that answers with a status its contract never declared.
 
 **The honest sentence for a green run** is *"every declared behaviour held"* — never *"the system
@@ -392,15 +392,15 @@ a stale count, a citation to a line that had moved, a phrase an earlier decision
 "owed" note that named nothing. Most were mechanically catchable. So the pack checks records with
 scripts, at the phase that writes them:
 
-- `npx builder run claims-check --run <key>` at the end of the code and docs phases. It re-runs
+- `npx builder-pipeline run claims-check --run <key>` at the end of the code and docs phases. It re-runs
   every recorded count's command, holds every `file:line` to that line's content, refuses retracted
   phrases, and requires every owed note to resolve to a decision-workspace entry, a registry id or a
   handoff section.
-- **Fixed output shapes.** `npx builder run output-check plan|findings|review <file>`: a plan,
+- **Fixed output shapes.** `npx builder-pipeline run output-check plan|findings|review <file>`: a plan,
   finding or review with a missing section, or a finding without evidence, fails at the phase that
   wrote it, not three phases later. When plans and reviews come in any shape, a checker cannot hold
   them to anything.
-- `npx builder run handoff-check <file>`: close-out cannot finish on an incomplete handoff pack.
+- `npx builder-pipeline run handoff-check <file>`: close-out cannot finish on an incomplete handoff pack.
 
 Every checker ships a red proof beside its green case. The reviewer's judgement then goes to what
 needs judgement.
@@ -451,9 +451,9 @@ absent feature is said out loud: `<feature>: not configured`.
 - A feature switched **on** with a required key empty is a validation error, never a skip.
 - An **unknown feature name** is an error: a typo would otherwise switch a check off in silence.
 - A feature is never switched on without the file or tool it needs. The setup step reads the
-  project to decide, and `npx builder verify` holds the block to that.
+  project to decide, and `npx builder-pipeline verify` holds the block to that.
 
-`npx builder run features` prints every feature's state, so "which checks ran?" has one answer.
+`npx builder-pipeline run features` prints every feature's state, so "which checks ran?" has one answer.
 
 ### 20. One run per session; stop at `run.end`
 
@@ -481,7 +481,7 @@ An idea that looks right but has not been measured ships in one of two labelled 
 
 - **Unmeasured.** On by default, because the proven pipeline already does it, and every report says
   its benefit is unmeasured. Builder batches and the narrow FIX lane ship this way, each with the
-  instrument that measures it (`npx builder run seat-peaks`, `npx builder run fix-rate`).
+  instrument that measures it (`npx builder-pipeline run seat-peaks`, `npx builder-pipeline run fix-rate`).
 - **Experimental.** Installed only with `unpack --experimental`, off until someone turns it on, and
   with the measurement that promotes or removes it written in [`EXPERIMENTS.md`](EXPERIMENTS.md)
   before it runs.

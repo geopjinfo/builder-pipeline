@@ -7,7 +7,7 @@ versions independently of any project it is pasted into.
 
 ### Added
 
-- **Install one tool group (`specs/toolkit-unpack-groups.spec.md`, REQ-801 to REQ-811).** `npx builder unpack --tool
+- **Install one tool group (`specs/toolkit-unpack-groups.spec.md`, REQ-801 to REQ-811).** `npx builder-pipeline unpack --tool
   <harness> --tools <group>[,<group>]` installs one part of the kit: `spec`, `audit`, `orchestrator`, `hooks`, `evals`
   or `pipeline`, plus the core set every install carries (the pointer block, the profile, the ledger seeds, `features`,
   `choices`, and each `scripts/lib` file that two or more groups need). `scripts/lib/tool-groups.cjs` places every
@@ -39,7 +39,7 @@ versions independently of any project it is pasted into.
   project that never adopted the pipeline. *Settings without a profile:* with no `PIPELINE_PROFILE.md`, the settings
   loader reads `builder.config.json` in the project root, or the file `BUILDER_CONFIG` names, as the bare JSON of §16,
   with the same validation; a profile beside a config file wins and the file is reported as ignored;
-  `npx builder run <script> --config <path>` sets `BUILDER_CONFIG`; `features` names the source in use.
+  `npx builder-pipeline run <script> --config <path>` sets `BUILDER_CONFIG`; `features` names the source in use.
   *Ledger gate paths:* `check-ledgers --boards <dir> --registry <file>`; a flag without its value is a usage error.
   *Board import (`scripts/board-import.mjs`):* a ralph `prd.json` or a Spec Kit `tasks.md` written as a build board
   with `## P0`, the progress markers, `## Inferred` and `## Unmapped`; stated values kept, inferred ones marked
@@ -68,8 +68,8 @@ versions independently of any project it is pasted into.
 
 - **Distribution (`specs/toolkit-distribution.spec.md`, REQ-501 to REQ-512; lane M13 of 2.0.0).** The kit is
   published under the MIT licence (`LICENSE`, `"license": "MIT"`, the file ships). The package is `builder-pipeline`
-  (the registry name `builder` belongs to an unrelated package) with two bins, `builder-pipeline` and `builder`; the
-  `builder` bin and the `npx builder …` prose go in the 2.0.0 release-prep PR (spec DL-2). Every shipped document names
+  (the registry name `builder` belongs to an unrelated package); the `builder` bin and the old `npx` prose went in the
+  2.0.0 release-prep lane (spec DL-2; see Breaking). Every shipped document names
   the new package; the README, UNPACK.md, FEATURES.md and RELEASING.md give the registry form `npm i -D
   builder-pipeline` (the listing starts with 2.0.0) beside the git-tag form. The fixture installs in the suite moved to
   `node_modules/builder-pipeline` (spec DL-10). *README badges from source:* `scripts/readme-badges.cjs` computes each
@@ -83,14 +83,28 @@ versions independently of any project it is pasted into.
   `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
 ### Breaking
 
+- **2.0.0: the `builder` bin is gone; the one command is `builder-pipeline` (strategy decision S3, spec
+  `specs/toolkit-distribution.spec.md` DL-2, REQ-503).** `package.json` declares one bin, `builder-pipeline`, running
+  `cli.js`. Every shipped line that tells a person or an agent what to type now says `npx builder-pipeline <cmd>` /
+  `npx builder-pipeline run <name>`: the CLI usage text and messages, `scripts/lib/run-hint.cjs`, the hooks, skills,
+  personas, adapters, templates, tooling, examples and every document. The folder layout (`node builder/cli.js`) and the
+  file names `builder.lock.json`, `builder.config.json`, `builder.choices.json` and the `builder-init` skill are
+  unchanged. *Migration for a 1.x project:* in your own scripts, CI and instruction files, change the command name
+  after `npx` from `builder` to `builder-pipeline`; `upgrade` does not rewrite project-owned files, so the project
+  makes this edit itself (README § Updating, GUIDE § "From 1.x: the command name", UNPACK § Upgrading). Tests: `tests/bin-rename.test.mjs`
+  (one bin; no shipped file names the old form outside CHANGELOG history; this bullet), `tests/package.test.mjs`,
+  `tests/toolkit-distribution.test.mjs` AC-503, and the prefix expectations in `tests/invocation.test.mjs`,
+  `tests/kit-location.test.mjs`, `tests/run-from-package.test.mjs`, `tests/cli-commands.test.mjs` and the rest of the
+  suite.
+
 - **2.0.0: accounts replace seats (REQ-107; D22, D33).** The 1.0 keys `features.orchestrator.seats`, `limits`,
   `secondaryConfigDir` and `credit` are gone. `features.accounts` holds the registry instead: one entry per account
   with its worker, who pays, content class, roles, config dir, start command and budget. While the orchestrator is
   on, a profile that still carries the 1.0 keys is refused at load; while it is off, the loader prints one warning.
-  Both name the fix: `npx builder accounts migrate` rewrites the `pipeline-settings` block once (`primary` as the
+  Both name the fix: `npx builder-pipeline accounts migrate` rewrites the `pipeline-settings` block once (`primary` as the
   session account, `secondary` as a Claude Code account, `credit` as an `api-key` account), writes
   `PIPELINE_PROFILE.md.bak` first, changes nothing on a second run, and refuses while a run holds a LAUNCHED or
-  STALLED lane. `npx builder doctor` prints one advisory row `profile: legacy seats, run npx builder accounts
+  STALLED lane. `npx builder-pipeline doctor` prints one advisory row `profile: legacy seats, run npx builder-pipeline accounts
   migrate` until the rewrite is done; its exit code is unchanged. GUIDE § Accounts carries the migration note. The
   version bump to 2.0.0 lands in the release PR only.
 
@@ -98,20 +112,20 @@ versions independently of any project it is pasted into.
 
 - **`doctor` accounts rows (REQ-701, REQ-107; D22, D37).** After the tool blocks, an `[accounts]` section with one
   advisory row per account in `features.accounts` and its readiness line (the built-in probes and the usage readers
-  run, the same assessment `npx builder accounts` prints), or one row `accounts: not configured`, or, while the
+  run, the same assessment `npx builder-pipeline accounts` prints), or one row `accounts: not configured`, or, while the
   profile still carries the 1.0 `seats` / `limits` / `secondaryConfigDir` / `credit` keys, exactly one row
-  `profile: legacy seats, run npx builder accounts migrate`. The rows are advisory: the exit code is unchanged.
+  `profile: legacy seats, run npx builder-pipeline accounts migrate`. The rows are advisory: the exit code is unchanged.
   `--json` carries the same rows as a last element `{ "section": "accounts", "advisory": true, "rows": [...] }`.
   Tests: `tests/doctor.test.mjs` (two accounts with stub `claude` and `codex` executables on PATH, the legacy row,
   the not-configured row, the exit code).
-- **Docs.** GUIDE's "Multi-account seats" section is now "Accounts": the registry, the `npx builder accounts`
+- **Docs.** GUIDE's "Multi-account seats" section is now "Accounts": the registry, the `npx builder-pipeline accounts`
   report, the registry commands (`add`, `note`, `key`, `remove`, `list`, `migrate`), placement by rule, the policy
   gate and the `--settings` pin, the rulebook pointer (`skills/references/account-selection.md`), a "Migrating from
   1.0 seats" note and a "Looping a board" subsection (`boardLoop`, experimental-off, no measurements yet). FEATURES.md,
   README.md and llms.txt name the report, the registry commands, `migrate` and the doctor rows. The feature rows for
   `remoteLanes` (M12), `boardLoop` (M9) and `familyReview` (M8) are not added here: each of those changes adds its own
   FEATURES.md row with its loader key, and `tests/pack-prose.test.mjs` refuses a `features.<x>` the loader does not
-  know. The `accounts add|note|key|remove|list` commands and the `npx builder accounts` report land with M10; the
+  know. The `accounts add|note|key|remove|list` commands and the `npx builder-pipeline accounts` report land with M10; the
   docs name them ahead of that change. Tests: `tests/pack-prose.test.mjs`, `tests/invocation.test.mjs`,
   `tests/cli-commands.test.mjs` (the README command list), `tests/genericity.test.mjs`.
 
@@ -141,7 +155,7 @@ versions independently of any project it is pasted into.
 ### Added — M3 placement over accounts (2.0.0 line)
 ### Added — M14 evidence programme (2.0.0 line)
 
-- **`npx builder run experiments` (REQ-1401, REQ-1402, REQ-1405; D57).** `scripts/experiments.mjs` over
+- **`npx builder-pipeline run experiments` (REQ-1401, REQ-1402, REQ-1405; D57).** `scripts/experiments.mjs` over
   `scripts/lib/experiments.cjs`: one line per EXPERIMENTS.md section with its flag, default state and decision; `--check`
   exits 1 on a section without a decision row or a keep without a number; `--matrix` prints the trial matrix (feature,
   section, test bed, command, keep rule, decision); `--record <n> --row "| … |"` appends one measurement row to a
@@ -190,7 +204,7 @@ versions independently of any project it is pasted into.
   worktree holds (`git worktree list --porcelain` is read first), copies the files `features.accounts.worktree.include`
   lists (a copy, never a link) and, for a path-root account, checks out only the roots (`git sparse-checkout
   --no-cone`); an existing worktree that is not sparse on the roots, or a worker without a deny-rule adapter, is
-  refused naming the path. `npx builder run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
+  refused naming the path. `npx builder-pipeline run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
   reports each as `kept (--keep <lane>)`. GUIDE says what a worktree does not do: it does not sandbox processes and
   it does not prevent merge conflicts. Tests: `tests/orch-preflight.test.mjs`, `tests/orch-worker-claude-code.test.mjs`,
   `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
@@ -251,7 +265,7 @@ versions independently of any project it is pasted into.
   worktree holds (`git worktree list --porcelain` is read first), copies the files `features.accounts.worktree.include`
   lists (a copy, never a link) and, for a path-root account, checks out only the roots (`git sparse-checkout
   --no-cone`); an existing worktree that is not sparse on the roots, or a worker without a deny-rule adapter, is
-  refused naming the path. `npx builder run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
+  refused naming the path. `npx builder-pipeline run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
   reports each as `kept (--keep <lane>)`. GUIDE says what a worktree does not do: it does not sandbox processes and
   it does not prevent merge conflicts. Tests: `tests/orch-preflight.test.mjs`, `tests/orch-worker-claude-code.test.mjs`,
   `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
@@ -259,7 +273,7 @@ versions independently of any project it is pasted into.
   token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
 ### Added — M2b accounts report and foreign probes (2.0.0 line)
 
-- **`npx builder accounts [--json]` — the readiness report (REQ-204, REQ-205; D7, D25).** With no subcommand the
+- **`npx builder-pipeline accounts [--json]` — the readiness report (REQ-204, REQ-205; D7, D25).** With no subcommand the
   command runs every account's probes and readers and prints one block per account in the shape of `gh auth status`:
   the name, worker and way of paying; the state line from the assessment (`ready`, `ready (read-only: smoke stale)`,
   `not ready (<reason>, run <sign-in>)`, `unmeasured (<reason>)`); content, roles, usage with its source, time and
@@ -288,7 +302,7 @@ versions independently of any project it is pasted into.
   registry rule in `orch-state`. Usage text and the README command row name the report.
 ### Added — M11 wrappers, gateway and free accounts
 
-- **`npx builder accounts install` (REQ-1101, REQ-1103, REQ-1109; D41, D52).** One wrapper pair (sh and ps1) per
+- **`npx builder-pipeline accounts install` (REQ-1101, REQ-1103, REQ-1109; D41, D52).** One wrapper pair (sh and ps1) per
   `claude-code` or `codex` account under the accounts home, from `templates/account-wrapper.sh` and `.ps1`
   (`scripts/lib/account-wrappers.cjs`). A wrapper unsets the denylist, checks the sandbox-runtime settings, sets
   `CLAUDE_CONFIG_DIR` or `CODEX_HOME` and starts the tool; it never exports `ANTHROPIC_AUTH_TOKEN` or
@@ -327,7 +341,7 @@ versions independently of any project it is pasted into.
 ### Added — M9 board loop (experimental-off)
 
 - **`features.boardLoop` (REQ-901 to REQ-915; D17, D44, D48, D52), `experimental-off`.** A loop runner above a task
-  board: `npx builder run board-loop <account> <board.md>` and `orch loop <board.md>` share one runner
+  board: `npx builder-pipeline run board-loop <account> <board.md>` and `orch loop <board.md>` share one runner
   (`scripts/lib/board-loop.cjs`). While on, the profile carries `promptFile`, `gate`, `maxPasses` (required),
   `passTimeoutMinutes` 60, `maxTurnsPerPass` 20, `stallMinutes` 5, `maxRetriesPerRow` 2, `maxConsecutiveFailures` 3 and
   `maxConsecutiveNoProgress` 3; off, the command prints the not-configured line and exits 0.
@@ -355,7 +369,7 @@ versions independently of any project it is pasted into.
 
 ### Added — M10 accounts command (2.0.0 line)
 
-- **`npx builder accounts add | note | key | key --remove | remove | list` (REQ-108, REQ-1001 to REQ-1007; D2, D9, D19,
+- **`npx builder-pipeline accounts add | note | key | key --remove | remove | list` (REQ-108, REQ-1001 to REQ-1007; D2, D9, D19,
   D20, D42).** `add <name> --worker <w> --pays <p> [--content …] [--roles …] [--family …] [--note …] [--config-dir …]
   [--command …] [--base-url …] [--budget-hard N --budget-kind percent|usd]` validates through the registry, writes the
   account into the §16 settings block only (every byte outside stays; temp + rename), turns `features.accounts` on and
@@ -533,8 +547,8 @@ versions independently of any project it is pasted into.
   per-account path under `~/.builder-pipeline/accounts/<name>/` (or `BUILDER_ACCOUNTS_HOME`).
 - **The 1.0 seat keys are refused or warned about.** `features.orchestrator.seats`, `limits`, `secondaryConfigDir`
   and `credit` are an error while the orchestrator is on and a one-line stderr warning while it is off, both naming
-  `npx builder accounts migrate`.
-- **`npx builder accounts migrate [--dry-run]`.** Rewrites the seat keys into accounts (`primary` as the session,
+  `npx builder-pipeline accounts migrate`.
+- **`npx builder-pipeline accounts migrate [--dry-run]`.** Rewrites the seat keys into accounts (`primary` as the session,
   `secondary` as a Claude Code account with its config dir and start command, `credit` as an api-key account with a
   USD budget and the credit guards), in the `pipeline-settings` block only, with a `PIPELINE_PROFILE.md.bak` backup;
   a second run changes nothing, and a run holding a LAUNCHED or STALLED lane refuses. The golden fixture proves the
@@ -568,9 +582,9 @@ versions independently of any project it is pasted into.
 
 ### Time to first value (REQ-1404)
 
-- **`first-value` script and test.** `npx builder run first-value [--json] [--keep]` creates an empty git repository in
-  a temporary folder, packs the checkout with `npm pack`, installs the tarball there, then runs `npx builder inventory`
-  and `npx builder run claims-check --files README.md` in that project. It prints the wall time and the time of each
+- **`first-value` script and test.** `npx builder-pipeline run first-value [--json] [--keep]` creates an empty git repository in
+  a temporary folder, packs the checkout with `npm pack`, installs the tarball there, then runs `npx builder-pipeline inventory`
+  and `npx builder-pipeline run claims-check --files README.md` in that project. It prints the wall time and the time of each
   step. `--json` prints the numbers; `--keep` leaves the folder. Test: `tests/first-value.test.mjs` fails above 300 s
   and on an accepted unknown flag. The first measurement is in EXPERIMENTS.md §20.
 

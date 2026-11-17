@@ -74,9 +74,9 @@ function cmdBootstrap(ctx, argv) {
 
 /**
  * THE KIT RUN FROM OUTSIDE THE PROJECT. The setup prompt runs `npx github:<owner>/builder-pipeline#<tag> bootstrap`:
- * npx fetches the kit into its own cache and runs it there. Every later command builder-init runs is `npx builder …`,
- * which resolves the PROJECT's bin — and with the kit not in the project, the bare name reaches the unrelated registry
- * package `builder`. So bootstrap, run from anywhere outside the project, adds the kit to the project as a
+ * npx fetches the kit into its own cache and runs it there. Every later command builder-init runs is `npx builder-pipeline …`,
+ * which resolves the PROJECT's bin — and with the kit not in the project, the bare name fetches the newest registry
+ * release, not the tag the setup prompt named. So bootstrap, run from anywhere outside the project, adds the kit to the project as a
  * devDependency at the spec npx fetched (one source of truth for the version: package.json), and installs it with
  * npm when npm is on PATH; without npm the dependency is written and the human is told to run `npm install`.
  * Run from the project's own node_modules or builder/ folder, the kit is already the project's: nothing is added.
@@ -99,7 +99,7 @@ function ensureDependency(ctx) {
   }
   const listed = pkg && ['devDependencies', 'dependencies'].map((k) => pkg[k] && pkg[k][own.name]).find(Boolean);
   const present = fs.existsSync(path.join(ctx.CWD, 'node_modules', ...own.name.split('/'), 'package.json'));
-  if (listed && present) return console.log(`\n${own.name} is already a dependency of this project (${listed}) — \`npx builder\` runs it.`);
+  if (listed && present) return console.log(`\n${own.name} is already a dependency of this project (${listed}) — \`npx builder-pipeline\` runs it.`);
   if (ctx.DRY()) {
     return console.log(`\n${listed ? '' : `would add ${own.name}@${spec} to package.json devDependencies, then `}would run: npm install${listed ? '' : ` --save-dev ${spec}`}`);
   }
@@ -108,14 +108,14 @@ function ensureDependency(ctx) {
     next.devDependencies = { ...(next.devDependencies || {}), [own.name]: spec };
     const eol = pkg && /\r\n/.test(fs.readFileSync(pkgFile, 'utf8')) ? '\r\n' : '\n';
     fs.writeFileSync(pkgFile, JSON.stringify(next, null, 2).replace(/\n/g, eol) + eol);
-    console.log(`\n${pkg ? 'added' : 'created package.json with'} ${own.name} as a devDependency (${spec}) — later \`npx builder\` commands run this kit, not the registry's \`builder\``);
+    console.log(`\n${pkg ? 'added' : 'created package.json with'} ${own.name} as a devDependency (${spec}) — later \`npx builder-pipeline\` commands run this kit at this tag, not the registry's newest release`);
   }
   const args = listed ? ['install'] : ['install', '--save-dev', spec];
   if (!npm(['--version'], ctx.CWD, 'pipe')) {
-    return console.log(`npm is not on PATH: run \`npm install\` in this folder before the builder-init skill runs \`npx builder\``);
+    return console.log(`npm is not on PATH: run \`npm install\` in this folder before the builder-init skill runs \`npx builder-pipeline\``);
   }
   console.log(`running: npm ${args.join(' ')}`);
-  if (!npm(args, ctx.CWD, 'inherit')) console.log(`npm install failed — run \`npm ${args.join(' ')}\` here yourself before the builder-init skill runs \`npx builder\``);
+  if (!npm(args, ctx.CWD, 'inherit')) console.log(`npm install failed — run \`npm ${args.join(' ')}\` here yourself before the builder-init skill runs \`npx builder-pipeline\``);
 }
 
 /**

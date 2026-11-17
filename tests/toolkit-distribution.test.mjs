@@ -48,10 +48,9 @@ describe('REQ-501…502 — the licence', () => {
 });
 
 describe('REQ-503…504 — the package name', () => {
-  test('AC-503: the package is builder-pipeline with the bins builder-pipeline and builder', () => {
+  test('AC-503: the package is builder-pipeline with the one bin builder-pipeline (the `builder` bin went in 2.0.0, DL-2)', () => {
     assert.equal(pkg.name, 'builder-pipeline');
-    assert.equal(pkg.bin['builder-pipeline'], 'cli.js');
-    assert.equal(pkg.bin.builder, 'cli.js');
+    assert.deepEqual(pkg.bin, { 'builder-pipeline': 'cli.js' });
   });
 
   test('AC-504: no shipped file names the old scoped package (CHANGELOG history excepted)', () => {

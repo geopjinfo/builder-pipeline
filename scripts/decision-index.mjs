@@ -2,10 +2,10 @@
 /**
  * Regenerate the decision index from the anchors themselves. Rule: scripts/lib/decision-index.cjs.
  *
- *   npx builder run decision-index             write features.decisionIndex.out — only when its content changed
- *   npx builder run decision-index --check    write nothing; fail when the index is stale or missing, or when any
+ *   npx builder-pipeline run decision-index             write features.decisionIndex.out — only when its content changed
+ *   npx builder-pipeline run decision-index --check    write nothing; fail when the index is stale or missing, or when any
  *                                              id is cited but never anchored, or anchored more than once
- * (folder layout: node scripts/decision-index.mjs in place of npx builder run decision-index)
+ * (folder layout: node scripts/decision-index.mjs in place of npx builder-pipeline run decision-index)
  *
  * Settings: features.decisionIndex.{roots, idPattern, out}. A root is a file or a directory, relative to the
  * project root; directories are walked for .md .txt .mjs .cjs .js .ts .py .json .yml .yaml, skipping

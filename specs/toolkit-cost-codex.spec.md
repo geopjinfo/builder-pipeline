@@ -5,7 +5,7 @@ Status: ratified
 Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build thread; see Decision log)
 
 > The kit's own spec for the second cost reader, part of release 2.0.0. It follows the installed spec template. Check it
-> with `npx builder run spec-check specs/toolkit-cost-codex.spec.md` (folder layout:
+> with `npx builder-pipeline run spec-check specs/toolkit-cost-codex.spec.md` (folder layout:
 > `node scripts/spec-check.mjs specs/toolkit-cost-codex.spec.md`). It is maintainer-only and does not ship in the package.
 
 ## Intent
@@ -102,7 +102,7 @@ Kind: `behaviour` (what succeeds) · `refusal` (what is refused, and why) · `ef
 | REQ-611 | `--rates FILE` prices Codex usage with the fields of DL-5 through `pricing.cost()` | a team that runs the pipeline on Codex CLI | behaviour | DL-5 |
 | REQ-612 | `cost-window` runs the Codex reader when `reader` is `codex` and keeps the Claude Code path when it is `claude-code`; with a profile whose reader is neither, it exits 2 and prints the loader's error, and the "unmeasurable with this harness" line stays as the last guard | a CI job | behaviour | intent |
 | REQ-613 | `seat-peaks` and `orchestrator-check` print an "unmeasurable" line that names the Codex reader and a reason, and exit 0 | a CI job | constraint | DL-9 |
-| REQ-614 | `npx builder run features` prints `costAccounting: on` for a valid profile with `reader: "codex"`; its output is otherwise unchanged | a CI job | effect | intent |
+| REQ-614 | `npx builder-pipeline run features` prints `costAccounting: on` for a valid profile with `reader: "codex"`; its output is otherwise unchanged | a CI job | effect | intent |
 
 ## Acceptance criteria
 

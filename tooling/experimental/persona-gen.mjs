@@ -3,9 +3,9 @@
  * EXPERIMENTAL (`features.personas`) — write or check one role profile per role column of the permission
  * catalogue. See EXPERIMENTS.md, role persona profiles. Rule: persona.cjs.
  *
- *   npx builder run experimental/persona-gen             write missing profiles; refresh the generated blocks of existing ones
- *   npx builder run experimental/persona-gen --check    exit 1 on any drift, missing or stray profile, or uncited drafted bullet
- * (folder layout: node scripts/experimental/persona-gen.mjs in place of npx builder run experimental/persona-gen)
+ *   npx builder-pipeline run experimental/persona-gen             write missing profiles; refresh the generated blocks of existing ones
+ *   npx builder-pipeline run experimental/persona-gen --check    exit 1 on any drift, missing or stray profile, or uncited drafted bullet
+ * (folder layout: node scripts/experimental/persona-gen.mjs in place of npx builder-pipeline run experimental/persona-gen)
  *
  * In the folder layout, installed by `node builder/cli.js unpack --experimental` beside `persona.cjs` in `scripts/experimental/`.
  *

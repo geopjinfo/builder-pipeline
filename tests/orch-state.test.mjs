@@ -58,7 +58,7 @@ describe('the feature gate', () => {
     for (const legacy of [{ seats: ['secondary', 'primary'] }, { limits: { primary: 50 } }, { secondaryConfigDir: '.x' }, { credit: { enabled: true, dailyCapUsd: 5 } }]) {
       const e = errs(legacy);
       assert.match(e, new RegExp(`features\\.orchestrator\\.${Object.keys(legacy)[0]}: 1\\.0 seat keys`), e);
-      assert.match(e, /npx builder accounts migrate/);
+      assert.match(e, /npx builder-pipeline accounts migrate/);
     }
     assert.match(errs({ seats: ['secondary'], credit: { enabled: false } }), /features\.orchestrator\.seats, credit: 1\.0 seat keys/);
     // With the orchestrator off the same profile loads with one warning and no error.
