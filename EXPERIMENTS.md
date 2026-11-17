@@ -548,7 +548,7 @@ A number here comes from a file in the project Library, never from memory.
 
 ### Run 3 — the loop driven by the orchestrator on the polyglot test bed (2026-11-17, REQ-1406)
 
-- Command: `npx builder run orch loop tasks/polyglot-testbed.md` from the integration branch (`3bb2343`, #28), with
+- Command: `npx builder-pipeline run orch loop tasks/polyglot-testbed.md` from the integration branch (`3bb2343`, #28), with
   `features.orchestrator` on. The orchestrator placed the loop through the accounts registry (`placeLoop`: the first
   account whose readiness assessment reads ready — the M3 placement fills that seam later), recorded the job in
   `loops.json` (kind loop, account `gw`, cap 6) and ran the same runner as Run 1b. Writer: the gateway lane (API
