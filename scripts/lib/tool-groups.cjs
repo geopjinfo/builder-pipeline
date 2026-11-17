@@ -105,6 +105,13 @@ const SCRIPTS = {
   'instruction-budget': 'pipeline',
   'instruction-lint': 'pipeline',
   'ledger-row': 'pipeline',
+  // 2.0.0 accounts line: the loop runner and the account key helper go with the orchestrator; the evidence programme
+  // scripts with evals; readme-badges is the kit's own README reader (core, like features)
+  'board-loop': 'orchestrator',
+  'account-key': CORE,
+  experiments: 'evals',
+  'first-value': 'evals',
+  'readme-badges': CORE,
 };
 
 /**
@@ -122,7 +129,7 @@ const LIBS = {
   'line-citations': 'audit',
   'contract-oracle': 'audit',
   'index-check': 'audit',
-  'outbound-guard': 'audit',
+  'outbound-guard': CORE, // the outbound guard is read by the audit, orchestrator, pipeline, evals and spec groups
   wiring: 'audit',
   'rules-module': 'audit',
   'mutation-summary': 'audit',
@@ -137,7 +144,7 @@ const LIBS = {
   'board-freshness': 'pipeline',
   'board-parse': 'pipeline',
   'page-docs': 'pipeline',
-  'run-log': 'pipeline',
+  'run-log': CORE,
   'table-row': 'pipeline',
   'instruction-budget': 'pipeline',
   'instruction-lint': 'pipeline',
@@ -153,6 +160,30 @@ const LIBS = {
   'transcript-usage': CORE,
   choices: CORE,
   'tool-groups': CORE,
+  // 2.0.0 accounts line. cli.js and cli/accounts.cjs (core) require the registry, the paths, the probes, the secrets,
+  // the lease, the wrappers, the lock, the gateway policy and the error rule, so all of them are core; the worker
+  // adapters' helpers and the loop runner are the orchestrator's; experiments is read by `features` (core).
+  'accounts-registry': CORE,
+  'account-paths': CORE,
+  'account-probes': 'orchestrator',
+  'account-secrets': CORE,
+  'account-lease': CORE,
+  'account-errors': 'orchestrator',
+  'account-policy': 'orchestrator',
+  'account-wrappers': CORE,
+  'accounts-lock': CORE,
+  'gateway-policy': CORE,
+  accounts: 'orchestrator',
+  'codex-ratelimits': 'orchestrator',
+  'codex-usage': 'evals',
+  experiments: CORE,
+  'srt-check': CORE,
+  gateways: CORE, // scripts/lib/gateways/: the adapters behind `accounts policy` (cli.js)
+  'worker-env': 'orchestrator',
+  'worker-errors': 'orchestrator',
+  'worker-runner': 'orchestrator',
+  'worker-verdict': 'orchestrator',
+  'board-loop': 'orchestrator',
 };
 
 /** Project-owned seeds and the pointer files, by destination. The ledger paths follow §16 `paths`; see groupOf(). */
@@ -181,6 +212,10 @@ const FILES = {
 const HOOK_LOADS = [
   'scripts/board-render.mjs',
   'scripts/instruction-lint.mjs',
+  // profile.cjs (2.0.0) requires the account registry, the account paths and the outbound guard, so a hook loads them too
+  'scripts/lib/account-paths.cjs',
+  'scripts/lib/accounts-registry.cjs',
+  'scripts/lib/outbound-guard.cjs',
   'scripts/lib/bash-cap.cjs',
   'scripts/lib/board-freshness.cjs',
   'scripts/lib/board-parse.cjs',
@@ -224,6 +259,7 @@ function groupOf(relPath, ledgers = { boards: 'tasks', registry: 'DEFERRED_TASKS
   if (seg[0] === 'scripts') {
     if (seg.length === 2) return SCRIPTS[stem(seg[1])] || null;
     if (seg[1] === 'lib' && seg.length === 3) return /^orch-/.test(seg[2]) ? 'orchestrator' : LIBS[stem(seg[2])] || null;
+    if (seg[1] === 'lib' && seg[2] === 'gateways') return CORE; // the gateway adapters behind `accounts policy` (cli.js)
     if (seg[1] === 'oracles') return 'audit';
     if (seg[1] === 'experimental') return 'evals';
   }

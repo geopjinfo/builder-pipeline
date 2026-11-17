@@ -34,9 +34,14 @@ function decisionFault(s) {
   return null;
 }
 
-/** The decision of a feature flag, or null: `{ date, verdict, text, n }`. */
-function decisionFor(md, flag) {
-  const s = parse(md).find((x) => x.flag === flag);
+/**
+ * The decision of a feature flag, or null: `{ date, verdict, text, n }`. The section is the one whose heading carries
+ * the flag; a flag measured inside a shared section (profile `experiment: '§20'`) names that section number instead.
+ */
+function decisionFor(md, flag, section = null) {
+  const all = parse(md);
+  const n = section ? Number(String(section).replace(/[^0-9]/g, '')) : null;
+  const s = all.find((x) => x.flag === flag) || (n ? all.find((x) => x.n === n) : null);
   return s && s.decision ? { ...s.decision, n: s.n } : null;
 }
 

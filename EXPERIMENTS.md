@@ -463,7 +463,8 @@ once, in one list. The reviewer still reads every finding.
 **What ships.** `features.boardLoop` (M9): `npx builder run board-loop` and `orch loop`. The orchestrator loops one brief through Stage 0 to Stage 5 on a
 throwaway project without a person between the stages. The board stays the one progress surface.
 
-**Opt in.** Set the feature to `experimental-on` when the 2.0 build has shipped it, on a throwaway project only.
+**Opt in.** Set `features.boardLoop.state` to `experimental-on` in `PIPELINE_PROFILE.md` §16, on a throwaway project only,
+with `features.boardLoop.promptFile`, `gate` and `maxPasses` filled.
 The test bed is a small project of four to six aider polyglot exercises, each with its unit tests as the gate.
 
 **Measurement.** Over one loop of every exercise, record: pass rate (exercises whose unit tests pass), cost per
@@ -486,10 +487,11 @@ counts exist to show that.
 
 ## 18. Remote lanes — `remoteLanes` (planned, experimental)
 
-**What ships.** Nothing yet. The 2.0 build adds it. A lane runs on another machine over ssh, with the same brief,
+**What ships.** `features.remoteLanes` (M12): `orch remote add | preflight | place | launch | poll | cancel`. A lane runs on another machine over ssh, with the same brief,
 board and worker adapter as a local lane.
 
-**Opt in.** Set the feature to `experimental-on` when the 2.0 build has shipped it, with one remote host configured.
+**Opt in.** Set `features.remoteLanes.state` to `experimental-on` in `PIPELINE_PROFILE.md` §16, then add one machine with
+`npx builder run orch remote add` and run its preflight.
 
 **Measurement.** One local lane and one remote lane on the same project and the same exercises. For each lane
 record: pass rate, wall time from `LAUNCH` to the verdict, ssh failures (a connection that dropped or was refused),
