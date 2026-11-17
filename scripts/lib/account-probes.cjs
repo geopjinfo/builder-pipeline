@@ -70,23 +70,32 @@ function probeEnv(base = process.env, worker = null, configDir = null) {
 
 /** Run a binary with arguments (no shell). Never throws: a missing binary is `{ error: 'not found' }`. */
 function runBinary(bin, args, { env, timeoutMs = DEFAULT_TIMEOUT_MS, cwd } = {}) {
+  const t0 = Date.now();
   const r = spawnSync(bin, args, { env, cwd, timeout: timeoutMs, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: process.platform === 'win32' });
-  return result(r, bin);
+  return result(r, bin, timeoutMs, Date.now() - t0);
 }
 
 /** Run a §16 command template through the shell, scrubbed and timed. */
 function runCommand(command, { env, timeoutMs = DEFAULT_TIMEOUT_MS, cwd } = {}) {
+  const t0 = Date.now();
   const r = spawnSync(String(command), { env, cwd, timeout: timeoutMs, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: true });
-  return result(r, String(command).split(/\s+/)[0]);
+  return result(r, String(command).split(/\s+/)[0], timeoutMs, Date.now() - t0);
 }
 
-function result(r, name) {
-  const timedOut = !!(r.error && r.error.code === 'ETIMEDOUT') || r.signal === 'SIGTERM';
-  const notFound = !!(r.error && r.error.code === 'ENOENT');
+/*
+ * A run past its timeout is a timeout even when spawnSync reports no error: on Windows the shell (cmd.exe) is what
+ * the timeout kills, and its grandchild keeps the pipes open until it exits on its own, so spawnSync returns late
+ * with a normal-looking status. Any output of such a run is not a reading.
+ */
+function result(r, name, timeoutMs = DEFAULT_TIMEOUT_MS, elapsedMs = 0) {
+  const timedOut = !!(r.error && r.error.code === 'ETIMEDOUT') || r.signal === 'SIGTERM' || elapsedMs >= timeoutMs;
+  // Through a shell a missing program is not ENOENT: sh exits 127, cmd.exe exits 9009 and says "is not recognized".
+  const notFound = !!(r.error && r.error.code === 'ENOENT') || r.status === 127 || r.status === 9009
+    || /is not recognized as an internal or external command/i.test(String(r.stderr || ''));
   return {
     stdout: clip(r.stdout),
     stderr: clip(r.stderr),
-    status: typeof r.status === 'number' ? r.status : null,
+    status: notFound ? null : typeof r.status === 'number' ? r.status : null,
     timedOut,
     error: timedOut ? 'timed out' : notFound ? `${name}: not found` : r.error ? String(r.error.code || r.error.message) : null,
   };

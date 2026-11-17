@@ -32,15 +32,24 @@ const tmp = (p) => { const d = mkdtempSync(join(tmpdir(), p)); made.push(d); ret
  */
 function stubs(bodies) {
   const bin = tmp('probe-bin-');
-  symlinkSync(process.execPath, join(bin, 'node'));
+  if (process.platform !== 'win32') symlinkSync(process.execPath, join(bin, 'node'));
   for (const [name, body] of Object.entries(bodies)) {
+    const script = `const args = process.argv.slice(2);\n${body}\n`;
+    if (process.platform === 'win32') {
+      // No shebangs on Windows: a .cmd shim runs this Node on the stub's script with the probe's own env.
+      writeFileSync(join(bin, `${name}.js`), script);
+      writeFileSync(join(bin, `${name}.cmd`), `@"${process.execPath}" "%~dp0${name}.js" %*\r\n`);
+      continue;
+    }
     const file = join(bin, name);
-    writeFileSync(file, `#!/usr/bin/env node\nconst args = process.argv.slice(2);\n${body}\n`);
+    writeFileSync(file, `#!/usr/bin/env node\n${script}`);
     chmodSync(file, 0o755);
   }
   return bin;
 }
-const envWith = (bin, extra = {}) => ({ PATH: `${bin}${delimiter}/usr/bin${delimiter}/bin`, HOME: '/home/none', ANTHROPIC_API_KEY: 'parent-secret-value-xyz', OPENAI_API_KEY: 'parent-openai-value', ...extra });
+// On Windows cmd.exe (the shell runBinary uses there) needs SystemRoot, ComSpec and PATHEXT; the allowlist passes them.
+const winBase = process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot, ComSpec: process.env.ComSpec, PATHEXT: process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD' } : {};
+const envWith = (bin, extra = {}) => ({ ...winBase, PATH: `${bin}${delimiter}/usr/bin${delimiter}/bin`, HOME: '/home/none', ANTHROPIC_API_KEY: 'parent-secret-value-xyz', OPENAI_API_KEY: 'parent-openai-value', ...extra });
 const claudeStub = (json, status = 0) => `if (args[0] === 'auth' && args[1] === 'status') { process.stdout.write(JSON.stringify({ ...${json}, configDirectory: process.env.CLAUDE_CONFIG_DIR, leaked: process.env.ANTHROPIC_API_KEY || 'absent' })); process.exit(${status}); } if (args[0] === '--version') { process.stdout.write('1.2.3\\n'); process.exit(0); } process.exit(2);`;
 const codexStub = (stderr, status) => `if (args[0] === 'login' && args[1] === 'status') { process.stderr.write(${JSON.stringify(stderr)} + ' ' + (process.env.OPENAI_API_KEY || 'absent') + ' ' + process.env.CODEX_HOME + '\\n'); process.exit(${status}); } process.exit(2);`;
 
