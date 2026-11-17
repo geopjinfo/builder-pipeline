@@ -2,20 +2,22 @@
 
 <p align="center">
   <img alt="agent-agnostic" src="https://img.shields.io/badge/agents-agnostic_by_design-critical?style=flat-square">
-  <img alt="pipeline" src="https://img.shields.io/badge/pipeline-10_phases-blue?style=flat-square">
+  <img alt="pipeline" src="https://img.shields.io/badge/pipeline-13_phases-blue?style=flat-square">
   <img alt="personas" src="https://img.shields.io/badge/personas-9_agents-8A2BE2?style=flat-square">
   <img alt="harnesses" src="https://img.shields.io/badge/--tool_targets-11-success?style=flat-square">
   <img alt="deps" src="https://img.shields.io/badge/CLI_dependencies-zero-brightgreen?style=flat-square">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square&logo=node.js&logoColor=white">
-  <img alt="install" src="https://img.shields.io/badge/install-npm_from_a_git_tag-orange?style=flat-square">
+  <img alt="install" src="https://img.shields.io/badge/install-npm-orange?style=flat-square">
   <img alt="inert" src="https://img.shields.io/badge/at_rest-100%25_inert-lightgrey?style=flat-square">
 </p>
 
-A self-contained, project-agnostic packaging of the **build-module-pipeline** mechanism proven on
-a production modular-monolith backend (15+ shipped modules): an orchestrated, persona-per-phase
-agent pipeline that builds one feature module at a time — planned, coded TDD-first, tested
-adversarially, audited in parallel, documented, and gate-reviewed — with durable ledgers so no
-work is silently lost and no "done" is unearned.
+A self-contained, project-agnostic packaging of the **build-module-pipeline** mechanism: an orchestrated,
+persona-per-phase agent pipeline that builds one feature module at a time — planned, coded TDD-first, tested
+adversarially, audited in parallel, documented, and gate-reviewed — with durable ledgers so no work is silently lost
+and no "done" is unearned.
+
+Built and used by its author on one production backend. That project's data cannot ship (the kit keeps no project
+ids). Published measurements start with 2.0.0 ([`EXPERIMENTS.md`](EXPERIMENTS.md)).
 
 It ships as an npm package (`builder-pipeline`, from the npm registry or from a git tag) with a zero-dependency Node
 CLI, `builder`. It works with **Claude Code, Codex and Antigravity** natively, and with any other agent that reads

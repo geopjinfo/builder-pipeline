@@ -32,8 +32,15 @@ versions independently of any project it is pasted into.
   `builder` bin and the `npx builder …` prose go in the 2.0.0 release-prep PR (spec DL-2). Every shipped document names
   the new package; the README, UNPACK.md, FEATURES.md and RELEASING.md give the registry form `npm i -D
   builder-pipeline` (the listing starts with 2.0.0) beside the git-tag form. The fixture installs in the suite moved to
-  `node_modules/builder-pipeline` (spec DL-10). Tests: `tests/toolkit-distribution.test.mjs` (one test per acceptance
-  criterion), `tests/package.test.mjs` (two bins).
+  `node_modules/builder-pipeline` (spec DL-10). *README badges from source:* `scripts/readme-badges.cjs` computes each
+  badge (phases from the phase table in `skills/build-module-pipeline.md`, personas from `agents/`, `--tool` targets
+  from `cli.js`, the Node floor and zero dependencies from `package.json`, install `npm`); `check()` lists the badges
+  that differ and `--write` rewrites the block; the README said 10 phases, it has 13 numbered rows. *Proof statement:*
+  the README and GUIDE.md say what a reader can verify (built and used by its author on one production backend;
+  published measurements start with 2.0.0) in place of "proven on … 15+ shipped modules". *Release routine:*
+  RELEASING.md checks the badges in step 2 and publishes to the npm registry after the tag (`npm pack --dry-run`, `npm
+  publish --access public`; the tag and the registry version match; the first registry release is 2.0.0). Tests:
+  `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
 
 ## [1.1.0] — 2026-11-16
 

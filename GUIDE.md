@@ -329,11 +329,12 @@ Details + pipeline wiring: [`skills-extra/README.md`](skills-extra/README.md).
 
 ## 🧬 Provenance
 
-Extracted 2026-08 from a production platform where this pipeline built 15+ modules, and uplifted
+Extracted 2026-08 from one production backend, where its author built and used it, and uplifted
 2026-09 with true accounting, record checkers, fixed output shapes, declared optional features and
-labelled experiments. Every rule exists because its absence caused a real defect there; the war
-stories are kept (anonymized) in [`DESIGN.md`](DESIGN.md) so future tuners know which rules are
-load-bearing.
+labelled experiments. That project's data cannot ship (the kit keeps no project ids); published
+measurements start with 2.0.0 ([`EXPERIMENTS.md`](EXPERIMENTS.md)). Every rule exists because its
+absence caused a real defect there; the war stories are kept (anonymized) in [`DESIGN.md`](DESIGN.md)
+so future tuners know which rules are load-bearing.
 
 > 📶 Nothing the pack requires needs the internet. Badges and Mermaid diagrams are optional
 > renderings: in an offline viewer the badges degrade to alt-text and the diagrams remain as
