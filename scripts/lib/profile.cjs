@@ -175,8 +175,12 @@ const FEATURES = {
   accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },
 };
 
+/** The project's visibility (§1, D23): what a `public` or `scratch` account may launch on. Default private — fail closed. */
+const VISIBILITY = Object.freeze(['public', 'private']);
+
 const DEFAULTS = {
   schema: SCHEMA,
+  visibility: 'private',
   commands: { tier: null, tiers: [], affected: null, typecheck: null },
   paths: {
     boards: 'tasks',
@@ -291,6 +295,7 @@ function logsProblem(logs, protectedGlobs, opts = {}) {
 function validate(settings) {
   const errors = [];
   if (settings.schema !== SCHEMA) errors.push(`schema: expected ${SCHEMA}, got ${JSON.stringify(settings.schema)}`);
+  if (!VISIBILITY.includes(settings.visibility)) errors.push(`visibility: ${VISIBILITY.map((v) => JSON.stringify(v)).join(' or ')} (the project's visibility, §1; a public-only account launches only on a public project), got ${JSON.stringify(settings.visibility)}`);
   for (const section of ['commands', 'paths', 'models', 'features']) {
     if (!isObject(settings[section])) errors.push(`${section}: must be an object`);
   }
@@ -675,4 +680,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, warnings, logsProblem, feature, merge, rootOf, accounts: accountsRegistry };
+module.exports = { SCHEMA, STATES, VISIBILITY, FEATURES, DEFAULTS, parse, load, validate, warnings, logsProblem, feature, merge, rootOf, accounts: accountsRegistry };

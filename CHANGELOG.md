@@ -5,6 +5,22 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M4 content policy and settings scan (2.0.0 line)
+
+- **Profile `visibility` (REQ-401, D23).** The pipeline-settings block gets a top-level `"visibility"`: `private`
+  (the default) or `public`; the template §1 names it and §16 carries it. The loader refuses any other value.
+- **`scripts/lib/account-policy.cjs` (REQ-401 to REQ-404, D5, D40).** A pure `check(account, project, claimedFiles,
+  decisions, settingsFiles)` that returns ordered faults: `E_CONTENT_PUBLIC` (a `public` or `scratch` account on a
+  private project), `E_PATH_ROOTS` (a claimed file outside the account's path roots, or a worker with no deny-rule
+  adapter — the path is named, never its content), `E_DATA_RECIPIENT` (a free or gateway account, or one with a
+  `baseUrl`, with no decision-log row that names it or its host — the refusal names the entry it expects) and
+  `E_SETTINGS` (the project's and the worktree's `.claude/settings.json` and `settings.local.json` and the account's
+  own settings carry `apiKeyHelper`, `env.ANTHROPIC_*`, `env.CLAUDE_CODE_*`, a proxy or CA variable, or a hook not
+  recorded in `builder.lock.json` — the key and the file are named, never a value). `denyPathsFor()` lists the
+  deny rules a path-root account needs. Tests: `tests/account-policy.test.mjs`.
+- **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
+  token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
+
 ### Added — M1 account registry (2.0.0 line)
 
 - **`features.accounts` (REQ-101 to REQ-106, plan decision D33).** The registry of the accounts the orchestrator may

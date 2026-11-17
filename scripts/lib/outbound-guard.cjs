@@ -29,6 +29,9 @@ const PATTERNS = [
   ['Slack token', /\bxox[abposr]-[A-Za-z0-9-]{10,}/],
   ['Google API key', /\bAIza[0-9A-Za-z_-]{35}\b/],
   ['JWT', /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+  // A gateway's own key (OmniRoute / Bifrost style: a short prefix, an underscore, a long random tail) or a long bearer
+  // token in a header — conservative: the tail must be 32+ random-looking characters, so a placeholder or a word passes.
+  ['gateway token', /\b(?:omr|bfr|bf|or|gw|vk)_[A-Za-z0-9]{32,}\b|\bBearer\s+[A-Za-z0-9._~+/=-]{40,}(?![A-Za-z0-9._~+/=-])/],
   ['credentials in a URL', /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s@/]{3,}@/i],
   ['assigned secret', /(?<![a-z0-9])(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret)[a-z0-9_]*["']?\s*[:=]\s*["']?(?![<{$]|\*{3}|x{3})([^\s"',;]{8,})/i],
 ];
