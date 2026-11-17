@@ -342,7 +342,7 @@ async function cmdKey(ctx, argv) {
     ctx.die(`${e.code ? `${e.code}: ` : ''}accounts key: ${e.message}`);
   }
   // The confirmation carries no part of the value (REQ-1002): the file, its mode and the helper only.
-  console.log(`accounts key: "${name}" key ${written.rotated ? 'rotated' : 'stored'} (mode ${written.mode}); apiKeyHelper set in ${p.settingsFile}`);
+  console.log(`accounts key: "${name}" key ${written.rotated ? 'rotated' : 'stored'} (${written.mode ? `mode ${written.mode}` : 'Windows: mode check skipped, the folder ACL rules'}); apiKeyHelper set in ${p.settingsFile}`);
   return undefined;
 }
 
