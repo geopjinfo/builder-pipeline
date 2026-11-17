@@ -101,6 +101,7 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder features` pr
 | `liteSplit` | the lite split above | any | [§8](EXPERIMENTS.md) |
 | `tokenEconomizer` · `planReview` | third-party cost plugin on trial lanes · fresh-context plan review | protocol only | [§9–10](EXPERIMENTS.md) |
 | `rankedSearch` · `riskHint` · `walkPriority` · `ruleNotes` | cheap-model advice, each through the outbound guard, never a gate | protocol only | [§12–15](EXPERIMENTS.md) |
+| `familyReview` | a second reader for a lane's P4 findings on an account of another worker `family`, at or above the writer's `tier`; off, nothing of it runs | any (`features.accounts` on) | [§16](EXPERIMENTS.md) |
 
 ## Bundled utility skills (installed unless `--no-extras`)
 
