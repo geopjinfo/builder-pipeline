@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFile
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
-import { ORCH, git, laneWorktree, orch, scratchRepo, tmp } from './fixtures/orch/rig.mjs';
+import { ORCH, PACK, git, laneWorktree, orch, profileText, scratchRepo, tmp } from './fixtures/orch/rig.mjs';
 
 const require = createRequire(import.meta.url);
 const state = require('../scripts/lib/orch-state.cjs');
@@ -397,5 +397,57 @@ describe('the review hold fails closed', () => {
     assert.throws(() => merge.mergeNext(r.root, 'gh', o), /q9\/t9 review REJECTED \(verdict\.prev-20261015T000000Z\.json\)/);
     writeFileSync(join(d, 'task.json'), JSON.stringify({ worktree: join(r.dir, 'some-other-lane') }));
     assert.equal(merge.mergeNext(r.root, 'gh', o).ok, true, 'positive control: a job for another lane does not hold this one');
+  });
+});
+
+describe('REQ-1845 — the completion gate runs before the gates command when `hygiene-gate` is among the gates', () => {
+  const kitScripts = join(PACK, 'scripts');
+  test('red: AC-1845 a lane whose diff adds .cursorrules is refused with the gate rows, the lane is FAILED and dequeued, the target unmoved; a clean lane merges', () => {
+    const { dir, repo, root } = scratchRepo({ profile: profileText({ extraFeatures: { artifactCheck: { state: 'on' } } }) });
+    const wts = { l1: laneWorktree(dir, repo, 'orch/g1-l1', '.cursorrules', 'be terse\n'), l2: laneWorktree(dir, repo, 'orch/g1-l2', 'b.txt', 'b\n') };
+    git(repo, 'checkout', '-q', '--detach'); // the target is not checked out: the ref moves by compare-and-swap
+    const split = { maxLanes: 2, rows: [], lanes: ['l1', 'l2'].map((n) => ({ name: n, rows: [`R-${n}`], level: 'Standard', track: 'ADDITIVE', dispatch: 'full', ownedFiles: [`${n}.txt`], hotFiles: [] })) };
+    state.init(root, 'g1', split, { repo, target: 'dev', preflightMode: 'parallel' });
+    for (const n of ['l1', 'l2']) {
+      state.setLane(root, 'g1', n, { status: 'DONE', worktree: wts[n] });
+      merge.enqueue(root, 'g1', n);
+    }
+    const o = { repo, slotOk: true, gatesCmd: OK, integration: true, integrationWorktree: join(dir, 'integration'), hygieneGate: true, kitScripts };
+    const tipDev = git(repo, 'rev-parse', 'dev');
+    const r = merge.mergeNext(root, 'g1', o);
+    assert.deepEqual([r.ok, r.lane, r.stage, r.exit], [false, 'l1', 'hygiene-gate', 1]);
+    assert.ok(r.rows.some((l) => /^FAIL\s+file scope/.test(l)), r.rows.join('\n'));
+    assert.ok(r.rows.some((l) => l.includes('.cursorrules')), r.rows.join('\n'));
+    assert.ok(existsSync(r.log) && readFileSync(r.log, 'utf8').includes('.cursorrules'));
+    const s = state.load(root, 'g1');
+    assert.equal(s.lanes.l1.status, 'FAILED');
+    assert.deepEqual(s.mergeQueue, ['l2']);
+    assert.equal(git(repo, 'rev-parse', 'dev'), tipDev);
+    assert.equal(git(repo, 'branch', '--list', 'orch/g1-*').split('\n').length, 2); // nothing deleted
+    const ok = merge.mergeNext(root, 'g1', o);
+    assert.equal(ok.ok, true, JSON.stringify(ok));
+    assert.equal(state.load(root, 'g1').lanes.l2.status, 'MERGED');
+  });
+  test('red: AC-1845 with no gate check on in the lane\'s profile the gate is "not configured" — a note in the log, never a pass and never a refusal; the gates command decides', () => {
+    const r = rig([['n1', 'c.txt', 'c\n']], { run: 'g2' });
+    const o = opts(r, RED(1), { hygieneGate: true, kitScripts });
+    const red = merge.mergeNext(r.root, 'g2', o);
+    assert.deepEqual([red.ok, red.stage, red.exit], [false, 'gates', 1]);
+    const logs = readdirSync(join(r.root, 'runs', 'g2', 'logs')).filter((f) => f.startsWith('hygiene-gate-n1-'));
+    assert.equal(logs.length, 1);
+    assert.match(readFileSync(join(r.root, 'runs', 'g2', 'logs', logs[0]), 'utf8'), /hygiene gate: not configured in this lane/);
+  });
+  test('red: AC-1845 `orch merge` prints the failing rows on stderr and exits 5', () => {
+    const { dir, repo, root } = scratchRepo({ profile: profileText({ orchestrator: { gates: ['hygiene-gate', OK] }, extraFeatures: { artifactCheck: { state: 'on' } } }) });
+    const wt = laneWorktree(dir, repo, 'orch/g3-l1', 'notes.tmp', 'scratch\n');
+    const split = { maxLanes: 1, rows: [], lanes: [{ name: 'l1', rows: ['R-l1'], level: 'Standard', track: 'ADDITIVE', dispatch: 'full', ownedFiles: ['l1.txt'], hotFiles: [] }] };
+    state.init(root, 'g3', split, { repo, target: 'dev', preflightMode: 'parallel' });
+    state.setLane(root, 'g3', 'l1', { status: 'DONE', worktree: wt });
+    merge.enqueue(root, 'g3', 'l1');
+    const r = orch(repo, root, ['merge', 'g3', '--slot-ok', '--integration-wt', join(dir, 'integration')]);
+    assert.equal(r.status, 5, r.out);
+    assert.match(r.stderr, /HYGIENE GATE FAIL l1/);
+    assert.match(r.stderr, /FAIL\s+file scope/);
+    assert.match(r.stderr, /notes\.tmp/);
   });
 });

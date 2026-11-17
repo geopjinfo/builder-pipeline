@@ -143,7 +143,10 @@ line in the FIX row's Notes cell. `gate-queue mark` evidence is unchanged.
 ### 6. Close-out — per module, in build order
 
 For each module, oldest first, the full playbook's *Finish* items 1–3 and 5: close its board, earn each `DONE`,
-update the registry (the version bump was step 3a), then its handoff pack
+update the registry (the version bump was step 3a), then the hygiene report and the completion gate over the
+module's range (`node scripts/hygiene.mjs --since <base> --json`, then `node scripts/hygiene.mjs --gate --since <base>
+--json`): a hard finding or a `FAIL` row is a FIX row (step 5) and the module does not close; no check on →
+`hygiene: not configured`, recorded, never a pass. Then its handoff pack
 (`node scripts/handoff-pack.mjs <key> --base <base>` and `node scripts/handoff-check.mjs <handoffs>/<date>-<key>-handoff.md`).
 Then:
 
@@ -161,6 +164,11 @@ back to step 4. When every module is `GATED`, append `run.end` to every module's
 Report per module the full playbook's *Finish* summary, plus the batch lines: modules `GATED` in build order,
 versions assigned, FIX rows per module, which checks re-ran because `status` re-opened them. The merge of
 `lite/<batch-id>` into the integration branch follows the project's own merge rule, as for a full run.
+
+**Staging and commit rules.** Stage files by name, never `git add .` or `git add -A`; inspect
+`git diff --cached --name-status` before the commit; a plain commit message and a plain PR title and body with no
+attribution trailer and no generated-content footer; remove scratch output before the close-out; run the completion
+gate (`hygiene --gate --since <base>`) before the push. A FAIL row is a FIX row, never a line to delete.
 
 **Worktree cleanup.** Do not remove the batch worktree yourself: the merge has not happened yet. Whoever merges
 `lite/<batch-id>` runs `node scripts/worktree-sweep.mjs --apply` from the primary checkout afterwards (the full

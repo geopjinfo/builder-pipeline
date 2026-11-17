@@ -367,6 +367,10 @@ When **MERGE-READY** (→ the detailed procedure for each step: `references/clos
    sure every decision and human ruling of this run is a row in `<decisions>`. Then the three free record gates:
    `node scripts/decision-index.mjs --check`, `node scripts/instruction-budget.mjs`,
    `node scripts/instruction-lint.mjs`. → What each holds, and each `not configured` line: `references/close-out.md`.
+   Then the hygiene report and the completion gate (→ the seven rows and each `not configured` line: `references/close-out.md`):
+   `node scripts/hygiene.mjs --since <base> --json` — a **hard** finding opens a `FIX-n` row, a soft one goes to the handoff
+   pack's gaps; then `node scripts/hygiene.mjs --gate --since <base> --json` — a `FAIL` row opens one `FIX-n` row per failing
+   gate and the module stays open; off → `hygiene: not configured`, recorded, never a pass.
 4. **Version bump** per profile §11 (e.g. semver + changelog entry: module key, requirements covered, interfaces/keys,
    deferrals, notable audit catches). Version + changelog ride the branch.
 5. **The handoff pack — P7 cannot close without it.** Every human-only change this module implies goes into ONE file:
@@ -382,6 +386,11 @@ When **MERGE-READY** (→ the detailed procedure for each step: `references/clos
    markdown board, then stop the watcher. The pipeline does not merge, push, or open PRs — the human reviews
    MERGE-READY, merges, and tags per profile §13. Do not claim done until the reviewer's verdict is MERGE-READY with
    evidence. Then end the session.
+**Staging and commit rules.** Stage files by name, never `git add .` or `git add -A`; inspect
+`git diff --cached --name-status` before the commit; a plain commit message and a plain PR title and body with no
+attribution trailer and no generated-content footer; remove scratch output before the close-out; run the completion
+gate (`hygiene --gate --since <base>`) before the push. A FAIL row is a FIX row, never a line to delete.
+
 8. **Worktree cleanup — after the merge, by whoever merges.** Leave the run's worktree in place: the merge has not
    happened when the run ends. Never remove a worktree by hand — a recursive delete through a `node_modules` junction
    empties the primary's. → The sweep commands, what they check and the `not configured` branch:

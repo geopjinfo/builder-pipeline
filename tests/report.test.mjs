@@ -179,3 +179,38 @@ describe('REQ-1601 — the profile rules live with the reporter', () => {
     assert.deepEqual(errs({ channels: [{ kind: 'stdout' }, { kind: 'webhook', format: 'generic', urlEnv: 'HOOK' }], alertOn: ['stall'] }), []);
   });
 });
+
+describe('REQ-1836 — the HYGIENE section reads the last hygiene record', () => {
+  const record = {
+    at: '2026-11-17T09:00:00.000Z', since: 'main', exit: 1,
+    checks: [
+      { name: 'secretScan', script: 'secret-scan', state: 'findings', hard: true, findings: ['SECRET config.js:3 — aws access key'], sinceNote: 'narrowed to the files changed since the ref' },
+      { name: 'ignoreCheck', script: 'ignore-check', state: 'clean', hard: false, findings: [], sinceNote: null },
+      { name: 'depsCheck', script: 'deps-check', state: 'not configured', hard: false, findings: [], sinceNote: null },
+      { name: 'docsCheck', script: 'docs-check', state: 'error', hard: false, findings: [], error: 'timed out' },
+    ],
+  };
+  test('red: AC-1836 with a record the section holds one line per check with its count; without a record it says no run yet; with no hygiene check on there is no section', () => {
+    const withRecord = report.build({ ...sources(), hygieneOn: true, hygiene: record }, { now: NOW, intervalMinutes: 30 });
+    assert.match(withRecord, /## HYGIENE\n+- secretScan: 1 finding\(s\) · hard · narrowed to the files changed since the ref\n- ignoreCheck: 0 finding\(s\)\n- depsCheck: not configured\n- docsCheck: could not run — timed out\nlast run 2026-11-17T09:00:00.000Z · since main · exit 1/);
+    assert.ok(!withRecord.includes('aws access key'), 'finding text never reaches the report');
+    assert.ok(withRecord.indexOf('## HYGIENE') < withRecord.indexOf('## COST'), 'HYGIENE comes before COST');
+    const noRun = report.build({ ...sources(), hygieneOn: true, hygiene: null }, { now: NOW, intervalMinutes: 30 });
+    assert.match(noRun, /## HYGIENE\n+hygiene: no run yet/);
+    const off = report.build({ ...sources(), hygieneOn: false, hygiene: null }, { now: NOW, intervalMinutes: 30 });
+    assert.ok(!off.includes('HYGIENE'));
+  });
+  test('red: AC-1836 gather reads <runs>/hygiene/last.json while a hygiene check is on, and the digest changes with it', () => {
+    const cwd = tmp('gather');
+    const settings = { paths: { runs: '.pipeline' }, features: { secretScan: { state: 'on' } } };
+    const a = report.gather({ cwd, root: null, settings, reportsDir: join(cwd, 'reports') });
+    assert.deepEqual([a.hygieneOn, a.hygiene], [true, null]);
+    mkdirSync(join(cwd, '.pipeline', 'hygiene'), { recursive: true });
+    writeFileSync(join(cwd, '.pipeline', 'hygiene', 'last.json'), JSON.stringify(record));
+    const b = report.gather({ cwd, root: null, settings, reportsDir: join(cwd, 'reports') });
+    assert.equal(b.hygiene.checks.length, 4);
+    assert.notEqual(report.digest(a), report.digest(b));
+    const off = report.gather({ cwd, root: null, settings: { paths: { runs: '.pipeline' }, features: {} }, reportsDir: join(cwd, 'reports') });
+    assert.deepEqual([off.hygieneOn, off.hygiene], [false, null]);
+  });
+});

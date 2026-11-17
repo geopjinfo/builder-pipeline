@@ -7,6 +7,7 @@
 - [README.md](README.md): what the kit is, install, the one setup prompt per tool, every CLI command, per-tool support
 - [GUIDE.md § Capacity governor](GUIDE.md): `features.capacity` — the host, the accounts and the 429 record cap the lanes that run at once; lowers only; `perLaneMb` is the measured per-lane peak RSS; `npx builder-pipeline run capacity --once | --watch`
 - [GUIDE.md § Progress reporter](GUIDE.md): `features.reporter` — one report per interval from the kit's records on stdout, a file, a webhook or a command; only on change, alerts opt-in, the outbound guard in front; `npx builder-pipeline run report --once | --watch`
+- [GUIDE.md § Repo hygiene and the completion gate](GUIDE.md): `npx builder-pipeline run hygiene [--since <base>]` runs every hygiene check that is on; `--gate` prints the seven completion-gate rows (file scope, ignore rules, secrets, staging, commit, delivery, separation), NOT CONFIGURED never a pass; `"hygiene-gate"` in `features.orchestrator.gates` refuses a merge on FAIL
 - [FEATURES.md](FEATURES.md): every feature on one page: what it does, how to start it, Claude Code / Codex / Antigravity support, status
 - [SETUP_PROMPT.md](SETUP_PROMPT.md): the one setup prompt (bootstrap, then the builder-init skill)
 - [USAGE.md](USAGE.md): the operator's runbook: stop points, record points, resuming, troubleshooting

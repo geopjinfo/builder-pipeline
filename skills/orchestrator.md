@@ -216,12 +216,27 @@ Building, planning, reviewing and orchestrating stay on the plan accounts; the l
 - **Exit 4 = conflict or target moved.** A heads-up file is written; send the human its path. Brief the lane worker:
   merge the target into its branch in its own worktree, keep both sides' planned work, re-run its tiers,
   `orch enqueue` again.
-- **Exit 5 = gates red.** Send the lane a FIX pointer with the gates log path; tell the human.
+- **Exit 5 = gates red, or HYGIENE GATE FAIL.** Send the lane a FIX pointer with the gates log path; tell the human.
+- **The completion gate in the merge.** With `hygiene-gate` among `features.orchestrator.gates` (a list:
+  `["hygiene-gate", "<gates command>"]`), `orch merge` runs `hygiene --gate --since <target>` over the lane's diff in
+  the integration worktree before the gates command. A FAIL row refuses the merge: exit 5 with the rows on stderr,
+  the lane FAILED and out of the queue like gates red, the rows in its gates log. Send the lane one FIX pointer per
+  failing row. A soft finding in a lane's hygiene report (`hygiene --json`) goes to the `repo-steward` persona
+  (read-only: keep, fix or allow with a reason and the §16 row that records it), never to a sweep with `--apply`.
+  `hygiene gate: not configured` in the log (no gate check is on) is not a pass: the gates command decides alone,
+  and the §16 line that would turn a gate check on is the human's.
 - **Never** delete, force-push, reset, rebase a shared branch, rewrite history, or drop planned or built work to
   make a merge pass.
 - After each merge: release is automatic (claims); run the worktree sweep the playbook's *Finish* names
   (`node scripts/worktree-sweep.mjs --apply`) — never remove a worktree by hand. `worktreeSweep: not configured` →
-  the manual fallback there.
+  the manual fallback there. Once a lane is MERGED and `features.branchSweep` or `features.worktreeSweep` is on,
+  `orch next` prints a `SWEEP branches` / `SWEEP worktrees` line naming the dry run; the removal is the human's,
+  and `next` never names `--apply`.
+
+**Staging and commit rules.** Stage files by name, never `git add .` or `git add -A`; inspect
+`git diff --cached --name-status` before the commit; a plain commit message and a plain PR title and body with no
+attribution trailer and no generated-content footer; remove scratch output before the close-out; run the completion
+gate (`hygiene --gate --since <base>`) before the push. A FAIL row is a FIX row, never a line to delete.
 
 | record | where |
 |---|---|

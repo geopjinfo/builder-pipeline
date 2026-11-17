@@ -750,7 +750,10 @@ function validateOrchestrator(settings, badRegex) {
   template('stateCommand', ['session']);
   template('stopCommand', ['session']);
   template('launchCommand', ['brief']);
-  template('gates', []);
+  // `gates`: a command, or a list of commands; the entry `hygiene-gate` names the kit's completion gate (REQ-1845).
+  if (Array.isArray(o.gates)) {
+    if (!o.gates.length || o.gates.some((g) => typeof g !== 'string' || !g.trim())) errors.push(`${at('gates')}: null, a command, or a non-empty list of commands (the entry "hygiene-gate" names the completion gate)`);
+  } else template('gates', []);
   for (const k of ['branchPrefix', 'worktreePrefix', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
   /* The accounts the orchestrator runs on (features.accounts, through the 1.0 view until M3): a terminal worker
    * account needs a launch command; an api-key account needs a model floor to check against. */

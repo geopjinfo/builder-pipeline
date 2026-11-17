@@ -383,7 +383,8 @@ A person who is away gets one page per interval that says what moved, what stall
 reads the records the kit already writes: every run's state and next actions, the events since the last report, the
 board counts, the capacity record, the readiness record, the 429 record and the cost window while `costAccounting`
 is on. The sections come in one fixed order: RUNS AND LANES, SINCE LAST REPORT, NEEDS A PERSON, CAPACITY AND ACCOUNTS,
-COST, NEXT. A source that is missing prints its own line and is never dropped. Numbers come from code; the optional
+HYGIENE (while a hygiene check is on: one line per check from the last `hygiene` run), COST, NEXT. A source that is
+missing prints its own line and is never dropped. Numbers come from code; the optional
 SUMMARY (model) section is the `progress-reporter` persona's words, labelled as such, and it is dropped when stale
 (`features.reporterSummary`, experimental).
 
@@ -400,6 +401,40 @@ plain http is for loopback only, no redirect is followed, and the log names host
 payload passes the outbound guard with the project's env secrets first: a hit means NOT SENT, the log reads
 `report.refused` with the kind, the file copy carries `[refused: <kind>]` in that line's place, and the next report's
 header says the last send was refused. A send failure never changes an exit code.
+
+## 🧹 Repo hygiene and the completion gate
+
+A repository that an agent worked in collects what the work left behind: merged branches, run folders, untracked
+junk, a large file, a key in a config, an assistant's own instruction file, a `Co-Authored-By` line. Each has a
+check, every check is a §16 feature that is `off` until the project turns it on, and `npx builder-pipeline run hygiene
+[--since <base>] [--json]` runs every check that is on through its own script and prints one report (a check that is
+off prints its `not configured` line). `--apply` reaches only the three sweeps, and only when a person types it.
+
+`npx builder-pipeline run hygiene --gate --since <base>` is the **completion gate**: seven rows, each `PASS`, `FAIL`
+or `NOT CONFIGURED`, with the findings behind a `FAIL`. A task is Done only when every configured row passes;
+`NOT CONFIGURED` is never a pass, and with no gate check on the command exits 3.
+
+| Gate | What it reads | Fails on |
+|---|---|---|
+| file scope | `artifactCheck` over the tree, or the commits since the base | an assistant-specific file or a scratch file in the tree |
+| ignore rules | `ignoreCheck`; `artifactCheck` over `.gitignore` | tracked junk, unignored junk, an assistant path in `.gitignore` |
+| secrets | `secretScan` over the tracked text | a key or token shape |
+| staging | `artifactCheck --staged` over the index when it is not empty, else the commits since the base | what a blanket `git add -A` picked up |
+| commit | `attributionCheck` since the base | an attribution trailer, a generated-content footer, an assistant author identity, an assistant branch name |
+| delivery | `ignoreCheck`, `sizeCheck` | tracked junk, a large file |
+| separation | `artifactCheck` (the archive catalogue); the `repo-steward` persona judges the rest | a deployment archive or packaging output in the tree |
+
+Where it runs: Phase 7 of the module pipeline (a `FAIL` row is one `FIX-n` row per failing gate and the module stays
+open), the readiness checklist, the orchestrator's merge (`"hygiene-gate"` in `features.orchestrator.gates` runs it
+over the lane's diff before the gates command and refuses the merge on `FAIL`, the lane FAILED like gates red), and
+the pre-commit hooks (`git-hooks --secret-scan`, `git-hooks --artifact-check`). The `repo-steward` persona reads the
+report and says keep, fix or allow per soft finding; it edits nothing. The progress reporter prints a HYGIENE section
+from the last run.
+
+Limits, by design: the gate and the checks remove nothing and rewrite no history (an attribution already on the
+integration branch is reported with "a history rewrite is a decision for a person"); `allow` lists in §16 are the only
+way past a finding; a user file or a legitimate configuration file is never erased to pass a check. The `builder-init`
+skill proposes the keys from the project's own facts and writes none before a person confirms.
 
 ## ⬆️ From 1.x: the command name
 

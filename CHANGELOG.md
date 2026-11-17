@@ -7,6 +7,27 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **M21 completion gate, part 2: the `hygiene` runner, `hygiene --gate` and the wiring (`specs/repo-hygiene.spec.md`
+  REQ-1831 to REQ-1834, REQ-1836, REQ-1844 to REQ-1848; D87, D99, D100, D103).** `npx builder-pipeline run hygiene
+  [--since <ref>] [--check <list>] [--json] [--apply]` runs every hygiene-class check whose §16 feature is on through
+  its own script and prints one report (a check that is off prints its `not configured` line; `--since` narrows the
+  file checks to the changed files and says which checks judge the whole tree; `--apply` reaches only the three
+  sweeps; exit 3 when no check is on); the report goes to `.pipeline/hygiene/last.json`. `--gate [--since <base>]`
+  prints the seven rows of the completion gate (file scope, ignore rules, secrets, staging, commit, delivery,
+  separation) as PASS, FAIL or NOT CONFIGURED with the findings behind a FAIL; exit 1 on a FAIL row, 3 when no gate
+  check is on, and NOT CONFIGURED is never a pass. `features.orchestrator.gates` now takes a list of commands; the
+  entry `"hygiene-gate"` makes `orch merge` run the gate over the lane's diff in the integration worktree before the
+  gates command, and a FAIL refuses the merge (exit 5, the rows on stderr, the lane FAILED and dequeued like gates
+  red, the rows in its log); "not configured" is a note in the log and the gates command decides. `orch next` offers
+  `SWEEP branches` / `SWEEP worktrees` after a merge when the sweep feature is on, dry run only. The progress report
+  carries a HYGIENE section from the last record while a hygiene check is on. Prose: Phase 7 and the readiness
+  checklist run the report and the gate (a FAIL row is one FIX row per gate, the module stays open; off is `hygiene:
+  not configured`, never a pass); the four skills, the worker brief and the `repo-steward` persona carry the staging
+  and commit rules in one block; `builder-init` Step 3b proposes the hygiene keys (`artifactCheck.allow` from the
+  install list in `builder.lock.json`, the two checks on when the orchestrator or the pipeline is on) and writes none
+  before the person confirms; GUIDE "Repo hygiene and the completion gate", USAGE "Completion gate", FEATURES rows.
+  Spec amendment DL-3: a lane refused by the gate is FAILED like gates red, not held MERGING. Tests:
+  `tests/hygiene.test.mjs`, rows in orch-merge, orch-state, report, profile, cli-commands and pack-prose.
 - **M21 completion gate, part 1: `attribution-check` and `artifact-check` (`specs/repo-hygiene.spec.md` REQ-1841 to
   REQ-1843, D99 to D104).** Two opt-in §16 features, both `off` by default, both hard: a finding exits 1.
   `features.attributionCheck` (`target`, `patterns`, `authors`, `allow`): `npx builder-pipeline run attribution-check

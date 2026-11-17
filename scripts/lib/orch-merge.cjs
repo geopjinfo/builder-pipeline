@@ -14,7 +14,8 @@
  *      conflict → lane STOPPED-CONFLICT + heads-up file; nothing is deleted or reset
  *   3. refresh: merge the target INTO the lane branch in the lane's own worktree (no rebase: history is never
  *      rewritten); a conflict there is aborted (`git merge --abort` restores the lane exactly) → heads-up
- *   4. gates in the lane worktree, exit code taken directly (never piped)
+ *   4. the completion gate (`hygiene-gate` in features.orchestrator.gates) then the gates command, in the lane
+ *      worktree, exit codes taken directly (never piped); a FAIL row refuses the merge, the lane is FAILED
  *   5. `git merge --no-ff` into the target; claims released
  *
  * INTEGRATION mode (default) — no checkout of the target is touched:
@@ -113,7 +114,7 @@ function stop(root, runId, lane, info) {
 }
 
 /**
- * Merge the queue head. opts: { repo (the target checkout), gatesCmd, slotOk, logDir, integration,
+ * Merge the queue head. opts: { repo (the target checkout), gatesCmd, hygieneGate, kitScripts, slotOk, logDir, integration,
  * integrationWorktree, linkDirs, linkGuard }. Returns { ok, lane, ... }. Throws only on a refusal that changed nothing.
  */
 function mergeNext(root, runId, opts) {
@@ -158,6 +159,8 @@ function mergeDirect({ root, runId, lane, l, repo, target }, opts) {
     return stop(root, runId, lane, { stage: 'refresh', files, detail: `merge of ${target} into ${l.branch} conflicted; aborted, lane back at ${tipBefore}` });
   }
 
+  const h = runHygieneGate(root, runId, lane, wt, target, opts);
+  if (h && h.exit !== 0) return hygieneGateFail(root, runId, lane, h);
   const g = runGates(root, runId, lane, wt, opts);
   if (g.exit !== 0) return gatesRed(root, runId, lane, g);
 
@@ -192,6 +195,52 @@ function runGates(root, runId, lane, cwd, opts) {
   const g = spawnSync(opts.gatesCmd, { cwd, shell: true, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   fs.writeFileSync(log, `$ ${opts.gatesCmd}\nexit ${g.status}\n${g.stdout || ''}\n${g.stderr || ''}`);
   return { exit: g.status, log };
+}
+
+/**
+ * The completion gate (REQ-1845) — `hygiene --gate --since <target> --json` in the worktree the gates run in, when
+ * `hygiene-gate` is among features.orchestrator.gates (opts.hygieneGate). It runs BEFORE the gates command: a lane
+ * that fails a hygiene row is not Done, whatever its tests say. Exit 3 (no gate check is on in the lane's profile)
+ * is a note in the log, never a pass and never a refusal: the gate was not configured, the gates command decides.
+ * A gate that cannot run (invalid profile, a crash) refuses the merge like a FAIL — a lane merged past a broken gate
+ * is the bug the gate exists to catch. Returns null when the gate is not asked for.
+ */
+function runHygieneGate(root, runId, lane, cwd, target, opts) {
+  if (!opts.hygieneGate) return null;
+  const script = path.join(opts.kitScripts || path.join(__dirname, '..'), 'hygiene.mjs');
+  const logDir = opts.logDir || path.join(runDir(root, runId), 'logs');
+  fs.mkdirSync(logDir, { recursive: true });
+  const log = path.join(logDir, `hygiene-gate-${lane}-${Date.now()}.log`);
+  const argv = [script, '--gate', '--since', target, '--json'];
+  const r = spawnSync(process.execPath, argv, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  let rows = [];
+  let exit = r.status === null ? 1 : r.status;
+  try {
+    const g = JSON.parse(r.stdout);
+    for (const row of g.rows) {
+      rows.push(`${row.result.padEnd(15)} ${row.gate.padEnd(13)} ${row.note}`);
+      for (const f of row.findings) rows.push(`    ${f}`);
+    }
+    if (exit === 0 && g.exit !== undefined) exit = g.exit;
+  } catch (_) {
+    rows = [`hygiene gate did not report (exit ${exit}): ${(r.stderr || r.stdout || '').trim().split(/\r?\n/)[0] || 'no output'}`];
+    if (exit === 0 || exit === 3) exit = 1;
+  }
+  if (exit === 3) rows.push('hygiene gate: not configured in this lane — no gate check is on; NOT CONFIGURED is never a pass, the gates command decides');
+  fs.writeFileSync(log, `$ node ${argv.map((a) => path.basename(a)).join(' ')}\nexit ${exit}\n${rows.join('\n')}\n${r.stderr || ''}`);
+  // the failing rows only, for the refusal line; exit 3 keeps its note so the caller can print it
+  const failing = exit === 1 ? rows.filter((l) => /^FAIL\b/.test(l) || l.startsWith('    ') || l.startsWith('hygiene gate did not')) : rows;
+  return { exit: exit === 3 ? 0 : exit, notConfigured: exit === 3, log, rows: failing };
+}
+
+function hygieneGateFail(root, runId, lane, h) {
+  state.update(root, runId, (st) => {
+    st.lanes[lane].status = 'FAILED';
+    st.lanes[lane].gatesLog = h.log;
+    st.mergeQueue = st.mergeQueue.filter((q) => q !== lane);
+  }, { type: 'merge.hygiene-gate', data: { lane, exit: h.exit, log: h.log, rows: h.rows } });
+  state.snapshotLane(root, runId, lane, `hygiene gate FAIL (exit ${h.exit})`);
+  return { ok: false, lane, stage: 'hygiene-gate', exit: h.exit, log: h.log, rows: h.rows };
 }
 
 function gatesRed(root, runId, lane, g) {
@@ -372,6 +421,8 @@ function mergeIntegration(ctx, opts) {
   state.setLane(root, runId, lane, { status: 'MERGING', integrationSha: built.sha, integrationBase: base, integrationDeps: deps });
   const withDeps = (r) => ({ ...r, deps });
 
+  const h = runHygieneGate(root, runId, lane, wt, target, opts);
+  if (h && h.exit !== 0) return withDeps(hygieneGateFail(root, runId, lane, h));
   const g = runGates(root, runId, lane, wt, opts);
   if (g.exit !== 0) return withDeps(gatesRed(root, runId, lane, g));
 

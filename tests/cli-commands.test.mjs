@@ -166,6 +166,10 @@ describe('run attribution-check / run artifact-check (M21)', () => {
     const c = run(cli, proj, ['run', 'artifact-check', '--bogus']);
     assert.equal(c.status, 2, c.out);
     assert.match(c.out, /usage:/);
+    const d = run(cli, proj, ['run', 'hygiene']);
+    assert.equal(d.status, 3, d.out);
+    assert.match(d.out, /^hygiene: no check is on/m);
+    assert.equal(run(cli, proj, ['run', 'hygiene', '--check']).status, 2);
   });
 });
 

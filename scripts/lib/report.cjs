@@ -51,7 +51,7 @@ function gather({ cwd = process.cwd(), root, settings = {}, env = process.env, n
   const dir = path.resolve(cwd, reportsDir || cfg.reportsDir);
   const stateFile = path.join(dir, 'state.json');
   const prev = readJson(stateFile, {}) || {};
-  const out = { runs: [], loops: {}, events: [], eventsOffset: { ...(prev.eventsOffset || {}) }, boards: [], capacity: null, readiness: null, ratelimit: null, cost: { configured: false }, summary: null, lastSent: prev.lastSentAt || null, lastRefused: prev.lastRefused || null, lastDigest: prev.lastDigest || null, skipped: prev.skipped || 0 };
+  const out = { runs: [], loops: {}, events: [], eventsOffset: { ...(prev.eventsOffset || {}) }, boards: [], capacity: null, readiness: null, ratelimit: null, cost: { configured: false }, hygiene: null, hygieneOn: false, summary: null, lastSent: prev.lastSentAt || null, lastRefused: prev.lastRefused || null, lastDigest: prev.lastDigest || null, skipped: prev.skipped || 0 };
   // runs: state.json and next actions through orch-state when the root exists
   const runsDir = root ? path.join(root, 'runs') : null;
   if (runsDir && fs.existsSync(runsDir)) {
@@ -90,6 +90,15 @@ function gather({ cwd = process.cwd(), root, settings = {}, env = process.env, n
     out.capacity = readJson(path.join(root, 'capacity.json'));
     out.readiness = readJson(path.join(root, 'accounts-readiness.json'));
     out.ratelimit = readJson(path.join(root, 'ratelimit.json'));
+  }
+  // hygiene (REQ-1836): the last `hygiene --json` record, read while at least one hygiene check is on
+  try {
+    const hygieneLib = require('./hygiene.cjs');
+    const profile = require('./profile.cjs');
+    out.hygieneOn = hygieneLib.FEATURES.some((n) => profile.feature(settings, n).enabled);
+    if (out.hygieneOn) out.hygiene = readJson(hygieneLib.recordPath(cwd, settings, 'last.json'));
+  } catch (_) {
+    out.hygieneOn = false;
   }
   // boards: counts through the board parser
   const boardsDir = path.resolve(cwd, (settings.paths && settings.paths.boards) || 'tasks');
@@ -195,6 +204,19 @@ function build(sources, { now = Date.now(), intervalMinutes = 30, first = false,
   else for (const [n, a] of Object.entries(s.readiness.accounts)) L.push(`- ${n}: ${a.state || 'unknown'}${typeof a.percent === 'number' ? ` · ${a.percent}% used` : ' · usage unmeasured'}${a.reason ? ` · ${a.reason}` : ''}`);
   if (!s.ratelimit) L.push('429 record: none');
   else L.push(`429 record: ${s.ratelimit.holdUntil ? `hold until ${s.ratelimit.holdUntil}` : 'no hold'}${typeof s.ratelimit.lanes === 'number' ? ` · lane cap ${s.ratelimit.lanes}` : ''}${typeof s.ratelimit.hits === 'number' ? ` · ${s.ratelimit.hits} hit(s)` : ''}`);
+  // HYGIENE (REQ-1836): one line per check from the last hygiene record, only while a hygiene check is on
+  if (s.hygieneOn) {
+    L.push('', '## HYGIENE', '');
+    if (!s.hygiene || !Array.isArray(s.hygiene.checks)) L.push('hygiene: no run yet');
+    else {
+      for (const c of s.hygiene.checks) {
+        if (c.state === 'not configured') L.push(`- ${c.name}: not configured`);
+        else if (c.state === 'error') L.push(`- ${c.name}: could not run — ${c.error || 'error'}`);
+        else L.push(`- ${c.name}: ${c.findings.length} finding(s)${c.hard ? ' · hard' : ''}${c.sinceNote ? ` · ${c.sinceNote}` : ''}`);
+      }
+      L.push(`last run ${s.hygiene.at || 'unknown'}${s.hygiene.since ? ` · since ${s.hygiene.since}` : ''} · exit ${s.hygiene.exit}`);
+    }
+  }
   // COST
   L.push('', '## COST', '');
   const c = s.cost || { configured: false };
@@ -221,6 +243,7 @@ function digest(sources) {
     loops: Object.fromEntries(Object.entries(s.loops || {}).map(([k, j]) => [k, [j.passes, j.stopReason, j.status, j.account]])),
     boards: s.boards || [],
     capacity: s.capacity ? [s.capacity.effectiveLanes, s.capacity.reason] : null,
+    hygiene: s.hygiene && Array.isArray(s.hygiene.checks) ? s.hygiene.checks.map((c) => [c.name, c.state, c.findings ? c.findings.length : 0]) : null,
     readiness: s.readiness && s.readiness.accounts ? Object.fromEntries(Object.entries(s.readiness.accounts).map(([n, a]) => [n, [a.state, a.reason, a.percent]])) : null,
     ratelimit: s.ratelimit ? [s.ratelimit.holdUntil, s.ratelimit.lanes, s.ratelimit.hits] : null,
     cost: s.cost ? [s.cost.configured, s.cost.dispatches, s.cost.usd] : null,

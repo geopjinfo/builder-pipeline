@@ -197,7 +197,10 @@ const creditOff = () => {
   console.log('orchestrator credit lane: not configured (features.orchestrator.credit.enabled is false)');
   process.exit(0);
 };
-const gatesCmd = () => flags.gates || cfg.gates || (tierCmd && (settings.commands.tiers || []).includes('gates') ? tierCmd.split('{tier}').join('gates') : null);
+// `gates` is a command or a list of commands; `hygiene-gate` in the list names the kit's completion gate (REQ-1845), run before the commands.
+const gatesList = () => (Array.isArray(cfg.gates) ? cfg.gates : cfg.gates ? [cfg.gates] : []);
+const hygieneGate = () => gatesList().includes('hygiene-gate');
+const gatesCmd = () => flags.gates || gatesList().filter((g) => g !== 'hygiene-gate').join(' && ') || (tierCmd && (settings.commands.tiers || []).includes('gates') ? tierCmd.split('{tier}').join('gates') : null);
 // `--queue <worktree>` names the queue a credit command reads or writes (a worktree of this repo)
 const queueFlag = () => (flags.queue && flags.queue !== true ? flags.queue : undefined);
 const creditQueueRoot = (fallback = () => credit.creditRoot()) => (queueFlag() ? credit.queueRootOf(queueFlag()) : fallback());
@@ -958,7 +961,7 @@ try {
       const r = merge.mergeNext(root(), pos[0], {
         repo: flags.repo, slotOk: !!flags['slot-ok'], gatesCmd: gatesCmd(), integration: flags.direct ? false : cfg.integration !== false,
         integrationWorktree: flags['integration-wt'] ? path.resolve(flags['integration-wt']) : undefined, linkDirs: cfg.linkDirs, linkGuard: cfg.linkGuard,
-        mechanical: cfg.mechanical,
+        mechanical: cfg.mechanical, hygieneGate: hygieneGate(), kitScripts: path.dirname(fileURLToPath(import.meta.url)),
       });
       for (const d of r.deps || []) console.log(d);
       if (r.ok) {
@@ -966,6 +969,7 @@ try {
         break;
       }
       if (r.stage === 'gates') die(5, `GATES RED ${r.lane} exit ${r.exit} — log ${r.log}`);
+      if (r.stage === 'hygiene-gate') die(5, `HYGIENE GATE FAIL ${r.lane} — the lane is not Done (log ${r.log}):\n${r.rows.join('\n')}`);
       if (r.stage === 'ff-needed') {
         console.log(`FF-NEEDED ${r.lane}: run  ${r.command}\n  gates green on ${r.sha}; ${r.worktree} has the target checked out, so its ref is not moved under it — then orch merge again`);
         process.exit(12);

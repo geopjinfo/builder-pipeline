@@ -229,6 +229,21 @@ variable; `features.artifactCheck.allow` in §16 is the only way past. When the 
 the artifact check joins it in the same `pre-commit` (and the other way round); a pre-commit hook of your own is left
 alone, with the one line to add printed.
 
+## Completion gate (`run hygiene --gate`)
+
+```
+npx builder-pipeline run hygiene --since <base> --json         # every hygiene check that is on, one report
+npx builder-pipeline run hygiene --gate --since <base>         # the seven rows: PASS / FAIL / NOT CONFIGURED
+```
+
+The first command runs each hygiene check whose §16 feature is on through its own script and writes the report to
+`.pipeline/hygiene/last.json` (the progress reporter reads it). The second prints the completion gate: file scope,
+ignore rules, secrets, staging, commit, delivery, separation. Exit 0 when every configured row passes, 1 on a FAIL
+row, 3 when no gate check is on — `NOT CONFIGURED` is printed, never counted as a pass. The pipeline runs both at
+Phase 7 and opens one FIX row per failing gate; `"hygiene-gate"` in `features.orchestrator.gates` runs the gate in
+`orch merge` and refuses the merge on FAIL, with the rows on stderr. Nothing is removed and no history is rewritten:
+each finding prints the command a person would run.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
