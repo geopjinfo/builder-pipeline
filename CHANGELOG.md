@@ -7,6 +7,12 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **M22 evidence: EXPERIMENTS §23 carries the kit's `deadCode` measurement (`specs/repo-hygiene.spec.md` REQ-1825, D91).**
+  `dead-code` over the kit at `dc0079e` with an empty bank: 73 ORPHAN findings, 73 false (every one a file loaded by a
+  built path: the `cli.js` dispatch, the hook settings, `path.join` loads), 5 of 5 false after the entry globs the
+  layout implies, zero true orphans, no STALE-TODO. The decision stays `not yet measured`: the keep rule needs two
+  repositories, and spec amendment DL-4 replaces the polyglot test bed (Python; the reader is JavaScript-only) with a
+  JavaScript project. `features` prints the §23 decision for `deadCode`.
 - **M21 completion gate, part 2: the `hygiene` runner, `hygiene --gate` and the wiring (`specs/repo-hygiene.spec.md`
   REQ-1831 to REQ-1834, REQ-1836, REQ-1844 to REQ-1848; D87, D99, D100, D103).** `npx builder-pipeline run hygiene
   [--since <ref>] [--check <list>] [--json] [--apply]` runs every hygiene-class check whose §16 feature is on through

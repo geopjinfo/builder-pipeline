@@ -789,6 +789,18 @@ count and the rate per repository in the table below. STALE-TODO is reported onl
 
 | Date | Kit commit | Repository | Commit | Findings | False | Rate |
 |---|---|---|---|---|---|---|
+| 2026-11-17 | dc0079e | the kit itself, roots as written above, empty bank, no `entries` | dc0079e | 73 | 73 | 100 percent |
+| 2026-11-17 | dc0079e | the kit itself, `entries` the layout implies (`scripts/*.mjs`, `scripts/*.cjs`, `cli/*.cjs`, `hooks/**`) | dc0079e | 5 | 5 | 100 percent |
+
+**Classification of the kit run (2026-11-17).** Every ORPHAN is a file loaded by a path the reader cannot see: 58
+command entries `cli.js` runs by a built path (`scripts/<name>.mjs`, `scripts/account-key.cjs`,
+`scripts/readme-badges.cjs`), 4 `cli/*.cjs` modules `cli.js` (outside `roots`) requires, 11 hook programs Claude Code
+and git run from settings, and 5 libraries loaded by `path.join` (`bash-cap`, `reanchor` from the hooks and `cli.js`;
+`tool-groups` from `cli.js`; `router-hint`, `srt-check` from `profile.cjs` and `account-wrappers.cjs`). Zero true
+orphans. STALE-TODO: none. The second repository is owed, and the polyglot test bed cannot serve it: the bed is Python
+and the import reader (`specifiers` in `scripts/lib/deps-check.cjs`) reads `require` and `import` only, so every `.py`
+file would be an ORPHAN by construction, not by measurement. The second repository is a JavaScript project other than
+the kit (spec amendment DL-4).
 
 **Keep rule.** Keep (promote to `off`, a feature a project may switch on) when the rate is under 10 percent on both
 repositories. Drop when it is 10 percent or more on either. A rate on one repository alone is not a decision.
@@ -796,4 +808,4 @@ repositories. Drop when it is 10 percent or more on either. A rate on one reposi
 **Risk.** Two repositories are a small sample, and both are JavaScript. A project in another language gets its own
 measurement before `experimental-on`.
 
-**Decision (2026-11-17).** not yet measured — no measurement yet; the ORPHAN false-positive rate on the two repositories is owed (M22).
+**Decision (2026-11-17).** not yet measured — one of two repositories measured: on the kit 73 findings, 73 false (100 percent), and still 5 of 5 false after the entry globs; the keep rule needs both repositories and the second (a JavaScript project, DL-4) is owed. The kit's number already says the reader cannot gate a repository whose entries are dispatched by a built path; the recommended course when the second number is in is drop, or a reader that takes `package.json` `bin` dispatch and hook settings as entries before the experiment is run again.
