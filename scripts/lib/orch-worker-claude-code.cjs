@@ -21,13 +21,14 @@
  *   pin        the `--settings` file every lane launch passes (REQ-404, D40): the account's own env block, its
  *              config dir and its baseUrl, plus `permissions.deny` for everything outside a path-root account's
  *              roots (REQ-402). Written into the run dir at 0600; it never carries a key or a key helper.
+ *   errors     `classifyError(response)` is the shared rule of scripts/lib/account-errors.cjs (REQ-306): LIMIT, BUDGET,
+ *              OVERLOAD or AUTH with an until time; `errorResponse(result, stderr)` shapes a failed run's texts for it.
  *
  * Tests drive a stub binary through BUILDER_CREDIT_WORKER_BIN (tests/fixtures/orch/stub-worker.cjs).
  */
 const fs = require('fs');
 const path = require('path');
 const { childEnv } = require('./worker-env.cjs');
-const { classifyError } = require('./worker-errors.cjs');
 
 const NAME = 'claude-code';
 const API_KEY_VAR = 'ANTHROPIC_API_KEY';
@@ -168,6 +169,11 @@ const resultLine = (result) => (result && typeof result.result === 'string' ? re
 const runSucceeded = (result, exitCode) => !!result && !result.is_error && result.subtype === 'success' && exitCode === 0;
 /** The API error texts of a failed run (for classification). */
 const errorTexts = (result) => (result && result.is_error ? [String(result.result ?? ''), JSON.stringify(result.errors ?? '')] : []);
+
+/** The shared exhaustion rule (REQ-306, D46): one of LIMIT, BUDGET, OVERLOAD, AUTH with `until`, or null. */
+const classifyError = (response, opts) => require('./account-errors.cjs').classifyError(response, opts);
+/** A failed run's texts as the response `classifyError` reads: the status code is read from "API Error: NNN" in them. */
+const errorResponse = (result, stderrText = '') => ({ text: [...errorTexts(result), String(stderrText || '')].join('\n') });
 
 const describeInput = (i = {}) => String(i.command ?? i.file_path ?? i.path ?? i.pattern ?? JSON.stringify(i)).slice(0, 160);
 
@@ -315,7 +321,7 @@ function removeKitHooks(hooks) {
 
 module.exports = {
   NAME, API_KEY_VAR, KEY_SOURCE, CONFIG_GLOBS, DEFAULT_GUARD_DIR,
-  settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, denials, resolveBin,
+  settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, errorResponse, classifyError, denials, resolveBin,
   launchSessionId, readLaunchLog, pin, withSettings, writePin,
-  KIT_HOOK_MARKER, PERMISSION_MODES, launchArgs, accountEnv, structuredVerdict, gateHookEntries, isKitHook, removeKitHooks, classifyError,
+  KIT_HOOK_MARKER, PERMISSION_MODES, launchArgs, accountEnv, structuredVerdict, gateHookEntries, isKitHook, removeKitHooks,
 };
