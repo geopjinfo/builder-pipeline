@@ -190,7 +190,16 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
   const pin = path.join(cwd, '.pipeline', 'loop', `${key}.settings.json`);
   const p = accountPaths.paths(accountPaths.home(env), accountName, account);
   const bin = env.BUILDER_LOOP_WORKER_BIN || claude.resolveBin(env);
-  const expectedKey = account.pays === 'subscription' ? 'none' : claude.API_KEY_VAR;
+  // REQ-602: a subscription account must start on its login ('none'); any other account on a key — the API key variable,
+  // an auth token (a gateway) or the apiKeyHelper of its settings. Anything else stops the worker before a model call.
+  const acceptableKeySources = account.pays === 'subscription' ? ['none'] : [claude.API_KEY_VAR, 'ANTHROPIC_AUTH_TOKEN', 'apiKeyHelper'];
+  const keySourceVerdict = (events) => {
+    for (const ev of events) {
+      if (ev && ev.type === 'system' && ev.subtype === 'init') return acceptableKeySources.includes(ev.apiKeySource) ? 'ok' : `apiKeySource is ${JSON.stringify(ev.apiKeySource)}, not one of ${acceptableKeySources.join(' | ')} — worker stopped before any model call`;
+      if (!(ev && ev.type === 'system' && /^hook/.test(String(ev.subtype)))) return `first non-hook stream event is ${ev && ev.type}/${ev && ev.subtype}, not system/init — worker stopped`;
+    }
+    return events.length > 50 ? 'no system/init within 50 events — worker stopped' : null;
+  };
 
   const finish = (reason, extra = {}) => {
     const rows = readRows(fs.readFileSync(boardFile, 'utf8'));
@@ -231,7 +240,7 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     if (env.BUILDER_LOOP_WORKER_BIN) for (const k of Object.keys(env)) if (k.startsWith('BUILDER_LOOP_STUB_')) childEnvironment[k] = env[k];
     const args = claude.launchArgs({ model: account.model || null, maxTurns: cfg.maxTurnsPerPass, settingsFile: pin, schema: VERDICT_SCHEMA });
     const started = Date.now();
-    const res = await runWorker({ bin, args, env: childEnvironment, cwd, prompt: input, passTimeoutMs: cfg.passTimeoutMinutes * 60000, stallTimeoutMs: cfg.stallMinutes * 60000, keySourceVerdict: (events) => claude.keySourceVerdict(events, expectedKey) });
+    const res = await runWorker({ bin, args, env: childEnvironment, cwd, prompt: input, passTimeoutMs: cfg.passTimeoutMinutes * 60000, stallTimeoutMs: cfg.stallMinutes * 60000, keySourceVerdict });
     const changed = changedFiles(cwd).filter((fl) => !fl.startsWith('.pipeline/'));
     // scope: denied paths and the board outside the chosen row (REQ-906, REQ-912)
     const scopeFaults = [];
