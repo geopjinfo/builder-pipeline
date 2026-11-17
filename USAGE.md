@@ -212,6 +212,23 @@ Antigravity, ChatGPT/GPT, an @anthropic.com or @openai.com address, …) and the
 human co-author, and never blocks a commit. A commit-msg hook you already have is left alone: the command names it and
 prints the one line to add to it.
 
+## The index is checked before a commit (`git-hooks --artifact-check`)
+
+`features.artifactCheck` on, then:
+
+```
+npx builder-pipeline git-hooks --artifact-check   # arm the pre-commit in this clone
+npx builder-pipeline doctor                        # "[repo] artifact check pre-commit: armed"
+```
+
+It copies `hooks/artifact-check-precommit.sh` to the folder git runs hooks from and fills `KIT`. Before every commit
+the hook runs `artifact-check --staged` over the index: an assistant-specific file, a scratch file, an archive, an
+assistant line in `.gitignore` or a generated-content label refuses the commit with the path and the `git rm --cached`
+line to run. What a blanket `git add -A` picked up is caught here, before it becomes history. There is no unlock
+variable; `features.artifactCheck.allow` in §16 is the only way past. When the secret-scan pre-commit is already armed,
+the artifact check joins it in the same `pre-commit` (and the other way round); a pre-commit hook of your own is left
+alone, with the one line to add printed.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

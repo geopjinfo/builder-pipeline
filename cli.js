@@ -768,6 +768,8 @@ function installTool(tool) {
       copyIfAbsent(path.join(KIT, 'hooks', 'board-render.cjs'), path.join('.claude', 'hooks', 'board-render.cjs'));
       // REQ-1815: the secret-scan pre-commit hook is copied beside the others and never armed (`git-hooks --secret-scan` arms it).
       copyIfAbsent(path.join(KIT, 'hooks', 'secret-scan-precommit.sh'), path.join('.claude', 'hooks', 'secret-scan-precommit.sh'));
+      // REQ-1843: the artifact-check pre-commit hook, copied the same way and never armed (`git-hooks --artifact-check` arms it).
+      copyIfAbsent(path.join(KIT, 'hooks', 'artifact-check-precommit.sh'), path.join('.claude', 'hooks', 'artifact-check-precommit.sh'));
       for (const h of filesUnder(path.join('hooks', 'claude-code'))) {
         copyIfAbsent(path.join(KIT, 'hooks', 'claude-code', h), path.join('.claude', 'hooks', h));
       }
@@ -776,6 +778,7 @@ function installTool(tool) {
     } else if (a.hooksDir) {
       copyIfAbsent(path.join(KIT, 'hooks', 'protected-paths.cjs'), path.join(nativePath(a.hooksDir), 'protected-paths.cjs'));
       copyIfAbsent(path.join(KIT, 'hooks', 'secret-scan-precommit.sh'), path.join(nativePath(a.hooksDir), 'secret-scan-precommit.sh'));
+      copyIfAbsent(path.join(KIT, 'hooks', 'artifact-check-precommit.sh'), path.join(nativePath(a.hooksDir), 'artifact-check-precommit.sh'));
       const cfg = a.hooksConfig({ hooksDir: a.hooksDir });
       if (cfg) {
         console.log(`hooks: copied, not armed. To arm protected-paths, write ${cfg.path} with the block below, then trust it with /hooks:`);
@@ -1658,6 +1661,7 @@ function main() {
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
     git-hooks --secret-scan [--dry-run] arm the pre-commit secret scan in this clone: a staged secret shape rejects the commit
+    git-hooks --artifact-check [--dry-run] arm the pre-commit artifact check in this clone: a staged assistant file, scratch file, archive or label rejects the commit
     accounts [--json]                   the readiness report (one block per account, as gh auth status): state with its reason, usage with its source, version, key present or absent, lease; exit 1 when any account is not ready, 0 with --json; "accounts: not configured" with the feature off
     accounts add <name> --worker <w> --pays <p> [--content ...] [--roles a,b] [--family ...] [--note "..."] [--config-dir ...] [--command "..."] [--base-url ...] [--budget-hard N --budget-kind percent|usd]
                                         write one account into features.accounts (§16) and make its folder under the accounts home

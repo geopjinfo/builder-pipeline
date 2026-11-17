@@ -165,6 +165,7 @@ function cmdDoctor(ctx, argv) {
   const hookRows = [
     { hook: 'commit-msg', ...gitHooks.status(ctx.CWD, ctx.KIT) },
     { hook: 'pre-commit', ...gitHooks.preCommitStatus(ctx.CWD, ctx.KIT) }, // REQ-1815: armed | missing | foreign
+    { hook: 'pre-commit', check: 'artifact-check', ...gitHooks.artifactPreCommitStatus(ctx.CWD, ctx.KIT) }, // REQ-1843
   ];
   if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'capacity', advisory: true, rows: capacity }, { section: 'reporter', advisory: true, rows: [reporterRow] }, { section: 'git-hooks', advisory: true, rows: hookRows }], null, 2));
   console.log(`builder kit ${ctx.VERSION} — doctor${none ? ' (no kit install detected — showing the native tools; pass --tool to pick)' : ''}`);
@@ -184,6 +185,7 @@ function cmdDoctor(ctx, argv) {
   const hygiene = hookRows[0];
   console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
   console.log(`[repo] secret scan pre-commit: ${hookRows[1].state} — ${hookRows[1].note}`);
+  console.log(`[repo] artifact check pre-commit: ${hookRows[2].state} — ${hookRows[2].note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 

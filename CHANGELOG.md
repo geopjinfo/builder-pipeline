@@ -19,7 +19,9 @@ versions independently of any project it is pasted into.
   reports ASSISTANT-FILE, SCRATCH-FILE, ARCHIVE (the D103 separation catalogue), ASSISTANT-IGNORE (an assistant path
   in `.gitignore`) and AI-LABEL (a generated-content label line in a tracked text file), each with the `git rm
   --cached` or `.gitignore` line a person would apply; `--staged` reads the index, and `hooks/artifact-check-precommit.sh`
-  runs it before a commit (copied, never armed; no unlock variable, `allow` is the only way past). With the feature
+  runs it before a commit (copied by `unpack`, armed by `npx builder-pipeline git-hooks --artifact-check`; the two kit
+  pre-commit hooks share one `pre-commit`, the second arm appends its call line; `doctor` prints the row; no unlock
+  variable, `allow` is the only way past). With the feature
   off, `--defaults` runs the built-in lists and says so on the first line. New read-only persona `agents/repo-steward.md`
   (keep, fix or allow per soft finding; the separation and terminology judgements; never edits, never `--apply`).
   Tests: `tests/attribution-check.test.mjs`, `tests/artifact-check.test.mjs`, rows in profile, features and

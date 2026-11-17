@@ -230,3 +230,56 @@ describe('REQ-1815 — the secret-scan pre-commit hook', () => {
     assert.match(out(foreign), /is not the kit's hook — left as it is/);
   });
 });
+
+describe('REQ-1843 — the artifact-check pre-commit hook', () => {
+  const SH = spawnSync('sh', ['-c', 'exit 0']).status !== 0 ? 'no POSIX sh on this machine' : false;
+  test('red: AC-1843 unpack copies the hook; `git-hooks --artifact-check` arms it; a staged .aider file from git add -A is refused naming the path; allow lets it through; a second arm is idempotent', { skip: SH }, () => {
+    const p = installed({ profile: { features: { artifactCheck: { state: 'on' } } } });
+    assert.ok(existsSync(join(p.proj, ...HOOKS, 'artifact-check-precommit.sh')), 'unpack copied the hook, never armed');
+    assert.ok(!existsSync(join(p.proj, '.git', 'hooks', 'pre-commit')), 'unpack armed nothing');
+    const arm = run(p.cli, p.proj, ['git-hooks', '--artifact-check']);
+    assert.equal(arm.status, 0, out(arm));
+    const hook = readFileSync(join(p.proj, '.git', 'hooks', 'pre-commit'), 'utf8');
+    assert.match(hook, /^KIT='node_modules\/builder-pipeline'$/m);
+    assert.doesNotMatch(hook, /BUILDER_UNLOCK/, 'no unlock variable exists');
+    writeFileSync(join(p.proj, '.aider.chat.history.md'), 'chat\n');
+    writeFileSync(join(p.proj, 'ok.txt'), 'ok\n');
+    git(p.proj, 'add', '-A');
+    const c = git(p.proj, 'commit', '-q', '-m', 'junk');
+    assert.notEqual(c.status, 0, 'the commit is refused');
+    assert.match(c.stdout + c.stderr, /ASSISTANT-FILE +\.aider\.chat\.history\.md/);
+    assert.match(c.stderr, /artifact-check refused the commit/);
+    writeFileSync(join(p.proj, 'PIPELINE_PROFILE.md'), readFileSync(join(p.proj, 'PIPELINE_PROFILE.md'), 'utf8').replace('"artifactCheck":{"state":"on"}', '"artifactCheck":{"state":"on","allow":[".aider*"]}'));
+    const ok = git(p.proj, 'commit', '-q', '-m', 'allowed');
+    assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+    assert.match(out(run(p.cli, p.proj, ['git-hooks', '--artifact-check'])), /git-hooks: armed — pre-commit refuses/);
+  });
+  test('red: AC-1843 the two kit hooks share one pre-commit: the second arm appends its call line, both checks run; a foreign pre-commit is left alone (exit 1)', { skip: SH }, () => {
+    const p = installed({ profile: { features: { artifactCheck: { state: 'on' }, secretScan: { state: 'on' } } } });
+    assert.equal(run(p.cli, p.proj, ['git-hooks', '--secret-scan']).status, 0);
+    const join2 = run(p.cli, p.proj, ['git-hooks', '--artifact-check']);
+    assert.equal(join2.status, 0, out(join2));
+    assert.match(out(join2), /joins the secret scan/);
+    const hook = readFileSync(join(p.proj, '.git', 'hooks', 'pre-commit'), 'utf8');
+    assert.match(hook, /secret-scan\.cjs/);
+    assert.match(hook, /artifact-check-precommit\.sh" \|\| exit 1/);
+    assert.equal(run(p.cli, p.proj, ['git-hooks', '--artifact-check']).status, 0, 'idempotent');
+    assert.equal(readFileSync(join(p.proj, '.git', 'hooks', 'pre-commit'), 'utf8'), hook, 'a second arm appends nothing');
+    writeFileSync(join(p.proj, 'notes.tmp'), 'scratch\n');
+    git(p.proj, 'add', 'notes.tmp');
+    const c = git(p.proj, 'commit', '-q', '-m', 'junk');
+    assert.notEqual(c.status, 0);
+    assert.match(c.stdout + c.stderr, /SCRATCH-FILE +notes\.tmp/);
+    // the other order: artifact first, then the secret scan joins it
+    const q = installed({ profile: { features: { artifactCheck: { state: 'on' }, secretScan: { state: 'on' } } } });
+    assert.equal(run(q.cli, q.proj, ['git-hooks', '--artifact-check']).status, 0);
+    const joined = run(q.cli, q.proj, ['git-hooks', '--secret-scan']);
+    assert.equal(joined.status, 0, out(joined));
+    assert.match(out(joined), /joins the artifact check/);
+    assert.match(readFileSync(join(q.proj, '.git', 'hooks', 'pre-commit'), 'utf8'), /secret-scan-precommit\.sh" \|\| exit 1/);
+    writeFileSync(join(q.proj, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+    const foreign = run(q.cli, q.proj, ['git-hooks', '--artifact-check']);
+    assert.equal(foreign.status, 1);
+    assert.match(out(foreign), /is not the kit's hook — left as it is/);
+  });
+});
