@@ -166,7 +166,10 @@ versions independently of any project it is pasted into.
 - **EXPERIMENTS §19: the recorded runs.** Run 1 is the loop runner's dry run on the polyglot test bed (stub worker,
   3 passes, 0 of 6 rows, stop no-progress, cost unmeasured, fix-rate unmeasured); Run 1b is the same board with a model
   through the gateway lane (1/6 rows before the prompt named the Read tools, then 6/6 rows for $0.33 in 48 turns), with
-  the files in the project Library and the rows in §17;
+  the files in the project Library and the rows in §17; Run 3 is the same board driven by `orch loop` through the
+  accounts registry (1/6 rows, $0.63: the exact allow list denied the worker's `cd … &&` shell prefixes), with
+  `loops.json` and the readiness record in the Library; Run 4 repeats it after D69 (5/6 rows, $0.37, stopped by the
+  pass cap with one refused `cd ../..` command);
   Run 2 records how the 2.0.0 build itself ran (device and cloud lanes, not the orchestrator) and lists every module PR.
   Tests: `tests/experiments.test.mjs` (the parser, the check, the matrix, the record path, §19 and §20 shape, a check
   above 20% false positives must be off by default), `tests/release-check.test.mjs` (§19 names every module PR and the
@@ -354,6 +357,10 @@ versions independently of any project it is pasted into.
   pass; the board, the progress log and git are the only memory. A passing pass is one commit with the trailers
   `Builder-Account:` and `Builder-Requirement:` and no other kit trailer; a failing pass leaves no commit, is pinned to a
   snapshot ref and the tree is restored and cleaned.
+- **The gate command in two normalised forms (D69).** `hooks/claude-code/lane-shell-allow.cjs`, a `PreToolUse` hook the
+  loop's `--settings` pin carries, accepts the gate command with a `cd <own worktree> &&` prefix (no `..`, no other
+  directory, no second command) or one `| head -n N` / `| tail -n N`, and answers nothing for anything else, so the exact
+  allow list keeps denying it. Measured runs lost four of five passes to those two shell habits before this.
 - **Caps and stops.** The gate script, the test roots, the prompt file and the harness configuration are denied; a
   write there, or a board edit outside the chosen row, is FAILED-SCOPE and stops the loop. A row failing
   `maxRetriesPerRow` times is marked BLOCKED on the board and the loop moves on. Stops come from a closed set
