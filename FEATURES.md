@@ -99,6 +99,7 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder features` pr
 | `personas` | role profiles generated from a permission catalogue (`experimental/persona-gen`) | any | [§4](EXPERIMENTS.md) |
 | `mutationGate` | a blocking mutation threshold, set from measured runs | any | [§5](EXPERIMENTS.md) |
 | `liteSplit` | the lite split above | any | [§8](EXPERIMENTS.md) |
+| `remoteLanes` | a lane on another machine over plain ssh; git through a shared origin is the only data path (`orch remote …`) | Claude Code workers; ssh and git on both hosts | [§18](EXPERIMENTS.md) |
 | `tokenEconomizer` · `planReview` | third-party cost plugin on trial lanes · fresh-context plan review | protocol only | [§9–10](EXPERIMENTS.md) |
 | `rankedSearch` · `riskHint` · `walkPriority` · `ruleNotes` | cheap-model advice, each through the outbound guard, never a gate | protocol only | [§12–15](EXPERIMENTS.md) |
 

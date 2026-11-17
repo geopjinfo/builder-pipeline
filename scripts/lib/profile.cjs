@@ -126,6 +126,9 @@ const FEATURES = {
     defaults: { state: 'experimental-off', cap: 4, trigger: 3, ledgers: ['(^|/)CHANGELOG\\.md$'], docsOnly: ['(^|/)README\\.md$'] },
     requires: [],
   },
+  /* A lane on another machine over plain ssh, git as the only data path — scripts/lib/orch-remote.cjs, EXPERIMENTS.md
+   * §18. `remotePollSeconds` is the liveness poll; the stall threshold is the lane's stallMinutes. */
+  remoteLanes: { defaults: { state: 'experimental-off', remotePollSeconds: 30 }, requires: [], experiment: '§18' },
   /* Removes finished git worktrees after their branch merged — scripts/worktree-sweep.mjs. `holdCommand` is the
    * project's own "something still needs this worktree" check (null = none). */
   worktreeSweep: {
@@ -669,7 +672,7 @@ function feature(settings, name) {
     on: `${name}: on`,
     off: `${name}: not configured`,
     unmeasured: `${name}: on (unmeasured — its benefit has not been measured; see EXPERIMENTS.md)`,
-    'experimental-off': `${name}: experimental — not enabled`,
+    'experimental-off': FEATURES[name].experiment ? `${name}: experimental-off — not enabled; its measurement is EXPERIMENTS.md ${FEATURES[name].experiment}` : `${name}: experimental — not enabled`,
     'experimental-on': `${name}: experimental — enabled; its measurement is owed (EXPERIMENTS.md)`,
   }[state] ?? `${name}: invalid state ${JSON.stringify(state)}`;
   return { name, state, enabled, config, line };

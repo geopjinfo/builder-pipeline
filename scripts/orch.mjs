@@ -55,6 +55,10 @@
  *   enqueue <run> <lane>
  *   merge <run> --slot-ok [--gates "<cmd>"] [--repo P] [--integration-wt D] [--direct]
  *                                     one lane at a time into features.orchestrator.target through the gates
+ * Remote lanes (features.remoteLanes, experimental-off — EXPERIMENTS.md §18)
+ *   remote add <run> <machine> --host H [--user U] --root <remoteRoot> | remote preflight <run> <machine>
+ *   remote place <run> <lane> <machine> | remote launch <run> <lane> --settings <pin> --base <branch> [--model M]
+ *   remote poll <run> <lane> | remote cancel <run> <lane>      the flag off prints "remoteLanes: not configured"
  * Credit lane (only with features.orchestrator.credit.enabled)
  *   credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget 0.50] [--allow-missing]
  *               [--queue <worktree>]  the queue the job goes into (default: the job worktree's own)
@@ -95,6 +99,7 @@ const credit = require('./lib/orch-credit.cjs');
 const snapshots = require('./lib/orch-snapshot.cjs');
 const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
+const remote = require('./lib/orch-remote.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
 const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry', 'rerun', 'queue-only']);
@@ -709,6 +714,32 @@ try {
       for (const id of runIds()) state.setPaused(root(), id, false);
       console.log('RESUMED — run `status` for relaunch actions');
       break;
+    case 'remote': {
+      const [sub, run, a, b] = pos;
+      if (!remote.featureOn(settings)) {
+        console.log(remote.notConfigured());
+        process.exit(0);
+      }
+      const rf = profile.feature(settings, 'remoteLanes').config;
+      const env = process.env;
+      if (sub === 'add') out(remote.addMachine(root(), run, a, { host: flags.host, user: flags.user === true ? null : flags.user || null, remoteRoot: flags.root }));
+      else if (sub === 'preflight') out(remote.preflight(root(), run, a, { env }));
+      else if (sub === 'place') out(remote.place(root(), run, a, b, { settings }).line);
+      else if (sub === 'launch') {
+        const acct = (settings.features.accounts && settings.features.accounts.accounts) || {};
+        const l = state.load(root(), run).lanes[a];
+        const maxTurns = Number(flags['max-turns']) || (l && l.account && acct[l.account] && acct[l.account].maxTurns) || null;
+        const r = remote.launch(root(), run, a, { env, settingsFile: flags.settings === true ? null : flags.settings ? path.resolve(flags.settings) : null, base: flags.base, maxTurns, model: flags.model === true ? null : flags.model || null });
+        out(r);
+        if (!r.ok) process.exit(3);
+      } else if (sub === 'poll') {
+        const r = remote.poll(root(), run, a, { env });
+        out(r);
+        console.log(`next poll in ${rf.remotePollSeconds}s`);
+      } else if (sub === 'cancel') out(remote.cancel(root(), run, a, { env }));
+      else die(2, 'usage: remote add|preflight|place|launch|poll|cancel …');
+      break;
+    }
     case 'credit': {
       if (!creditOn()) creditOff();
       const croot = credit.creditRoot();
