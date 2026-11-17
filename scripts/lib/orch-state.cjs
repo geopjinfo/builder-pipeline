@@ -7,15 +7,21 @@
  * killed. Nothing it knows may live only in its context. A new session resumes from this file alone:
  * `nextActions()` derives what to do next from state + clock, with no memory of the previous session.
  *
- * PLACEMENT. A lane runs in one of two seats, tried in the order `seats` lists them (features.orchestrator.seats):
- *   secondary  a terminal worker signed in to a second account (its own usage limit; launched by the project's
- *              `launchCommand`, watched by `orch watch`)
- *   primary    the orchestrating session's own account: a sub-agent for a solo lane; its own session for a
- *              pipeline lane (seats never dispatch, so a sub-agent cannot run a pipeline's seats)
- * A lane goes to the first seat whose fresh usage reading is under its limit (`limits.<seat>`, percent). The
- * primary seat's limit should sit BELOW the secondary's: the orchestrating session runs on that account too and
- * needs headroom of its own. The first lane may start on the first seat unmeasured; any later placement needs a
- * reading younger than `usageStaleMinutes`. When every seat is full: USAGE-HOLD, nothing launches.
+ * PLACEMENT (2.0, plan M3, REQ-301 to REQ-305, REQ-307, REQ-312, REQ-313; D1, D3, D24, D46, D52). A lane goes to an
+ * ACCOUNT of `features.accounts`, recorded in the run state at init (`accounts`, registry order; the state-file field
+ * that names a lane's account is still `seat`). `placement()` walks the accounts in order, filtered by the lane's role
+ * (`roles` empty = any; a lane needs module-builder) and content class, `pays: api-key` accounts last:
+ *   not ready     the readiness record (orch-accounts.cjs: a LIMIT/BUDGET/AUTH from a worker, or a failed probe)
+ *                 skips the account and the line says why
+ *   hard cap      a fresh reading at or above `budget.hard` (percent or USD) is not ready; the line names the cap
+ *   soft limit    at or above `budget.soft` (else `softLimitPct`) the account takes only a job marked needs-account
+ *                 (a brief naming it); a plain job reads NEEDS-IT-ONLY there
+ *   unmeasured    a reading older than `usageStaleMinutes` is unmeasured; only the FIRST account in order may launch
+ *                 unmeasured, and only while nothing runs. Nothing placeable: USAGE-UNKNOWN (name the reader to run)
+ *                 or USAGE-HOLD (every account full).
+ * `placement: shadow` computes that choice, writes a `placement.shadow` event and places the 1.0 way (the first ready
+ * account by order). A 1.0 run state (`seats`, `limits`, no `accounts`) is read as two synthetic accounts named by its
+ * seats and placed exactly as 1.0 did (the golden fixture); it is never written back in the old shape (REQ-311).
  * Credit jobs are placed by the credit lane, not here (orch-credit.cjs).
  *
  * CAPACITY (features.orchestrator.capacity; null = off). A standing lane policy instead of a per-run guess: while the
@@ -34,6 +40,7 @@ const { runDir, readJson, writeJsonAtomic, withLock } = require('./orch-store.cj
 const snapshots = require('./orch-snapshot.cjs');
 const ratelimit = require('./orch-ratelimit.cjs');
 const { integritySnapshot, integrityDiff } = require('./orch-integrity.cjs');
+const accountsLib = require('./orch-accounts.cjs');
 
 const STATUSES = ['PLANNED', 'CLAIMED', 'LAUNCHED', 'DONE', 'QUEUED', 'MERGING', 'MERGED', 'STALLED', 'PAUSED', 'STOPPED-CONFLICT', 'FAILED'];
 const ACTIVE = ['LAUNCHED', 'STALLED']; // a live worker session holds a lane slot
@@ -41,6 +48,10 @@ const SNAPSHOT_ON = ['STALLED', 'FAILED']; // a lane entering one of these is pi
 const SEATS = ['secondary', 'primary'];
 const DEFAULTS = Object.freeze({ stallMinutes: 90, usageStaleMinutes: 30, seats: ['primary'], limits: { secondary: 80, primary: 60 } });
 const RUNNER_OF = Object.freeze({ secondary: 'terminal worker on the secondary account', primary: 'primary account: a sub-agent for a solo lane, its own session for a pipeline lane' });
+const SESSION_RUNNER = 'the orchestrating session: a sub-agent for a solo lane, its own session for a pipeline lane';
+/** The account fields the run state records at init (never a command template's output, never a key). */
+const ACCOUNT_FIELDS = Object.freeze(['name', 'worker', 'pays', 'content', 'roles', 'budget', 'maxTurns', 'timeoutMinutes', 'configDir', 'command', 'smokeCommand', 'usageCommand', 'note']);
+const PLACEMENTS = Object.freeze(['on', 'shadow']);
 
 const stateFile = (root, runId) => path.join(runDir(root, runId), 'state.json');
 const lockFile = (root, runId) => path.join(runDir(root, runId), 'state.lock');
@@ -67,12 +78,16 @@ function load(root, runId) {
 function init(root, runId, splitResult, opts = {}) {
   const {
     repo = null, target = null, worktreeBase = null, worktreePrefix = 'wt-', branchPrefix = 'orch/', preflightMode = 'single',
-    seats = DEFAULTS.seats, limits = DEFAULTS.limits, stallMinutes = DEFAULTS.stallMinutes, usageStaleMinutes = DEFAULTS.usageStaleMinutes,
-    capacity = null, credit = false,
+    limits = DEFAULTS.limits, stallMinutes = DEFAULTS.stallMinutes, usageStaleMinutes = DEFAULTS.usageStaleMinutes,
+    capacity = null, credit = false, accounts = null, softLimitPct = null, placement: placementMode = 'on',
   } = opts;
   const file = stateFile(root, runId);
   if (fs.existsSync(file)) throw new Error(`run "${runId}" already exists — resume it, never re-init`);
-  for (const seat of seats) if (!SEATS.includes(seat)) throw new Error(`unknown seat "${seat}" (${SEATS.join('|')})`);
+  // 2.0: the accounts the run may place on, in registry order; `seats` keeps their names for the 1.0 readers.
+  const accountRows = Array.isArray(accounts) && accounts.length ? accounts.map(slimAccount) : null;
+  const seats = accountRows ? accountRows.map((a) => a.name) : opts.seats || DEFAULTS.seats;
+  if (!accountRows) for (const seat of seats) if (!SEATS.includes(seat)) throw new Error(`unknown seat "${seat}" (${SEATS.join('|')})`);
+  if (!PLACEMENTS.includes(placementMode)) throw new Error(`unknown placement mode "${placementMode}" (${PLACEMENTS.join('|')})`);
   const lanes = {};
   for (const l of splitResult.lanes) {
     const name = `${runId}-${l.name}`;
@@ -90,7 +105,8 @@ function init(root, runId, splitResult, opts = {}) {
     approved: false, approvedBy: null, paused: false, preflightMode,
     plannedMaxLanes: splitResult.maxLanes ?? 2,
     maxLanes: preflightMode === 'parallel' ? (splitResult.maxLanes ?? 2) : 1,
-    seats: [...seats], limits: { ...DEFAULTS.limits, ...limits }, usageStaleMinutes,
+    seats: [...seats], usageStaleMinutes,
+    ...(accountRows ? { accounts: accountRows, placement: placementMode, ...(typeof softLimitPct === 'number' ? { softLimitPct } : {}) } : { limits: { ...DEFAULTS.limits, ...limits } }),
     ...(capacity ? { capacity: { ...capacity } } : {}),
     ...(credit ? { credit: true } : {}), // the run uses the credit lane: a WAIT-P4 lane may be offered SELF-AUDIT
     // the plan the lanes came from, so ADD-LANES can say where to pull the next rows
@@ -211,21 +227,33 @@ function notice(root, runId, lane, kind = 'finish') {
   return r;
 }
 
+/** The names a reading may be recorded under: the run's accounts (2.0) or its seats (1.0). */
+const seatNames = (s) => accountsOf(s).map((a) => a.name);
+const checkSeat = (s, seat) => {
+  const names = seatNames(s);
+  if (!names.includes(seat)) throw new Error(`unknown seat "${seat}" (${names.join('|')})`);
+};
+
+/**
+ * Record a usage reading for an account (or a 1.0 seat): a percentage, or a reading `{ pct?, usd?, source?, at? }`
+ * (a USD budget reads `usd`). Number(null) and Number('') are 0: an unmeasured account must never be recorded as 0 %.
+ */
 function recordUsage(root, runId, seat, pct) {
-  if (!SEATS.includes(seat)) throw new Error(`unknown seat "${seat}" (${SEATS.join('|')})`);
-  // Number(null) and Number('') are 0: an unmeasured seat must never be recorded as 0% used.
-  if (pct === null || pct === undefined || String(pct).trim() === '' || !Number.isFinite(Number(pct)))
-    throw new Error(`usage: a percentage, got ${JSON.stringify(pct)} — an unknown reading goes to recordUsageUnknown`);
+  const reading = pct !== null && typeof pct === 'object' ? { ...pct } : { pct };
+  const has = (k) => reading[k] !== null && reading[k] !== undefined && String(reading[k]).trim() !== '' && Number.isFinite(Number(reading[k]));
+  if (!has('pct') && !has('usd')) throw new Error(`usage: a percentage, got ${JSON.stringify(pct)} — an unknown reading goes to recordUsageUnknown`);
+  const row = { ...(has('pct') ? { pct: Number(reading.pct) } : {}), ...(has('usd') ? { usd: Number(reading.usd) } : {}), ...(reading.source ? { source: reading.source } : {}), at: reading.at && Number.isFinite(Date.parse(reading.at)) ? new Date(Date.parse(reading.at)).toISOString() : now() };
   return update(root, runId, (s) => {
-    s.usage[seat] = { pct: Number(pct), at: now() };
+    checkSeat(s, seat);
+    s.usage[seat] = row;
     return s.usage;
-  }, { type: 'usage', data: { seat, pct: Number(pct) } });
+  }, { type: 'usage', data: { seat, ...row } });
 }
 
 /** A usage report with no percentage: kept with its raw lines; `s.usage` — what placement reads — is untouched. */
 function recordUsageUnknown(root, runId, seat, lines) {
-  if (!SEATS.includes(seat)) throw new Error(`unknown seat "${seat}" (${SEATS.join('|')})`);
   return update(root, runId, (s) => {
+    checkSeat(s, seat);
     s.usageUnknown = { ...(s.usageUnknown || {}), [seat]: { at: now(), lines } };
     return s.usageUnknown[seat];
   }, { type: 'usage.unknown', data: { seat, lines } });
@@ -247,29 +275,107 @@ function setPaused(root, runId, paused) {
   }, { type: paused ? 'run.paused' : 'run.resumed' });
 }
 
-/** Where the next lane goes: { seat, why } or { seat: null, why } (USAGE-UNKNOWN / USAGE-HOLD). */
-function placement(s, at = Date.now(), running = 0) {
-  const u = s.usage || {};
+/** One account row as the run state records it (ACCOUNT_FIELDS only). */
+const slimAccount = (a) => Object.fromEntries(ACCOUNT_FIELDS.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));
+
+/**
+ * The accounts a run places on. A 2.0 state carries them; a 1.0 state (`seats`, `limits`) is read as synthetic
+ * accounts named by its seats (`primary` = the session, `secondary` = a terminal worker), percent caps from `limits`.
+ */
+function accountsOf(s) {
+  if (Array.isArray(s.accounts) && s.accounts.length) return s.accounts;
   const order = s.seats && s.seats.length ? s.seats : DEFAULTS.seats;
   const limits = { ...DEFAULTS.limits, ...(s.limits || {}) };
+  return order.map((seat) => ({ name: seat, worker: seat === 'primary' ? 'session' : 'claude-code', pays: 'subscription', content: 'any', roles: [], budget: { kind: 'percent', soft: null, hard: limits[seat] ?? null }, legacy: true }));
+}
+const isLegacyState = (s) => !(Array.isArray(s.accounts) && s.accounts.length);
+const accountOf = (s, name) => accountsOf(s).find((a) => a.name === name) || null;
+
+/** How a lane runs on an account, for the LAUNCH line. */
+function runnerOf(s, name) {
+  const a = accountOf(s, name);
+  if (!a) return RUNNER_OF[name] || 'unknown runner';
+  if (a.legacy) return RUNNER_OF[name];
+  if (a.worker === 'session') return SESSION_RUNNER;
+  return `${a.worker} worker on account ${a.name}${a.pays === 'api-key' ? ', pays per use' : ''}`;
+}
+
+/** The freshest reading for an account: the run's own record (`orch usage`) or the readiness record's (the assessment). */
+function readingFor(s, readiness, name) {
+  const rows = [(s.usage || {})[name], readiness && readiness[name] && readiness[name].usage].filter((u) => u && Number.isFinite(Date.parse(u.at)));
+  rows.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
+  return rows[0] || null;
+}
+
+/**
+ * Where the next lane goes (the rule above). Pure.
+ * @param {object} s        the run state
+ * @param {number} at       the clock
+ * @param {number} running  live lanes (the first-lane rule needs 0)
+ * @param {{ role?: string, content?: string|string[], needsAccount?: string|null }} [job]  the lane: role (default
+ *        module-builder), content class, and the account its brief names (needs-account)
+ * @param {{ readiness?: object, plain?: boolean }} [opts]  readiness = orch-accounts record (name → entry); plain =
+ *        the 1.0 way (registry order, no soft limit, no api-key-last), used by shadow mode
+ * @returns {{ seat: string|null, why: string, notes?: string[] }}  `seat` names the account (the state-file field)
+ */
+function placement(s, at = Date.now(), running = 0, job = {}, opts = {}) {
+  const legacy = isLegacyState(s);
+  const readiness = opts.readiness || {};
   const staleMin = s.usageStaleMinutes ?? DEFAULTS.usageStaleMinutes;
-  const fresh = (seat) => u[seat] && at - Date.parse(u[seat].at) <= staleMin * 60000;
+  const role = job.role || 'module-builder';
+  let order = accountsOf(s).filter((a) => accountsLib.allows(a, { role, content: job.content }));
+  if (!opts.plain) order = [...order.filter((a) => a.pays !== 'api-key'), ...order.filter((a) => a.pays === 'api-key')];
   const full = [];
+  const notes = [];
+  const unknown = [];
+  const result = (seat, why) => {
+    if (legacy) return { seat, why };
+    const skipped = [...full.map((f) => `${f} — at its hard cap`), ...notes];
+    return { seat, why: seat && skipped.length ? `${why} — skipped ${skipped.join('; ')}` : why, notes: skipped };
+  };
+  const unknownWhy = (name) => `USAGE-UNKNOWN: ${name} usage unmeasured in ${staleMin} min${full.length ? ` and ${full.join(', ')}` : ''} — orch usage-read ${s.runId} ${name} (or orch usage ${s.runId} ${name} <pct>)`;
+  if (!order.length) return result(null, `NO-ACCOUNT: no account allows role ${role}${job.content ? ` with content ${JSON.stringify(job.content)}` : ''} — add one to features.accounts`);
   for (let i = 0; i < order.length; i++) {
-    const seat = order[i];
-    const limit = limits[seat];
-    if (fresh(seat)) {
-      if (u[seat].pct < limit) return { seat, why: `${seat} at ${u[seat].pct}% under its limit ${limit}%` };
-      full.push(`${seat} at ${u[seat].pct}% (limit ${limit}%)`);
+    const a = order[i];
+    const rd = accountsLib.readinessOf(readiness[a.name], at);
+    if (rd.blocked) {
+      notes.push(`${a.name}: ${rd.why}`);
       continue;
     }
-    if (i === 0 && running === 0 && (!u[seat] || u[seat].pct < limit)) return { seat, why: `${seat}: first lane, usage unmeasured` };
-    return {
-      seat: null,
-      why: `USAGE-UNKNOWN: ${seat} usage unmeasured in ${staleMin} min${full.length ? ` and ${full.join(', ')}` : ''} — orch usage-read ${s.runId} ${seat} (or orch usage ${s.runId} ${seat} <pct>)`,
-    };
+    const b = a.budget || {};
+    const usd = b.kind === 'usd';
+    const fmt = usd ? (v) => `$${v}` : (v) => `${v}%`;
+    const hard = typeof b.hard === 'number' ? b.hard : null;
+    const soft = opts.plain ? null : typeof b.soft === 'number' ? b.soft : !usd && typeof s.softLimitPct === 'number' ? s.softLimitPct : null;
+    const u = readingFor(s, readiness, a.name);
+    const value = u ? (usd ? (typeof u.usd === 'number' ? u.usd : null) : typeof u.pct === 'number' ? u.pct : null) : null;
+    const fresh = u && value !== null && at - Date.parse(u.at) <= staleMin * 60000;
+    if (fresh) {
+      if (hard !== null && value >= hard) {
+        full.push(`${a.name} at ${fmt(value)} (limit ${fmt(hard)})`);
+        continue;
+      }
+      if (soft !== null && value >= soft) {
+        if (job.needsAccount === a.name) return result(a.name, `${a.name} at ${fmt(value)} above its soft limit ${fmt(soft)} — the brief names it (needs-account)`);
+        notes.push(`${a.name}: NEEDS-IT-ONLY at ${fmt(value)} (soft limit ${fmt(soft)})`);
+        continue;
+      }
+      return result(a.name, `${a.name} at ${fmt(value)} under its limit ${hard !== null ? fmt(hard) : 'none'}`);
+    }
+    if (i === 0 && running === 0 && (value === null || hard === null || value < hard)) return result(a.name, `${a.name}: first lane, usage unmeasured`);
+    if (legacy) return { seat: null, why: unknownWhy(a.name) };
+    unknown.push(a.name);
+    notes.push(`${a.name}: usage unmeasured${u ? ` (reading ${Math.round((at - Date.parse(u.at)) / 60000)} min old)` : ''} — only the first account may launch unmeasured`);
   }
-  return { seat: null, why: `USAGE-HOLD: ${full.join(' and ')} — no new lanes` };
+  if (unknown.length) return result(null, unknownWhy(unknown[0]));
+  if (full.length) return result(null, `USAGE-HOLD: ${full.join(' and ')} — no new lanes`);
+  return result(null, `USAGE-HOLD: no account may take the lane — ${notes.join('; ')}`);
+}
+
+/** The placement `next` would make now, with the readiness record under `root` (what gate-launch checks). */
+function placementNow(root, s, at = Date.now(), job = {}) {
+  const running = Object.values(s.lanes).filter((l) => ACTIVE.includes(l.status)).length;
+  return placement(s, at, running, job, { readiness: accountsLib.load(root).accounts });
 }
 
 /** `BUILDER_ORCH_LANE_CAP`: a whole number 1–16 overrides the capacity lane cap; unset or invalid → null (no override). */
@@ -365,7 +471,16 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
     acts.push(`RATE-LIMIT-HOLD: global back-off after a 429 until ${cap.holdUntil} — no new lanes`);
     free = 0;
   } else if (maxLanes < s.maxLanes) acts.push(`RATE-LIMIT: lanes capped at ${maxLanes} of ${s.maxLanes} after a 429 — one more per clean finish`);
-  const place = free > 0 && lanes.some(([, l]) => l.status === 'PLANNED' || l.status === 'CLAIMED') ? placement(s, at, running) : null;
+  const readiness = opts.readiness || accountsLib.load(root).accounts;
+  const waiting = lanes.some(([, l]) => l.status === 'PLANNED' || l.status === 'CLAIMED');
+  let place = free > 0 && waiting ? placement(s, at, running, {}, { readiness }) : null;
+  if (place && s.placement === 'shadow') {
+    // REQ-312: the new rule's choice is recorded; the lane is placed the 1.0 way (first ready account by order)
+    const plain = placement(s, at, running, {}, { readiness, plain: true });
+    event(root, s.runId, 'placement.shadow', { chosen: place.seat, reason: place.why, placed: plain.seat });
+    place = plain;
+  }
+  for (const n of (place && place.notes) || []) acts.push(`SKIP ${n}`);
   if (place && !place.seat) {
     acts.push(place.why);
     free = 0;
@@ -374,7 +489,7 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
   for (const [k, l] of lanes) {
     if (free <= 0) break;
     if (l.status === 'PLANNED' || l.status === 'CLAIMED') {
-      acts.push(`LAUNCH ${k}: ${l.level}/${l.track} ${l.dispatch} rows ${l.rows.join(',')}${l.status === 'PLANNED' ? ' (claim first)' : ''} on ${place.seat} (${RUNNER_OF[place.seat]})`);
+      acts.push(`LAUNCH ${k}: ${l.level}/${l.track} ${l.dispatch} rows ${l.rows.join(',')}${l.status === 'PLANNED' ? ' (claim first)' : ''} on ${place.seat} (${runnerOf(s, place.seat)})`);
       free--;
     }
   }
@@ -400,7 +515,7 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
 }
 
 module.exports = {
-  init, load, update, setLane, notice, snapshotLane, integrityBaseline, recordUsage, recordUsageUnknown, approve, setPaused, nextActions, placement, event, pauseFile,
-  envLaneCap, capacityOf, measuredLanes, isWaitP4,
-  STATUSES, ACTIVE, SEATS, DEFAULTS, RUNNER_OF,
+  init, load, update, setLane, notice, snapshotLane, integrityBaseline, recordUsage, recordUsageUnknown, approve, setPaused, nextActions, placement, placementNow, event, pauseFile,
+  envLaneCap, capacityOf, measuredLanes, isWaitP4, accountsOf, accountOf, isLegacyState, runnerOf, readingFor, seatNames, slimAccount,
+  STATUSES, ACTIVE, SEATS, DEFAULTS, RUNNER_OF, SESSION_RUNNER, ACCOUNT_FIELDS, PLACEMENTS,
 };

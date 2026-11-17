@@ -422,3 +422,328 @@ describe('usage read: a report with no percentage is unknown, never 0%', () => {
     assert.deepEqual(s.usageUnknown.primary.lines, ['Total cost: 0.12']);
   });
 });
+
+/* ------------------------------------------------------------------ 2.0: placement over accounts (M3) ---- */
+
+import { ACCOUNTS_HOME_OF } from './fixtures/orch/rig.mjs';
+
+const acct = require('../scripts/lib/orch-accounts.cjs');
+const AT = Date.parse('2026-11-17T12:00:00.000Z');
+const minsAgo = (n) => new Date(AT - n * 60000).toISOString();
+const plan = (name, over = {}) => ({ name, worker: 'claude-code', pays: 'subscription', content: 'any', roles: [], budget: { kind: 'percent', soft: null, hard: 85 }, maxTurns: 40, timeoutMinutes: 90, command: 'go {brief}', ...over });
+const key = (name, over = {}) => ({ name, worker: 'claude-code', pays: 'api-key', content: 'any', roles: [], budget: { kind: 'usd', soft: 8, hard: 10 }, maxTurns: 40, timeoutMinutes: 90, command: 'go {brief}', ...over });
+/** A 2.0 run state over `accounts` with `usage` readings `{ name: [value, minutesAgo] }`; pure, no CLI. */
+function run2(accounts, usage = {}, opts = {}) {
+  const runId = 'a2';
+  const s = {
+    runId, lanes: {}, usage: {}, accounts, seats: accounts.map((a) => a.name), usageStaleMinutes: 30, softLimitPct: 80, approved: true, paused: false, maxLanes: 2, mergeQueue: [], placement: 'on', ...opts,
+  };
+  for (const [name, [v, ago]] of Object.entries(usage)) s.usage[name] = { ...(accounts.find((a) => a.name === name).budget.kind === 'usd' ? { usd: v } : { pct: v }), at: minsAgo(ago) };
+  return s;
+}
+const place = (s, job = {}, o = {}) => state.placement(s, AT, o.running ?? 1, job, o);
+
+describe('placement over accounts: the ordered account list (REQ-301 to REQ-304)', () => {
+  test('red: REQ-301 account A at 90 % with cap 85 and B at 40 % → B, and the why names A\'s cap (AC-301a)', () => {
+    const s = run2([plan('alpha'), plan('bravo')], { alpha: [90, 5], bravo: [40, 5] });
+    const p = place(s);
+    assert.equal(p.seat, 'bravo');
+    assert.match(p.why, /^bravo at 40% under its limit 85%/);
+    assert.match(p.why, /alpha at 90% \(limit 85%\) — at its hard cap/);
+    assert.ok(p.notes.some((n) => /alpha at 90% \(limit 85%\)/.test(n)));
+    const both = place(run2([plan('alpha'), plan('bravo')], { alpha: [90, 5], bravo: [85, 5] }));
+    assert.equal(both.seat, null);
+    assert.match(both.why, /^USAGE-HOLD: alpha at 90% \(limit 85%\) and bravo at 85% \(limit 85%\) — no new lanes$/);
+  });
+
+  test('red: REQ-301 the walk follows registry order and the lane\'s role: an account limited to headless roles never takes a lane', () => {
+    const s = run2([plan('alpha', { roles: ['module-tester', 'module-reviewer'] }), plan('bravo'), plan('charlie')], { alpha: [10, 5], bravo: [50, 5], charlie: [10, 5] });
+    assert.equal(place(s).seat, 'bravo', 'alpha has no builder role; bravo comes before charlie');
+    assert.equal(place(s, { role: 'module-tester' }).seat, 'alpha', 'a tester job may use alpha');
+    assert.equal(place(run2([plan('alpha', { roles: ['docs-maintainer'] })], { alpha: [10, 5] })).seat, null);
+    assert.match(place(run2([plan('alpha', { roles: ['docs-maintainer'] })], { alpha: [10, 5] })).why, /^NO-ACCOUNT: no account allows role module-builder/);
+    const content = run2([plan('alpha', { content: 'public' }), plan('bravo', { content: ['src/'] }), plan('charlie')], { alpha: [10, 5], bravo: [10, 5], charlie: [10, 5] });
+    assert.equal(place(content, { content: 'scratch' }).seat, 'charlie', 'public and a path-root list do not take scratch work');
+    assert.equal(place(content, { content: 'src/' }).seat, 'bravo');
+    assert.equal(place(content).seat, 'alpha', 'a job with no content class goes to the first account');
+  });
+
+  test('red: REQ-302 above the soft limit an account takes only needs-account work: a plain job reads NEEDS-IT-ONLY, a brief naming it is placed on it (AC-302a)', () => {
+    const s = run2([plan('alpha'), plan('bravo')], { alpha: [82, 5], bravo: [40, 5] });
+    const p = place(s);
+    assert.equal(p.seat, 'bravo');
+    assert.ok(p.notes.some((n) => /^alpha: NEEDS-IT-ONLY at 82% \(soft limit 80%\)$/.test(n)), p.notes.join('\n'));
+    const named = place(s, { needsAccount: 'alpha' });
+    assert.equal(named.seat, 'alpha');
+    assert.match(named.why, /^alpha at 82% above its soft limit 80% — the brief names it \(needs-account\)$/);
+    assert.equal(place(run2([plan('alpha', { budget: { kind: 'percent', soft: 90, hard: 95 } })], { alpha: [82, 5] })).seat, 'alpha', 'budget.soft beats softLimitPct');
+    const only = place(run2([plan('alpha')], { alpha: [82, 5] }));
+    assert.equal(only.seat, null);
+    assert.match(only.why, /^USAGE-HOLD: no account may take the lane — alpha: NEEDS-IT-ONLY/);
+    const usd = run2([key('charlie', { budget: { kind: 'usd', soft: 8, hard: 10 } })], { charlie: [8.5, 5] });
+    assert.ok(place(usd).notes.some((n) => /charlie: NEEDS-IT-ONLY at \$8\.5 \(soft limit \$8\)/.test(n)), 'a USD soft limit works the same way');
+    assert.equal(place(usd, { needsAccount: 'charlie' }).seat, 'charlie');
+  });
+
+  test('red: REQ-303 pays: api-key accounts come last whatever their registry position (AC-303a)', () => {
+    const s = run2([key('charlie'), plan('alpha')], { charlie: [2, 5], alpha: [40, 5] });
+    assert.equal(place(s).seat, 'alpha');
+    const full = run2([key('charlie'), plan('alpha')], { charlie: [2, 5], alpha: [90, 5] });
+    const p = place(full);
+    assert.equal(p.seat, 'charlie');
+    assert.match(p.why, /^charlie at \$2 under its limit \$10 — skipped alpha at 90% \(limit 85%\) — at its hard cap$/);
+    assert.equal(place(run2([key('charlie'), plan('alpha')], { charlie: [10, 5], alpha: [90, 5] })).seat, null, 'a key account at its USD cap is not ready either');
+  });
+
+  test('red: REQ-304 a reading older than usageStaleMinutes is unmeasured; only the first account in order may launch unmeasured, and only while nothing runs (AC-304a)', () => {
+    const accounts = [plan('alpha'), plan('bravo')];
+    const first = place(run2(accounts, { alpha: [5, 45] }), {}, { running: 0 });
+    assert.deepEqual([first.seat, first.why], ['alpha', 'alpha: first lane, usage unmeasured']);
+    assert.equal(place(run2(accounts, { alpha: [99, 45] }), {}, { running: 0 }).seat, null, 'a stale reading at the cap does not launch');
+    const second = place(run2(accounts, { alpha: [5, 45] }), {}, { running: 1 });
+    assert.equal(second.seat, null);
+    assert.match(second.why, /^USAGE-UNKNOWN: alpha usage unmeasured in 30 min — orch usage-read a2 alpha \(or orch usage a2 alpha <pct>\)$/);
+    assert.ok(second.notes.some((n) => /^alpha: usage unmeasured \(reading 45 min old\) — only the first account may launch unmeasured$/.test(n)));
+    assert.ok(second.notes.some((n) => /^bravo: usage unmeasured — only the first account may launch unmeasured$/.test(n)));
+    const later = place(run2(accounts, { alpha: [5, 45], bravo: [20, 5] }), {}, { running: 1 });
+    assert.equal(later.seat, 'bravo', 'a measured account further down still takes the lane');
+    assert.match(later.why, /skipped alpha: usage unmeasured/);
+    const stale = place(run2(accounts, { alpha: [90, 5], bravo: [20, 45] }), {}, { running: 1 });
+    assert.equal(stale.seat, null);
+    assert.match(stale.why, /^USAGE-UNKNOWN: bravo usage unmeasured in 30 min and alpha at 90% \(limit 85%\)/);
+  });
+
+  test('red: REQ-304, REQ-309 the readiness record\'s reading counts, and the newest reading wins', () => {
+    const s = run2([plan('alpha')], {});
+    const readiness = { alpha: { usage: { pct: 30, source: 'measured', at: minsAgo(3) } } };
+    assert.equal(place(s, {}, { readiness }).seat, 'alpha');
+    s.usage.alpha = { pct: 90, at: minsAgo(1) };
+    assert.equal(place(s, {}, { readiness }).seat, null, 'the run\'s newer reading is at the cap');
+    assert.deepEqual(state.readingFor(s, readiness, 'alpha').pct, 90);
+    assert.deepEqual(state.readingFor(s, {}, 'nobody'), null);
+  });
+
+  test('red: REQ-307 an account the readiness record holds not ready — LIMIT, BUDGET, AUTH or a failed probe — is skipped and the line says why (AC-307a)', () => {
+    const s = run2([plan('alpha'), plan('bravo')], { alpha: [10, 5], bravo: [20, 5] });
+    const until = new Date(AT + 3600000).toISOString();
+    const readiness = { alpha: { state: 'ready', error: { kind: 'LIMIT', until, reason: '429' } } };
+    const p = place(s, {}, { readiness });
+    assert.equal(p.seat, 'bravo');
+    assert.ok(p.notes.includes(`alpha: LIMIT until ${until}`), p.notes.join('\n'));
+    assert.equal(place(s, {}, { readiness: { alpha: { state: 'not ready', reason: 'signed out' } } }).notes[0], 'alpha: not ready (signed out)');
+    assert.equal(place(s, {}, { readiness: { alpha: { state: 'ready', error: { kind: 'LIMIT', until: minsAgo(1) } } } }).seat, 'alpha', 'a passed hold no longer blocks');
+    assert.equal(place(s, {}, { readiness: { alpha: { state: 'unmeasured', reason: 'no probe' } } }).seat, 'alpha', 'no probe answer is not a refusal: the usage rule decides');
+    const all = place(s, {}, { readiness: { alpha: { error: { kind: 'AUTH', until: null } }, bravo: { error: { kind: 'BUDGET', until } } } });
+    assert.equal(all.seat, null);
+    assert.match(all.why, /^USAGE-HOLD: no account may take the lane — alpha: AUTH until the next sign-in; bravo: BUDGET until /);
+  });
+
+  test('red: REQ-312 shadow placement writes the event with the rule\'s choice and places the 1.0 way (AC-312a)', () => {
+    const root = tmp('shadow');
+    state.init(root, 'sh', lanes(1), { preflightMode: 'parallel', accounts: [plan('alpha'), plan('bravo')], softLimitPct: 80, placement: 'shadow' });
+    state.approve(root, 'sh', 'lead');
+    state.recordUsage(root, 'sh', 'alpha', 82);
+    state.recordUsage(root, 'sh', 'bravo', 40);
+    const s = state.load(root, 'sh');
+    assert.equal(s.placement, 'shadow');
+    const acts = state.nextActions(root, s);
+    assert.match(acts.find((a) => a.startsWith('LAUNCH l1')), / on alpha \(claude-code worker on account alpha\)$/, '1.0 way: the first ready account by order');
+    const ev = readFileSync(join(root, 'runs', 'sh', 'events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((e) => e.type === 'placement.shadow');
+    assert.equal(ev.length, 1);
+    assert.deepEqual([ev[0].chosen, ev[0].placed], ['bravo', 'alpha']);
+    assert.match(ev[0].reason, /^bravo at 40% under its limit 85% — skipped alpha: NEEDS-IT-ONLY/);
+    assert.throws(() => state.init(root, 'sh2', lanes(1), { accounts: [plan('alpha')], placement: 'off' }), /unknown placement mode "off"/);
+    const on = tmp('on');
+    state.init(on, 'on', lanes(1), { preflightMode: 'parallel', accounts: [plan('alpha'), plan('bravo')], softLimitPct: 80 });
+    state.approve(on, 'on', 'lead');
+    state.recordUsage(on, 'on', 'alpha', 82);
+    state.recordUsage(on, 'on', 'bravo', 40);
+    const onActs = state.nextActions(on, state.load(on, 'on'));
+    assert.match(onActs.find((a) => a.startsWith('LAUNCH l1')), / on bravo /);
+    assert.ok(onActs.includes('SKIP alpha: NEEDS-IT-ONLY at 82% (soft limit 80%)'), onActs.join('\n'));
+    assert.equal(existsSync(join(on, 'runs', 'on', 'events.jsonl')) && readFileSync(join(on, 'runs', 'on', 'events.jsonl'), 'utf8').includes('placement.shadow'), false);
+  });
+
+  test('a 2.0 run state records the accounts, names them as seats, and recordUsage takes a USD reading or refuses an unknown name', () => {
+    const root = tmp('rec');
+    const s = state.init(root, 'rc', lanes(1), { accounts: [plan('alpha', { note: 'x', versionCommand: 'v' }), key('charlie')], softLimitPct: 70 });
+    assert.deepEqual(s.seats, ['alpha', 'charlie']);
+    assert.equal(s.limits, undefined);
+    assert.equal(s.softLimitPct, 70);
+    assert.equal(s.placement, 'on');
+    assert.equal(s.accounts[0].versionCommand, undefined, 'only the placement fields are recorded');
+    assert.equal(s.accounts[0].note, 'x');
+    state.recordUsage(root, 'rc', 'charlie', { usd: 2.5, source: 'measured' });
+    assert.equal(state.load(root, 'rc').usage.charlie.usd, 2.5);
+    assert.throws(() => state.recordUsage(root, 'rc', 'secondary', 10), /unknown seat "secondary" \(alpha\|charlie\)/);
+    assert.throws(() => state.recordUsage(root, 'rc', 'alpha', { usd: null }), /recordUsageUnknown/);
+    assert.equal(state.runnerOf(s, 'charlie'), 'claude-code worker on account charlie, pays per use');
+    assert.equal(state.runnerOf({ ...s, accounts: [{ ...plan('zulu'), worker: 'session' }] }, 'zulu'), state.SESSION_RUNNER);
+  });
+});
+
+describe('the orch command places over accounts (REQ-303, REQ-305, REQ-307, REQ-309, REQ-311, REQ-313)', () => {
+  /** A project whose §16 carries `features.accounts` rows beside the migrated session account; the run is made by the CLI. */
+  function accountsProject(accounts, { usage = {}, orchestrator = {}, lanesN = 1 } = {}) {
+    const dir = tmp('acc');
+    const write = (acc) => writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { launchCommand: 'go {brief}', ...orchestrator }, accounts: acc }));
+    write(accounts);
+    const root = join(dir, 'orch');
+    const lanesFile = join(dir, 'lanes.json');
+    writeFileSync(lanesFile, JSON.stringify(lanes(lanesN)));
+    const init = orch(dir, root, ['init', 'ar', '--lanes', lanesFile, '--mode', 'parallel', '--repo', dir]);
+    assert.equal(init.status, 0, init.out);
+    state.approve(root, 'ar', 'lead');
+    for (const [name, v] of Object.entries(usage)) state.recordUsage(root, 'ar', name, v);
+    return { dir, root, write };
+  }
+  const events = (root, run = 'ar') => readFileSync(join(root, 'runs', run, 'events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+
+  test('red: REQ-303 a launch on an api-key account writes `account.paid` and a decision-log row (AC-303a)', () => {
+    const { dir, root } = accountsProject({ charlie: key('charlie') }, { usage: { primary: 70, charlie: { usd: 2 } } });
+    const s = state.load(root, 'ar');
+    assert.deepEqual(s.seats, ['primary', 'charlie']);
+    state.setLane(root, 'ar', 'l1', { status: 'CLAIMED' });
+    const r = orch(dir, root, ['gate-launch', 'ar', 'l1']);
+    assert.equal(r.status, 0, r.out);
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.account, 'charlie');
+    assert.equal(j.pays, 'api-key');
+    assert.equal(j.launch, `go ${s.lanes.l1.brief}`);
+    const paid = events(root).filter((e) => e.type === 'account.paid');
+    assert.equal(paid.length, 1);
+    assert.deepEqual([paid[0].lane, paid[0].account], ['l1', 'charlie']);
+    const log = readFileSync(join(dir, 'DECISIONS.md'), 'utf8');
+    assert.match(log, /\| D-orch-ar-l1 \| \d{4}-\d{2}-\d{2} \| orchestrator \| lane l1 of run ar launched on api-key account charlie \|/);
+    assert.match(log, /\| Id \| Date \| Module\/scope \| Decision \|/, 'created with its header');
+  });
+
+  test('red: REQ-305 an account with no maxTurns is refused naming the field; the launch line carries the caps, says unpriced for a model with no rate, and --max-budget-usd is a backstop (AC-305a, AC-305b)', () => {
+    const dir = tmp('caps');
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { seats: ['secondary', 'primary'], launchCommand: 'go {brief} --turns {maxTurns} --minutes {timeoutMinutes} --account {account}' }, caps: false }));
+    const root = join(dir, 'orch');
+    const lanesFile = join(dir, 'lanes.json');
+    writeFileSync(lanesFile, JSON.stringify(lanes(1)));
+    assert.equal(orch(dir, root, ['init', 'cp', '--lanes', lanesFile, '--mode', 'parallel', '--repo', dir]).status, 0);
+    state.approve(root, 'cp', 'lead');
+    state.setLane(root, 'cp', 'l1', { status: 'CLAIMED' });
+    const refused = orch(dir, root, ['gate-launch', 'cp', 'l1']);
+    assert.equal(refused.status, 3, refused.out);
+    assert.match(refused.out, /REFUSED launch cp\/l1: account secondary has no maxTurns — set features\.accounts\.accounts\.secondary\.maxTurns/);
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { seats: ['secondary', 'primary'], launchCommand: 'go {brief} --turns {maxTurns} --minutes {timeoutMinutes} --account {account}' }, caps: false, accounts: { secondary: { maxTurns: 25 } } }));
+    const noTimeout = orch(dir, root, ['gate-launch', 'cp', 'l1']);
+    assert.equal(noTimeout.status, 3);
+    assert.match(noTimeout.out, /has no timeoutMinutes/);
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { seats: ['secondary', 'primary'], launchCommand: 'go {brief} --turns {maxTurns} --minutes {timeoutMinutes} --account {account}' }, accounts: { secondary: { maxTurns: 25, timeoutMinutes: 60 } } }));
+    const ok = orch(dir, root, ['gate-launch', 'cp', 'l1', '--max-budget-usd', '3']);
+    assert.equal(ok.status, 0, ok.out);
+    const j = JSON.parse(ok.stdout);
+    assert.deepEqual([j.account, j.maxTurns, j.timeoutMinutes, j.model, j.price, j.maxBudgetUsd], ['secondary', 25, 60, 'strong-model', 'unpriced', 3]);
+    assert.match(j.maxBudgetUsdRole, /backstop only — never a cap/);
+    assert.match(j.launch, / --turns 25 --minutes 60 --account secondary$/);
+  });
+
+  test('red: REQ-307 the command runs the readiness assessment before placing: an account whose probe says signed out is skipped and the line says why (AC-307a)', () => {
+    const { dir, root } = accountsProject({ delta: plan('delta', { configDir: '.claude-down' }), echo: plan('echo', { configDir: '.claude-echo' }) }, { usage: { primary: 70, delta: 10, echo: 20 } });
+    const r = orch(dir, root, ['status', 'ar']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.stdout, /SKIP delta: not ready \(signed out\)/);
+    assert.match(r.stdout, /LAUNCH l1: .* on echo \(claude-code worker on account echo\)/);
+    assert.match(r.stdout, /^  delta  not ready \(signed out, run claude auth login\)/m);
+    assert.match(r.stdout, /^  echo  ready  20 % \(recorded \d{2}:\d{2}\)/m, 'the run\'s own reading shows with its time');
+    const rec = acct.load(root).accounts;
+    assert.equal(rec.delta.state, 'not ready');
+    assert.equal(rec.echo.state, 'ready');
+    assert.ok(rec.echo.assessedAt);
+    // a LIMIT recorded by a worker holds the account until its time, and status says so
+    acct.markError(root, 'echo', { kind: 'LIMIT', until: new Date(Date.now() + 3600000).toISOString(), reason: '429' });
+    const held = orch(dir, root, ['next', 'ar']);
+    assert.match(held.stdout, /SKIP echo: LIMIT until /);
+    assert.equal(/LAUNCH l1/.test(held.stdout), false);
+  });
+
+  test('red: REQ-309 a stale usage reading is refreshed by the account\'s own reader on any orch command, and status prints the time of the reading (AC-309a)', () => {
+    const reader = `node -e "const d = String.fromCharCode(36); console.log('spent ' + d + '3 of ' + d + '10')"`; // no $ for the shell to expand
+    const { dir, root } = accountsProject({ foxtrot: plan('foxtrot', { configDir: '.claude-fox', usageCommand: reader }) }, { usage: { primary: 70 } });
+    const r = orch(dir, root, ['status', 'ar']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.stdout, /^  foxtrot  ready  30 % \(measured \d{2}:\d{2}\)/m);
+    assert.match(r.stdout, /LAUNCH l1: .* on foxtrot/);
+    const rec = acct.load(root).accounts.foxtrot;
+    assert.equal(rec.usage.pct, 30);
+    assert.ok(Number.isFinite(Date.parse(rec.usage.at)));
+    // a command that places nothing still refreshes once the record is older than usageStaleMinutes
+    acct.record(root, 'foxtrot', { assessedAt: new Date(Date.now() - 3 * 3600000).toISOString(), usage: null });
+    assert.equal(orch(dir, root, ['claims']).status, 0);
+    assert.equal(acct.load(root).accounts.foxtrot.usage.pct, 30, 'refreshed');
+    acct.record(root, 'foxtrot', { assessedAt: new Date().toISOString(), usage: { pct: 55, source: 'measured', at: new Date().toISOString() } });
+    assert.equal(orch(dir, root, ['claims']).status, 0);
+    assert.equal(acct.load(root).accounts.foxtrot.usage.pct, 55, 'a fresh record is left alone by a command that places nothing');
+  });
+
+  test('red: REQ-313 at or above the soft limit the status account line and the lane row show `budget warn <used> of <cap>` (AC-313a)', () => {
+    const { dir, root } = accountsProject({ golf: plan('golf', { configDir: '.claude-golf', budget: { kind: 'percent', soft: 80, hard: 85 } }) }, { usage: { primary: 70, golf: 82 } });
+    state.setLane(root, 'ar', 'l1', { status: 'LAUNCHED', seat: 'golf', sessionId: 'g1' });
+    const r = orch(dir, root, ['status', 'ar']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.stdout, /^  golf  ready  82 % .*  budget warn 82 % of 85 %$/m);
+    assert.match(r.stdout, /^l1 \| LAUNCHED \| .* \| golf \(budget warn 82 % of 85 %\) \| g1 \|/m);
+    state.recordUsage(root, 'ar', 'golf', 50);
+    assert.equal(/budget warn/.test(orch(dir, root, ['status', 'ar']).stdout), false);
+  });
+
+  test('red: REQ-313 a hard cap or soft limit raised in §16 without a decision-log line refuses gate-launch naming the field and the expected entry (AC-313b)', () => {
+    const { dir, root, write } = accountsProject({ hotel: plan('hotel', { configDir: '.claude-hotel', budget: { kind: 'percent', soft: 80, hard: 85 } }) }, { usage: { primary: 70, hotel: 40 } });
+    state.setLane(root, 'ar', 'l1', { status: 'CLAIMED' });
+    assert.equal(orch(dir, root, ['gate-launch', 'ar', 'l1']).status, 0);
+    write({ hotel: plan('hotel', { configDir: '.claude-hotel', budget: { kind: 'percent', soft: 80, hard: 90 } }) });
+    const r = orch(dir, root, ['gate-launch', 'ar', 'l1']);
+    assert.equal(r.status, 3, r.out);
+    assert.match(r.out, /REFUSED launch ar\/l1: features\.accounts\.accounts\.hotel\.budget\.hard raised 85 → 90 without a decision-log line — add a row to DECISIONS\.md that carries "hotel budget\.hard 85 → 90"/);
+    writeFileSync(join(dir, 'DECISIONS.md'), '| D-9 | 2026-11-17 | orchestrator | hotel budget.hard 85 → 90 | more headroom this week | — |\n');
+    const ok = orch(dir, root, ['gate-launch', 'ar', 'l1']);
+    assert.equal(ok.status, 0, ok.out);
+    assert.equal(state.load(root, 'ar').accounts.find((a) => a.name === 'hotel').budget.hard, 90, 'the run records the new cap once the row exists');
+    write({ hotel: plan('hotel', { configDir: '.claude-hotel', budget: { kind: 'percent', soft: 70, hard: 90 } }) });
+    assert.equal(orch(dir, root, ['gate-launch', 'ar', 'l1']).status, 0, 'lowering a limit needs no entry');
+  });
+
+  test('red: REQ-311 a 1.0 state fixture — `orch status` prints the 1.0 rows and leaves the file unchanged (AC-311a)', () => {
+    const { dir, root } = project({ seats: ['secondary', 'primary'], launchCommand: 'go {brief}' });
+    const runDir = join(root, 'runs', 'old');
+    mkdirSync(runDir, { recursive: true });
+    const old = {
+      runId: 'old', createdAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T12:00:00.000Z', repo: dir, target: 'dev', approved: true, approvedBy: 'lead', paused: false, preflightMode: 'parallel',
+      plannedMaxLanes: 2, maxLanes: 2, seats: ['secondary', 'primary'], limits: { secondary: 80, primary: 60 }, usageStaleMinutes: 30,
+      usage: { secondary: { pct: 40, at: '2026-10-01T11:55:00.000Z' } }, mergeQueue: [], rows: [],
+      lanes: {
+        l1: { name: 'old-l1', rows: ['R1'], level: 'Standard', track: 'ADDITIVE', dispatch: 'full', ownedFiles: ['a.ts'], hotFiles: [], seat: 'secondary', branch: 'orch/old-l1', worktree: null, status: 'MERGED', sessionId: 's1', brief: join(runDir, 'briefs', 'l1.md'), result: join(runDir, 'results', 'l1.md'), timings: { plannedAt: '2026-10-01T10:00:00.000Z' }, stallMinutes: 90 },
+        l2: { name: 'old-l2', rows: ['R2'], level: 'Standard', track: 'ADDITIVE', dispatch: 'full', ownedFiles: ['b.ts'], hotFiles: [], seat: null, branch: 'orch/old-l2', worktree: null, status: 'CLAIMED', sessionId: null, brief: join(runDir, 'briefs', 'l2.md'), result: join(runDir, 'results', 'l2.md'), timings: { plannedAt: '2026-10-01T10:00:00.000Z' }, stallMinutes: 90 },
+      },
+    };
+    const text = JSON.stringify(old, null, 2) + '\n';
+    writeFileSync(join(runDir, 'state.json'), text);
+    const r = orch(dir, root, ['status', 'old']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.stdout, /^run old · target dev · preflight parallel · lanes ≤2 · seats secondary → primary · approved yes \(lead\)/m);
+    assert.match(r.stdout, /^l1 \| MERGED \| Standard\/ADDITIVE \| full \| R1 \| secondary \| s1 \| /m);
+    assert.match(r.stdout, /^l2 \| CLAIMED \| Standard\/ADDITIVE \| full \| R2 \| - \| - \| /m);
+    assert.match(r.stdout, /LAUNCH l2: Standard\/ADDITIVE full rows R2 on secondary \(terminal worker on the secondary account\)/, 'the 1.0 first-lane rule: nothing runs, the stale reading is under the limit');
+    assert.match(r.stdout, /^  secondary  ready  40 % \(recorded 11:55\)/m, 'the 1.0 reading is shown with its time');
+    assert.equal(readFileSync(join(runDir, 'state.json'), 'utf8'), text, 'never written back');
+    assert.equal(existsSync(join(runDir, 'state.json.bak')), false);
+    assert.equal(orch(dir, root, ['next', 'old']).status, 0);
+    assert.equal(readFileSync(join(runDir, 'state.json'), 'utf8'), text);
+    assert.equal(state.isLegacyState(old), true);
+    assert.deepEqual(state.accountsOf(old).map((a) => [a.name, a.worker, a.budget.hard]), [['secondary', 'claude-code', 80], ['primary', 'session', 60]]);
+  });
+
+  test('red: REQ-311 the orchestrator\'s own 429 record is still the global one (AC-306f)', () => {
+    const { dir, root } = project();
+    assert.equal(orch(dir, root, ['ratelimit', 'hit', '--planned', '4']).status, 0);
+    const rl = JSON.parse(readFileSync(join(root, 'ratelimit.json'), 'utf8'));
+    assert.deepEqual([rl.lanes, rl.consecutive429], [2, 1]);
+    assert.equal(existsSync(join(root, acct.FILE)) ? Object.keys(acct.load(root).accounts).some((n) => acct.load(root).accounts[n].error) : false, false, 'no account carries the global 429');
+    assert.ok(ACCOUNTS_HOME_OF());
+  });
+});
