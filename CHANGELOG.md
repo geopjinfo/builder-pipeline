@@ -79,6 +79,21 @@ versions independently of any project it is pasted into.
 - Tests: `tests/report.test.mjs`, `tests/notify.test.mjs` (a loopback `node:http` server, a stub command),
   `tests/report-cli.test.mjs`; rows in `profile`, `features`, `doctor`, `orch-gaps`, `pack-prose` and `experiments`.
   Docs: FEATURES rows, GUIDE section, USAGE runbook, llms.txt.
+- **Repo hygiene, code and docs (plan M20, `specs/repo-hygiene.spec.md` REQ-1821 to REQ-1825, D90 to D92).** Three
+  opt-in checks in the kit's checker pattern, one §16 feature each, default off; a check that is off prints
+  `<feature>: not configured` and exits 3, never a pass. `npx builder-pipeline run deps-check` runs the project's own
+  package manager through `features.depsCheck.listCommand` and `auditCommand` and reads their JSON (`format: npm`) or
+  counts their output lines by a pattern (`format: lines`): NO-LOCKFILE, LS-PROBLEM, AUDIT-<severity> (exit 1 at or
+  above `maxSeverity`), UNUSED-DEP over `unused.roots`; a command that is absent or fails outside its documented exit
+  codes is UNMEASURABLE. `npx builder-pipeline run docs-check` reads every Markdown file under `features.docsCheck.roots`:
+  BROKEN-PATH (the instruction lint's resolver, now exported as `makeResolver` from `scripts/lib/instruction-lint.cjs`;
+  the lint rule is unchanged), BROKEN-LINK, BROKEN-ANCHOR (GitHub slugs), UNKNOWN-SCRIPT; external URLs are never
+  fetched. `npx builder-pipeline run dead-code` (`features.deadCode`, experimental-off, EXPERIMENTS §23): ORPHAN files on
+  a ratchet bank (`baseline`, a new orphan is REFUSED with exit 1, a removed one shrinks the bank) and STALE-TODO
+  markers older than `todoDays` by `git blame`, the author never printed. The three scripts and libs join the `hygiene`
+  tool group (REQ-1839); `scripts/lib/instruction-lint.cjs` becomes core because the lint and `docs-check` share its
+  resolver. EXPERIMENTS §23 states the deadCode measurement and keep rule before the code. Tests:
+  `tests/deps-check.test.mjs`, `tests/docs-check.test.mjs`, `tests/dead-code.test.mjs`.
 - **`features.ignoreCheck`, `features.sizeCheck`, `features.secretScan` (REQ-1811 to REQ-1817; D87 to D89, D96, D97),
   default off.** `npx builder-pipeline run ignore-check | size-check | secret-scan` (`scripts/*.mjs` over
   `scripts/lib/*.cjs`, with `scripts/lib/hygiene-cli.cjs` as the shared shell). Off prints `<feature>: not configured`
