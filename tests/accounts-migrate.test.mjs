@@ -125,7 +125,9 @@ describe('builder accounts migrate', () => {
     assert.equal(existsSync(join(proj, 'PIPELINE_PROFILE.md.bak')), false);
     assert.equal(run(proj, ['migrate', '--force']).status, 1);
     assert.equal(run(proj, ['nope']).status, 1);
-    assert.equal(run(proj, []).status, 1);
+    // No subcommand is the readiness report (REQ-205): with the feature off it says not configured and exits 0.
+    assert.equal(run(proj, []).status, 0);
+    assert.match(run(proj, []).out, /^accounts: not configured/m);
     assert.equal(run(mkdtempSync(join(tmpdir(), 'kit-accounts-empty-')), ['migrate']).status, 1);
   });
 
