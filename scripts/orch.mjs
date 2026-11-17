@@ -22,7 +22,8 @@
  * Lanes
  *   preflight [--run R]               the project's checks; exit 0 parallel, 6 single-lane only
  *   claim <run> <lane> | release <run> [lane] | claims
- *   gate-launch <run> <lane> [--resume]
+ *   gate-launch <run> <lane> [--resume]   the pre-launch gate: content policy, settings scan, worktree, --settings pin
+ *   worktree <run> <lane>             create the lane worktree (fresh branch, include files copied, sparse on path roots)
  *                                     before a secondary-seat launch: refuses a lane `next` does not say to launch,
  *                                     or one placed on the primary seat; records the git config/hooks baseline;
  *                                     prints the lane's paths and the filled launchCommand. --resume also takes the
@@ -95,6 +96,8 @@ const credit = require('./lib/orch-credit.cjs');
 const snapshots = require('./lib/orch-snapshot.cjs');
 const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
+const policy = require('./lib/account-policy.cjs');
+const accountPaths = require('./lib/account-paths.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
 const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry', 'rerun', 'queue-only']);
@@ -119,7 +122,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
+const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|worktree|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -193,6 +196,106 @@ function creditLines() {
     return `credit: status unavailable (${e.message.split(/\r?\n/)[0]})`;
   }
   return lines.filter(Boolean).join('\n') || null;
+}
+
+const cc = () => require('./lib/orch-worker-claude-code.cjs');
+const accountsCfg = () => profile.feature(settings, 'accounts').config;
+/** The registry account a terminal-worker lane runs on (the 1.0 secondary seat through legacyView), or null = no policy. */
+function laneAccount() {
+  const name = legacy.accounts && legacy.accounts.secondary;
+  if (!name) return null;
+  return profile.accounts.list(settings).find((a) => a.name === name) || null;
+}
+const readText = (file) => {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+};
+/** Create the lane worktree when it is absent; an existing one is checked against the roots (REQ-402, REQ-405). */
+function laneWorktree(s, l, roots) {
+  if (fs.existsSync(l.worktree)) {
+    if (roots) {
+      const have = pre.sparseRoots(l.worktree);
+      const same = have && have.length === roots.length && roots.every((r) => have.includes(r));
+      if (!same) die(3, `E_PATH_ROOTS: worktree ${l.worktree} is not a sparse checkout of the roots ${roots.join(', ')} — remove it (or re-create it with orch worktree) before the launch`);
+    }
+    return { worktree: l.worktree, branch: l.branch, created: false, sparse: roots };
+  }
+  const include = (accountsCfg().worktree || {}).include || [];
+  try {
+    return { ...pre.createLaneWorktree({ repo: s.repo, worktree: l.worktree, branch: l.branch, base: s.target || 'HEAD', roots, include }), created: true };
+  } catch (e) {
+    die(3, e.message);
+  }
+  return null;
+}
+/**
+ * The pre-launch gate of a lane (REQ-401 to REQ-404, REQ-703): exits 3 with the check lines on any fault; else creates
+ * the worktree when absent, writes the --settings pin (0600) and returns { pinFile, roots }. No account = no policy.
+ */
+function policyGate(s, run, lane, l) {
+  const account = laneAccount();
+  if (!account) return { pinFile: null, roots: null };
+  const home = accountPaths.home();
+  const ap = accountPaths.paths(home, account.name, account);
+  const checks = pre.launchChecks({ account, paths: ap, homeExists: fs.existsSync(home) });
+  if (checks.length) {
+    for (const c of checks) console.log(`CHECK ${c.check}: ${c.message}`);
+    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: checks.map((c) => c.check) });
+    process.exit(3);
+  }
+  const projectDir = s.repo || process.cwd();
+  const roots = policy.pathRoots(account);
+  const lockFiles = (() => {
+    try {
+      return Object.keys(JSON.parse(fs.readFileSync(path.join(projectDir, 'builder.lock.json'), 'utf8')).files || {});
+    } catch {
+      return [];
+    }
+  })();
+  const entries = [
+    { file: path.join(projectDir, '.claude', 'settings.json'), role: 'project' },
+    { file: path.join(projectDir, '.claude', 'settings.local.json'), role: 'project' },
+    ...(l.worktree && fs.existsSync(l.worktree) ? [{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }] : []),
+    { file: ap.settingsFile, role: 'account' },
+  ];
+  const faults = policy.check(
+    account,
+    { visibility: settings.visibility, decisionIdPattern: profile.feature(settings, 'handoffPack').config.decisionIdPattern, decisionsPath: settings.paths.decisions, lockFiles, canDeny: account.worker === 'claude-code' },
+    [...(l.ownedFiles || []), ...(l.hotFiles || [])],
+    readText(path.join(projectDir, settings.paths.decisions)),
+    policy.readSettingsFiles(entries),
+  );
+  if (faults.length) {
+    for (const f of faults) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
+    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: faults.map((f) => f.code) });
+    process.exit(3);
+  }
+  let denyPaths = [];
+  if (l.worktree && s.repo) {
+    laneWorktree(s, l, roots);
+    if (roots) denyPaths = policy.denyPathsFor(pre.trackedFiles(s.repo, s.target || 'HEAD'), roots);
+  } else if (roots) die(3, `E_PATH_ROOTS: account ${account.name} has path roots (${roots.join(', ')}) and run ${run} records no repo or worktree for ${lane} — a path-root account launches only in a sparse worktree`);
+  // the worktree's own settings files exist only now: scan them too before the pin is written
+  if (l.worktree && fs.existsSync(l.worktree) && !entries.some((e) => e.role === 'worktree')) {
+    const late = policy.check(account, { lockFiles, canDeny: true, visibility: 'public' }, [], null, policy.readSettingsFiles([{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }]));
+    if (late.length) {
+      for (const f of late) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
+      state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: late.map((f) => f.code) });
+      process.exit(3);
+    }
+  }
+  let accountSettings = null;
+  try {
+    accountSettings = JSON.parse(fs.readFileSync(ap.settingsFile, 'utf8'));
+  } catch {
+    /* none: the scan above already judged an unreadable one */
+  }
+  const pinFile = path.join(store.runDir(root(), run), 'pins', `${lane}.settings.json`);
+  cc().writePin(pinFile, cc().pin({ account, configDir: ap.configDir, accountSettings, denyPaths }));
+  return { pinFile, roots };
 }
 
 function printStatus(runId, { split = false } = {}) {
@@ -470,9 +573,26 @@ try {
         if (g.code === 3) process.exit(3);
       }
       if (!resume && acts.some((a) => a.startsWith(`LAUNCH ${lane}:`) && / on primary \(/.test(a))) die(3, `REFUSED launch ${run}/${lane}: placed on the primary seat — start it on the primary account (a sub-agent for a solo lane, its own session for a pipeline lane), not with the secondary launcher`);
+      // M4: the account's content policy, the settings scan and the --settings pin (REQ-401 to REQ-404, REQ-703).
+      const gate = policyGate(s, run, lane, l);
       if (!l.integrity) state.integrityBaseline(root(), run, lane); // a resume keeps the first baseline: a change from an earlier attempt is never laundered
-      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch };
-      out({ name: l.name, worktree: l.worktree, branch: l.branch, brief: l.brief, result: l.result, launch: cfg.launchCommand ? pre.fill(cfg.launchCommand, vars) : null });
+      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch, settings: gate.pinFile };
+      const template = cfg.launchCommand || legacy.launchCommand;
+      let launch = template ? pre.fill(template, vars) : null;
+      if (launch && gate.pinFile && !String(template).includes('{settings}')) launch = cc().withSettings(launch, gate.pinFile);
+      out({ name: l.name, worktree: l.worktree, branch: l.branch, brief: l.brief, result: l.result, settings: gate.pinFile, sparse: gate.roots, launch });
+      break;
+    }
+    case 'worktree': {
+      // create a lane's worktree the hygienic way (REQ-405): a fresh branch, the include files copied, sparse on a path-root account
+      const [run, lane] = pos;
+      const s = state.load(root(), run);
+      const l = s.lanes[lane];
+      if (!l) die(2, `no lane ${lane}`);
+      if (!l.worktree || !s.repo) die(3, `refused: run ${run} records no repo or worktree path for ${lane} — re-init with --repo`);
+      const account = laneAccount();
+      const r = laneWorktree(s, l, account ? policy.pathRoots(account) : null);
+      console.log(`${r.created ? 'created' : 'exists'} ${r.worktree} on ${r.branch}${r.fresh === false ? ' (branch existed, no worktree held it)' : ''}${r.sparse ? ` · sparse: ${r.sparse.join(', ')}` : ''}${r.copied && r.copied.length ? ` · copied: ${r.copied.join(', ')}` : ''}${r.missing && r.missing.length ? ` · not found: ${r.missing.join(', ')}` : ''}`);
       break;
     }
     case 'set': {

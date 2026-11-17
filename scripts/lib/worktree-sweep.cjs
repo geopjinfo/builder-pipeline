@@ -188,6 +188,7 @@ function plan({
   idleHours = 6,
   prefix = null,
   reserved = [],
+  keep = [],
   holdCommand = null,
   procLines = processCommandLines(),
   runHold = defaultHoldRunner,
@@ -198,9 +199,18 @@ function plan({
   const primary = key(primaryOf(repo));
   const here = key(git(cwd, ['rev-parse', '--show-toplevel']).out || cwd);
   const res = new Set(reserved.map((r) => r.toLowerCase()));
+  // --keep <lane> (REQ-405): a lane id, a whole folder name or a branch tail; the worktree stays and the report says so
+  const keptBy = (name, branch) => (keep || []).find((k) => {
+    const n = name.toLowerCase();
+    const kk = String(k).toLowerCase();
+    const b = (branch || '').toLowerCase();
+    return n === kk || n.endsWith(`-${kk}`) || b === kk || b.endsWith(`/${kk}`) || b.endsWith(`-${kk}`);
+  });
   return listWorktrees(repo).map((w) => {
     const name = path.basename(w.path);
     const reasons = [];
+    const k = keptBy(name, w.branch);
+    if (k !== undefined) reasons.push(`kept (--keep ${k})`);
     if (key(w.path) === primary) reasons.push('primary checkout');
     else if (key(w.path) === here) reasons.push('the checkout this sweep runs from');
     else if (prefix && !name.toLowerCase().startsWith(prefix.toLowerCase())) reasons.push(`name outside the sweep prefix "${prefix}"`);
@@ -332,6 +342,7 @@ function run({
   idleHours,
   prefix,
   reserved,
+  keep = [],
   holdCommand,
   backupDirs = DEFAULT_BACKUP_DIRS,
   logsDir = 'logs',
@@ -343,7 +354,7 @@ function run({
   date = new Date().toISOString().slice(0, 10),
 }) {
   const procs = procLines === undefined ? processCommandLines() : procLines;
-  const items = plan({ repo, target, idleHours, prefix, reserved, holdCommand, procLines: procs, runHold, now, cwd });
+  const items = plan({ repo, target, idleHours, prefix, reserved, keep, holdCommand, procLines: procs, runHold, now, cwd });
   const primary = primaryOf(repo);
   const backupRoot = path.join(primary, logsDir, 'backups', `worktrees-${date}`);
   const nmPrimary = path.join(primary, 'node_modules');

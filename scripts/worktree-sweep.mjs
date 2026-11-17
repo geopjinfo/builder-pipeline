@@ -80,6 +80,7 @@ if (!Number.isFinite(idleHours) || idleHours < 0) {
   console.error('worktree-sweep: --idle-hours must be a number >= 0');
   process.exit(2);
 }
+// --keep <lane,...> (REQ-405): each worktree named by a lane id, folder name or branch tail stays, reported as kept
 const extraKeep = (val('--keep') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
 if (top.status !== 0 || !top.stdout.trim()) {
@@ -101,7 +102,8 @@ const out = sweep.run({
   target,
   idleHours,
   prefix: cfg.prefix,
-  reserved: [...cfg.reserved, ...extraKeep],
+  reserved: cfg.reserved,
+  keep: extraKeep,
   holdCommand: standalone ? null : cfg.holdCommand,
   backupDirs: cfg.backupDirs,
   logsDir: loaded.settings.paths.logs,
