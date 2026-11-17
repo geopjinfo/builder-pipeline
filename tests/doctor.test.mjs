@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, relative } from 'node:path';
@@ -154,5 +154,27 @@ describe('builder doctor accounts rows (REQ-701, REQ-107)', () => {
     assert.doesNotMatch(text.out, /legacy seats/);
     const rows = accountRows(json);
     assert.deepEqual(rows.map((r) => r.note), ['accounts: not configured']);
+  });
+});
+
+describe('builder doctor git-hooks rows (REQ-1815, AC-1815b)', () => {
+  const gitHooks = require('../cli/git-hooks.cjs');
+  const git = (cwd, ...args) => spawnSync('git', args, { cwd, encoding: 'utf8' });
+  test('red: the --json report carries a git-hooks section with the pre-commit row stating armed, missing and foreign in turn; the text report prints the line', () => {
+    const proj = project();
+    git(proj, 'init', '-q');
+    writeFileSync(join(proj, 'PIPELINE_PROFILE.md'), profileText({}));
+    const env = { ...process.env, BUILDER_NO_BASH_CAP: '1', BUILDER_ACCOUNTS_HOME: mkdtempSync(join(tmpdir(), 'doctor-home-')) };
+    const go = (args) => spawnSync(process.execPath, ['builder/cli.js', 'doctor', '--tool', 'claude-code', ...args], { cwd: proj, encoding: 'utf8', env });
+    const row = () => JSON.parse(go(['--json']).stdout).find((t) => t.section === 'git-hooks').rows.find((r) => r.hook === 'pre-commit');
+    assert.equal(row().state, 'missing');
+    assert.match(go([]).stdout, /^\[repo\] secret scan pre-commit: missing — /m);
+    const target = join(gitHooks.hooksDir(proj), 'pre-commit');
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, gitHooks.preCommitText(join(proj, 'builder')));
+    assert.equal(row().state, 'armed');
+    writeFileSync(target, '#!/bin/sh\nexit 0\n');
+    assert.equal(row().state, 'foreign');
+    assert.match(go([]).stdout, /^\[repo\] secret scan pre-commit: foreign — /m);
   });
 });

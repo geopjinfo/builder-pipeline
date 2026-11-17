@@ -108,6 +108,10 @@ const SCRIPTS = {
   // 2.0.0 accounts line: the loop runner and the account key helper go with the orchestrator; the evidence programme
   // scripts with evals; readme-badges is the kit's own README reader (core, like features)
   'board-loop': 'orchestrator',
+  // M19 tree hygiene (REQ-1811 to REQ-1813): mapped to audit until M18 adds the `hygiene` group (REQ-1839)
+  'ignore-check': 'audit',
+  'size-check': 'audit',
+  'secret-scan': 'audit',
   'account-key': CORE,
   experiments: 'evals',
   'first-value': 'evals',
@@ -141,6 +145,11 @@ const LIBS = {
   'worktree-sweep': 'orchestrator',
   'bash-cap': 'hooks',
   reanchor: 'hooks',
+  // M19 tree hygiene libs: audit until the `hygiene` group exists (REQ-1839); secret-scan.cjs is also what the two hooks load
+  'hygiene-cli': 'audit',
+  'ignore-check': 'audit',
+  'size-check': 'audit',
+  'secret-scan': 'audit',
   'board-freshness': 'pipeline',
   'board-parse': 'pipeline',
   'page-docs': 'pipeline',
@@ -221,6 +230,9 @@ const HOOK_LOADS = [
   'scripts/lib/outbound-guard.cjs',
   'scripts/lib/bash-cap.cjs',
   'scripts/lib/board-freshness.cjs',
+  // the pre-commit secret scan and the write guard (REQ-1815, REQ-1816) load the scan and its helper
+  'scripts/lib/hygiene-cli.cjs',
+  'scripts/lib/secret-scan.cjs',
   'scripts/lib/board-parse.cjs',
   'scripts/lib/board-rows.cjs',
   'scripts/lib/instruction-lint.cjs',

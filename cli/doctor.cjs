@@ -140,7 +140,12 @@ function cmdDoctor(ctx, argv) {
     unconfirmed: (ctx.ADAPTERS[tool] && ctx.ADAPTERS[tool].unconfirmed) || [],
   }));
   const rows = accountsRows(ctx.CWD);
-  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }], null, 2));
+  const gitHooks = require('./git-hooks.cjs');
+  const hookRows = [
+    { hook: 'commit-msg', ...gitHooks.status(ctx.CWD, ctx.KIT) },
+    { hook: 'pre-commit', ...gitHooks.preCommitStatus(ctx.CWD, ctx.KIT) }, // REQ-1815: armed | missing | foreign
+  ];
+  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'git-hooks', advisory: true, rows: hookRows }], null, 2));
   console.log(`builder kit ${ctx.VERSION} — doctor${none ? ' (no kit install detected — showing the native tools; pass --tool to pick)' : ''}`);
   for (const t of report) {
     console.log(`\n[${t.tool}] ${t.label}`);
@@ -152,8 +157,9 @@ function cmdDoctor(ctx, argv) {
   }
   console.log('\n[accounts] features.accounts — advisory, the exit code is unchanged');
   for (const r of rows) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
-  const hygiene = require('./git-hooks.cjs').status(ctx.CWD, ctx.KIT);
+  const hygiene = hookRows[0];
   console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
+  console.log(`[repo] secret scan pre-commit: ${hookRows[1].state} — ${hookRows[1].note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 

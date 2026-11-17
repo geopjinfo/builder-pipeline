@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -112,4 +112,20 @@ test('REQ-401 the template §16 block carries visibility private', () => {
   const raw = JSON.parse(/```json pipeline-settings\r?\n([\s\S]*?)\r?\n```/.exec(tpl)[1]);
   assert.equal(raw.visibility, 'private');
   assert.match(tpl, /\*\*Visibility:\*\*/);
+});
+
+describe('REQ-1811 to REQ-1813 — the tree hygiene rows', () => {
+  const parse = (features) => profile.parse('```json pipeline-settings\n' + JSON.stringify({ schema: 2, features }) + '\n```\n');
+  test('red: the three features exist with the spec defaults, off', () => {
+    assert.deepEqual(profile.FEATURES.ignoreCheck.defaults, { state: 'off', extra: [], allow: [] });
+    assert.deepEqual(profile.FEATURES.sizeCheck.defaults, { state: 'off', maxFileKb: 512, history: false, maxCommits: 500, allow: [] });
+    assert.deepEqual(profile.FEATURES.secretScan.defaults, { state: 'off', roots: ['.'], allow: [], history: false, maxCommits: 200 });
+  });
+  test('red: a negative number, a non-boolean history and a list with a non-string are invalid, each naming its key', () => {
+    const r = parse({ sizeCheck: { state: 'on', maxFileKb: -1, history: 'yes' }, secretScan: { state: 'on', roots: [1] }, ignoreCheck: { state: 'on', allow: 'x' } });
+    for (const key of ['features.sizeCheck.maxFileKb: a positive integer', 'features.sizeCheck.history: true or false', 'features.secretScan.roots: an array of non-empty strings', 'features.ignoreCheck.allow: an array of non-empty strings']) {
+      assert.ok(r.errors.includes(key), `${key}\n${r.errors.join('\n')}`);
+    }
+    assert.deepEqual(parse({ sizeCheck: { state: 'on', maxFileKb: 256, history: true, maxCommits: 50, allow: ['a/*'] } }).errors, []);
+  });
 });
