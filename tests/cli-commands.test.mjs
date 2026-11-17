@@ -132,7 +132,7 @@ describe('builder bootstrap', () => {
   });
 });
 
-const COMMANDS = ['unpack', 'upgrade', 'bootstrap', 'inventory', 'choices', 'doctor', 'personas-check', 'run', 'targets', 'verify', 'features', 'check-ledgers', 'check-targets'];
+const COMMANDS = ['unpack', 'upgrade', 'bootstrap', 'inventory', 'choices', 'doctor', 'personas-check', 'run', 'targets', 'verify', 'features', 'check-ledgers', 'check-targets', 'accounts'];
 
 test('red: the usage text, the README command list and the next steps name every command', () => {
   const { proj, cli } = project();

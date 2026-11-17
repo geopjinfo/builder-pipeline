@@ -1530,6 +1530,7 @@ function main() {
   if (cmd === 'bootstrap') return require('./cli/bootstrap.cjs').cmdBootstrap(ctx(), argv.slice(1));
   if (cmd === 'doctor') return require('./cli/doctor.cjs').cmdDoctor(ctx(), argv.slice(1));
   if (cmd === 'git-hooks') return require('./cli/git-hooks.cjs').cmdGitHooks(ctx(), argv.slice(1));
+  if (cmd === 'accounts') return require('./cli/accounts.cjs').cmdAccounts(ctx(), argv.slice(1));
   if (cmd !== 'unpack' && cmd !== 'upgrade') {
     console.log(`builder kit ${VERSION}`);
     console.log(`usage: node builder/cli.js <command> [options]
@@ -1544,6 +1545,7 @@ function main() {
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
+    accounts migrate [--dry-run]        rewrite the 1.0 seat keys (seats, limits, secondaryConfigDir, credit) into features.accounts (backup first)
   check
     verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check
   other

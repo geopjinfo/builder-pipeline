@@ -357,7 +357,8 @@ error, because a typo would otherwise switch a check off in silence.
     "mutationGate":     { "state": "experimental-off" },
     "liteSplit":        { "state": "experimental-off", "cap": 4, "trigger": 3, "ledgers": ["(^|/)CHANGELOG\\.md$"], "docsOnly": ["(^|/)README\\.md$"] },
     "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
-    "orchestrator":     { "state": "off", "target": null, "seats": ["primary"], "primaryLaunch": "manual", "limits": { "secondary": 80, "primary": 60 }, "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null, "credit": { "enabled": false, "dailyCapUsd": null } }
+    "orchestrator":     { "state": "off", "target": null, "primaryLaunch": "manual", "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null },
+    "accounts":         { "state": "off", "softLimitPct": 80, "usageStaleMinutes": 30, "accounts": {} }
   }
 }
 ```
