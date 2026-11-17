@@ -141,6 +141,38 @@ versions independently of any project it is pasted into.
   `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
 - **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
   token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
+### Added — M10 accounts command (2.0.0 line)
+
+- **`npx builder accounts add | note | key | key --remove | remove | list` (REQ-108, REQ-1001 to REQ-1007; D2, D9, D19,
+  D20, D42).** `add <name> --worker <w> --pays <p> [--content …] [--roles …] [--family …] [--note …] [--config-dir …]
+  [--command …] [--base-url …] [--budget-hard N --budget-kind percent|usd]` validates through the registry, writes the
+  account into the §16 settings block only (every byte outside stays; temp + rename), turns `features.accounts` on and
+  makes the account folder (0700; on Windows an owner-only ACL through `icacls`, else "mode unverified"). Refusals
+  carry a named code: `E_ACCOUNT_NAME`, `E_ACCOUNT_EXISTS`, `E_PAYS_TWICE`, `E_BASEURL_SUB`, `E_ACCOUNT_UNKNOWN`,
+  `E_LEASE_HELD`. `note` replaces the note. `remove` deletes the wrappers, the key file and the §16 entry and keeps the
+  folder.
+- **Key entry and storage (`scripts/lib/account-secrets.cjs`, `scripts/account-key.cjs`).** `key <name>` reads the
+  key with echo off in raw mode and restores the terminal on Ctrl-C; off a TTY it reads to end of input and says echo
+  may be visible; printable ASCII only; no argv or environment form. A Claude Code account's key goes to the account's
+  key file only (O_CREAT|O_EXCL|O_NOFOLLOW, 0600 in a 0700 dir; rotation by temp + rename after an lstat check that
+  refuses a symlink) and `apiKeyHelper` in the account's settings.json points at the kit helper `account-key read
+  <name>`, which prints the file and refuses a mode wider than 0600. A Codex account is signed in through `codex login
+  --with-api-key` with `CODEX_HOME` set to the account dir and `cli_auth_credentials_store = "file"`; the kit never
+  writes the key and reports the mode of `auth.json`. `key --remove` deletes the key file and the helper setting only
+  (Codex: `codex logout`). No confirmation line carries any part of the value.
+- **Leases (`scripts/lib/account-lease.cjs`).** `acquire`, `release`, `read`, `state`, `isLive` over
+  `accounts/<name>/lease.json` (`{ pid, startedAt, lane }`). `remove` and `migrate` refuse under a live lease and name
+  the pid; a lease whose process is gone is reported as stale, cleared, and the command proceeds.
+- **`list [--json]`.** One line per account: worker, pays, content, roles, key present or absent (never the value),
+  lease state, key file mode; a POSIX key file wider than 0600 reads `not ready (key file mode 0644)`; on Windows the
+  mode check is skipped and the ACL is reported or "mode unverified".
+- **Tests.** `accounts-cli` (every subcommand through cli.js with `BUILDER_ACCOUNTS_HOME` inside the temp project and a
+  stub `codex` on PATH; the key file is never in `builder.lock.json` or an upgrade backup), `account-secrets` (flags,
+  symlink refusal, modes, the Windows branch through an injected platform, the Codex stub), `account-lease`, and
+  `secret-shapes` (REQ-1007: the shipped files, `tests/fixtures`, a temp HOME and the captured stdio of a real run
+  hold no key shape; fakes are built at runtime). On Windows the codex binary is resolved on PATH (PATHEXT) and run
+  through the shell, and the tests assert the documented Windows behaviour (mode check skipped) instead of POSIX modes. The Antigravity adapter note says `accounts key` refuses an
+  Antigravity account. Usage text and the README command row cover the new subcommands.
 
 ### Added — M1 account registry (2.0.0 line)
 
