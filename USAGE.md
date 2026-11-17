@@ -163,6 +163,21 @@ For a fix or small feature that doesn't warrant the full phase list, use the FIX
 - `ledger-audit` (extras) — periodic "are our DONEs real" sweep; schedule it, drift compounds
   silently between audits.
 
+## A report while you are away (`features.reporter`)
+
+Switch `features.reporter` on in §16 with one or more channels, then start the watcher once at run start:
+
+```
+npx builder-pipeline run report --watch
+```
+
+One report every `intervalMinutes` (default 30), only when something changed, with a heartbeat line every fourth quiet
+tick. `npx builder-pipeline run report --once` sends one now. The files are under `.pipeline/reports/` (`latest.md`,
+`state.json`, one dated file per tick, `report.log.jsonl` for sends, skips, refusals and failures). A Slack channel is
+an Incoming Webhook whose URL you keep in an environment variable (`urlEnv`) or a 0600 file (`urlFile`), never in the
+profile. A report that would carry a secret shape is not sent and says so in its next header. `orch status` prints
+`reporter: last sent …`; `doctor` prints one advisory row.
+
 ## Removing a tool, or the kit (`uninstall`)
 
 ```

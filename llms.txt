@@ -5,6 +5,7 @@
 ## Start here
 
 - [README.md](README.md): what the kit is, install, the one setup prompt per tool, every CLI command, per-tool support
+- [GUIDE.md § Progress reporter](GUIDE.md): `features.reporter` — one report per interval from the kit's records on stdout, a file, a webhook or a command; only on change, alerts opt-in, the outbound guard in front; `npx builder-pipeline run report --once | --watch`
 - [FEATURES.md](FEATURES.md): every feature on one page: what it does, how to start it, Claude Code / Codex / Antigravity support, status
 - [SETUP_PROMPT.md](SETUP_PROMPT.md): the one setup prompt (bootstrap, then the builder-init skill)
 - [USAGE.md](USAGE.md): the operator's runbook: stop points, record points, resuming, troubleshooting

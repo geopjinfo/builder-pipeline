@@ -99,3 +99,11 @@ describe('REQ-1501 — features.capacity is in the table, default off (AC-1501c)
     assert.match(r.stdout, /^capacity: not configured$/m);
   });
 });
+
+describe('REQ-1601 — the reporter rows of the FEATURES table', () => {
+  test('red: AC-1601c reporter defaults to off and reporterSummary to experimental-off with its §22 decision', () => {
+    const r = run(project());
+    assert.match(r.stdout, /^reporter: not configured$/m);
+    assert.match(r.stdout, /^reporterSummary: experimental-off — not enabled; its measurement is EXPERIMENTS\.md §22 · decision: not yet measured/m);
+  });
+});
