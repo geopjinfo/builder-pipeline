@@ -37,6 +37,8 @@
  *                                     while a linkDirs entry of the lane worktree is a link and the brief names a
  *                                     reinstall step (link-guard)
  *   worktree <run> <lane>             create the lane worktree (fresh branch, include files copied, sparse on path roots)
+ *   brief <run> <lane> [--write]      the worker brief from the template with the lane facts and its Account: line
+ *                                     filled from the placement (REQ-502); --write writes it once at the lane's brief path
  *   link-guard <folder> [--brief <file>]
  *                                     0 no linked dir · 4 a linkDirs entry is a link (never reinstall there) ·
  *                                     3 a link + a brief naming any reinstall step (unlink it yourself first)
@@ -133,7 +135,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|worktree|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
+const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|worktree|brief|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -710,6 +712,28 @@ try {
       const account = laneRegistryAccount(s, l);
       const r = laneWorktree(s, l, account ? policy.pathRoots(account) : null);
       console.log(`${r.created ? 'created' : 'exists'} ${r.worktree} on ${r.branch}${r.fresh === false ? ' (branch existed, no worktree held it)' : ''}${r.sparse ? ` · sparse: ${r.sparse.join(', ')}` : ''}${r.copied && r.copied.length ? ` · copied: ${r.copied.join(', ')}` : ''}${r.missing && r.missing.length ? ` · not found: ${r.missing.join(', ')}` : ''}`);
+      break;
+    }
+    case 'brief': {
+      // the worker brief skeleton: the template with the lane facts and the placed account filled in (REQ-502)
+      const [run, lane] = pos;
+      if (!run || !lane) die(2, 'usage: brief <run> <lane> [--write]');
+      const s = state.load(root(), run);
+      const l = s.lanes[lane];
+      if (!l) die(2, `no lane ${lane}`);
+      const installed = path.join(s.repo || process.cwd(), 'specs', 'orchestrator-worker-brief.template.md');
+      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'templates', 'orchestrator-worker-brief.md');
+      const placed = l.seat || state.placementNow(root(), s).seat || null;
+      const account = placed ? laneRegistryAccount(s, l) || state.accountOf(s, placed) : null;
+      const text = planLib.renderBrief(fs.readFileSync(templateFile, 'utf8'), { run, lane: { ...l, name: lane }, rows: s.rows || [], target: s.target, account });
+      if (!flags.write) {
+        process.stdout.write(text);
+        break;
+      }
+      if (fs.existsSync(l.brief)) die(3, `refused: ${l.brief} exists — the brief is yours once written; edit it, or remove it and run brief --write again`);
+      fs.mkdirSync(path.dirname(l.brief), { recursive: true });
+      fs.writeFileSync(l.brief, text);
+      console.log(`wrote ${l.brief}${account ? ` (Account: ${account.name})` : ' (no placement yet: fill the Account: line)'}`);
       break;
     }
     case 'set': {

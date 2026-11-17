@@ -44,6 +44,23 @@ or the reviewer to its one review file. Each limit is the first paragraph of the
 `git status --porcelain` and revert anything outside the seat's limit. The [Codex adapter](codex.md) describes the same
 check.
 
+### Worker recipe (a lane on an Antigravity account)
+
+The registry (`features.accounts`) accepts the workers `claude-code`, `codex` and `session` in this release; an
+Antigravity account is assessed (its probe) but has no launcher of its own. The rulebook is
+`skills/references/account-selection.md`.
+
+- **Start.** A person starts the lane by hand in the lane worktree, on the account signed in to the workspace, with
+  the brief pointer as the first prompt, then records it: `npx builder run orch set <run> <lane> status=LAUNCHED
+  seat=<account> sessionId=<id>`. Headless form, where the installed version has it: `-p --output-format json
+  --print-timeout <seconds>` with the timeout from `timeoutMinutes`.
+- **Environment.** The account is the one the workspace is signed in to; pays is `subscription` only (no key
+  helper, no gateway form). Keep the lane worktree's `.agents/` the kit wrote; add nothing to it for one lane.
+- **What the kit cannot enforce here.** No hook runs and no deny rule exists, so the guards are instructions checked
+  by `git status --porcelain` after each phase; a path-root account is refused. No usage reader exists: the account
+  stays `unmeasured` and only the first account in order may launch unmeasured. No `--settings` pin reaches the
+  process, so the settings scan judges the project's files only.
+
 ## Not wired (the module's `unconfirmed` list)
 
 - **Hooks.** `.agents/hooks.json` is a documented location. Antigravity sends `toolCall { name, args }` and expects a
