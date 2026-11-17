@@ -48,14 +48,13 @@ function unreleasedLines(text) {
 }
 
 /**
- * The newest CHANGELOG section: [Unreleased] while it holds any entry, else the first released section. The release
- * commit renames [Unreleased] to the version and leaves an empty [Unreleased] above it, so the bullet this test
- * looks for moves into the released section on release day and stays there.
+ * The newest CHANGELOG section with a `### Breaking` heading: [Unreleased] while it holds one, else the first released
+ * section. The release commit renames [Unreleased] to the version and leaves an empty [Unreleased] above it, so the
+ * bullet this test looks for moves into the released section on release day and stays there; the non-breaking entries
+ * of the next release, added above it, do not hide it.
  */
 function newestSectionLines(text) {
   const unreleased = unreleasedLines(text);
-  // 2.1.0: once the rename shipped, [Unreleased] carries later work; the Breaking bullet is read from the newest
-  // section that has a Breaking heading — [Unreleased] while it has one, else the release it became
   if (unreleased.some(([, l]) => /^### Breaking\b/.test(l))) return unreleased;
   const lines = text.split(/\r?\n/);
   let on = false, seen = false;
