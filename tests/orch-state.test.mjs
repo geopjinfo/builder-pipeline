@@ -264,7 +264,7 @@ describe('lane placement: the secondary seat first, then the primary under its l
     const r = orch(dir, root, ['gate-launch', 'pl', 'l1']);
     assert.equal(r.status, 0, r.out);
     const j = JSON.parse(r.stdout);
-    assert.match(j.launch, /^start-worker --brief ".*l1\.md" --lane l1$/);
+    assert.match(j.launch, /^start-worker --brief ".*l1\.md" --lane l1 --settings ".*l1\.settings\.json"$/); // M4: every launch carries the --settings pin (REQ-404)
     assert.equal(orch(dir, root, ['gate-launch', 'pl', 'l1']).status, 0); // still CLAIMED: idempotent
     state.setLane(root, 'pl', 'l1', { status: 'DONE' });
     assert.equal(orch(dir, root, ['gate-launch', 'pl', 'l1']).status, 3); // red: a lane next does not say to launch

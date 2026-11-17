@@ -79,7 +79,9 @@ For each `LAUNCH <lane>` line, in order:
 
 1. `orch claim <run> <lane>` — exit 3 means another live lane holds one of its files: do not launch; re-split, or
    wait for the holder to merge.
-2. Create the lane worktree on the lane branch, cut from `target`, and install what its tiers need. If a
+2. Create the lane worktree on the lane branch, cut from `target`, and install what its tiers need. `orch worktree
+   <run> <lane>` creates it (a fresh branch, `features.accounts.worktree.include` files copied in, only the roots of
+   a path-root account); `gate-launch` creates it the same way when it is absent. If a
    `linkDirs` entry (an installed dependency tree) is linked from the primary checkout instead, never let the lane
    reinstall there: a reinstall deletes THROUGH the link and empties the install every lane shares.
    `orch link-guard <worktree> --brief <file>` says so (exit 4 a link · 3 a link and a brief naming any reinstall

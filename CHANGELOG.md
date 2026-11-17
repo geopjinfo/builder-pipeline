@@ -18,6 +18,23 @@ versions independently of any project it is pasted into.
   own settings carry `apiKeyHelper`, `env.ANTHROPIC_*`, `env.CLAUDE_CODE_*`, a proxy or CA variable, or a hook not
   recorded in `builder.lock.json` — the key and the file are named, never a value). `denyPathsFor()` lists the
   deny rules a path-root account needs. Tests: `tests/account-policy.test.mjs`.
+- **gate-launch runs the policy gate (REQ-401 to REQ-404, REQ-703, D37).** With a registry account on the lane
+  (the 1.0 secondary seat through `legacyView()`), `orch gate-launch` first runs the pre-launch checks (the session
+  account, a worker with no launcher, a missing account dir — each prints one `CHECK <name>:` line and exits 3), then
+  the policy check over the lane's owned and hot files, the decision log and the settings files, and refuses with
+  exit 3 and the fault list (a `launch.refused` event carries the codes, never a value). A passing launch writes the
+  account's `--settings` pin into `<run>/pins/<lane>.settings.json` at 0600 — the account's env block, its config
+  dir, its baseUrl and the deny rules of a path-root account — and the launch command carries it (`{settings}` in
+  `launchCommand`, or `--settings "<file>"` appended). No registry account: the 1.0 launch, unchanged.
+- **Lane worktree hygiene (REQ-402, REQ-405, D50).** `orch worktree <run> <lane>` — and `gate-launch` when the
+  worktree is absent — creates the lane worktree on a fresh branch named from the lane id, never on a branch another
+  worktree holds (`git worktree list --porcelain` is read first), copies the files `features.accounts.worktree.include`
+  lists (a copy, never a link) and, for a path-root account, checks out only the roots (`git sparse-checkout
+  --no-cone`); an existing worktree that is not sparse on the roots, or a worker without a deny-rule adapter, is
+  refused naming the path. `npx builder run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
+  reports each as `kept (--keep <lane>)`. GUIDE says what a worktree does not do: it does not sandbox processes and
+  it does not prevent merge conflicts. Tests: `tests/orch-preflight.test.mjs`, `tests/orch-worker-claude-code.test.mjs`,
+  `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
 - **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
   token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
 
