@@ -27,10 +27,12 @@ const { readVerdict, VERDICT_SCHEMA } = require('./worker-verdict.cjs');
 const { childEnv } = require('./worker-env.cjs');
 const snapshots = require('./orch-snapshot.cjs');
 const runLog = require('./run-log.cjs');
+const capacityLib = require('./capacity.cjs');
+const store = require('./orch-store.cjs');
 const { ROW_ID, stripAnnotation, normalizeStatus } = require('./board-rows.cjs');
 
 const FEATURE = 'boardLoop';
-const STOPS = Object.freeze(['all-pass', 'max-passes', 'not-ready', 'no-progress', 'consecutive-failures', 'rows-blocked', 'scope', 'stall']);
+const STOPS = Object.freeze(['all-pass', 'max-passes', 'not-ready', 'no-progress', 'consecutive-failures', 'rows-blocked', 'scope', 'stall', 'capacity']);
 const BYPASS = /--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--permission-mode[= ]bypassPermissions|bypassPermissions|--yolo|--full-auto\b/;
 const HARNESS_CONFIG = Object.freeze(['.claude/', 'CLAUDE.md', '.mcp.json', 'PIPELINE_PROFILE.md', 'AGENTS.md', '.codex/', '.agents/']);
 const SETTLED = /^(DONE|DROPPED|DEFERRED→)/;
@@ -176,6 +178,17 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     if (io.log) io.log(l);
   };
   const log = (ev) => runLog.append(logPath(cwd, key), ev);
+  // M15 (REQ-1509, REQ-1516): with features.capacity on, the runner reads the governor's record before each pass and
+  // holds at 0 lanes; and it samples its worker's RSS by pid, the one honest per-lane memory measurement (D83).
+  const capF = profile.feature(settings, capacityLib.FEATURE);
+  const capOn = capF.enabled;
+  const capCfg = capF.config;
+  const orchRoot = store.orchRoot(env, cwd);
+  const stub = !!env.BUILDER_LOOP_WORKER_BIN;
+  const holdPollMs = stub && Number(env.BUILDER_LOOP_STUB_CAPACITY_POLL_MS) > 0 ? Number(env.BUILDER_LOOP_STUB_CAPACITY_POLL_MS) : capCfg.intervalSeconds * 1000;
+  const rssIo = stub && env.BUILDER_LOOP_STUB_PS_KB !== undefined ? { platform: env.BUILDER_LOOP_STUB_PLATFORM || 'linux', ps: () => env.BUILDER_LOOP_STUB_PS_KB } : stub && env.BUILDER_LOOP_STUB_PLATFORM ? { platform: env.BUILDER_LOOP_STUB_PLATFORM } : {};
+  const rssSampleMs = stub ? 25 : 2000;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const state = readJson(statePath(cwd, key), { passes: 0, cap: cfg.maxPasses, extended: false, retries: {}, consecutiveFailures: 0, history: [], stopReason: null, account: accountName });
   if (morePasses) {
@@ -224,6 +237,30 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
       const rd = io.ready(accountName);
       if (rd && rd.ready === false) return finish('not-ready', { detail: `${accountName}: ${rd.reason || 'not ready'}` });
     }
+    if (capOn) {
+      // REQ-1509: at 0 lanes wait intervalSeconds and read again, up to holdMaxMinutes, then stop with the reason capacity
+      const holdStart = stub && Number(env.BUILDER_LOOP_STUB_HOLD_START_MS) > 0 ? Number(env.BUILDER_LOOP_STUB_HOLD_START_MS) : Date.now();
+      let reads = 0;
+      let last = null;
+      for (;;) {
+        const g = capacityLib.laneCap(orchRoot, Date.now());
+        reads += 1;
+        if (g.lanes === null || g.lanes > 0) {
+          if (last) {
+            log({ kind: 'capacity.hold', reads, seconds: Math.round((Date.now() - holdStart) / 1000), binding: last.binding || null, ended: 'pass' });
+            say(`capacity: ${g.lanes === null ? 'no fresh record' : `${g.lanes} lane(s)`} — the pass runs after ${reads} read(s)`);
+          }
+          break;
+        }
+        if (!last) say(`capacity: 0 lanes (${g.binding || 'capacity'}) — holding up to ${capCfg.holdMaxMinutes} min, reading again every ${capCfg.intervalSeconds} s`);
+        last = g;
+        if (Date.now() - holdStart >= capCfg.holdMaxMinutes * 60000) {
+          log({ kind: 'capacity.hold', reads, seconds: Math.round((Date.now() - holdStart) / 1000), binding: g.binding || null, ended: 'stop' });
+          return finish('capacity', { detail: `held ${reads} read(s) at 0 lanes — ${g.binding || 'capacity'}` });
+        }
+        await sleep(holdPollMs);
+      }
+    }
     const row = open[0];
     const pass = state.passes + 1;
     const before = Object.fromEntries(rows.map((r) => [r.id, r.status]));
@@ -247,7 +284,20 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     if (env.BUILDER_LOOP_WORKER_BIN) for (const k of Object.keys(env)) if (k.startsWith('BUILDER_LOOP_STUB_')) childEnvironment[k] = env[k];
     const args = claude.launchArgs({ model: account.model || null, maxTurns: cfg.maxTurnsPerPass, settingsFile: pin, schema: VERDICT_SCHEMA });
     const started = Date.now();
-    const res = await runWorker({ bin, args, env: childEnvironment, cwd, prompt: input, passTimeoutMs: cfg.passTimeoutMinutes * 60000, stallTimeoutMs: cfg.stallMinutes * 60000, keySourceVerdict });
+    let peakRssMb = null;
+    let sampler = null;
+    const onSpawn = capOn
+      ? (child) => {
+          const sample = () => {
+            const mb = capacityLib.rssMb(child.pid, rssIo);
+            if (mb !== null && (peakRssMb === null || mb > peakRssMb)) peakRssMb = mb;
+          };
+          sample();
+          sampler = setInterval(sample, rssSampleMs);
+        }
+      : null;
+    const res = await runWorker({ bin, args, env: childEnvironment, cwd, prompt: input, passTimeoutMs: cfg.passTimeoutMinutes * 60000, stallTimeoutMs: cfg.stallMinutes * 60000, keySourceVerdict, onSpawn });
+    if (sampler) clearInterval(sampler);
     const changed = changedFiles(cwd).filter((fl) => !fl.startsWith('.pipeline/'));
     // scope: denied paths and the board outside the chosen row (REQ-906, REQ-912)
     const scopeFaults = [];
@@ -310,7 +360,7 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     const openNow = rowsNow.filter(isOpen);
     if (!stop && !openNow.length) stop = rowsNow.some((r) => BLOCKED.test(r.status)) ? 'rows-blocked' : 'all-pass';
     if (!stop && pass >= state.cap) stop = 'max-passes';
-    log({ kind: 'pass', pass, row: row.id, rowsPassing, retries: state.retries[row.id] || 0, gateDigest: sha256(gate.text), gateExit: gate.status, turns, cost, passed, why, outcome: res.outcome, verdict: verdict.job, stopReason: stop, seconds: Math.round((Date.now() - started) / 1000) });
+    log({ kind: 'pass', pass, row: row.id, rowsPassing, retries: state.retries[row.id] || 0, gateDigest: sha256(gate.text), gateExit: gate.status, turns, cost, passed, why, outcome: res.outcome, verdict: verdict.job, stopReason: stop, seconds: Math.round((Date.now() - started) / 1000), ...(capOn ? { passPeakRssMb: peakRssMb, passPeakRssSource: peakRssMb === null ? 'unmeasured' : 'ps' } : {}) });
     say(`pass ${pass}: ${row.id} ${passed ? 'PASSED' : `failed — ${why}`} (${rowsPassing}/${rowsNow.length} rows done)`);
     writeJson(statePath(cwd, key), state);
     if (stop) return finish(stop, scopeFaults.length ? { detail: why } : {});

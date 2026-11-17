@@ -94,6 +94,25 @@ const advisory = (note, extra = {}) => ({ feature: 'accounts', status: 'advisory
  * The advisory accounts rows for the project at `cwd`: the legacy row, the not-configured row, or one row per account
  * with its readiness line. Never throws: a profile that does not load gives the not-configured row.
  */
+/**
+ * The advisory capacity row (REQ-1511): the feature's line, and on win32 the note that load is unmeasured there
+ * (os.loadavg() is zero on Windows, D72). Never throws; the exit code never changes.
+ */
+function capacityRows(cwd, platform = process.platform) {
+  const profile = require('../scripts/lib/profile.cjs');
+  const row = (note, state) => ({ feature: 'capacity', status: 'advisory', state, note });
+  let loaded;
+  try {
+    loaded = profile.load(cwd);
+  } catch (_) {
+    return [row('capacity: not configured', 'off')];
+  }
+  if (!loaded || loaded.errors.length) return [row('capacity: not configured', 'off')];
+  const f = profile.feature(loaded.settings, 'capacity');
+  const signals = platform === 'win32' ? 'memory, cores, disk, accounts and the 429 record; load is unmeasured on win32 (os.loadavg() is 0 there) and never binds' : 'memory, cores, load, disk, accounts and the 429 record';
+  return [row(`${f.line} — signals: ${signals}`, f.state)];
+}
+
 function accountsRows(cwd, env = process.env) {
   const profile = require('../scripts/lib/profile.cjs');
   const registry = require('../scripts/lib/accounts-registry.cjs');
@@ -140,7 +159,8 @@ function cmdDoctor(ctx, argv) {
     unconfirmed: (ctx.ADAPTERS[tool] && ctx.ADAPTERS[tool].unconfirmed) || [],
   }));
   const rows = accountsRows(ctx.CWD);
-  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }], null, 2));
+  const capacity = capacityRows(ctx.CWD);
+  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'capacity', advisory: true, rows: capacity }], null, 2));
   console.log(`builder kit ${ctx.VERSION} — doctor${none ? ' (no kit install detected — showing the native tools; pass --tool to pick)' : ''}`);
   for (const t of report) {
     console.log(`\n[${t.tool}] ${t.label}`);
@@ -152,9 +172,11 @@ function cmdDoctor(ctx, argv) {
   }
   console.log('\n[accounts] features.accounts — advisory, the exit code is unchanged');
   for (const r of rows) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
+  console.log('\n[capacity] features.capacity — advisory, the exit code is unchanged');
+  for (const r of capacity) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
   const hygiene = require('./git-hooks.cjs').status(ctx.CWD, ctx.KIT);
   console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 
-module.exports = { cmdDoctor, installedTools, accountsRows, LEGACY_ROW, NATIVE };
+module.exports = { cmdDoctor, installedTools, accountsRows, capacityRows, LEGACY_ROW, NATIVE };
