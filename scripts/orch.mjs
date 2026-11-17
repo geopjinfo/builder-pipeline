@@ -527,7 +527,14 @@ try {
         console.error(m.pct === null ? `lanes ≤${maxLanes}: no "${m.seat} <n>%" figure in ${flags.measured}` : `lanes ≤${maxLanes}: measured ${m.seat} ${m.pct}% ${m.pct < capacity.underPct ? '<' : '≥'} ${capacity.underPct}% (${flags.measured})`);
       }
       const hot = [...cfg.hot, settings.paths.registry, `${settings.paths.boards}/_gate-queue.md`];
-      const res = planLib.split(fs.readFileSync(pos[0], 'utf8'), { ...cfg, hot, maxLanes });
+      // familyReview (experimental, REQ-801/802): off, the key is absent and the split is byte-identical. On, the
+      // writer is --writer <account>, else the first account in registry order that may hold a lane.
+      const fam = profile.feature(settings, 'familyReview');
+      const famAccounts = accountList();
+      const writer = flags.writer || (famAccounts.find((a) => profile.accounts.placeable(a)) || {}).name || null;
+      const familyReview = fam.enabled && accountsOn ? { state: fam.config.state, accounts: famAccounts, writer } : undefined;
+      const res = planLib.split(fs.readFileSync(pos[0], 'utf8'), { ...cfg, hot, maxLanes, ...(familyReview ? { familyReview } : {}) });
+      if (res.familyReview) for (const line of res.familyReview.log) console.error(line);
       res.plan = { ...res.plan, file: path.resolve(pos[0]) }; // init keeps it; ADD-LANES names it
       const bad = planLib.laneOverlaps(res.lanes);
       if (bad.length) die(3, `internal: lanes overlap: ${bad.join('; ')}`);
