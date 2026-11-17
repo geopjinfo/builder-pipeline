@@ -221,3 +221,53 @@ describe('REQ-909 — the measurement row', () => {
     assert.throws(() => loop.recordExperiment(join(dir, 'none.md'), row), /no §17/);
   });
 });
+
+describe('D69 — the gate command in its two extra forms, nothing wider (tests/board-loop, hooks/claude-code/lane-shell-allow.cjs)', () => {
+  const allow = require('../hooks/claude-code/lane-shell-allow.cjs');
+  const HOOK = join(PACK, 'hooks', 'claude-code', 'lane-shell-allow.cjs');
+  const wt = '/work/lanes/demo';
+  const gate = './gate-row.sh T1';
+  const ok = (cmd) => allow.allowed(cmd, { gate, worktree: wt });
+  test('red: the gate as written, with a cd to the own worktree, or piped once to head or tail is accepted', () => {
+    assert.equal(ok('./gate-row.sh T1'), true);
+    assert.equal(ok(`cd ${wt} && ./gate-row.sh T1`), true);
+    assert.equal(ok(`cd ${wt}/ && ./gate-row.sh T1`), true, 'a trailing slash normalises away');
+    assert.equal(ok(`cd /work/lanes/./demo && ./gate-row.sh T1`), true, 'a dot segment normalises away');
+    assert.equal(ok('./gate-row.sh T1 | tail -n 15'), true);
+    assert.equal(ok(`cd ${wt} && ./gate-row.sh T1 | head -n 40`), true);
+  });
+  test('red: another path, a .., a second command, or a pipe to anything else is refused', () => {
+    assert.equal(ok('cd /work/lanes/other && ./gate-row.sh T1'), false, 'another path');
+    assert.equal(ok(`cd ${wt}/../demo && ./gate-row.sh T1`), false, '.. is refused even when it resolves to the worktree');
+    assert.equal(ok(`cd ${wt} && ./gate-row.sh T1 && git rev-parse HEAD`), false, 'a second command');
+    assert.equal(ok(`cd ${wt} && ./gate-row.sh T1; git status`), false, 'a second command after ;');
+    assert.equal(ok('./gate-row.sh T1 | grep FAIL'), false, 'a pipe to grep');
+    assert.equal(ok('./gate-row.sh T1 | tail -n 5 | head -n 1'), false, 'two pipes');
+    assert.equal(ok('./gate-row.sh T1 | tail -n all'), false, 'N must be numeric');
+    assert.equal(ok('./gate-row.sh T2'), false, 'another row');
+    assert.equal(ok(`cd ${wt} && cat > x.py <<'EOF'\nprint(1)\nEOF`), false, 'a heredoc write');
+    assert.equal(ok(`cd ${wt} && ./gate-row.sh T1 2>&1 | tail -n 15`), false, 'a redirection');
+  });
+  test('red: as a PreToolUse hook: an accepted command answers permissionDecision allow; a refused one answers nothing and exits 0', () => {
+    const run = (command) => spawnSync(process.execPath, [HOOK, '--gate', gate, '--worktree', wt, '--marker', 'builder-pipeline-lane-gate'], { input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } }), encoding: 'utf8' });
+    const a = run(`cd ${wt} && ./gate-row.sh T1 | tail -n 15`);
+    assert.equal(a.status, 0, a.stderr);
+    assert.equal(JSON.parse(a.stdout).hookSpecificOutput.permissionDecision, 'allow');
+    const d = run('cd /elsewhere && ./gate-row.sh T1');
+    assert.equal(d.status, 0);
+    assert.equal(d.stdout.trim(), '', 'a refused command gets no decision from the hook: the permission system denies it');
+    const other = spawnSync(process.execPath, [HOOK, '--gate', gate, '--worktree', wt], { input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: 'x' } }), encoding: 'utf8' });
+    assert.equal(other.stdout.trim(), '', 'a non-Bash tool is not the hook\'s business');
+  });
+  test('red: the loop pin carries the PreToolUse entry with the marker, the gate and the worktree', () => {
+    const r = rig({ script: solveInOrder(), over: { maxPasses: 1 } });
+    assert.equal(r.run().status, 10);
+    const pin = JSON.parse(readFileSync(join(r.repo, '.pipeline', 'loop', 'demo.settings.json'), 'utf8'));
+    const pre = pin.hooks.PreToolUse;
+    assert.ok(Array.isArray(pre) && pre.length === 1 && pre[0].matcher === 'Bash');
+    const cmd = pre[0].hooks[0].command;
+    assert.match(cmd, /lane-shell-allow\.cjs/);
+    assert.match(cmd, /--marker builder-pipeline-lane-gate/);
+    assert.ok(cmd.includes('--worktree'), cmd);
+  });
+});
