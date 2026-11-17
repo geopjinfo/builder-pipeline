@@ -5,6 +5,19 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Breaking
+
+- **2.0.0: accounts replace seats (REQ-107; D22, D33).** The 1.0 keys `features.orchestrator.seats`, `limits`,
+  `secondaryConfigDir` and `credit` are gone. `features.accounts` holds the registry instead: one entry per account
+  with its worker, who pays, content class, roles, config dir, start command and budget. While the orchestrator is
+  on, a profile that still carries the 1.0 keys is refused at load; while it is off, the loader prints one warning.
+  Both name the fix: `npx builder accounts migrate` rewrites the `pipeline-settings` block once (`primary` as the
+  session account, `secondary` as a Claude Code account, `credit` as an `api-key` account), writes
+  `PIPELINE_PROFILE.md.bak` first, changes nothing on a second run, and refuses while a run holds a LAUNCHED or
+  STALLED lane. `npx builder doctor` prints one advisory row `profile: legacy seats, run npx builder accounts
+  migrate` until the rewrite is done; its exit code is unchanged. GUIDE § Accounts carries the migration note. The
+  version bump to 2.0.0 lands in the release PR only.
+
 ### Added — M7 docs, doctor and changelog (2.0.0 line)
 
 - **`doctor` accounts rows (REQ-701, REQ-107; D22, D37).** After the tool blocks, an `[accounts]` section with one
@@ -15,6 +28,16 @@ versions independently of any project it is pasted into.
   `--json` carries the same rows as a last element `{ "section": "accounts", "advisory": true, "rows": [...] }`.
   Tests: `tests/doctor.test.mjs` (two accounts with stub `claude` and `codex` executables on PATH, the legacy row,
   the not-configured row, the exit code).
+- **Docs.** GUIDE's "Multi-account seats" section is now "Accounts": the registry, the `npx builder accounts`
+  report, the registry commands (`add`, `note`, `key`, `remove`, `list`, `migrate`), placement by rule, the policy
+  gate and the `--settings` pin, the rulebook pointer (`skills/references/account-selection.md`), a "Migrating from
+  1.0 seats" note and a "Looping a board" subsection (`boardLoop`, experimental-off, no measurements yet). FEATURES.md,
+  README.md and llms.txt name the report, the registry commands, `migrate` and the doctor rows. The feature rows for
+  `remoteLanes` (M12), `boardLoop` (M9) and `familyReview` (M8) are not added here: each of those changes adds its own
+  FEATURES.md row with its loader key, and `tests/pack-prose.test.mjs` refuses a `features.<x>` the loader does not
+  know. The `accounts add|note|key|remove|list` commands and the `npx builder accounts` report land with M10; the
+  docs name them ahead of that change. Tests: `tests/pack-prose.test.mjs`, `tests/invocation.test.mjs`,
+  `tests/cli-commands.test.mjs` (the README command list), `tests/genericity.test.mjs`.
 
 ### Added — M5 delegation rulebook (2.0.0 line)
 
@@ -172,6 +195,10 @@ versions independently of any project it is pasted into.
   migrated registry places every 1.0 case as before (REQ-106); finished run states are read unchanged (REQ-311).
 - The 1.0 placement and credit code reads the registry through `legacyView()` until M3 replaces it; the template §16
   carries an `accounts` line instead of the seat keys, and FEATURES.md names the Accounts row.
+- Tests: `tests/accounts-migrate.test.mjs` (the block rewrite, the backup, idempotence, the live-run refusal, the
+  legacy warning), `tests/orch-placements-golden.test.mjs` (the migrated registry against the golden fixture),
+  `tests/orch-state.test.mjs` (the registry read by placement), `tests/cli-commands.test.mjs` (the `accounts` command
+  in the usage text and the README), `tests/pack-prose.test.mjs` (the `features.accounts` name).
 
 ### Added — M0 accounts spec and decisions (2.0.0 line)
 
