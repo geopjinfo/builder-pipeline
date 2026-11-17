@@ -290,6 +290,37 @@ the board declares. No measurements exist yet for this feature. It stays `experi
 shows that the loop keeps the same gates as a person-driven board ([EXPERIMENTS.md](EXPERIMENTS.md)). It lands in
 its own change; a kit without the key prints `boardLoop: not configured`.
 
+### 🧭 Capacity governor (`features.capacity`, default off; 2.1.0)
+
+The governor caps the number of lanes that run at the same time by what the machine and the accounts can carry. It
+is one more term in the lane-cap rule the orchestrator already has: effective lanes = min(`maxLanes`, the 429 cap,
+the governor's record). It lowers only. It never raises a cap, never stops a running lane and never signals a process;
+`ADD-LANES` and `split --max-lanes` stay with the person.
+
+Signals, each with a source: free memory against `perLaneMb` and `minFreeMb`, cores minus `reserveCores`, the
+one-minute load against `maxLoadPerCore` (Unix only; `os.loadavg()` is zero on Windows, so load is unmeasured there),
+free disk against `minDiskMb`, the accounts that are ready and under their soft limit, and the 429 record. An
+unmeasured signal never binds, and the record says so. A drop applies at once; a rise applies by one lane after
+`riseAfterTicks` ticks that allow it. Every line names the figure and its unit, never only a ratio.
+
+Set it up: turn `features.capacity` on in §16 and fill `perLaneMb` with this project's measured per-lane peak RSS.
+The loop runner writes `passPeakRssMb` into each pass row of `.pipeline/loop/<board>.jsonl` while the feature is on,
+so run a board loop once and read the figure from there (the kit's own figure is in [EXPERIMENTS §21](EXPERIMENTS.md)).
+Then start the watcher at run start beside the board watcher:
+
+```bash
+npx builder-pipeline run capacity --once            # one tick: write <orch root>/capacity.json and print the table
+npx builder-pipeline run capacity --watch           # tick every intervalSeconds; one watcher per orch root holds a pid lease
+```
+
+`orch next` prints `CAPACITY: lanes capped at N of M — <signal>` while the record binds, `gate-launch --resume` counts
+it as a slot limit, `orch status` prints one `capacity:` line and `doctor` adds one advisory row. The loop runner reads
+the record before each pass: at 0 lanes it waits `intervalSeconds` and reads again, up to `holdMaxMinutes`, then stops
+with the reason `capacity`. A record older than `ttlSeconds` is ignored, and the reader says so: the pipeline fails
+open on a dead watcher, never closed. When the line has bound for `explainAfterTicks` ticks, the read-only
+`capacity-steward` persona explains the binding signal in words and drafts one profile change and one decision row.
+Numbers come from the script; words come from the persona (plan decision D70).
+
 ### 💳 Credit lane (only with an `api-key` account)
 
 ```mermaid

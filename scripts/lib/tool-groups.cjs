@@ -41,6 +41,8 @@ const PERSONAS = {
   'standards-auditor': 'audit',
   'vuln-auditor': 'audit',
   'repo-auditor': 'audit',
+  // 2.1.0 (M15): the read-only explainer of the capacity governor's record goes with the orchestrator
+  'capacity-steward': 'orchestrator',
 };
 
 /** Skills (skills/*.md, skills-extra/<name>/), by name. `references` is the pipeline skill's own folder. */
@@ -111,6 +113,8 @@ const SCRIPTS = {
   // 2.0.0 accounts line: the loop runner and the account key helper go with the orchestrator; the evidence programme
   // scripts with evals; readme-badges is the kit's own README reader (core, like features)
   'board-loop': 'orchestrator',
+  // 2.1.0: the capacity governor is one more term in the orchestrator's lane-cap rule (M15)
+  capacity: 'orchestrator',
   'account-key': CORE,
   experiments: 'evals',
   'first-value': 'evals',
@@ -144,6 +148,7 @@ const LIBS = {
   'worktree-sweep': CORE, // the orchestrator's sweep and run-sweep (hygiene) share its tree helpers
   'branch-sweep': 'hygiene',
   'run-sweep': 'hygiene',
+  capacity: 'orchestrator', // 2.1.0 (M15): read by orch-state, orch, board-loop and the capacity command
   'bash-cap': 'hooks',
   reanchor: 'hooks',
   'board-freshness': 'pipeline',

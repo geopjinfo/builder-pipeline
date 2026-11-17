@@ -91,3 +91,11 @@ describe('features — repo hygiene (M18)', () => {
     assert.match(bad.stdout + bad.stderr, /branchSweep\.remote.*list, off/);
   });
 });
+
+describe('REQ-1501 — features.capacity is in the table, default off (AC-1501c)', () => {
+  test('red: the loader knows the feature and its line says not configured', () => {
+    const r = run(project(block({ schema: 2 })));
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^capacity: not configured$/m);
+  });
+});
