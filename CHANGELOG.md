@@ -5,6 +5,17 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M7 docs, doctor and changelog (2.0.0 line)
+
+- **`doctor` accounts rows (REQ-701, REQ-107; D22, D37).** After the tool blocks, an `[accounts]` section with one
+  advisory row per account in `features.accounts` and its readiness line (the built-in probes and the usage readers
+  run, the same assessment `npx builder accounts` prints), or one row `accounts: not configured`, or, while the
+  profile still carries the 1.0 `seats` / `limits` / `secondaryConfigDir` / `credit` keys, exactly one row
+  `profile: legacy seats, run npx builder accounts migrate`. The rows are advisory: the exit code is unchanged.
+  `--json` carries the same rows as a last element `{ "section": "accounts", "advisory": true, "rows": [...] }`.
+  Tests: `tests/doctor.test.mjs` (two accounts with stub `claude` and `codex` executables on PATH, the legacy row,
+  the not-configured row, the exit code).
+
 ### Added — M5 delegation rulebook (2.0.0 line)
 
 - **`skills/references/account-selection.md` — the rulebook for choosing an account (REQ-501; plan M5, D8, D29).**
