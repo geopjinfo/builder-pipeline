@@ -164,3 +164,38 @@ test('bash cap hook as a hook: rewrites a large result and writes one log; small
   assert.equal(hook('bash-output-cap.cjs', 'not json at all', project).status, 0);
   assert.equal(existsSync(join(fx('guard-project'), 'logs')), false);
 });
+
+// ---- secret write guard (REQ-1816) --------------------------------------------------------------------
+
+const secretGuard = require('../hooks/claude-code/secret-write-guard.cjs');
+const { SHAPES } = require('../scripts/lib/outbound-guard.cjs');
+const GH_SHAPE = `ghp_${'a1B2'.repeat(10)}`; // built at run time: this file holds no key-looking literal
+const secretOn = withFeatures({ secretScan: { state: 'on', allow: ['fixtures/*'] } });
+
+test('REQ-1816 secret write guard red: a Write with a GitHub token shape is blocked naming the kind, never the text; Edit and MultiEdit too', () => {
+  const w = secretGuard.decide({ tool_name: 'Write', tool_input: { file_path: '/r/src/config.js', content: `const t = '${GH_SHAPE}';\n` } }, secretOn, { shapes: SHAPES, root: '/r' });
+  assert.equal(w.block, true);
+  assert.match(w.reason, /Blocked write to src\/config\.js: the text carries a secret shape \(GitHub token\)/);
+  assert.equal(w.reason.includes(GH_SHAPE), false);
+  assert.equal(secretGuard.decide({ tool_name: 'Edit', tool_input: { file_path: 'a.js', old_string: 'x', new_string: GH_SHAPE } }, secretOn, { shapes: SHAPES }).block, true);
+  assert.equal(secretGuard.decide({ tool_name: 'MultiEdit', tool_input: { file_path: 'a.js', edits: [{ new_string: 'fine' }, { new_string: `k=${GH_SHAPE}` }] } }, secretOn, { shapes: SHAPES }).block, true);
+});
+
+test('REQ-1816 secret write guard: an allowed path, clean text, another tool and the feature off all pass', () => {
+  const d = (input, s = secretOn) => secretGuard.decide(input, s, { shapes: SHAPES, root: '/r' });
+  assert.equal(d({ tool_name: 'Write', tool_input: { file_path: '/r/fixtures/keys.txt', content: GH_SHAPE } }).block, false);
+  assert.equal(d({ tool_name: 'Write', tool_input: { file_path: '/r/src/a.js', content: 'const t = process.env.TOKEN;' } }).block, false);
+  assert.equal(d({ tool_name: 'Bash', tool_input: { command: `echo ${GH_SHAPE}` } }).block, false);
+  assert.deepEqual(d({ tool_name: 'Write', tool_input: { file_path: '/r/src/a.js', content: GH_SHAPE } }, withFeatures({})), { block: false, reason: 'secretScan: not configured' });
+});
+
+test('REQ-1816 secret write guard as a hook: exit 2 with the kind on stderr and the token absent; a fixture path in allow exits 0', () => {
+  const project = fx('secret-project');
+  const blocked = hook('secret-write-guard.cjs', { tool_name: 'Write', tool_input: { file_path: join(project, 'src', 'x.ts'), content: `export const t = '${GH_SHAPE}';` } }, project);
+  assert.equal(blocked.status, 2, blocked.stderr);
+  assert.match(blocked.stderr, /GitHub token/);
+  assert.equal(blocked.stderr.includes(GH_SHAPE), false);
+  const ok = hook('secret-write-guard.cjs', { tool_name: 'Write', tool_input: { file_path: join(project, 'fixtures', 'sample.txt'), content: GH_SHAPE } }, project);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(hook('secret-write-guard.cjs', 'not json', project).status, 0);
+});

@@ -161,7 +161,12 @@ function cmdDoctor(ctx, argv) {
   const rows = accountsRows(ctx.CWD);
   const capacity = capacityRows(ctx.CWD);
   const reporterRow = reporterAdvisory(ctx.CWD); // REQ-1613: one advisory row
-  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'capacity', advisory: true, rows: capacity }, { section: 'reporter', advisory: true, rows: [reporterRow] }], null, 2));
+  const gitHooks = require('./git-hooks.cjs');
+  const hookRows = [
+    { hook: 'commit-msg', ...gitHooks.status(ctx.CWD, ctx.KIT) },
+    { hook: 'pre-commit', ...gitHooks.preCommitStatus(ctx.CWD, ctx.KIT) }, // REQ-1815: armed | missing | foreign
+  ];
+  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'capacity', advisory: true, rows: capacity }, { section: 'reporter', advisory: true, rows: [reporterRow] }, { section: 'git-hooks', advisory: true, rows: hookRows }], null, 2));
   console.log(`builder kit ${ctx.VERSION} — doctor${none ? ' (no kit install detected — showing the native tools; pass --tool to pick)' : ''}`);
   for (const t of report) {
     console.log(`\n[${t.tool}] ${t.label}`);
@@ -176,8 +181,9 @@ function cmdDoctor(ctx, argv) {
   console.log('\n[capacity] features.capacity — advisory, the exit code is unchanged');
   for (const r of capacity) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
   console.log(`\n[reporter] features.reporter — advisory, the exit code is unchanged\n  ${reporterRow.status.padEnd(12)}${reporterRow.feature} — ${reporterRow.note}`);
-  const hygiene = require('./git-hooks.cjs').status(ctx.CWD, ctx.KIT);
+  const hygiene = hookRows[0];
   console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
+  console.log(`[repo] secret scan pre-commit: ${hookRows[1].state} — ${hookRows[1].note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 
