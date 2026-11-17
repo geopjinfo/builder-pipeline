@@ -9,7 +9,8 @@
  * for it again on every turn after. Batch size (`features.builderBatch.rows`) is unmeasured until this is
  * compared before and after.
  *
- * HARNESS. Reads Claude Code transcripts only (`features.costAccounting.reader === "claude-code"`): one
+ * HARNESS. Reads Claude Code transcripts only (`features.costAccounting.reader === "claude-code"`). The `codex`
+ * reader prints "unmeasurable" with its reason (no per-turn prompt size to de-duplicate). Claude Code: one
  * transcript per subagent dispatch, with its agent type beside it. Other harnesses write no per-dispatch
  * usage this can read — the script says "unmeasurable with this harness" and exits 0.
  *
@@ -110,6 +111,11 @@ function main() {
   const accounting = profile.feature(settings, 'costAccounting');
   if (!accounting.enabled) {
     console.log(accounting.line);
+    process.exit(0);
+  }
+  if (accounting.config.reader === 'codex') {
+    // Codex writes `last_token_usage` per response, with no message id to de-duplicate on; a peak read from it would be a guess.
+    console.log('seat peaks: unmeasurable with this harness (reader "codex": Codex transcripts carry no per-turn prompt size this script can de-duplicate; cost-window reads them)');
     process.exit(0);
   }
   if (accounting.config.reader !== 'claude-code') {

@@ -100,7 +100,7 @@ Kind: `behaviour` (what succeeds) · `refusal` (what is refused, and why) · `ef
 | REQ-609 | A session whose cumulative total decreases is unmeasurable with the line number as the reason, and `cost-window` prints it | a maintainer of the kit | refusal | DL-3 |
 | REQ-610 | A model with no rate in the table in use is counted as unpriced and the total is marked partial; it is never added as $0 | a team that runs the pipeline on Codex CLI | constraint | DL-4 |
 | REQ-611 | `--rates FILE` prices Codex usage with the fields of DL-5 through `pricing.cost()` | a team that runs the pipeline on Codex CLI | behaviour | DL-5 |
-| REQ-612 | `cost-window` runs the Codex reader when `reader` is `codex`, keeps the Claude Code path when it is `claude-code`, and prints "unmeasurable with this harness" for any other value the loader let through | a CI job | behaviour | intent |
+| REQ-612 | `cost-window` runs the Codex reader when `reader` is `codex` and keeps the Claude Code path when it is `claude-code`; with a profile whose reader is neither, it exits 2 and prints the loader's error, and the "unmeasurable with this harness" line stays as the last guard | a CI job | behaviour | intent |
 | REQ-613 | `seat-peaks` and `orchestrator-check` print an "unmeasurable" line that names the Codex reader and a reason, and exit 0 | a CI job | constraint | DL-9 |
 | REQ-614 | `npx builder run features` prints `costAccounting: on` for a valid profile with `reader: "codex"`; its output is otherwise unchanged | a CI job | effect | intent |
 
@@ -114,7 +114,7 @@ Verb: `assert` (holds as written) · `by-design` (cite a decision) · `gap` (cit
 | AC-602 | REQ-602 | assert | a profile with `costAccounting` on and `reader: "gemini"` | the profile is parsed | one error names `features.costAccounting.reader`, `claude-code` and `codex` |
 | AC-603 | REQ-603 | assert | `CODEX_HOME` set to a directory | `sessionsDir()` | the path is `CODEX_HOME/sessions`; with no `CODEX_HOME` it ends in `.codex/sessions`; an explicit directory wins over both |
 | AC-604 | REQ-603 | assert | a fixture tree `2026/11/16/rollout-a.jsonl`, `2026/11/17/rollout-b.jsonl` and a `notes.txt` | `jsonlFiles(dir)` | both rollout files and nothing else |
-| AC-605 | REQ-604 | assert | the fixture session `rollout-a.jsonl` | `records(text)` | the kinds in order are `session_meta`, `turn_context`, `token_count`, `token_count`, `other`, `token_count`; the `session_meta` record has `sessionId`, `model` is on the `turn_context` record |
+| AC-605 | REQ-604 | assert | the fixture session `rollout-a.jsonl` | `records(text)` | the kinds in order are `session_meta`, `turn_context`, `token_count`, `token_count`, `other`, `token_count`, `turn_context`, `token_count`; the `session_meta` record has `sessionId`, `model` is on the `turn_context` record |
 | AC-606 | REQ-605 | assert | the fixture's second `token_count` line, which carries `rate_limits` | `records(text)` | the record's `rateLimits` deep-equals the payload's `rate_limits` object; the first `token_count` has `rateLimits: null` |
 | AC-607 | REQ-606 | assert | a line that is not JSON in the middle of a file, a JSON line without `type`, and a `token_count` whose `input_tokens` is a string | `records(text)` | three `unrecognised` records with line numbers and reasons |
 | AC-608 | REQ-606 | assert | a file whose last line is cut | `records(text)` | one `torn` record, and `sessionUsage` still sums the complete lines |
@@ -126,7 +126,7 @@ Verb: `assert` (holds as written) · `by-design` (cite a decision) · `gap` (cit
 | AC-614 | REQ-610 | assert | the fixture tree with no `--rates` | `cost-window … --transcripts DIR --json` | `partial` is true, `unpriced` is 2, `total` is 0, and the output never shows the sessions as `$0.00` without `unpriced` beside it |
 | AC-615 | REQ-611 | assert | a rates file that prices `model-alpha` and `model-beta` | `cost-window … --transcripts DIR --rates FILE --json` | `partial` is false and `total` equals the hand-computed cost |
 | AC-616 | REQ-612 | assert | a profile with `reader: "claude-code"` | `cost-window --since … --until …` | the output does not contain `unmeasurable with this harness` and the window line is printed |
-| AC-617 | REQ-612 | assert | a profile whose reader is forced past validation to `other` | `cost-window` | exit 0 and the output is `cost window: unmeasurable with this harness` |
+| AC-617 | REQ-612 | assert | a profile with `reader: "other"` | `cost-window --since … --until …` | exit 2 and the error names `features.costAccounting.reader` |
 | AC-618 | REQ-613 | assert | a profile with `reader: "codex"` | `seat-peaks` | exit 0 and a line that starts `seat peaks: unmeasurable` and contains `codex` |
 | AC-619 | REQ-613 | assert | a profile with `reader: "codex"`, `orchestratorModel` on and `models.orchestrator` set | `orchestrator-check` | exit 0 and a line that starts `orchestrator model: unmeasurable` and contains `codex` |
 | AC-620 | REQ-614 | assert | a profile with `costAccounting` on and `reader: "codex"` | `run features` | exit 0, `costAccounting: on` and `features: profile valid` are printed |
