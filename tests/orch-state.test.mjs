@@ -747,3 +747,22 @@ describe('the orch command places over accounts (REQ-303, REQ-305, REQ-307, REQ-
     assert.ok(ACCOUNTS_HOME_OF());
   });
 });
+
+describe('placementNow agrees with next (REQ-312)', () => {
+  test('red: in shadow mode gate-launch checks the account next placed the 1.0 way, not the rule\'s choice', () => {
+    const root = tmp('pnow');
+    const mk = (name) => ({ name, worker: 'claude-code', pays: 'subscription', content: 'any', roles: [], budget: { kind: 'percent', soft: null, hard: 85 }, maxTurns: 40, timeoutMinutes: 90, command: 'go {brief}' });
+    state.init(root, 'pn', lanes(1), { preflightMode: 'parallel', accounts: [mk('alpha'), mk('bravo')], softLimitPct: 80, placement: 'shadow' });
+    state.approve(root, 'pn', 'lead');
+    state.recordUsage(root, 'pn', 'alpha', 82);
+    state.recordUsage(root, 'pn', 'bravo', 40);
+    const s = state.load(root, 'pn');
+    assert.equal(state.placementNow(root, s).seat, 'alpha');
+    assert.match(state.nextActions(root, s).find((a) => a.startsWith('LAUNCH l1')), / on alpha /);
+    const on = tmp('pnow-on');
+    state.init(on, 'pn', lanes(1), { preflightMode: 'parallel', accounts: [mk('alpha'), mk('bravo')], softLimitPct: 80 });
+    state.recordUsage(on, 'pn', 'alpha', 82);
+    state.recordUsage(on, 'pn', 'bravo', 40);
+    assert.equal(state.placementNow(on, state.load(on, 'pn')).seat, 'bravo');
+  });
+});
