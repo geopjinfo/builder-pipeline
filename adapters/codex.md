@@ -139,16 +139,21 @@ If it is not running, the page is only as fresh as the last explicit
 | Prompt-cache TTL by replay | unavailable: no such settings are exposed |
 | `effort:` frontmatter | ignored. Use a per-run reasoning setting if your Codex version has one (profile §12) |
 | Orchestrator model check | `npx builder run orchestrator-check` prints `unmeasurable here`: no transcript it can read |
-| Per-seat cost accounting (`costAccounting`, `seat-peaks`, `cost-window`) | unavailable. The agents table renders em-dashes (see below) |
+| Per-seat cost accounting (`costAccounting`, `seat-peaks`, `cost-window`) | partial. With `reader: "codex"`, `npx builder run cost-window --since <iso> --until <iso>` reads the Codex rollout files under `$CODEX_HOME/sessions` (or `--transcripts <dir>`) and sums each session's tokens per model; one session file is one dispatch, its seat the session's `agent_role` or `codex-session`. The kit ships no OpenAI rates, so a session is unpriced (its tokens are shown, never `$0.00`) unless `--rates <file>` names a table. `seat-peaks` prints "unmeasurable" with its reason, and the agents table renders em-dashes (see below) |
 | Live page · Workflow-driven runs · advisor A/B | unavailable |
 | Batch orchestrator (`orchestrator`, `scripts/orch.mjs`) | runs as is: plain Node over git, with every seat action a command template you fill for this harness (`launchCommand`, `stateCommand`, `stopCommand`, `usageCommand`). A primary-seat pipeline lane is its own session. The credit worker adapter ships for Claude Code only — keep `credit.enabled` false here until one exists for this harness |
 | Language server plugin | unavailable as a plugin; any editor integration you run yourself is outside the pipeline |
 
-Codex keeps no per-dispatch usage records of the shape the accounting reader expects, so the
-per-seat model / wall-clock / token / cost columns render as em-dashes. That is the designed
+Codex keeps no per-dispatch usage records of the shape the board's accounting reader expects, so
+the per-seat model / wall-clock / token / cost columns render as em-dashes. That is the designed
 outcome, not a failure: every other section — rows, steps, gates, files, ceiling — is unaffected,
 and an em-dash says *unmeasured* where a zero would claim a measurement nobody took. Set
-`features.costAccounting` to `off` so the board says so.
+`features.costAccounting` to `off` so the board says so, or to `on` with `reader: "codex"` to
+measure spend windows with `cost-window`: it reads the `token_count` events of each rollout file
+(`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`), sums the differences between the cumulative
+totals per model, and lists any file whose shape it does not recognise as `unmeasurable` with the
+line number. The format it reads is written down in `specs/toolkit-cost-codex.spec.md` (maintainer
+repository).
 
 ## qa-audit (if installed)
 
