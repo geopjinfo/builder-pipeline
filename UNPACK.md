@@ -90,7 +90,7 @@ node builder/cli.js upgrade --dry-run
 node builder/cli.js upgrade   # tools and flags from builder.lock.json; --tool overrides, --prune removes files a release dropped
 ```
 
-Pass the same `--tool`, `--models`, `--no-extras` and `--experimental` you gave the original
+Pass the same `--tool`, `--tools`, `--models`, `--no-extras` and `--experimental` you gave the original
 `unpack` — `upgrade` walks unpack's own source→destination mapping, so it refreshes exactly the
 files those flags install, and a different `--models` rewrites every persona's `model:` line.
 
@@ -121,6 +121,36 @@ Then:
 
 A kit-owned file you edited locally is overwritten too — its edit survives only in the backup.
 Carry a local change in the profile, not in a persona (see *Customization guardrails* below).
+
+## Install one tool group
+
+The kit is a set of tools. A project that runs its own orchestrator can install the review and audit
+gates alone; a team that writes specs can install the spec stage alone. `--tools` names the groups:
+
+```
+node builder/cli.js unpack --tool claude-code --tools audit
+node builder/cli.js unpack --tool claude-code --tools spec,orchestrator --dry-run
+node builder/cli.js upgrade            # repeats the groups builder.lock.json recorded; --tools overrides
+```
+
+| Group | What it installs |
+|---|---|
+| `spec` | the `spec-author` skill, `spec-check`, `spec-trace-check` and their libraries, `specs/spec.template.md` |
+| `audit` | the reviewer and the four auditor personas, `repo-auditor`, the `ledger-audit`, `qa-audit` and `repo-audit` skills, `claims-check`, `output-check`, `fix-rate`, `inventory`, `board-import`, the citation, contract-oracle (with `scripts/oracles/`), index, outbound, wiring, rules-module, mutation, ratchet, decision-index and personas checkers |
+| `orchestrator` | the `orchestrator` skill, `orch` and its `orch-*` libraries, `orchestrator-check`, `worktree-sweep`, the plan and worker-brief templates |
+| `hooks` | `.claude/hooks/` and `.codex/hooks/`, hook-trust, and the scripts the hooks load (`board-render`, `instruction-lint`, `bash-cap`, `reanchor` and their libraries) |
+| `evals` | `cost-window`, `seat-peaks`, the experimental tooling under `scripts/experimental/` (with `--experimental`) |
+| `pipeline` | everything else: the `build-module-pipeline`, lite, scaffold, readiness, setup, `builder-init` and `persona-detect` skills with their references, the planner, builder, tester and docs-maintainer personas, the boards tooling, the handoff scripts, the utility skills |
+| `core` | always installed, not a group you name: the pointer block, `PIPELINE_PROFILE.md`, the ledger seeds (board rules, registry, decision log, session board), `features`, `choices`, and each `scripts/lib` file that two or more groups need |
+
+No `--tools`, or `--tools all`, installs every group: the install is the one it always was. An unknown
+group is refused with the list of valid groups, and nothing is written. The table that places every
+installed file is `builder/scripts/lib/tool-groups.cjs`; a test fails on any file it does not place.
+
+`builder.lock.json` records the groups as `install.toolGroups` (absent means all). `upgrade` repeats
+them; `upgrade --tools` with a smaller list reports each locked file outside it as `kept (outside the
+tool groups)` and removes it only with `--prune` (backup first). `verify` prints the groups in use and
+`SKIP` for a check whose files are outside them. `--dry-run` prints the count of files per group.
 
 ## Step 0 — inventory the target repo (agent: do this first, read-only)
 

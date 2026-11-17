@@ -9,6 +9,7 @@
  *   npx builder unpack --tool claude-code,codex
  *   npx builder unpack --tool all [--dry-run] [--no-extras] [--experimental]
  *   npx builder unpack --tool claude-code --models strong=opus,mid=haiku
+ *   npx builder unpack --tool claude-code --tools spec,audit   (one tool group or several; default all — scripts/lib/tool-groups.cjs)
  *   npx builder upgrade [--tool claude-code] [--dry-run] [--prune]   (an install from an older kit release)
  *   npx builder uninstall --tool codex | --all [--dry-run]   (remove what the lock says the kit wrote)
  *   npx builder --version
@@ -30,6 +31,9 @@
  * graphify, ledger-audit — see skills-extra/README.md) and the personas they ship (skills-extra/<name>/agents/).
  * --experimental also installs the experimental files (agents/experimental/, tooling/experimental/). They are
  * shipped but unproven; EXPERIMENTS.md names the measurement that promotes or removes each one.
+ * --tools <group>[,<group>] installs one part of the kit: spec, audit, orchestrator, hooks, evals or pipeline, plus the
+ * core set every install carries (the pointer block, the profile, the ledger seeds, the shared libs). Every file place()
+ * lands goes through scripts/lib/tool-groups.cjs; the lock records the groups (install.toolGroups) and upgrade repeats them.
  *
  * Safe by design: copy-if-absent (never overwrites), pointer blocks are appended once
  * (marker-guarded), --dry-run previews everything, hooks are copied but never armed. The kit itself is
@@ -66,6 +70,7 @@ const VERSION = require('./package.json').version;
 const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator', 'builder-init', 'persona-detect', 'spec-author'];
 const ADAPTERS = require('./adapters/lib/index.cjs');
 const choicesLib = require('./scripts/lib/choices.cjs');
+const toolGroups = require('./scripts/lib/tool-groups.cjs');
 
 // ---------------------------------------------------------------------------
 // Tool registry. Two install styles:
@@ -135,6 +140,32 @@ function kitScript(name) {
 let DRY = false;
 let NO_EXTRAS = false;
 let EXPERIMENTAL = false;
+/** `--tools`: the sorted tool groups to install, or null for every group (no filter: the install is unchanged). */
+let TOOL_GROUPS = null;
+/** Files place() met per group this run: { installed: { group: n }, skipped: { group: n } } (the dry-run tally). */
+const GROUP_TALLY = { installed: {}, skipped: {} };
+let LEDGERS = null;
+/** True when `dst` installs for this run's tool groups; tallies it either way. An unmapped file is a refusal. */
+function inToolGroups(dst) {
+  const key = lockKey(dst);
+  if (!LEDGERS) LEDGERS = ledgerPaths();
+  const group = toolGroups.groupOf(key, LEDGERS);
+  if (group === null) {
+    if (!TOOL_GROUPS) return true;
+    die(`${key}: not in any tool group (scripts/lib/tool-groups.cjs) — map it before installing with --tools`);
+  }
+  const ok = !TOOL_GROUPS || toolGroups.selected(key, new Set(TOOL_GROUPS), LEDGERS);
+  const t = ok ? GROUP_TALLY.installed : GROUP_TALLY.skipped;
+  t[group] = (t[group] || 0) + 1;
+  return ok;
+}
+/** The dry-run tally: `spec: 8 files, core: 25 files` and, with --tools, the groups left out. */
+function groupTallyLines() {
+  const fmt = (t) => Object.keys(t).sort().map((g) => `${g}: ${t[g]} file${t[g] === 1 ? '' : 's'}`).join(', ');
+  const lines = [`tool groups: ${TOOL_GROUPS ? TOOL_GROUPS.join(', ') : 'all'}${TOOL_GROUPS ? ' + core' : ''} — ${fmt(GROUP_TALLY.installed) || 'no files'}`];
+  if (Object.keys(GROUP_TALLY.skipped).length) lines.push(`not selected — ${fmt(GROUP_TALLY.skipped)}`);
+  return lines;
+}
 const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
 
 /**
@@ -143,7 +174,7 @@ const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
  * the set unpack installs.
  */
 let MODE = 'unpack';
-const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0, 'stale (removed from the kit)': 0, pruned: 0, 'removed (choice is no longer both)': 0 } };
+const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0, 'stale (removed from the kit)': 0, 'kept (outside the tool groups)': 0, pruned: 0, 'removed (choice is no longer both)': 0 } };
 /** --prune: an upgrade backs up and deletes the lock-matched files the kit no longer installs (leftovers() below). */
 let PRUNE = false;
 /**
@@ -184,7 +215,7 @@ const lockKey = (dst) => posixPath(dst);
  */
 /**
  * `install` records how the project installed the kit — { tools, models (the --models overrides), noExtras,
- * experimental } — so `upgrade` repeats the same install without the flags being typed again (explicit flags still
+ * experimental, toolGroups (the --tools groups; absent = all) } — so `upgrade` repeats the same install without the flags being typed again (explicit flags still
  * override), and a pointer file several tools share speaks for every tool installed, not only the latest command's.
  * A write that names no record (bootstrap) keeps the one already there.
  */
@@ -202,7 +233,10 @@ function writeLock({ bootstrap = false, install = null } = {}) {
 }
 function installRecord() {
   const models = Object.fromEntries(Object.entries(MODEL_OVERRIDES).filter(([, m]) => Object.keys(m).length));
-  return { tools: [...POINTER_TOOLS].sort(), models, noExtras: NO_EXTRAS, experimental: EXPERIMENTAL };
+  const record = { tools: [...POINTER_TOOLS].sort(), models, noExtras: NO_EXTRAS, experimental: EXPERIMENTAL };
+  // Absent = every group, so a lock from before --tools reads as the full install it was.
+  if (TOOL_GROUPS) record.toolGroups = TOOL_GROUPS.slice();
+  return record;
 }
 
 /**
@@ -295,6 +329,16 @@ function leftovers(tools) {
       continue;
     }
     if (MODE !== 'upgrade') continue;
+    // Narrowing with --tools (DL-8): a locked file outside the selected groups is a deletion only --prune performs.
+    if (TOOL_GROUPS && !inToolGroups(key)) {
+      if (!matches) say('kept (local edit)', key, 'outside the selected tool groups, and changed since the kit wrote it — delete it by hand if unwanted');
+      else if (PRUNE) {
+        removeKitFile(key);
+        LOCK.drop.add(key);
+        say('pruned', key, 'outside the selected tool groups; backed up first');
+      } else say('kept (outside the tool groups)', key, `not in --tools ${TOOL_GROUPS.join(',')} — re-run with --prune to back it up and delete it`);
+      continue;
+    }
     if (!matches) {
       say('kept (local edit)', key, 'removed from the kit, and changed since the kit wrote it — move the change, then delete it by hand');
     } else if (PRUNE) {
@@ -378,6 +422,8 @@ function place(dst, produce, owner, replace = false) {
   // Two tools can map one source to one destination (codex + antigravity share .agents/skills/, opencode + generic
   // share .builder/): it is written and reported once.
   if (UPGRADE.seen.has(lockKey(dst))) return;
+  // --tools: a file outside the selected groups is not placed and not seen, so leftovers() can name it.
+  if (!inToolGroups(dst)) return;
   UPGRADE.seen.add(lockKey(dst));
   if (MODE !== 'upgrade') {
     if (exists && !replace) {
@@ -925,6 +971,7 @@ function cmdUnpack(tools) {
     choicesLib.write(CWD, choicesLib.empty());
     log('wrote:', `${choicesLib.FILE} (no clashes to decide)`);
   }
+  if (DRY || TOOL_GROUPS) for (const line of groupTallyLines()) console.log(line);
   console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'}${EXPERIMENTAL ? ' Experimental files included.' : ''} Next steps:
   1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md (incl. §16 settings) from
      THIS project's docs (not the kit's source project).
@@ -956,8 +1003,10 @@ function cmdUpgrade(tools) {
   const c = UPGRADE.counts;
   const backups = path.join('.builder', `backup-${UPGRADE.stamp}`);
   const stale = c['stale (removed from the kit)'];
+  const outside = c['kept (outside the tool groups)'];
   const removed = c.pruned + c['removed (choice is no longer both)'];
-  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}${stale ? `, ${stale} stale (removed from the kit — --prune deletes them)` : ''}${removed ? `, ${removed} removed` : ''}.`);
+  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}${stale ? `, ${stale} stale (removed from the kit — --prune deletes them)` : ''}${outside ? `, ${outside} kept outside the tool groups (--prune deletes them)` : ''}${removed ? `, ${removed} removed` : ''}.`);
+  if (DRY || TOOL_GROUPS) for (const line of groupTallyLines()) console.log(line);
   if (c.updated > 0 || removed > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
   console.log(`Next steps:
   1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
@@ -1108,7 +1157,17 @@ function seatProblems() {
 
 function cmdVerify() {
   let fail = 0;
-  const check = (ok, msg) => { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fail++; };
+  /**
+   * The tool groups the lock records (DL-9): a check whose files are outside them is SKIP, not FAIL — a `spec`-only
+   * install has no personas by design. `groups` names the group(s) a check's files belong to; none = always checked.
+   */
+  const installed = lockMeta().install && Array.isArray(lockMeta().install.toolGroups) ? lockMeta().install.toolGroups : null;
+  const inGroups = (...gs) => !installed || gs.some((x) => x === toolGroups.CORE || installed.includes(x));
+  const check = (ok, msg, ...gs) => {
+    if (gs.length && !inGroups(...gs)) return console.log(`  SKIP  ${msg} (not in the tool groups: ${installed.join(', ')})`);
+    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${msg}`);
+    if (!ok) fail++;
+  };
   const profileAbs = path.join(CWD, 'PIPELINE_PROFILE.md');
   /**
    * The ledgers live where §16 `paths` says, not where the installer first put them. An adopter whose
@@ -1118,6 +1177,7 @@ function cmdVerify() {
   const { boards: boardsDir, registry: registryFile, decisions: decisionsFile } = ledgerPaths();
 
   console.log('Install:');
+  console.log(`  info  tool groups: ${installed ? `${installed.join(', ')} (${LOCK_FILE})` : 'all'}`);
   check(fs.existsSync(profileAbs), 'PIPELINE_PROFILE.md exists at repo root');
   check(fs.existsSync(path.join(CWD, boardsDir, 'README.md')), `${boardsDir}/README.md (board rules) exists (paths.boards)`);
   check(fs.existsSync(path.join(CWD, registryFile)), `${registryFile} exists (paths.registry)`);
@@ -1152,25 +1212,29 @@ function cmdVerify() {
     fs.existsSync(path.join(SCRIPTS_HOME, 'board-progress.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'board-check-all.mjs')),
     `board scripts installed (${sh}/board-{progress,check-all}.mjs)`,
+    'pipeline',
   );
   check(
     fs.existsSync(path.join(SCRIPTS_HOME, 'board-render.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'board-watch.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'lib', 'board-parse.cjs')),
     `run-board tooling installed (${sh}/board-{render,watch}.mjs + ${sh}/lib/*.cjs)`,
+    'pipeline',
   );
-  const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')];
+  // Only the checkers of the installed groups are expected (the package layout holds them all in the package).
+  const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')]
+    .filter((s) => inGroups(toolGroups.groupOf(`scripts/${posixPath(s)}`)));
   const missing = checkers.filter((s) => !fs.existsSync(path.join(SCRIPTS_HOME, s)));
   check(missing.length === 0, `checkers installed (${sh}/{${checkers.map(posixPath).join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
 
   const personaAt = ['.claude/agents/module-planner.md', '.codex/agents/module-planner.toml', '.agents/agents/module-planner.md', '.builder/personas/module-planner.md'];
-  check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)');
+  check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)', 'pipeline', 'audit');
   const seats = seatProblems();
   check(seats.problems.length === 0, seats.problems.length === 0
     ? `pipeline seats are the kit's (${seats.checked.join(', ') || 'no persona folder'})`
-    : `pipeline seats not the kit's — the pipeline skills dispatch these by name: ${seats.problems.join('; ')}`);
+    : `pipeline seats not the kit's — the pipeline skills dispatch these by name: ${seats.problems.join('; ')}`, 'pipeline');
 
   const wired = Object.values(TOOLS)
     .map((t) => t.pointer)
@@ -1572,6 +1636,8 @@ function main() {
     upgrade [--tool <list|all>]         refresh kit-owned files (backup first; --force over local edits);
                                         names files this release dropped as stale, --prune deletes them (backup first)
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
+      [--tools <group list|all>]        one tool group or several: spec, audit, orchestrator, hooks, evals, pipeline (default all;
+                                        the core files come with any group; upgrade repeats what builder.lock.json recorded)
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
   check
@@ -1580,7 +1646,8 @@ function main() {
     run [<script> [args]] | targets | --version
 
   e.g. node builder/cli.js unpack --tool claude-code,codex
-       node builder/cli.js upgrade --dry-run   (repeats the --tool/--models/--no-extras/--experimental builder.lock.json recorded)`);
+       node builder/cli.js unpack --tool claude-code --tools audit   (the review and audit gates alone)
+       node builder/cli.js upgrade --dry-run   (repeats the --tool/--tools/--models/--no-extras/--experimental builder.lock.json recorded)`);
     process.exit(cmd ? 1 : 0);
   }
 
@@ -1591,6 +1658,19 @@ function main() {
    * overrides on record for the tools it does not re-render.
    */
   const recorded = lockMeta().install || null;
+  const g = argv.indexOf('--tools');
+  if (g !== -1) {
+    if (!argv[g + 1] || argv[g + 1].startsWith('--')) die(`--tools needs a value: ${toolGroups.GROUPS.join(', ')} (comma-separated), or all`);
+    try {
+      TOOL_GROUPS = toolGroups.parse(argv[g + 1]);
+    } catch (e) {
+      die(e.message);
+    }
+  } else if (cmd === 'upgrade' && recorded && Array.isArray(recorded.toolGroups)) {
+    TOOL_GROUPS = toolGroups.parse(recorded.toolGroups.filter((x) => toolGroups.GROUPS.includes(x)).join(','));
+    if (TOOL_GROUPS) console.log(`tool groups: ${TOOL_GROUPS.join(', ')} (from ${LOCK_FILE}; --tools overrides)`);
+  }
+  if (TOOL_GROUPS && g !== -1) console.log(`tool groups: ${TOOL_GROUPS.join(', ')}`);
   if (recorded) {
     const upgrading = cmd === 'upgrade';
     if (upgrading && !argv.includes('--no-extras') && !argv.includes('--extras')) NO_EXTRAS = recorded.noExtras === true;
