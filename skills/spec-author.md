@@ -10,7 +10,12 @@ spec template (`specs/spec.template.md`; the kit's copy is `builder/templates/sp
 acceptance criteria and an API contract**. You do not plan, scaffold or code — the `module-planner` reads your file
 in Phase 1 and cites its rows. **A person ratifies it; you never do.**
 
-**Load `PIPELINE_PROFILE.md` (repo root) first.** §3 names the oracles (catalogues you consult and never extend),
+**Load `PIPELINE_PROFILE.md` (repo root) first.** With no profile, the project has not adopted the pipeline: write
+the spec into `specs/` with the template's default id shape (`REQ-\d+`), check it with
+`npx builder-pipeline run spec-check specs/<key>.spec.md` (a path, not a key: the checker then runs with defaults and says so),
+and skip the §3, §6 and `features.specAuthoring` reads below.
+
+**With a profile:** §3 names the oracles (catalogues you consult and never extend),
 §6 the cross-cutting contracts every interface follows (envelope, error shape, pagination, authorization key per
 route), §16 `features.specAuthoring` the folder (`dir`) and the requirement-id shape (`idPattern`). When the feature is
 `off`, say `specAuthoring: not configured` and stop: the project has not asked for this stage.

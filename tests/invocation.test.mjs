@@ -1,5 +1,5 @@
 /**
- * Every run command a kit script or hook prints names the layout it runs in: `npx builder run <x>` installed as a
+ * Every run command a kit script or hook prints names the layout it runs in: `npx builder-pipeline run <x>` installed as a
  * package (or vendored into .claude/hooks/kit/), `node scripts/<x>.mjs` in the folder layout. One helper spells them
  * (scripts/lib/run-hint.cjs); a hard-coded form anywhere else under scripts/ or hooks/ is wrong advice in one layout.
  */
@@ -59,15 +59,15 @@ describe('run commands come from the one helper', () => {
       assert.equal(r.status, 0, r.stderr);
       return r.stdout.trim();
     };
-    assert.equal(probe('node_modules/@geopjinfo/builder-pipeline/scripts/lib'), 'npx builder run ledger-row registry X|npx builder verify');
-    assert.equal(probe('proj/.claude/hooks/kit/lib'), 'npx builder run ledger-row registry X|npx builder verify');
+    assert.equal(probe('node_modules/builder-pipeline/scripts/lib'), 'npx builder-pipeline run ledger-row registry X|npx builder-pipeline verify');
+    assert.equal(probe('proj/.claude/hooks/kit/lib'), 'npx builder-pipeline run ledger-row registry X|npx builder-pipeline verify');
     assert.equal(probe('proj/scripts/lib'), 'node scripts/ledger-row.mjs registry X|node builder/cli.js verify');
   });
 });
 
-describe('a usage line printed from the package says npx builder run', () => {
+describe('a usage line printed from the package says npx builder-pipeline run', () => {
   const proj = temp('kit-hint-pkg-');
-  const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+  const kit = join(proj, 'node_modules', 'builder-pipeline');
   mkdirSync(kit, { recursive: true });
   cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
 
@@ -75,7 +75,7 @@ describe('a usage line printed from the package says npx builder run', () => {
     test(`red: ${name} usage (package) vs the folder layout`, () => {
       const pkg = spawnSync(process.execPath, [join(kit, 'cli.js'), 'run', name, ...args], { cwd: proj, encoding: 'utf8' });
       const out = `${pkg.stdout}${pkg.stderr}`;
-      assert.match(out, new RegExp(`npx builder run ${name}`), out);
+      assert.match(out, new RegExp(`npx builder-pipeline run ${name}`), out);
       assert.doesNotMatch(out, HARD, out);
       const folder = spawnSync(process.execPath, [join(PACK, 'scripts', `${name}.mjs`), ...args], { cwd: proj, encoding: 'utf8' });
       assert.match(`${folder.stdout}${folder.stderr}`, new RegExp(`node scripts/${name}\\.mjs`));
@@ -184,12 +184,12 @@ describe('every shipped file gives install-neutral commands', () => {
       if (buf.includes(0)) continue; // binary
       hits.push(...bareKitCommands(rel, buf.toString('utf8')));
     }
-    assert.deepEqual(hits, [], `use npx builder run <x> / npx builder <cmd> (with one folder-layout note), or runHint()/cliHint():\n${hits.join('\n')}`);
+    assert.deepEqual(hits, [], `use npx builder-pipeline run <x> / npx builder-pipeline <cmd> (with one folder-layout note), or runHint()/cliHint():\n${hits.join('\n')}`);
   });
 
   test('red: the Markdown the CLI installs holds no kit form in the package layout (so its source may keep the folder form)', () => {
     const proj = temp('kit-hint-all-');
-    const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+    const kit = join(proj, 'node_modules', 'builder-pipeline');
     mkdirSync(kit, { recursive: true });
     cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
     const u = spawnSync(process.execPath, [join(kit, 'cli.js'), 'unpack', '--tool', 'all', '--experimental'], { cwd: proj, encoding: 'utf8' });
@@ -214,11 +214,11 @@ describe('every shipped file gives install-neutral commands', () => {
 
 describe('the reference docs give install-neutral commands', () => {
   for (const doc of ['USAGE.md', 'DESIGN.md', 'EXPERIMENTS.md', ...readdirSync(join(PACK, 'adapters')).filter((f) => f.endsWith('.md')).map((f) => `adapters/${f}`)]) {
-    test(`${doc}: npx builder forms only, with the folder layout in one note`, () => {
+    test(`${doc}: npx builder-pipeline forms only, with the folder layout in one note`, () => {
       const text = readFileSync(join(PACK, ...doc.split('/')), 'utf8');
       const hits = text.split(/\r?\n/).map((l, i) => (HARD.test(l) ? `${doc}:${i + 1}: ${l.trim().slice(0, 100)}` : null)).filter(Boolean);
       assert.deepEqual(hits, []);
-      if (/npx builder run /.test(text)) assert.match(text, /^> \*\*Commands\.\*\*/m, `${doc} names npx builder run without the folder-layout note`);
+      if (/npx builder-pipeline run /.test(text)) assert.match(text, /^> \*\*Commands\.\*\*/m, `${doc} names npx builder-pipeline run without the folder-layout note`);
     });
   }
 });

@@ -5,6 +5,630 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-11-17
+
+### Breaking
+
+- **2.0.0: the `builder` bin is gone; the one command is `builder-pipeline` (strategy decision S3, spec
+  `specs/toolkit-distribution.spec.md` DL-2, REQ-503).** `package.json` declares one bin, `builder-pipeline`, running
+  `cli.js`. Every shipped line that tells a person or an agent what to type now says `npx builder-pipeline <cmd>` /
+  `npx builder-pipeline run <name>`: the CLI usage text and messages, `scripts/lib/run-hint.cjs`, the hooks, skills,
+  personas, adapters, templates, tooling, examples and every document. The folder layout (`node builder/cli.js`) and the
+  file names `builder.lock.json`, `builder.config.json`, `builder.choices.json` and the `builder-init` skill are
+  unchanged. *Migration for a 1.x project:* in your own scripts, CI and instruction files, change the command name
+  after `npx` from `builder` to `builder-pipeline`; `upgrade` does not rewrite project-owned files, so the project
+  makes this edit itself (README § Updating, GUIDE § "From 1.x: the command name", UNPACK § Upgrading). Tests: `tests/bin-rename.test.mjs`
+  (one bin; no shipped file names the old form outside CHANGELOG history; this bullet), `tests/package.test.mjs`,
+  `tests/toolkit-distribution.test.mjs` AC-503, and the prefix expectations in `tests/invocation.test.mjs`,
+  `tests/kit-location.test.mjs`, `tests/run-from-package.test.mjs`, `tests/cli-commands.test.mjs` and the rest of the
+  suite.
+
+- **2.0.0: accounts replace seats (REQ-107; D22, D33).** The 1.0 keys `features.orchestrator.seats`, `limits`,
+  `secondaryConfigDir` and `credit` are gone. `features.accounts` holds the registry instead: one entry per account
+  with its worker, who pays, content class, roles, config dir, start command and budget. While the orchestrator is
+  on, a profile that still carries the 1.0 keys is refused at load; while it is off, the loader prints one warning.
+  Both name the fix: `npx builder-pipeline accounts migrate` rewrites the `pipeline-settings` block once (`primary` as the
+  session account, `secondary` as a Claude Code account, `credit` as an `api-key` account), writes
+  `PIPELINE_PROFILE.md.bak` first, changes nothing on a second run, and refuses while a run holds a LAUNCHED or
+  STALLED lane. `npx builder-pipeline doctor` prints one advisory row `profile: legacy seats, run npx builder-pipeline accounts
+  migrate` until the rewrite is done; its exit code is unchanged. GUIDE § Accounts carries the migration note. The
+  version bump to 2.0.0 is in this release.
+
+### Added — M8 family review and router hint (2.0.0 line)
+
+- **`features.familyReview`, experimental-off (REQ-801, REQ-802; plan M8, D6, D14).** On, `orch split` gives every
+  lane a second reader: the first registry account, in registry order, whose worker `family` differs from the
+  writer's and whose `tier` is at or above the writer's (`scripts/lib/family-review.cjs`, pure). The writer is
+  `--writer <account>`, else the first account that may hold a lane. The registry account gains an optional `tier`
+  from the ordered list `free < mid < strong` (`accounts-registry.cjs` validates it; absent is unknown and never "at
+  or above"). With no qualifying account the lane has no second reader and `lanes.json` and the log carry
+  `familyReview: no second reader — no other-family account at or above tier <x>`. Off, nothing of it runs: the split
+  output is byte-identical with the key absent. EXPERIMENTS.md §16 states the second reader, the measurement
+  (accepted findings per auditor family, loop-backs, cost per task over three modules each way) and the keep rule;
+  FEATURES.md and the profile template carry the row and the §16 line; the rulebook names the key.
+- **`features.routerHint`, experimental-off (M8b, D15).** `scripts/lib/router-hint.cjs` (pure): for a lane, an
+  account suggestion (the pays order, the content class against the project visibility), a risk flag (a refused
+  content class, a Full lane) and whether a second opinion is advised (the §16 rule). Advisory only: it never changes
+  a placement. A call that would send task text to an account whose data-recipient decision is not in the decision
+  log is refused with `E_DATA_RECIPIENT` first; then `E_GUARD_OFF` without `features.outboundGuard`; then the guard
+  itself (`E_OUTBOUND`). Off, `run()` returns the feature line and calls nothing.
+- Tests: `tests/orch-plan.test.mjs` (REQ-801 identical output with the key absent and off; REQ-802 AC-802a the
+  mid-tier other-family account and the strong writer, the positive case, the tier validation, `orch split` with the
+  feature on and off), `tests/router-hint.test.mjs` (off runs nothing, the suggestion and risk flag, the second
+  opinion, advisory only, the three refusal codes in order, the guard's verdict), `tests/features.test.mjs` (the two
+  `experimental — not enabled` lines), `tests/experiments.test.mjs` (§16 states the measurement, one §16).
+### Added
+
+- **Install one tool group (`specs/toolkit-unpack-groups.spec.md`, REQ-801 to REQ-811).** `npx builder-pipeline unpack --tool
+  <harness> --tools <group>[,<group>]` installs one part of the kit: `spec`, `audit`, `orchestrator`, `hooks`, `evals`
+  or `pipeline`, plus the core set every install carries (the pointer block, the profile, the ledger seeds, `features`,
+  `choices`, and each `scripts/lib` file that two or more groups need). `scripts/lib/tool-groups.cjs` places every
+  installed file in exactly one group (`groupOf`, `select`, `parse`); the folder layout's `hooks` group also carries the
+  scripts the hooks load. An unknown group is refused with the list of valid groups and nothing is written; no `--tools`
+  or `--tools all` installs every group, byte for byte as before. `builder.lock.json` records `install.toolGroups`
+  (absent = all), `upgrade` repeats it unless `--tools` is given again, a narrowing `upgrade --tools` reports each locked
+  file outside the groups as `kept (outside the tool groups)` and removes it only with `--prune`, `verify` names the
+  groups and prints `SKIP` for a check outside them, and `--dry-run` prints the count of files per group. Docs: UNPACK.md
+  § "Install one tool group" (the group table), README § "One tool, without the pipeline", FEATURES.md row, llms.txt,
+  the CLI usage text. Tests: `tests/toolkit-unpack-groups.test.mjs` (one test per acceptance criterion, including a
+  guard that walks the real install list in both layouts and fails on any unmapped file).
+- **Codex transcript cost reader (`specs/toolkit-cost-codex.spec.md`, REQ-601 to REQ-614).**
+  `features.costAccounting.reader` accepts `"codex"` beside `"claude-code"`; any other value is a validation error
+  that names both. `scripts/lib/codex-usage.cjs` reads the Codex CLI rollout files
+  (`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`, format verified from the `openai/codex` source and cited in the
+  spec) in two layers: a record layer (`parseLine`, `records`) that types `session_meta`, `turn_context`,
+  `token_count` (with `rate_limits` passed through raw) and `token_usage_record` lines and reports every other shape
+  as `unrecognised` with its line number; and a cost layer (`sessionUsage`, `collect`) that sums the differences
+  between cumulative `token_count` totals per model inside a window, and marks a session whose total decreases as
+  unmeasurable. `cost-window` branches on the reader, takes `--transcripts <dir>`, lists unmeasurable files, and
+  reports Codex models as unpriced (never `$0`) unless `--rates <file>` prices them; no OpenAI rates ship (the pricing
+  page could not be cited with model names on the day, see the spec's decision log). `seat-peaks` and
+  `orchestrator-check` print "unmeasurable" with the reader and a reason for `codex`. FEATURES.md, adapters/codex.md
+  and USAGE.md say what is measured on Codex. Tests: `tests/toolkit-cost-codex.test.mjs` (one test per acceptance
+  criterion) over `tests/fixtures/codex-sessions/`.
+
+- **One tool, without the pipeline (`specs/toolkit-standalone.spec.md`, REQ-101 to REQ-405).** Each kit tool runs in a
+  project that never adopted the pipeline. *Settings without a profile:* with no `PIPELINE_PROFILE.md`, the settings
+  loader reads `builder.config.json` in the project root, or the file `BUILDER_CONFIG` names, as the bare JSON of §16,
+  with the same validation; a profile beside a config file wins and the file is reported as ignored;
+  `npx builder-pipeline run <script> --config <path>` sets `BUILDER_CONFIG`; `features` names the source in use.
+  *Ledger gate paths:* `check-ledgers --boards <dir> --registry <file>`; a flag without its value is a usage error.
+  *Board import (`scripts/board-import.mjs`):* a ralph `prd.json` or a Spec Kit `tasks.md` written as a build board
+  with `## P0`, the progress markers, `## Inferred` and `## Unmapped`; stated values kept, inferred ones marked
+  `⚠ CONFIRM`, a DONE whose source names no test keeps an empty evidence cell so `check-ledgers` reports it under LG-5;
+  refuses an unknown format, a missing or invalid source, and an existing output without `--force`, writing nothing.
+  *Spec checkers on named files:* `spec-check <file>.md` and `spec-trace-check <requirements> --tests <path>
+  [--packs <path>]` run with the default settings while their feature is off and say so on the first line; a module
+  key, or no named file, still prints `not configured`, so step 0.7 and the readiness gate are unchanged.
+  README § "One tool, without the pipeline", FEATURES.md rows, llms.txt, and a no-profile paragraph in
+  `skills/spec-author.md`. `specs/` is maintainer-only (package skip list). Tests: `tests/toolkit-standalone.test.mjs`
+  (one test per acceptance criterion).
+- **The hygiene checks without the pipeline (`specs/toolkit-hygiene-standalone.spec.md`, REQ-701 to REQ-711).**
+  With its feature off, `instruction-lint <file>…` lints the named files with the default settings and no baseline
+  (the ratchet is reported, not enforced); `instruction-budget <file>… [--max-lines <n>]` judges them against `n` or
+  the default of 200 lines; `worktree-sweep --target <branch> [--idle-hours <n>]` judges every worktree against that
+  branch with the default settings as a dry run, `--apply` removes, and no `holdCommand` ever runs from defaults. Each
+  prints `<feature>: not configured — checking … with defaults` on its first line and keeps its normal exit codes. With
+  no named file, with `--files` (the edit hook) or with no `--target`, each still prints `not configured` and exits 0,
+  so the gates and the hook are unchanged. A flag without its value, an unknown flag, a named file that does not exist
+  and a sweep outside a git repository exit 2 with a usage line. FEATURES.md rows, README § "One tool, without the
+  pipeline", llms.txt, and a "Without a profile" paragraph in `skills-extra/status-and-next/SKILL.md` and
+  `skills-extra/repo-audit/SKILL.md`. Tests: `tests/toolkit-hygiene-standalone.test.mjs` (one test per acceptance
+  criterion; the spec's decisions are in its Decision log).
+
+### Changed
+
+- **Distribution (`specs/toolkit-distribution.spec.md`, REQ-501 to REQ-512; lane M13 of 2.0.0).** The kit is
+  published under the MIT licence (`LICENSE`, `"license": "MIT"`, the file ships). The package is `builder-pipeline`
+  (the registry name `builder` belongs to an unrelated package); the `builder` bin and the old `npx` prose went in the
+  2.0.0 release-prep lane (spec DL-2; see Breaking). Every shipped document names
+  the new package; the README, UNPACK.md, FEATURES.md and RELEASING.md give the registry form `npm i -D
+  builder-pipeline` (the listing starts with 2.0.0) beside the git-tag form. The fixture installs in the suite moved to
+  `node_modules/builder-pipeline` (spec DL-10). *README badges from source:* `scripts/readme-badges.cjs` computes each
+  badge (phases from the phase table in `skills/build-module-pipeline.md`, personas from `agents/`, `--tool` targets
+  from `cli.js`, the Node floor and zero dependencies from `package.json`, install `npm`); `check()` lists the badges
+  that differ and `--write` rewrites the block; the README said 10 phases, it has 13 numbered rows. *Proof statement:*
+  the README and GUIDE.md say what a reader can verify (built and used by its author on one production backend;
+  published measurements start with 2.0.0) in place of "proven on … 15+ shipped modules". *Release routine:*
+  RELEASING.md checks the badges in step 2 and publishes to the npm registry after the tag (`npm pack --dry-run`, `npm
+  publish --access public`; the tag and the registry version match; the first registry release is 2.0.0). Tests:
+  `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
+### Added — M7 docs, doctor and changelog (2.0.0 line)
+
+- **`doctor` accounts rows (REQ-701, REQ-107; D22, D37).** After the tool blocks, an `[accounts]` section with one
+  advisory row per account in `features.accounts` and its readiness line (the built-in probes and the usage readers
+  run, the same assessment `npx builder-pipeline accounts` prints), or one row `accounts: not configured`, or, while the
+  profile still carries the 1.0 `seats` / `limits` / `secondaryConfigDir` / `credit` keys, exactly one row
+  `profile: legacy seats, run npx builder-pipeline accounts migrate`. The rows are advisory: the exit code is unchanged.
+  `--json` carries the same rows as a last element `{ "section": "accounts", "advisory": true, "rows": [...] }`.
+  Tests: `tests/doctor.test.mjs` (two accounts with stub `claude` and `codex` executables on PATH, the legacy row,
+  the not-configured row, the exit code).
+- **Docs.** GUIDE's "Multi-account seats" section is now "Accounts": the registry, the `npx builder-pipeline accounts`
+  report, the registry commands (`add`, `note`, `key`, `remove`, `list`, `migrate`), placement by rule, the policy
+  gate and the `--settings` pin, the rulebook pointer (`skills/references/account-selection.md`), a "Migrating from
+  1.0 seats" note and a "Looping a board" subsection (`boardLoop`, experimental-off, no measurements yet). FEATURES.md,
+  README.md and llms.txt name the report, the registry commands, `migrate` and the doctor rows. The feature rows for
+  `remoteLanes` (M12), `boardLoop` (M9) and `familyReview` (M8) are not added here: each of those changes adds its own
+  FEATURES.md row with its loader key, and `tests/pack-prose.test.mjs` refuses a `features.<x>` the loader does not
+  know. The `accounts add|note|key|remove|list` commands and the `npx builder-pipeline accounts` report land with M10; the
+  docs name them ahead of that change. Tests: `tests/pack-prose.test.mjs`, `tests/invocation.test.mjs`,
+  `tests/cli-commands.test.mjs` (the README command list), `tests/genericity.test.mjs`.
+
+### Added — M5 delegation rulebook (2.0.0 line)
+
+- **`skills/references/account-selection.md` — the rulebook for choosing an account (REQ-501; plan M5, D8, D29).**
+  Kit-neutral, in Simplified Technical English: ready only and the `note` as a rule; the content class against the
+  project's visibility; the role against the account's `roles` and the headless roles; the task-to-account table;
+  parallel lanes spread over accounts; the soft limit, `NEEDS-IT-ONLY` and the needs-account mark; the pays order
+  with `api-key` last and announced; `LIMIT`, `BUDGET`, `AUTH` holds with the one retry and never a retry loop;
+  `OVERLOAD` in place; never a resume across accounts; a worker's answer is a draft; say which account did what;
+  shadow mode; never a bypass flag or a worker without the repo hooks. It names only `features.<x>` keys the loader
+  knows. `skills/orchestrator.md` §3 points at it.
+- **The brief's `Account:` line (REQ-502).** `templates/orchestrator-worker-brief.md` carries
+  `- Account: <account> (worker <worker>, pays <pays>)`; `scripts/lib/orch-plan.cjs` `renderBrief()` fills it from the
+  placement with the lane facts (rows, files, worktree, branch, target, result) and leaves the judgement placeholders;
+  `orch brief <run> <lane> [--write]` prints the skeleton or writes it once at the lane's brief path (never over an
+  existing brief, exit 3).
+- **The account side of a launch in the prose.** The playbook's P4 dispatch names the account each auditor runs on;
+  `adapters/claude-code.md`, `adapters/codex.md` and `adapters/antigravity.md` each carry a "Worker recipe"
+  subsection: how a lane on an account of that worker starts, its flags and environment, and what the kit cannot
+  enforce there.
+- Tests: `tests/account-selection.test.mjs` (the rulebook ships and is pointed at, its feature and registry keys,
+  the instruction-lint rules over it, the vocabulary, the template line, the P4 sentence, the adapter recipes),
+  `tests/orch-plan.test.mjs` (`renderBrief` and `orch brief`), `tests/pack-prose.test.mjs` (the features names).
+
+### Added — M3 placement over accounts (2.0.0 line)
+### Added — M14 evidence programme (2.0.0 line)
+
+- **`npx builder-pipeline run experiments` (REQ-1401, REQ-1402, REQ-1405; D57).** `scripts/experiments.mjs` over
+  `scripts/lib/experiments.cjs`: one line per EXPERIMENTS.md section with its flag, default state and decision; `--check`
+  exits 1 on a section without a decision row or a keep without a number; `--matrix` prints the trial matrix (feature,
+  section, test bed, command, keep rule, decision); `--record <n> --row "| … |"` appends one measurement row to a
+  section's table, the recording path a scheduled run uses. `features` prints the decision beside every experimental or
+  unmeasured flag.
+- **EXPERIMENTS §19: the recorded runs.** Run 1 is the loop runner's dry run on the polyglot test bed (stub worker,
+  3 passes, 0 of 6 rows, stop no-progress, cost unmeasured, fix-rate unmeasured); Run 1b is the same board with a model
+  through the gateway lane (1/6 rows before the prompt named the Read tools, then 6/6 rows for $0.33 in 48 turns), with
+  the files in the project Library and the rows in §17; Run 3 is the same board driven by `orch loop` through the
+  accounts registry (1/6 rows, $0.63: the exact allow list denied the worker's `cd … &&` shell prefixes), with
+  `loops.json` and the readiness record in the Library; Run 4 repeats it after D69 (5/6 rows, $0.37, stopped by the
+  pass cap with one refused `cd ../..` command);
+  Run 2 records how the 2.0.0 build itself ran (device and cloud lanes, not the orchestrator) and lists every module PR.
+  Tests: `tests/experiments.test.mjs` (the parser, the check, the matrix, the record path, §19 and §20 shape, a check
+  above 20% false positives must be off by default), `tests/release-check.test.mjs` (§19 names every module PR and the
+  evidence files).
+
+### Changed — M14 (REQ-1403)
+
+- **`builderBatch` and `fixLane` ship off by default.** The §19 run did not measure them, so 2.0.0 sets both to `off`;
+  set a feature to `unmeasured` to switch it on, and its report says the benefit is unmeasured. The template, FEATURES
+  and EXPERIMENTS §6 and §7 say so.
+- **`fix-rate` with no FIX row is unmeasured, never a pass.** It prints `fixLane: unmeasured — no FIX row in N board(s)`
+  and exits 3 (the not-configured code); no `0.0%` is printed. Test: `tests/fix-rate.test.mjs`.
+
+### Added — M4 content policy and settings scan (2.0.0 line)
+
+- **Profile `visibility` (REQ-401, D23).** The pipeline-settings block gets a top-level `"visibility"`: `private`
+  (the default) or `public`; the template §1 names it and §16 carries it. The loader refuses any other value.
+- **`scripts/lib/account-policy.cjs` (REQ-401 to REQ-404, D5, D40).** A pure `check(account, project, claimedFiles,
+  decisions, settingsFiles)` that returns ordered faults: `E_CONTENT_PUBLIC` (a `public` or `scratch` account on a
+  private project), `E_PATH_ROOTS` (a claimed file outside the account's path roots, or a worker with no deny-rule
+  adapter — the path is named, never its content), `E_DATA_RECIPIENT` (a free or gateway account, or one with a
+  `baseUrl`, with no decision-log row that names it or its host — the refusal names the entry it expects) and
+  `E_SETTINGS` (the project's and the worktree's `.claude/settings.json` and `settings.local.json` and the account's
+  own settings carry `apiKeyHelper`, `env.ANTHROPIC_*`, `env.CLAUDE_CODE_*`, a proxy or CA variable, or a hook not
+  recorded in `builder.lock.json` — the key and the file are named, never a value). `denyPathsFor()` lists the
+  deny rules a path-root account needs. Tests: `tests/account-policy.test.mjs`.
+- **gate-launch runs the policy gate (REQ-401 to REQ-404, REQ-703, D37).** With a registry account on the lane
+  (the 1.0 secondary seat through `legacyView()`), `orch gate-launch` first runs the pre-launch checks (the session
+  account, a worker with no launcher, a missing account dir — each prints one `CHECK <name>:` line and exits 3), then
+  the policy check over the lane's owned and hot files, the decision log and the settings files, and refuses with
+  exit 3 and the fault list (a `launch.refused` event carries the codes, never a value). A passing launch writes the
+  account's `--settings` pin into `<run>/pins/<lane>.settings.json` at 0600 — the account's env block, its config
+  dir, its baseUrl and the deny rules of a path-root account — and the launch command carries it (`{settings}` in
+  `launchCommand`, or `--settings "<file>"` appended). No registry account: the 1.0 launch, unchanged.
+- **Lane worktree hygiene (REQ-402, REQ-405, D50).** `orch worktree <run> <lane>` — and `gate-launch` when the
+  worktree is absent — creates the lane worktree on a fresh branch named from the lane id, never on a branch another
+  worktree holds (`git worktree list --porcelain` is read first), copies the files `features.accounts.worktree.include`
+  lists (a copy, never a link) and, for a path-root account, checks out only the roots (`git sparse-checkout
+  --no-cone`); an existing worktree that is not sparse on the roots, or a worker without a deny-rule adapter, is
+  refused naming the path. `npx builder-pipeline run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
+  reports each as `kept (--keep <lane>)`. GUIDE says what a worktree does not do: it does not sandbox processes and
+  it does not prevent merge conflicts. Tests: `tests/orch-preflight.test.mjs`, `tests/orch-worker-claude-code.test.mjs`,
+  `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
+- **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
+  token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
+
+### Added — M2a readiness assessment (2.0.0 line)
+
+- **`scripts/lib/accounts.cjs`: a pure readiness assessment (REQ-201, REQ-202, REQ-206, REQ-207, REQ-209, REQ-211,
+  REQ-212; plan decisions D3, D46, D51).** `assess(account, probes, usage, now)` gives one verdict per account: name,
+  state (`ready`, `not ready` with a reason, or `unmeasured`), note, roles, version, budget with its `used` reading,
+  and `until` for an AUTH reason. A credential that expires inside `authMinMinutes` (default 120) or has expired reads
+  `not ready (AUTH until <time>, run claude auth login)`; no expiry leaves the state unchanged. An account with
+  `smokeCommand` whose last pass is older than `smokeMaxAgeHours` reads `ready (read-only: smoke stale)`. A key
+  account whose spend nobody can read reads `ready (balance unmeasured)` and `assessAll(settings, readings, now)`
+  sorts it last, ready accounts first. Every string the assessment carries passes the outbound guard's secret shapes
+  and a match becomes `<redacted: <kind>>`, never the text.
+- **Usage sources (REQ-203, REQ-210, REQ-212).** Each reading carries `source` (`measured`, `estimate`,
+  `unmeasured`) and `at`; measured beats estimate; `renderLine` prints `42 % (measured 09:14)`, `~40 % (estimate
+  09:30)`, `unpriced (estimate …)` for a model with no pinned rate, and `unmeasured` for no reading, never `0 %`.
+  Readers: `usageCommand` text (`$X of $Y`), the gateway snapshot JSON (`spend`, `maxBudget`, `budgetResetAt`), and
+  the Codex session `rate_limits` (`scripts/lib/codex-ratelimits.cjs`: the last `token_count` record of the newest
+  rollout under `<CODEX_HOME>/sessions/**`; the window closest to its limit binds). A Claude plan account has no
+  reader and stays unmeasured.
+- **Built-in probes (`scripts/lib/account-probes.cjs`, REQ-208, REQ-211, REQ-202).** Claude Code: `claude auth
+  status` JSON (`authMethod`, `configDirectory`; exit 1 = signed out) or the account's key file plus `apiKeyHelper` in
+  its settings.json (the key file is tested for presence only). Codex: `codex login status` read from stderr and the
+  exit code (ChatGPT login, API key, not logged in; no plan tier), with the expiry read from `auth.json`. Probes run
+  with `spawnSync` under a timeout in an allowlisted env (`PATH`, `HOME`, locale, plus `CLAUDE_CONFIG_DIR` or
+  `CODEX_HOME` = the account's config dir; never the parent's `ANTHROPIC_*`, `OPENAI_*`, `CLAUDE*` or `CODEX*`).
+  `collect(account, paths, io)` gathers the probe, the smoke record, `versionCommand` and every usage reader for
+  `assess`. The `PROBES` map is keyed by worker; Antigravity and gateway probes (M2b) are its named extension points.
+  Tests: `tests/accounts.test.mjs`, `tests/accounts-probes.test.mjs` (stub executables in a temp dir, no real
+  harness runs), `tests/codex-ratelimits.test.mjs`.
+### Added — M4 content policy and settings scan (2.0.0 line)
+
+- **Profile `visibility` (REQ-401, D23).** The pipeline-settings block gets a top-level `"visibility"`: `private`
+  (the default) or `public`; the template §1 names it and §16 carries it. The loader refuses any other value.
+- **`scripts/lib/account-policy.cjs` (REQ-401 to REQ-404, D5, D40).** A pure `check(account, project, claimedFiles,
+  decisions, settingsFiles)` that returns ordered faults: `E_CONTENT_PUBLIC` (a `public` or `scratch` account on a
+  private project), `E_PATH_ROOTS` (a claimed file outside the account's path roots, or a worker with no deny-rule
+  adapter — the path is named, never its content), `E_DATA_RECIPIENT` (a free or gateway account, or one with a
+  `baseUrl`, with no decision-log row that names it or its host — the refusal names the entry it expects) and
+  `E_SETTINGS` (the project's and the worktree's `.claude/settings.json` and `settings.local.json` and the account's
+  own settings carry `apiKeyHelper`, `env.ANTHROPIC_*`, `env.CLAUDE_CODE_*`, a proxy or CA variable, or a hook not
+  recorded in `builder.lock.json` — the key and the file are named, never a value). `denyPathsFor()` lists the
+  deny rules a path-root account needs. Tests: `tests/account-policy.test.mjs`.
+- **gate-launch runs the policy gate (REQ-401 to REQ-404, REQ-703, D37).** With a registry account on the lane
+  (the 1.0 secondary seat through `legacyView()`), `orch gate-launch` first runs the pre-launch checks (the session
+  account, a worker with no launcher, a missing account dir — each prints one `CHECK <name>:` line and exits 3), then
+  the policy check over the lane's owned and hot files, the decision log and the settings files, and refuses with
+  exit 3 and the fault list (a `launch.refused` event carries the codes, never a value). A passing launch writes the
+  account's `--settings` pin into `<run>/pins/<lane>.settings.json` at 0600 — the account's env block, its config
+  dir, its baseUrl and the deny rules of a path-root account — and the launch command carries it (`{settings}` in
+  `launchCommand`, or `--settings "<file>"` appended). No registry account: the 1.0 launch, unchanged.
+- **Lane worktree hygiene (REQ-402, REQ-405, D50).** `orch worktree <run> <lane>` — and `gate-launch` when the
+  worktree is absent — creates the lane worktree on a fresh branch named from the lane id, never on a branch another
+  worktree holds (`git worktree list --porcelain` is read first), copies the files `features.accounts.worktree.include`
+  lists (a copy, never a link) and, for a path-root account, checks out only the roots (`git sparse-checkout
+  --no-cone`); an existing worktree that is not sparse on the roots, or a worker without a deny-rule adapter, is
+  refused naming the path. `npx builder-pipeline run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
+  reports each as `kept (--keep <lane>)`. GUIDE says what a worktree does not do: it does not sandbox processes and
+  it does not prevent merge conflicts. Tests: `tests/orch-preflight.test.mjs`, `tests/orch-worker-claude-code.test.mjs`,
+  `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
+- **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
+  token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
+### Added — M2b accounts report and foreign probes (2.0.0 line)
+
+- **`npx builder-pipeline accounts [--json]` — the readiness report (REQ-204, REQ-205; D7, D25).** With no subcommand the
+  command runs every account's probes and readers and prints one block per account in the shape of `gh auth status`:
+  the name, worker and way of paying; the state line from the assessment (`ready`, `ready (read-only: smoke stale)`,
+  `not ready (<reason>, run <sign-in>)`, `unmeasured (<reason>)`); content, roles, usage with its source, time and
+  reader, version, key present or absent (the file and its mode, never the value), lease state, `until` for an AUTH
+  reason, the note and the readers' notes. Blocks follow `assessAll`'s order (ready first, not ready last). The exit
+  code is 1 when any account is not ready or unmeasured, 0 with `--json` (the assessment objects plus `content`, `key`,
+  `lease`, `notes`). With `features.accounts` off, no profile or no account it prints `accounts: not configured` and
+  exits 0, never a pass. It reads nothing of `features.orchestrator`, so it works with the orchestrator off. `list`
+  stays the registry view and runs no probe.
+- **Antigravity and gateway probes (`scripts/lib/account-probes.cjs`, REQ-208; D53).** Worker `antigravity` joins the
+  registry (`WORKERS`): no key mode (`pays: api-key` is refused), never a 1.0 seat (D26). Its probe runs the models
+  listing (`agy models`, the one `ANTIGRAVITY_BIN` constant, or the account's `readyCommand`) under the timeout: exit 0
+  with a model listed is ready, the words "sign in" in the output are not ready with a reason that names the sign-in,
+  a timeout or a missing binary is unmeasured. A gateway account (`pays: gateway`, any worker) is ready when its
+  wrapper (`bin/<name>` or `bin/<name>.ps1`) exists, carries no `CLOSED_MARKER` line (`# builder-pipeline: closed`,
+  the refusal wrapper M11 writes) and its gateway key is present (the key file, or `auth.json` for Codex) — presence
+  only, never read.
+- **Snapshot reader (REQ-203 remainder).** `collect()` reads `budget.file` (absolute, or relative to the accounts
+  home) through `parseGatewaySnapshot`, `budget.key` selecting `keys.<key>`, as a measured reading dated by the file's
+  mtime; a missing or unreadable file, or a key with no spend, gives no reading and one note in `collect().notes`,
+  never a throw.
+- **Tests.** `accounts-report` (cli.js in a temp project with `BUILDER_ACCOUNTS_HOME` inside it and stubs as the whole
+  PATH: not configured exit 0, orchestrator off, a not-ready account exit 1, `--json` exit 0 with the shape, no key or
+  env value in the output, `list` runs no probe), `accounts-probes` (Antigravity ready / sign in / timeout / missing /
+  `readyCommand`; gateway wrapper, closed marker, key presence, ps1 and Codex branches; the snapshot wiring), and the
+  registry rule in `orch-state`. Usage text and the README command row name the report.
+### Added — M11 wrappers, gateway and free accounts
+
+- **`npx builder-pipeline accounts install` (REQ-1101, REQ-1103, REQ-1109; D41, D52).** One wrapper pair (sh and ps1) per
+  `claude-code` or `codex` account under the accounts home, from `templates/account-wrapper.sh` and `.ps1`
+  (`scripts/lib/account-wrappers.cjs`). A wrapper unsets the denylist, checks the sandbox-runtime settings, sets
+  `CLAUDE_CONFIG_DIR` or `CODEX_HOME` and starts the tool; it never exports `ANTHROPIC_AUTH_TOKEN` or
+  `ANTHROPIC_API_KEY`. A gateway or api-key Claude account gets `apiKeyHelper` in its composed `settings.json`; a
+  gateway Claude account also gets the base URL, model aliases through `ANTHROPIC_DEFAULT_*_MODEL` and `modelOverrides`;
+  a subscription account never a base URL. A gateway Codex account gets `config.toml` with
+  `model_providers.gateway.env_key = "BUILDER_GATEWAY_KEY"`, the one variable its wrapper exports. The free lane's
+  combo is resolved at write time from the gateway policy: a closed lane gets a refusal wrapper that only explains why
+  (marker line `# builder-pipeline: closed`), an unreadable policy leaves a working wrapper alone. Each Claude Code
+  account gets `srt-settings.json` (`denyRead` of every other account dir and the user's `~/.claude` and `~/.codex`,
+  `allowWrite` of the lane worktree, the key masked and injected toward the API host only); `scripts/lib/srt-check.cjs`
+  refuses the launch naming the file when it is invalid. The Antigravity wrapper drops `SSH_*` only while a session bus
+  is reachable (REQ-1106).
+- **`accounts.lock.json` (REQ-1102; D19, D38).** `scripts/lib/accounts-lock.cjs` records every written file with its
+  sha256 under the accounts home, keeps and names a file changed since the kit wrote it, backs it up under
+  `backups/<stamp>/` before `--force` replaces it, and never writes outside kit-created folders. The free-model MCP
+  registration is printed, never written.
+- **`accounts policy show | dry-run | apply` and `accounts usage-snapshot` (REQ-1104, REQ-1105; D8, D43).**
+  `scripts/lib/gateway-policy.cjs` over `scripts/lib/gateways/` (OmniRoute pinned at 3.8 with a golden request plan,
+  `tests/fixtures/gateway/omniroute-3.8/`; Bifrost declared, refused until pinned). Idempotent; the token from a 0600
+  file owned by the user; Node fetch with `redirect: 'error'`; plain http to loopback only; errors reduced to method,
+  path and status; an applied marker with the policy sha256 and the gateway version. An unknown gateway is refused with
+  the known list; a policy naming a subscription provider is refused. The usage snapshot writes `keys.<name>: { spend,
+  maxBudget, budgetResetAt }` as the assessment reads it, never a token or a key.
+- **Free-model MCP server (REQ-1107; D15, D43), `features.freeModelMcp` experimental-off.**
+  `tooling/experimental/free-model-mcp.cjs`: stdio JSON-RPC on the 2026-07-28 protocol (`server/discover`, per-request
+  `_meta` echoed, `resultType`) with the legacy `initialize` fallback, Node built-ins only, one tool, one fixed route,
+  loopback only, no redirects, the key read at call time and replaced in error text, per-account `promptMaxBytes`, the
+  outbound guard over the prompt and the system text (a secret shape refuses the call naming the kind).
+- **`builder verify` policy drift row (REQ-1108).** An advisory row names the drifted policy keys and the apply
+  command, read from the applied marker; nothing is written and the exit code is unchanged.
+- GUIDE: "Accounts and wrappers". FEATURES: the wrappers row and the `freeModelMcp` experimental row. Tests:
+  `tests/accounts-install.test.mjs`, `tests/gateway-policy.test.mjs` (stub management API on loopback),
+  `tests/free-model-mcp.test.mjs` (both client generations, stub gateway on loopback).
+
+### Added — M9 board loop (experimental-off)
+
+- **`features.boardLoop` (REQ-901 to REQ-915; D17, D44, D48, D52), `experimental-off`.** A loop runner above a task
+  board: `npx builder-pipeline run board-loop <account> <board.md>` and `orch loop <board.md>` share one runner
+  (`scripts/lib/board-loop.cjs`). While on, the profile carries `promptFile`, `gate`, `maxPasses` (required),
+  `passTimeoutMinutes` 60, `maxTurnsPerPass` 20, `stallMinutes` 5, `maxRetriesPerRow` 2, `maxConsecutiveFailures` 3 and
+  `maxConsecutiveNoProgress` 3; off, the command prints the not-configured line and exits 0.
+- **A pass.** A fresh worker session from the same prompt file (`templates/loop-prompt.md` installs as `LOOP_PROMPT.md`)
+  through the M6 runner and the Claude Code adapter in account mode; the runner, not the worker, picks the first open,
+  not blocked row and flips it. The pass ends on the gate exit code and the structured verdict together (PASS with gate
+  exit 1 is a failed pass). The gate output, capped at `bashCap.limitBytes`, and a one-line progress note feed the next
+  pass; the board, the progress log and git are the only memory. A passing pass is one commit with the trailers
+  `Builder-Account:` and `Builder-Requirement:` and no other kit trailer; a failing pass leaves no commit, is pinned to a
+  snapshot ref and the tree is restored and cleaned.
+- **The gate command in two normalised forms (D69).** `hooks/claude-code/lane-shell-allow.cjs`, a `PreToolUse` hook the
+  loop's `--settings` pin carries, accepts the gate command with a `cd <own worktree> &&` prefix (no `..`, no other
+  directory, no second command) or one `| head -n N` / `| tail -n N`, and answers nothing for anything else, so the exact
+  allow list keeps denying it. Measured runs lost four of five passes to those two shell habits before this.
+- **Caps and stops.** The gate script, the test roots, the prompt file and the harness configuration are denied; a
+  write there, or a board edit outside the chosen row, is FAILED-SCOPE and stops the loop. A row failing
+  `maxRetriesPerRow` times is marked BLOCKED on the board and the loop moves on. Stops come from a closed set
+  (`all-pass`, `max-passes`, `not-ready`, `no-progress`, `consecutive-failures`, `rows-blocked`, `scope`, `stall`),
+  written to the summary line, the run log (`.pipeline/loop/<board>.jsonl`: pass, row, rows passing, retries, gate
+  digest, turns, cost or unmeasured, stop reason) and the state; the loop never pushes and exits 10 with rows open.
+  `--more-passes N` raises the cap once per run and is logged. A bypass flag in the prompt file, the account command or
+  the gate refuses the loop naming the flag.
+- **`orch loop`.** Places the loop through `scripts/lib/orch-loop.cjs` `placeLoop(settings, board, io)` — today the first
+  account whose readiness assessment reads ready; M3 replaces the body — records the job in `<orch root>/loops.json`
+  (kind loop, account, cap, passes, stop reason) and `orch status` prints it; a not-ready account is refused before any
+  pass. `--record-experiment <EXPERIMENTS.md>` appends one dated row to §17 and leaves the flag alone (REQ-909).
+- Tests: `tests/board-loop.test.mjs` (a stub worker with scripted passes, a stub gate, a scratch repo) and
+  `tests/orch-loop.test.mjs` (a stub `claude` for the probes). FEATURES row; template §16 line.
+
+### Added — M10 accounts command (2.0.0 line)
+
+- **`npx builder-pipeline accounts add | note | key | key --remove | remove | list` (REQ-108, REQ-1001 to REQ-1007; D2, D9, D19,
+  D20, D42).** `add <name> --worker <w> --pays <p> [--content …] [--roles …] [--family …] [--note …] [--config-dir …]
+  [--command …] [--base-url …] [--budget-hard N --budget-kind percent|usd]` validates through the registry, writes the
+  account into the §16 settings block only (every byte outside stays; temp + rename), turns `features.accounts` on and
+  makes the account folder (0700; on Windows an owner-only ACL through `icacls`, else "mode unverified"). Refusals
+  carry a named code: `E_ACCOUNT_NAME`, `E_ACCOUNT_EXISTS`, `E_PAYS_TWICE`, `E_BASEURL_SUB`, `E_ACCOUNT_UNKNOWN`,
+  `E_LEASE_HELD`. `note` replaces the note. `remove` deletes the wrappers, the key file and the §16 entry and keeps the
+  folder.
+- **Key entry and storage (`scripts/lib/account-secrets.cjs`, `scripts/account-key.cjs`).** `key <name>` reads the
+  key with echo off in raw mode and restores the terminal on Ctrl-C; off a TTY it reads to end of input and says echo
+  may be visible; printable ASCII only; no argv or environment form. A Claude Code account's key goes to the account's
+  key file only (O_CREAT|O_EXCL|O_NOFOLLOW, 0600 in a 0700 dir; rotation by temp + rename after an lstat check that
+  refuses a symlink) and `apiKeyHelper` in the account's settings.json points at the kit helper `account-key read
+  <name>`, which prints the file and refuses a mode wider than 0600. A Codex account is signed in through `codex login
+  --with-api-key` with `CODEX_HOME` set to the account dir and `cli_auth_credentials_store = "file"`; the kit never
+  writes the key and reports the mode of `auth.json`. `key --remove` deletes the key file and the helper setting only
+  (Codex: `codex logout`). No confirmation line carries any part of the value.
+- **Leases (`scripts/lib/account-lease.cjs`).** `acquire`, `release`, `read`, `state`, `isLive` over
+  `accounts/<name>/lease.json` (`{ pid, startedAt, lane }`). `remove` and `migrate` refuse under a live lease and name
+  the pid; a lease whose process is gone is reported as stale, cleared, and the command proceeds.
+- **`list [--json]`.** One line per account: worker, pays, content, roles, key present or absent (never the value),
+  lease state, key file mode; a POSIX key file wider than 0600 reads `not ready (key file mode 0644)`; on Windows the
+  mode check is skipped and the ACL is reported or "mode unverified".
+- **Tests.** `accounts-cli` (every subcommand through cli.js with `BUILDER_ACCOUNTS_HOME` inside the temp project and a
+  stub `codex` on PATH; the key file is never in `builder.lock.json` or an upgrade backup), `account-secrets` (flags,
+  symlink refusal, modes, the Windows branch through an injected platform, the Codex stub), `account-lease`, and
+  `secret-shapes` (REQ-1007: the shipped files, `tests/fixtures`, a temp HOME and the captured stdio of a real run
+  hold no key shape; fakes are built at runtime). On Windows the codex binary is resolved on PATH (PATHEXT) and run
+  through the shell, and the tests assert the documented Windows behaviour (mode check skipped) instead of POSIX modes. The Antigravity adapter note says `accounts key` refuses an
+  Antigravity account. Usage text and the README command row cover the new subcommands.
+### Added — M12 remote lanes (experimental-off)
+
+- **`features.remoteLanes` (REQ-1201 to REQ-1211, D58), `experimental-off`.** A lane runs on another machine over plain
+  ssh; git through a shared origin is the only data path. `scripts/lib/orch-remote.cjs` and `orch remote
+  add | preflight | place | launch | poll | cancel`. A machine is a row in `state.json` (`host`, `user`, `remoteRoot`,
+  `status`, `lastSeen`, the preflight result); a lane may carry `machine`. With the flag off, a plan machine prints
+  `remoteLanes: not configured` and the lane stays local; with it on, an unknown machine is refused naming the row.
+- **Transport and preflight.** `ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 user@host
+  <cmd>`, Node built-ins only. Exit 255 is the event `remote_unknown`, never a lane verdict; exit 1 is the remote
+  command's. One preflight per machine runs `claude auth status`, `claude --version`, `git --version` and tests
+  `remoteRoot/.git`; a failing check names itself, a missing login is `machine_unauthenticated`, and a `remoteRoot` on a
+  mount path is refused before any call. The kit never mounts, copies or syncs a worktree (GUIDE carries Git's own
+  warning against sharing a working tree across systems).
+- **Launch, poll, collect.** One ssh call starts a lane: `git fetch origin`, `git worktree add` on a fresh lane branch
+  from the origin base, the `--settings` pin written into the worktree and every hook it names checked (a missing hook
+  refuses the launch and the event names it), then `setsid nohup claude -p … --output-format json > .lane/out.json` with
+  the pid in `.lane/pid` and `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`; the exit tail commits, pushes the lane branch,
+  writes `.lane/head` and removes the pin. Polls check the pid and the mtimes of `.lane/out.json` and `.lane/err.log`;
+  `lane.heartbeat` is the orchestrator's clock, remote times are stored as `remoteTs` and never order anything; a stall
+  judged on remote mtimes is `FAILED-STALL`; cancel kills the remote process group and the lane stays cancelling until a
+  poll confirms exit. On exit the orchestrator fetches the lane branch, judges the REQ-604 verdict against the fetched
+  tip (`FAILED-STALE-VERDICT` on another head) and queues a PASS lane for the existing merge path. Every `.lane/err.log`
+  line passes the outbound guard before it enters `events.jsonl`; no credential, `.env` or ssh key ever goes to the
+  remote. `features` prints `remoteLanes: experimental-off` and names EXPERIMENTS §18.
+- Tests: `tests/orch-remote.test.mjs` on a stub `ssh` (`tests/fixtures/orch/stub-ssh.cjs`) that records argv and plays
+  scripted exits (255, 1, live pid, stale mtimes, a pushed branch with a matching or another head, a secret-shaped
+  err.log line). The M9 loop runner's dispatch point is a TODO in the module header.
+
+### Added — M6 worker adapters (2.0.0 line)
+
+- **Allowlisted child env (REQ-601, D42).** `scripts/lib/worker-env.cjs` builds a headless worker's env from `PATH`,
+  `HOME`, `LANG`, `TERM`, `TMPDIR` and the account's own block, and sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME`. It never
+  inherits `ANTHROPIC_*` (`ANTHROPIC_BASE_URL` included), `CLAUDE*`, `OPENAI_*`, `CODEX_*`, `GEMINI_*`, `NODE_OPTIONS`,
+  `NODE_EXTRA_CA_CERTS`, `SSL_CERT_*`, `*_PROXY`, `LD_PRELOAD` or `XDG_CONFIG_HOME`, and it refuses a key variable in
+  the account block (a key never enters through the environment, D20).
+- **Runner-owned clocks (REQ-603, D12).** `scripts/lib/worker-runner.cjs` starts a worker with the prompt on stdin,
+  reads its event stream, and enforces the pass timeout and the stall window itself: a worker that never exits is
+  `FAILED-TIMEOUT` and is stopped; one that stops emitting is `FAILED-STALL`; a key-source fault stops it before any
+  model call (`STOPPED-KEY-SOURCE`).
+- **Codex adapter (`scripts/lib/orch-worker-codex.cjs`, REQ-602, D26).** `codex exec --json --output-schema`, the
+  sandbox never `danger-full-access`, `CODEX_HOME` set, the verdict read from the last agent message, `classifyError`
+  (LIMIT, BUDGET, OVERLOAD, AUTH with an until time, `scripts/lib/worker-errors.cjs`). The CLI exposes no key source in
+  its stream, so the proof is `codex login status` before the launch: a login that does not match how the account pays,
+  or no login, stops the job; text the kit cannot read is `unconfirmed`. Registered in the credit lane's worker table.
+- **Verdict schema (REQ-604, D13, D47).** `scripts/lib/worker-verdict.cjs`: `verdict` (PASS, CHANGES_REQUESTED, ERROR),
+  `summary`, `filesTouched`, `head`, `requirements`. A missing or malformed field, exit 0 with no verdict, or a claimed
+  id the verdict does not judge is `FAILED`; another head is `FAILED-STALE-VERDICT`; a denied tool is `INCOMPLETE`.
+- **Claude Code adapter in account mode (REQ-603 to REQ-605).** `launchArgs` carries `--max-turns`, `--permission-mode`,
+  `--permission-prompts none`, `--settings <pin>` and `--json-schema`; `accountEnv` uses the allowlist;
+  `structuredVerdict` reads the result's `structured_output`. `gateHookEntries` gives the `--settings` pin a
+  `TaskCompleted` and a `Stop` hook that run the lane's gate through the new `hooks/claude-code/lane-gate.cjs`: a
+  failed gate is exit 2 with the gate output as the reason. Every entry carries the marker `builder-pipeline-lane-gate`
+  and `removeKitHooks` takes them out again. The pin's path comes from the launch options (the preflight writes it).
+- Tests: `tests/orch-worker-codex.test.mjs` (stub `codex` on `BUILDER_CODEX_WORKER_BIN`,
+  `tests/fixtures/orch/stub-codex.cjs`) and `tests/orch-worker-claude-code.test.mjs` (the stub worker). The credit
+  lane's own exports are unchanged.
+### Added — M3 placement over accounts (2.0.0 line)
+
+- **`placement()` walks the account list (REQ-301 to REQ-304; plan decisions D1, D3, D24).** A run records its
+  accounts at init (`accounts`, registry order; the state-file field that names a lane's account is still `seat`).
+  Placement filters them by the lane's role (`roles` empty = any; a lane needs module-builder) and content class, puts
+  `pays: api-key` accounts last, and reads percent or USD budgets alike: at or above `budget.hard` the account is not
+  ready and the line names the cap; at or above the soft limit (`budget.soft`, else `softLimitPct`) it takes only a
+  job marked needs-account and a plain job reads `NEEDS-IT-ONLY`; a reading older than `usageStaleMinutes` is
+  unmeasured and only the first account in order may launch unmeasured. `next` prints one `SKIP <account>: <why>` line
+  per account passed over. A 1.0 run state (`seats`, `limits`) is read as synthetic accounts and placed exactly as 1.0
+  did (`tests/orch-placements-golden.test.mjs` stays green); it is never written back in the old shape (REQ-311).
+- **gate-launch over accounts (REQ-303, REQ-305, REQ-308, REQ-313; D12, D31, D49).** The launch line carries the
+  account, its `maxTurns` and `timeoutMinutes` (refused naming the field when missing), the model and `unpriced` when
+  the pricing table has no rate for it, and `--max-budget-usd` as a backstop that is never a cap; `{account}`,
+  `{maxTurns}` and `{timeoutMinutes}` fill the launch command (an account's own `command` wins). A launch on an
+  api-key account writes `account.paid` to events.jsonl and a row to the project's decision log (`paths.decisions`).
+  A hard cap or soft limit raised in §16 since init refuses the launch until a decision-log line carries the account,
+  the field, the old and the new value. An account's `smokeCommand` re-runs before its first launch in a run when the
+  last pass is older than `usageStaleMinutes`; a failure refuses naming the account (`scripts/lib/orch-preflight.cjs`
+  `smokeDue`, `runSmoke`).
+- **`scripts/lib/account-errors.cjs` — `classifyError(response)` (REQ-306; D35, D46).** One rule for every worker
+  adapter: `{ status, headers, body, text }` → `{ kind, until, reason }` with kind LIMIT (429 + Retry-After, or a
+  usage-limit refusal text with a reset time such as "resets at 3pm (Europe/London)"), BUDGET (400/402/403/429 with a
+  budget body, or `resetsAt`), OVERLOAD (529, 503 or an overloaded body; `until` is the next backoff step) or AUTH
+  (401, a 403 auth body, an expired credential); null for a plain job fault. The Claude Code adapter re-exports it.
+  LIMIT, BUDGET and AUTH mark the account not ready until `until` in `<orch root>/accounts-readiness.json`
+  (`scripts/lib/orch-accounts.cjs`); OVERLOAD is never an account state; the global 429 record is unchanged.
+- **The retry rule (REQ-310; D46).** `orch-accounts.cjs` `runWithRetry()`: on LIMIT, BUDGET or AUTH the job runs once
+  more on the next ready account its roles and content class allow, and the status line says so once; on OVERLOAD the
+  same prompt retries on the same account after min(10 s · 2^n, 5 min), at most `overloadRetries` (default 4) times,
+  then `FAILED-OVERLOAD` with the account still ready. The clock and the sleep are injected; no test sleeps.
+- **Readiness inside every orch command (REQ-307, REQ-309; D31).** `status`, `next`, `claim` and `gate-launch` run the
+  full readiness assessment (every probe, every usage reader) before placing; every other command runs it when the
+  record is older than `usageStaleMinutes`. `status` prints one line per account with its state, the reading and its
+  time, and `budget warn <used> of <cap>` at or above the soft limit, on the account line and the lane row (REQ-313).
+- **Shadow placement (REQ-312; D52).** `features.accounts.placement: shadow` computes the account the rule would
+  choose, writes a `placement.shadow` event `{ chosen, reason, placed }` and places the 1.0 way (first ready account by
+  order).
+- **`accounts migrate` rewrites finished run states (REQ-311; D34).** Every state with no LAUNCHED or STALLED lane
+  gains `accounts` and a lane `account` beside its `seat`; the original is archived as `state.json.bak`.
+- Tests: `tests/account-errors.test.mjs` (the four kinds, the per-account record, the retry rule with an injected
+  clock, the budget warning, the decision-log row), `tests/orch-preflight.test.mjs` (the smoke re-run),
+  `tests/orch-state.test.mjs` (placement cases, shadow, the 1.0 fixture, gate-launch refusals),
+  `tests/accounts-migrate.test.mjs` (the state rewrite). The rig puts stub `claude` and `codex` executables first on
+  PATH, so no orch test probes a real harness.
+
+### Changed
+
+- Placement now reads `features.accounts` (the account list, `softLimitPct`, `usageStaleMinutes`, `placement`,
+  `overloadRetries`) instead of the 1.0 `seats` / `limits` keys; `legacyView()` serves only the credit lane's headless
+  runner and the golden fixture. `orch usage <run> <account> <pct | $usd>` and `usage-read <run> [<account>|all]` take
+  account names; `creditContext()` carries `fallbackAccounts`, the api-key fallback chain in registry order.
+
+### Added — M2a readiness assessment (2.0.0 line)
+
+- **`scripts/lib/accounts.cjs`: a pure readiness assessment (REQ-201, REQ-202, REQ-206, REQ-207, REQ-209, REQ-211,
+  REQ-212; plan decisions D3, D46, D51).** `assess(account, probes, usage, now)` gives one verdict per account: name,
+  state (`ready`, `not ready` with a reason, or `unmeasured`), note, roles, version, budget with its `used` reading,
+  and `until` for an AUTH reason. A credential that expires inside `authMinMinutes` (default 120) or has expired reads
+  `not ready (AUTH until <time>, run claude auth login)`; no expiry leaves the state unchanged. An account with
+  `smokeCommand` whose last pass is older than `smokeMaxAgeHours` reads `ready (read-only: smoke stale)`. A key
+  account whose spend nobody can read reads `ready (balance unmeasured)` and `assessAll(settings, readings, now)`
+  sorts it last, ready accounts first. Every string the assessment carries passes the outbound guard's secret shapes
+  and a match becomes `<redacted: <kind>>`, never the text.
+- **Usage sources (REQ-203, REQ-210, REQ-212).** Each reading carries `source` (`measured`, `estimate`,
+  `unmeasured`) and `at`; measured beats estimate; `renderLine` prints `42 % (measured 09:14)`, `~40 % (estimate
+  09:30)`, `unpriced (estimate …)` for a model with no pinned rate, and `unmeasured` for no reading, never `0 %`.
+  Readers: `usageCommand` text (`$X of $Y`), the gateway snapshot JSON (`spend`, `maxBudget`, `budgetResetAt`), and
+  the Codex session `rate_limits` (`scripts/lib/codex-ratelimits.cjs`: the last `token_count` record of the newest
+  rollout under `<CODEX_HOME>/sessions/**`; the window closest to its limit binds). A Claude plan account has no
+  reader and stays unmeasured.
+- **Built-in probes (`scripts/lib/account-probes.cjs`, REQ-208, REQ-211, REQ-202).** Claude Code: `claude auth
+  status` JSON (`authMethod`, `configDirectory`; exit 1 = signed out) or the account's key file plus `apiKeyHelper` in
+  its settings.json (the key file is tested for presence only). Codex: `codex login status` read from stderr and the
+  exit code (ChatGPT login, API key, not logged in; no plan tier), with the expiry read from `auth.json`. Probes run
+  with `spawnSync` under a timeout in an allowlisted env (`PATH`, `HOME`, locale, plus `CLAUDE_CONFIG_DIR` or
+  `CODEX_HOME` = the account's config dir; never the parent's `ANTHROPIC_*`, `OPENAI_*`, `CLAUDE*` or `CODEX*`).
+  `collect(account, paths, io)` gathers the probe, the smoke record, `versionCommand` and every usage reader for
+  `assess`. The `PROBES` map is keyed by worker; Antigravity and gateway probes (M2b) are its named extension points.
+  Tests: `tests/accounts.test.mjs`, `tests/accounts-probes.test.mjs` (stub executables in a temp dir, no real
+  harness runs), `tests/codex-ratelimits.test.mjs`.
+
+### Added — M1 account registry (2.0.0 line)
+
+- **`features.accounts` (REQ-101 to REQ-106, plan decision D33).** The registry of the accounts the orchestrator may
+  place lanes on: per account a worker (`session`, `claude-code`, `codex`, `api-key`, ...), who pays, a content
+  policy, roles, a family, a config dir, a start command and a budget (`percent` or `usd`, soft and hard, with a
+  renewal period). Names follow one rule (lowercase, 16 characters, a reserved list) and the loader refuses a value
+  shaped like a secret, naming the kind and never the text (REQ-105). `scripts/lib/account-paths.cjs` names every
+  per-account path under `~/.builder-pipeline/accounts/<name>/` (or `BUILDER_ACCOUNTS_HOME`).
+- **The 1.0 seat keys are refused or warned about.** `features.orchestrator.seats`, `limits`, `secondaryConfigDir`
+  and `credit` are an error while the orchestrator is on and a one-line stderr warning while it is off, both naming
+  `npx builder-pipeline accounts migrate`.
+- **`npx builder-pipeline accounts migrate [--dry-run]`.** Rewrites the seat keys into accounts (`primary` as the session,
+  `secondary` as a Claude Code account with its config dir and start command, `credit` as an api-key account with a
+  USD budget and the credit guards), in the `pipeline-settings` block only, with a `PIPELINE_PROFILE.md.bak` backup;
+  a second run changes nothing, and a run holding a LAUNCHED or STALLED lane refuses. The golden fixture proves the
+  migrated registry places every 1.0 case as before (REQ-106); finished run states are read unchanged (REQ-311).
+- The 1.0 placement and credit code reads the registry through `legacyView()` until M3 replaces it; the template §16
+  carries an `accounts` line instead of the seat keys, and FEATURES.md names the Accounts row.
+- Tests: `tests/accounts-migrate.test.mjs` (the block rewrite, the backup, idempotence, the live-run refusal, the
+  legacy warning), `tests/orch-placements-golden.test.mjs` (the migrated registry against the golden fixture),
+  `tests/orch-state.test.mjs` (the registry read by placement), `tests/cli-commands.test.mjs` (the `accounts` command
+  in the usage text and the README), `tests/pack-prose.test.mjs` (the `features.accounts` name).
+
+### Added — M0 accounts spec and decisions (2.0.0 line)
+
+- **Accounts spec (`specs/accounts.spec.md`).** The requirements oracle for the 2.0.0 "accounts" release: REQ-101 to
+  REQ-1406 in EARS phrasing with an INVARIANTS block and an Amendments table (plan decision D45), 151 Given/When/Then
+  criteria, ratified by the owner on 16 November 2026. Checked with the kit's own spec stage: the kit now carries a
+  maintainer-only `PIPELINE_PROFILE.md` with `features.specAuthoring` on, a `DECISIONS.md` (D1 to D60) and a
+  `DEFERRED_TASKS.md`; none of them ships (`tests/package.test.mjs` skip list, `tests/pack-prose.test.mjs` scan).
+- **Golden placement fixture (`tests/fixtures/orch-placements-1.0.json`, REQ-106).** 36 placement decisions of the
+  1.0 seat rule, captured before the account registry replaces it; `tests/orch-placements-golden.test.mjs` holds the
+  1.0 rule to them and `accounts migrate` is proven against the same file.
+### EXPERIMENTS measurement sections (REQ-801, REQ-901, REQ-1211, REQ-1401)
+
+- **EXPERIMENTS.md §16 to §20 and a decision row in every section.** §16 `familyReview`, §17 `boardLoop` and §18
+  `remoteLanes` state what the 2.0 build adds, how to opt in, the exact measurement and the keep or drop rule. §19 is
+  a reserved skeleton; §20 holds the kit's own measurements (time to first value, false-positive rates of the
+  default-on checks) with empty tables. Every section §1 to §20 ends with a dated
+  `**Decision (<date>).** keep | drop | not yet measured — <number or "no measurement">` row; today no section says
+  keep, because no measured criterion holds yet. Test: `tests/experiments.test.mjs` (sections 1 to 20 present, a
+  non-blank decision row in each, a keep row never on "no measurement").
+
+### Time to first value (REQ-1404)
+
+- **`first-value` script and test.** `npx builder-pipeline run first-value [--json] [--keep]` creates an empty git repository in
+  a temporary folder, packs the checkout with `npm pack`, installs the tarball there, then runs `npx builder-pipeline inventory`
+  and `npx builder-pipeline run claims-check --files README.md` in that project. It prints the wall time and the time of each
+  step. `--json` prints the numbers; `--keep` leaves the folder. Test: `tests/first-value.test.mjs` fails above 300 s
+  and on an accepted unknown flag. The first measurement is in EXPERIMENTS.md §20.
+
+### False-positive rates of the default-on checks (REQ-1405)
+
+- **EXPERIMENTS.md §20 false-positive table filled.** `check-ledgers`, `claims-check`, `output-check`, `fix-rate` and
+  `inventory` ran on four public repositories (`expressjs/express`, `fastify/fastify`, `pallets/flask`,
+  `ruvnet/claude-flow`, shas in the table). Every finding was classified by hand. Rates: 0% for `check-ledgers` and
+  `output-check`, 1.1% for `inventory` (two items on `claude-flow`: a skill folder without `SKILL.md`, a note listed
+  as an agent); `claims-check` and `fix-rate` produced no finding on repositories without a pipeline run. No check is
+  above 20%. Doc-only change; `tests/experiments.test.mjs` keeps §20's decision row checked.
+
 ## [1.1.0] — 2026-11-16
 
 ### Added

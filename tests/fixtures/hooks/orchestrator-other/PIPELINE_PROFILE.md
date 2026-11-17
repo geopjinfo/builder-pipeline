@@ -8,7 +8,7 @@
   "models": { "orchestrator": "model-alpha", "strong": null, "mid": null },
   "features": {
     "orchestratorModel": { "state": "on" },
-    "costAccounting": { "state": "on", "reader": "generic" }
+    "costAccounting": { "state": "on", "reader": "codex" }
   }
 }
 ```

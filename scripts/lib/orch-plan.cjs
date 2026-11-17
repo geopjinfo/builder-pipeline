@@ -25,6 +25,9 @@
  * HOT FILES are shared by many rows (the changelog, the manifest, the registry, generated contracts). They never
  * make two rows share a lane: the merge queue serialises them instead, one merge at a time.
  *
+ * FAMILY REVIEW (experimental, REQ-801, REQ-802). `opts.familyReview = { state, accounts, writer }` gives every lane
+ * a `secondReader` through scripts/lib/family-review.cjs. Absent or not active, the result is byte-identical.
+ *
  * Path rules are the project's, from features.orchestrator in §16: `sourceRoots` (production source),
  * `riskPaths.{migration,platform,permission}` (globs), `modulePattern` (a regex whose one capture names the
  * module — two modules in one row, or a glob in the module position, is cross-module).
@@ -37,6 +40,8 @@ const LEVEL_RANK = { Micro: 1, Small: 2, Standard: 3, Full: 4 };
 const TRACK_RANK = ['SOLO', 'RULINGS', 'FIX', 'ADDITIVE', 'FULL', 'PLATFORM'];
 const DISPATCH_RANK = ['solo', 'lite', 'full'];
 const LEVEL_OF_RISK = Object.freeze({ high: 'Full', medium: 'Standard', low: 'Micro' });
+
+const familyReview = require('./family-review.cjs');
 
 const DEFAULTS = Object.freeze({
   hot: ['CHANGELOG.md', 'package.json', 'package-lock.json', '.gitignore'],
@@ -340,7 +345,7 @@ function split(text, opts = {}) {
     l.name = `l${i + 1}`;
   });
 
-  return {
+  return familyReview.apply({
     plan: { title: meta.plan || meta.title || '', run: meta.run || '', source: meta.source || '' },
     maxLanes: cfg.maxLanes,
     smallEnabled: !!cfg.smallEnabled,
@@ -363,7 +368,7 @@ function split(text, opts = {}) {
     })),
     lanes,
     hotFilesQueued: uniq(lanes.flatMap((l) => l.hotFiles)),
-  };
+  }, opts.familyReview);
 }
 
 /** Owned-file overlaps between lanes — must be empty for a valid split. */
@@ -377,7 +382,35 @@ function laneOverlaps(lanes) {
   return out;
 }
 
+/**
+ * The worker brief from the template (templates/orchestrator-worker-brief.md, installed as
+ * specs/orchestrator-worker-brief.template.md): the fenced markdown body with the lane facts filled in — the run and
+ * lane, level/track and dispatch, the rows table, the owned and hot files, worktree, branch, target, result and the
+ * `Account:` line from the placement (REQ-502). A placeholder the lane cannot fill (the done-test, the tiers, the
+ * records) stays as written for the orchestrator. No account → the `Account:` line keeps its placeholder, never an
+ * empty name. Pure.
+ */
+function renderBrief(template, { run, lane, rows = [], target = null, account = null }) {
+  const fence = /```markdown\r?\n([\s\S]*?)\r?\n```/.exec(String(template));
+  let body = fence ? fence[1] : String(template);
+  const byId = new Map((rows || []).map((r) => [r.id, r]));
+  const rowLines = (lane.rows || []).map((id) => {
+    const r = byId.get(id) || { id };
+    return `| ${id} | ${r.title || '<title>'} | ${r.level || lane.level || '<level>'}/${r.track || lane.track || '<track>'} | ${r.reason || '<reason from lanes.json>'} |`;
+  });
+  if (rowLines.length) body = body.replace(/^\| <id> \| <title> \| <level>\/<track> \| <reason from lanes\.json> \|$/m, rowLines.join('\n'));
+  const list = (a) => (Array.isArray(a) && a.length ? a.join(', ') : 'none');
+  const subs = {
+    '<run>': run, '<lane>': lane.name, '<level>': lane.level, '<track>': lane.track, '<full|lite|solo>': lane.dispatch,
+    '<ownedFiles>': list(lane.ownedFiles), '<hotFiles>': list(lane.hotFiles),
+    '<worktree>': lane.worktree, '<branch>': lane.branch, '<target>': target, '<result>': lane.result,
+    ...(account && account.name ? { '<account>': account.name, '<worker>': account.worker || 'unknown', '<pays>': account.pays || 'unknown' } : {}),
+  };
+  for (const [k, v] of Object.entries(subs)) if (v !== null && v !== undefined && v !== '') body = body.split(k).join(String(v));
+  return body.endsWith('\n') ? body : `${body}\n`;
+}
+
 module.exports = {
-  split, parsePlan, levelFor, riskFor, derivedFlags, openConfirms, overlaps, isHot, isUnder, laneOverlaps, globRe, norm,
+  split, parsePlan, renderBrief, levelFor, riskFor, derivedFlags, openConfirms, overlaps, isHot, isUnder, laneOverlaps, globRe, norm,
   DEFAULTS, FULL_FLAGS, KNOWN_FLAGS, KINDS, LEVEL_RANK, LEVEL_OF_RISK, TRACK_RANK,
 };

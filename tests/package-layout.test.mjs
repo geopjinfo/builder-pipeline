@@ -1,5 +1,5 @@
 /**
- * The kit installed as a package (node_modules/@geopjinfo/builder-pipeline) — what the sample-project run found broken:
+ * The kit installed as a package (node_modules/builder-pipeline) — what the sample-project run found broken:
  *   D2  board-check-all spawned `scripts/board-progress.mjs` relative to the working directory, and its --fix printed
  *       PASS after the child crashed;
  *   D3  the board-render and instruction-lint hooks looked for `<project>/scripts/lib`, which a package install never
@@ -24,7 +24,7 @@ after(() => { for (const d of made) rmSync(d, { recursive: true, force: true });
 
 const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
 
-function project(kitAt = 'node_modules/@geopjinfo/builder-pipeline') {
+function project(kitAt = 'node_modules/builder-pipeline') {
   const proj = mkdtempSync(join(tmpdir(), 'kit-pkg-'));
   made.push(proj);
   const kit = join(proj, ...kitAt.split('/'));
@@ -66,7 +66,7 @@ describe('D2 — board-check-all runs from the package', () => {
     writeFileSync(board, readFileSync(board, 'utf8').replace(/\*\*TOTAL\*\* \| `[^`]*` \*\*\d+%\*\*/, '**TOTAL** | `░░░░░░░░░░░░░░░░░░░░` **0%**'));
     const r = run(cli, proj, ['run', 'board-check-all']);
     assert.equal(r.status, 1, out(r));
-    assert.match(r.stderr, /npx builder run board-check-all --fix/);
+    assert.match(r.stderr, /npx builder-pipeline run board-check-all --fix/);
     assert.doesNotMatch(r.stderr, /node scripts\//);
     const fixed = run(cli, proj, ['run', 'board-check-all', '--fix']);
     assert.equal(fixed.status, 0, out(fixed));

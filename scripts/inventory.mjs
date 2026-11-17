@@ -1,8 +1,8 @@
 /**
- * What this project already has, and how much of it looks like the kit — `npx builder run inventory`.
- * (folder layout: node scripts/inventory.mjs in place of npx builder run inventory)
+ * What this project already has, and how much of it looks like the kit — `npx builder-pipeline run inventory`.
+ * (folder layout: node scripts/inventory.mjs in place of npx builder-pipeline run inventory)
  *
- *   npx builder run inventory [--json] [--root <project dir>] [--kit <kit dir>] [--threshold 0.3]
+ *   npx builder-pipeline run inventory [--json] [--root <project dir>] [--kit <kit dir>] [--threshold 0.3]
  *
  * Lists every skill, agent, persona, playbook and hook under the harness folders (scripts/lib/inventory.cjs
  * LOCATIONS), the greenfield/brownfield call with its evidence, and every project↔kit pair that shares a name, a
@@ -32,7 +32,7 @@ function findKit() {
   const beside = join(dirname(fileURLToPath(import.meta.url)), '..');
   if (existsSync(join(beside, 'agents')) && existsSync(join(beside, 'cli.js'))) return beside;
   try {
-    return dirname(require.resolve('@geopjinfo/builder-pipeline/package.json', { paths: [process.cwd()] }));
+    return dirname(require.resolve('builder-pipeline/package.json', { paths: [process.cwd()] }));
   } catch {
     return null;
   }

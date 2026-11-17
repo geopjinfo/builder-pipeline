@@ -30,10 +30,14 @@
  */
 const { existsSync, readFileSync, realpathSync } = require('node:fs');
 const { basename, dirname, isAbsolute, join, relative, resolve } = require('node:path');
+const accountsRegistry = require('./accounts-registry.cjs');
 
 const SCHEMA = 2;
 const STATES = ['on', 'off', 'unmeasured', 'experimental-off', 'experimental-on'];
 const ACTIVE = new Set(['on', 'unmeasured', 'experimental-on']);
+/* features.costAccounting.reader: which harness's transcripts the cost scripts read (scripts/lib/transcript-usage.cjs +
+ * session-usage.cjs for Claude Code; scripts/lib/codex-usage.cjs for the Codex CLI). */
+const COST_READERS = ['claude-code', 'codex'];
 
 /**
  * Every feature the pack knows, its default, and the keys that must be non-null when it is active. A default of
@@ -82,8 +86,10 @@ const FEATURES = {
   },
   decisionIndex: { defaults: { state: 'off', roots: [], idPattern: 'D-\\d+', out: null }, requires: ['roots', 'idPattern', 'out'] },
   ratchets: { defaults: { state: 'off', lists: [] }, requires: ['lists'] },
-  builderBatch: { defaults: { state: 'unmeasured', rows: 5 }, requires: ['rows'] },
-  fixLane: { defaults: { state: 'unmeasured' }, requires: [] },
+  /* Both ship OFF since 2.0.0 (REQ-1403, D57): the §19 recorded run did not measure them. Set `unmeasured` to switch one
+   * on; its report then says the benefit is unmeasured (EXPERIMENTS.md §6, §7). */
+  builderBatch: { defaults: { state: 'off', rows: 5 }, requires: ['rows'], experiment: '§6' },
+  fixLane: { defaults: { state: 'off' }, requires: [], experiment: '§7' },
   livePage: { defaults: { state: 'experimental-off' }, requires: [] },
   graphTrial: {
     defaults: { state: 'experimental-off', seats: ['orchestrator', 'module-planner', 'standards-auditor', 'invariant-auditor'], callPattern: null },
@@ -118,12 +124,32 @@ const FEATURES = {
   walkPriority: { defaults: { state: 'experimental-off' }, requires: [] },
   ruleNotes: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* A second reader for a lane's P4 findings on a registry account of another worker `family`, at or above the
+   * writer's `tier` — scripts/lib/family-review.cjs, EXPERIMENTS.md §16 (plan M8, REQ-801, REQ-802, D6, D14). Off,
+   * nothing of it runs: the plan split is byte-identical with the key absent. */
+  familyReview: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* Advisory account suggestion, risk flag and second-opinion advice for a lane; never changes a placement; any call
+   * goes behind outboundGuard after the data-recipient decision is recorded — scripts/lib/router-hint.cjs (M8b, D15). */
+  routerHint: { defaults: { state: 'experimental-off' }, requires: [], decisionSection: '§16' }, // measured inside §16 with familyReview
   /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
    * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue
    * treats as bookkeeping (re-opens nothing) / docs (re-opens no module phase) — see scripts/lib/gate-queue.cjs. */
   liteSplit: {
     defaults: { state: 'experimental-off', cap: 4, trigger: 3, ledgers: ['(^|/)CHANGELOG\\.md$'], docsOnly: ['(^|/)README\\.md$'] },
     requires: [],
+  },
+  /* A lane on another machine over plain ssh, git as the only data path — scripts/lib/orch-remote.cjs, EXPERIMENTS.md
+   * §18. `remotePollSeconds` is the liveness poll; the stall threshold is the lane's stallMinutes. */
+  remoteLanes: { defaults: { state: 'experimental-off', remotePollSeconds: 30 }, requires: [], experiment: '§18' },
+  /* The free-model MCP server (tooling/experimental/free-model-mcp.cjs): one tool, one fixed route on the local gateway,
+   * loopback only, the outbound guard over every prompt. `promptMaxBytes` is a number or { default, <account> }. */
+  freeModelMcp: { defaults: { state: 'experimental-off', baseUrl: 'http://127.0.0.1:20128', route: null, promptMaxBytes: 200000, maxTokens: 2048, timeoutMs: 120000 }, requires: ['route'], experiment: '§20' },
+  /* The loop runner above a board — scripts/board-loop.mjs, scripts/lib/board-loop.cjs, EXPERIMENTS.md §17. The caps live
+   * in the runner (D44, D48): maxPasses is required while on; the rest default to the field's loop practice. */
+  boardLoop: {
+    defaults: { state: 'experimental-off', promptFile: 'LOOP_PROMPT.md', gate: null, maxPasses: null, passTimeoutMinutes: 60, maxTurnsPerPass: 20, stallMinutes: 5, maxRetriesPerRow: 2, maxConsecutiveFailures: 3, maxConsecutiveNoProgress: 3, testRoots: ['test/', 'tests/'] },
+    requires: ['promptFile', 'gate', 'maxPasses'],
+    experiment: '§17',
   },
   /* Removes finished git worktrees after their branch merged — scripts/worktree-sweep.mjs. `holdCommand` is the
    * project's own "something still needs this worktree" check (null = none). */
@@ -132,11 +158,11 @@ const FEATURES = {
     requires: ['target'],
   },
   /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
-   * disjoint lanes, places each lane on a seat (`seats`: a secondary-account terminal worker and/or a sub-agent of
-   * the orchestrating session, each under its usage `limits` percent), merges finished lanes one at a time into
-   * `target` through `gates`, and — only with `credit.enabled` — runs credit jobs on an API credit balance with the
-   * guards in scripts/lib/orch-credit.cjs. Every command template is the project's own; null means "not available
-   * here" and the step says so. */
+   * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
+   * `target` through `gates`, and runs headless jobs on an api-key account with the guards in scripts/lib/orch-credit.cjs.
+   * The 1.0 keys `seats`, `limits`, `secondaryConfigDir` and `credit` are gone: a profile that still carries them is
+   * refused while the orchestrator is active and warned about otherwise (`npx builder-pipeline accounts migrate`, D33). Every
+   * command template is the project's own; null means "not available here" and the step says so. */
   orchestrator: {
     defaults: {
       state: 'off',
@@ -153,10 +179,7 @@ const FEATURES = {
       modulesDir: null,
       stallMinutes: 90,
       usageStaleMinutes: 30,
-      seats: ['primary'],
       primaryLaunch: 'manual',
-      limits: { secondary: 80, primary: 60 },
-      secondaryConfigDir: null,
       usageCommand: null,
       launchCommand: null,
       stateCommand: null,
@@ -169,29 +192,20 @@ const FEATURES = {
       capacity: null,
       preflight: [],
       tests: { mode: 'local', local: null, remote: null },
-      credit: {
-        enabled: false,
-        worker: 'claude-code',
-        dailyCapUsd: null,
-        periodBudgetUsd: null,
-        renewDay: 1,
-        tzOffsetMinutes: 0,
-        reserveUsd: 0,
-        lapses: false,
-        fallback: ['secondary', 'primary'],
-        commands: ['git status', 'git diff', 'git diff --stat', 'git log --oneline -20'],
-        seatCommands: {},
-        forbidden: ['**/package.json', '**/package-lock.json', '**/npm-shrinkwrap.json', '**/yarn.lock', '**/pnpm-lock.yaml'],
-        testRoots: ['test/', 'tests/'],
-        guardDir: null,
-      },
     },
     requires: ['target'],
   },
+  /* Named accounts the orchestrator places lanes on: worker, who pays, content class, roles, budget, note — the
+   * registry rules are in scripts/lib/accounts-registry.cjs (plan M1, D22, D32). Replaces the 1.0 seats and credit lane. */
+  accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },
 };
+
+/** The project's visibility (§1, D23): what a `public` or `scratch` account may launch on. Default private — fail closed. */
+const VISIBILITY = Object.freeze(['public', 'private']);
 
 const DEFAULTS = {
   schema: SCHEMA,
+  visibility: 'private',
   commands: { tier: null, tiers: [], affected: null, typecheck: null },
   paths: {
     boards: 'tasks',
@@ -306,6 +320,7 @@ function logsProblem(logs, protectedGlobs, opts = {}) {
 function validate(settings) {
   const errors = [];
   if (settings.schema !== SCHEMA) errors.push(`schema: expected ${SCHEMA}, got ${JSON.stringify(settings.schema)}`);
+  if (!VISIBILITY.includes(settings.visibility)) errors.push(`visibility: ${VISIBILITY.map((v) => JSON.stringify(v)).join(' or ')} (the project's visibility, §1; a public-only account launches only on a public project), got ${JSON.stringify(settings.visibility)}`);
   for (const section of ['commands', 'paths', 'models', 'features']) {
     if (!isObject(settings[section])) errors.push(`${section}: must be an object`);
   }
@@ -467,7 +482,16 @@ function validate(settings) {
       errors.push('features.worktreeSweep.holdCommand: null, or a command containing {path}');
     }
   }
+  /* The cost readers the kit ships. A third value would make cost-window print "unmeasurable" for a typo. */
+  const reader = settings.features?.costAccounting?.reader;
+  if (reader !== undefined && reader !== null && !COST_READERS.includes(reader)) {
+    errors.push(`features.costAccounting.reader: one of ${COST_READERS.map((r) => `"${r}"`).join(' | ')}, got ${JSON.stringify(reader)}`);
+  }
   errors.push(...validateOrchestrator(settings, badRegex));
+  errors.push(...accountsRegistry.validateAccounts(settings, { secretPatterns: require('./outbound-guard.cjs').PATTERNS }));
+  // The 1.0 seat keys: refused only while the orchestrator is active (D33); `warnings()` carries the other case.
+  const legacy = accountsRegistry.legacyKeys(settings.features?.orchestrator);
+  if (legacy.length && ACTIVE.has(settings.features?.orchestrator?.state)) errors.push(accountsRegistry.legacyMessage(legacy));
   const budget = settings.features?.instructionBudget?.maxLines;
   if (budget !== undefined && budget !== null && !(Number.isInteger(budget) && budget > 0)) errors.push('features.instructionBudget.maxLines: a positive integer');
   if (settings.features?.orchestratorModel && ACTIVE.has(settings.features.orchestratorModel.state) && !settings.models?.orchestrator) {
@@ -539,18 +563,8 @@ function validateOrchestrator(settings, badRegex) {
   if (active && o.standardPipeline === 'lite' && !ACTIVE.has(settings.features?.liteSplit?.state)) {
     errors.push(`${at('standardPipeline')}: "lite" needs features.liteSplit enabled — the lite lanes queue into its gate batch`);
   }
-  const seats = o.seats;
-  if (seats !== undefined) {
-    if (!Array.isArray(seats) || seats.length === 0 || seats.some((s) => !['primary', 'secondary'].includes(s)) || new Set(seats).size !== seats.length) {
-      errors.push(`${at('seats')}: a non-empty list of "secondary" and/or "primary", each once, in placement order`);
-    }
-  }
   if (o.primaryLaunch !== undefined && !['manual', 'app-session'].includes(o.primaryLaunch)) {
     errors.push(`${at('primaryLaunch')}: "manual" (the human starts the lane's session) or "app-session" (the orchestrator starts it — adapters/claude-code.md)`);
-  }
-  if (o.limits !== undefined) {
-    if (!isObject(o.limits)) errors.push(`${at('limits')}: { "secondary": pct, "primary": pct }`);
-    else for (const [k, v] of Object.entries(o.limits)) if (!['primary', 'secondary'].includes(k) || !(typeof v === 'number' && v > 0 && v <= 100)) errors.push(`${at(`limits.${k}`)}: a seat name with a percentage in (0, 100]`);
   }
   const template = (k, needs) => {
     const v = o[k];
@@ -563,9 +577,15 @@ function validateOrchestrator(settings, badRegex) {
   template('stopCommand', ['session']);
   template('launchCommand', ['brief']);
   template('gates', []);
-  for (const k of ['branchPrefix', 'worktreePrefix', 'secondaryConfigDir', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
-  if (active && Array.isArray(seats) && seats.includes('secondary') && !o.launchCommand) {
-    errors.push(`${at('launchCommand')}: required while "secondary" is a seat — it is how a secondary-seat lane starts (or drop "secondary" from seats)`);
+  for (const k of ['branchPrefix', 'worktreePrefix', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
+  /* The accounts the orchestrator runs on (features.accounts, through the 1.0 view until M3): a terminal worker
+   * account needs a launch command; an api-key account needs a model floor to check against. */
+  if (active) {
+    const view = accountsRegistry.legacyView(settings);
+    if (view.seats.includes('secondary') && !view.launchCommand && !o.launchCommand) {
+      errors.push(`features.accounts.accounts.${view.accounts.secondary}.command: required for a terminal worker account — it is how its lane starts ({brief})`);
+    }
+    if (view.credit.enabled && !settings.models?.strong && !settings.models?.mid) errors.push('models.strong / models.mid: at least one is required while an api-key account exists — the model floor is checked against them');
   }
   if (o.preflight !== undefined) {
     if (!Array.isArray(o.preflight)) errors.push(`${at('preflight')}: an array of { "name", "command", "tests"? }`);
@@ -588,36 +608,6 @@ function validateOrchestrator(settings, badRegex) {
       if (tests.mode === 'remote' && !tests.remote) errors.push(`${at('tests.remote')}: required while tests.mode is "remote"`);
     }
   }
-  const c = o.credit;
-  if (c !== undefined) {
-    if (!isObject(c)) return [...errors, `${at('credit')}: an object`];
-    if (typeof c.enabled !== 'boolean') errors.push(`${at('credit.enabled')}: true or false`);
-    if (c.worker !== 'claude-code') errors.push(`${at('credit.worker')}: "claude-code" (the one worker adapter shipped)`);
-    for (const k of ['commands', 'forbidden', 'testRoots']) if (c[k] !== undefined && !strList(c[k]) && !(Array.isArray(c[k]) && c[k].length === 0)) errors.push(`${at(`credit.${k}`)}: an array of non-empty strings`);
-    if (c.commands !== undefined && Array.isArray(c.commands) && c.commands.some((x) => typeof x === 'string' && /[*]/.test(x))) errors.push(`${at('credit.commands')}: whole named commands only — no wildcards`);
-    if (c.fallback !== undefined && (!Array.isArray(c.fallback) || c.fallback.some((a) => !['secondary', 'primary'].includes(a)) || new Set(c.fallback).size !== c.fallback.length)) {
-      errors.push(`${at('credit.fallback')}: a list of "secondary" and/or "primary", each once ([] = credit only)`);
-    }
-    if (c.seatCommands !== undefined && (!isObject(c.seatCommands) || Object.values(c.seatCommands).some((v) => !strList(v) || v.some((x) => /[*]/.test(x))))) {
-      errors.push(`${at('credit.seatCommands')}: { "<kind>": ["whole named command", …] }`);
-    }
-    const money = (k, { nullable }) => {
-      const v = c[k];
-      if (v === null || v === undefined) return nullable ? null : errors.push(`${at(`credit.${k}`)}: required while the credit lane is enabled`);
-      if (!(typeof v === 'number' && Number.isFinite(v) && v >= 0)) errors.push(`${at(`credit.${k}`)}: a number >= 0`);
-      return null;
-    };
-    if (c.renewDay !== undefined && !(Number.isInteger(c.renewDay) && c.renewDay >= 1 && c.renewDay <= 28)) errors.push(`${at('credit.renewDay')}: a whole day 1-28`);
-    if (c.tzOffsetMinutes !== undefined && !(Number.isInteger(c.tzOffsetMinutes) && Math.abs(c.tzOffsetMinutes) <= 14 * 60)) errors.push(`${at('credit.tzOffsetMinutes')}: whole minutes within ±840`);
-    if (active && c.enabled === true) {
-      money('dailyCapUsd', { nullable: false });
-      if (typeof c.dailyCapUsd === 'number' && !(c.dailyCapUsd > 0)) errors.push(`${at('credit.dailyCapUsd')}: must be > 0 (0 would read as "no cap" to one reader and "spend nothing" to another)`);
-      money('periodBudgetUsd', { nullable: true });
-      money('reserveUsd', { nullable: true });
-      if (Array.isArray(c.fallback) && c.fallback.includes('secondary') && !o.secondaryConfigDir) errors.push(`${at('secondaryConfigDir')}: required while the credit fallback names "secondary"`);
-      if (!settings.models?.strong && !settings.models?.mid) errors.push('models.strong / models.mid: at least one is required while the credit lane is enabled — the model floor is checked against them');
-    }
-  }
   return errors;
 }
 
@@ -635,17 +625,40 @@ function merge(base, over) {
  */
 function parse(text) {
   const blocks = [...String(text).matchAll(BLOCK)];
-  if (blocks.length === 0) return { found: false, settings: clone(DEFAULTS), errors: [] };
-  if (blocks.length > 1) return { found: true, settings: clone(DEFAULTS), errors: [`${blocks.length} pipeline-settings blocks — exactly one is allowed`] };
+  if (blocks.length === 0) return { found: false, settings: clone(DEFAULTS), errors: [], warnings: [] };
+  if (blocks.length > 1) return { found: true, settings: clone(DEFAULTS), errors: [`${blocks.length} pipeline-settings blocks — exactly one is allowed`], warnings: [] };
   let raw;
   try {
     raw = JSON.parse(blocks[0][1]);
   } catch (e) {
-    return { found: true, settings: clone(DEFAULTS), errors: [`pipeline-settings is not valid JSON: ${e.message}`] };
+    return { found: true, settings: clone(DEFAULTS), errors: [`pipeline-settings is not valid JSON: ${e.message}`], warnings: [] };
   }
-  if (!isObject(raw)) return { found: true, settings: clone(DEFAULTS), errors: ['pipeline-settings must be a JSON object'] };
+  if (!isObject(raw)) return { found: true, settings: clone(DEFAULTS), errors: ['pipeline-settings must be a JSON object'], warnings: [] };
   const settings = merge(DEFAULTS, raw);
-  return { found: true, settings, errors: validate(settings) };
+  return { found: true, settings, errors: validate(settings), warnings: warnings(settings) };
+}
+
+/**
+ * What loads but should be said once: the 1.0 seat keys on a profile whose orchestrator is off (D33). An error
+ * here would stop every checker in every installed project after `upgrade`; a warning names the fix and lets them run.
+ * @returns {string[]}
+ */
+function warnings(settings) {
+  const out = [];
+  const legacy = accountsRegistry.legacyKeys(settings.features?.orchestrator);
+  if (legacy.length && !ACTIVE.has(settings.features?.orchestrator?.state)) out.push(accountsRegistry.legacyMessage(legacy));
+  return out;
+}
+
+const warned = new Set();
+/** Print a profile warning to stderr once per process (every checker loads the profile; the person reads it once). */
+function warnOnce(path, list) {
+  for (const w of list || []) {
+    const key = `${path}:${w}`;
+    if (warned.has(key) || process.env.BUILDER_PROFILE_QUIET) continue;
+    warned.add(key);
+    process.stderr.write(`${basename(path)}: warning — ${w}\n`);
+  }
 }
 
 /**
@@ -666,14 +679,53 @@ function rootOf(dir) {
   return resolve(dir, '..');
 }
 
+/** The one settings block as bare JSON text (a config file, REQ-101): the same merge and validation as the §16 block. */
+function parseJson(text) {
+  let raw;
+  try {
+    raw = JSON.parse(String(text));
+  } catch (e) {
+    return { found: true, settings: clone(DEFAULTS), errors: [`pipeline-settings is not valid JSON: ${e.message}`] };
+  }
+  if (!isObject(raw)) return { found: true, settings: clone(DEFAULTS), errors: ['pipeline-settings must be a JSON object'] };
+  const settings = merge(DEFAULTS, raw);
+  return { found: true, settings, errors: validate(settings) };
+}
+
+/** The config file a project without a profile may use: `BUILDER_CONFIG` names it, else `<root>/builder.config.json`. */
+const CONFIG_FILE = 'builder.config.json';
+function configPath(root, env = process.env) {
+  if (env.BUILDER_CONFIG) return isAbsolute(env.BUILDER_CONFIG) ? env.BUILDER_CONFIG : resolve(root, env.BUILDER_CONFIG);
+  const local = join(root, CONFIG_FILE);
+  return existsSync(local) ? local : null;
+}
+
 /**
- * Read `PIPELINE_PROFILE.md` from a project root. No profile, or a profile without the block, yields the defaults
- * and `found: false` — every optional feature is then off and says so.
+ * Read the project's settings. `PIPELINE_PROFILE.md` is the source when it exists; a profile without the block yields
+ * the defaults and `found: false`. With no profile, the config file (`BUILDER_CONFIG`, else `builder.config.json`)
+ * is read as the bare JSON of the §16 block — same shape, same validation — so one kit tool runs in a project that
+ * never adopted the pipeline (REQ-101, REQ-102). A config file beside a profile is ignored and named in `notes`
+ * (REQ-103): two sources would be two truths. `source` is 'profile' | 'config' | 'defaults'.
  */
-function load(root = process.cwd(), file = 'PIPELINE_PROFILE.md') {
+function load(root = process.cwd(), file = 'PIPELINE_PROFILE.md', env = process.env) {
   const path = join(root, file);
-  if (!existsSync(path)) return { path, found: false, settings: clone(DEFAULTS), errors: [] };
-  return { path, ...parse(readFileSync(path, 'utf8')) };
+  const config = configPath(root, env);
+  if (existsSync(path)) {
+    const notes = config ? [`${relative(root, config).split('\\').join('/') || config} is ignored: ${file} exists and is the one source of settings`] : [];
+    const loaded = { path, source: 'profile', configPath: null, notes, ...parse(readFileSync(path, 'utf8')) };
+    warnOnce(path, loaded.warnings || []);
+    return loaded;
+  }
+  if (config) {
+    if (!existsSync(config)) {
+      return { path, source: 'config', configPath: config, notes: [], found: false, settings: clone(DEFAULTS), errors: [`BUILDER_CONFIG names ${config}, which does not exist`], warnings: [] };
+    }
+    const loaded = { path, source: 'config', configPath: config, notes: [], ...parseJson(readFileSync(config, 'utf8')) };
+    if (!loaded.warnings) loaded.warnings = [];
+    warnOnce(config, loaded.warnings);
+    return loaded;
+  }
+  return { path, source: 'defaults', configPath: null, notes: [], found: false, settings: clone(DEFAULTS), errors: [], warnings: [] };
 }
 
 /**
@@ -689,10 +741,10 @@ function feature(settings, name) {
     on: `${name}: on`,
     off: `${name}: not configured`,
     unmeasured: `${name}: on (unmeasured — its benefit has not been measured; see EXPERIMENTS.md)`,
-    'experimental-off': `${name}: experimental — not enabled`,
+    'experimental-off': FEATURES[name].experiment ? `${name}: experimental-off — not enabled; its measurement is EXPERIMENTS.md ${FEATURES[name].experiment}` : `${name}: experimental — not enabled`,
     'experimental-on': `${name}: experimental — enabled; its measurement is owed (EXPERIMENTS.md)`,
   }[state] ?? `${name}: invalid state ${JSON.stringify(state)}`;
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, logsProblem, feature, merge, rootOf };
+module.exports = { SCHEMA, STATES, VISIBILITY, FEATURES, DEFAULTS, CONFIG_FILE, COST_READERS, parse, parseJson, load, configPath, validate, warnings, logsProblem, feature, merge, rootOf, accounts: accountsRegistry };

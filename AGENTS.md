@@ -7,10 +7,10 @@ out of `package.json` `"files"`, and `tests/package.test.mjs` fails if it is add
 
 ## What this repository is
 
-`@geopjinfo/builder-pipeline`: an npm package, installed from a git tag, that gives any software project a
+`builder-pipeline`: an npm package, installed from a git tag, that gives any software project a
 multi-agent build pipeline for Claude Code, Codex and Antigravity (and prompt files for other agents). A zero-dependency
-Node CLI (`cli.js`, command `builder`) installs neutral personas, skills, templates and hooks into a project, and runs
-the kit's checker scripts there (`npx builder run <name>`). Every project fact lives in the project's own
+Node CLI (`cli.js`, command `builder-pipeline`) installs neutral personas, skills, templates and hooks into a project, and runs
+the kit's checker scripts there (`npx builder-pipeline run <name>`). Every project fact lives in the project's own
 `PIPELINE_PROFILE.md`; the kit carries none.
 
 ## Layout
@@ -47,7 +47,7 @@ the kit's checker scripts there (`npx builder run <name>`). Every project fact l
 7. **No project-specific ids.** Nothing shipped may name a project, product, person, private host, drive path or a
    project's ticket/decision/ruling ids. `tests/genericity.test.mjs` scans every shipped file; its allowlist is exact
    text only, for the kit's own neutral ids.
-8. **Install-neutral commands.** Shipped text says `npx builder <cmd>` / `npx builder run <name>`. A folder-layout form
+8. **Install-neutral commands.** Shipped text says `npx builder-pipeline <cmd>` / `npx builder-pipeline run <name>`. A folder-layout form
    (`node builder/cli.js`, `node scripts/<x>.mjs`) appears only on a line that says "folder layout", in a
    `> **Commands.**` note, or in Markdown the CLI installs (it rewrites them). Scripts and hooks print run hints through
    `scripts/lib/run-hint.cjs` only. Guarded by `tests/invocation.test.mjs` and `tests/kit-location.test.mjs`.

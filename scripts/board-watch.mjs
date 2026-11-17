@@ -1,6 +1,6 @@
 /**
- * `npx builder run board-watch` — keep every rendered run board current while a run is happening.
- * (folder layout: node scripts/board-watch.mjs in place of npx builder run board-watch)
+ * `npx builder-pipeline run board-watch` — keep every rendered run board current while a run is happening.
+ * (folder layout: node scripts/board-watch.mjs in place of npx builder-pipeline run board-watch)
  *
  * WHY THIS EXISTS. A page that is only fresh when somebody remembers to render it is a page that is
  * usually stale, and the freshness gate would then be failing runs for a forgotten chore rather than
@@ -18,10 +18,10 @@
  * swallowed. It renders only boards the freshness check calls stale, so a sweep over an idle repo
  * writes nothing at all.
  *
- *   npx builder run board-watch                  watch until stopped (the pipeline runs this)
- *   npx builder run board-watch --once          one sweep, then exit (what the tests drive)
- *   npx builder run board-watch --interval 30   also sweep on a timer, seconds (default 20)
- *   npx builder run board-watch --root <dir>    a repo root other than the cwd (tests, worktrees)
+ *   npx builder-pipeline run board-watch                  watch until stopped (the pipeline runs this)
+ *   npx builder-pipeline run board-watch --once          one sweep, then exit (what the tests drive)
+ *   npx builder-pipeline run board-watch --interval 30   also sweep on a timer, seconds (default 20)
+ *   npx builder-pipeline run board-watch --root <dir>    a repo root other than the cwd (tests, worktrees)
  */
 import { createRequire } from 'node:module';
 import { existsSync, readdirSync, watch } from 'node:fs';

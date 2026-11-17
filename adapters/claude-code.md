@@ -1,6 +1,6 @@
 # Adapter — Claude Code
 
-> **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
+> **Commands.** Written for the npm-package install: a kit script runs as `npx builder-pipeline run <name>`. With the
 > kit copied in as a `builder/` folder ([`UNPACK.md`](../UNPACK.md)), run it from the project's `scripts/` copy with Node.
 
 One adapter among eleven. It is privileged in nothing, but it has the richest native integration:
@@ -12,7 +12,7 @@ say, line by line, what each item becomes without this harness.
 
 ## File placement
 
-`npx builder unpack --tool claude-code --dry-run` prints every destination. It is the
+`npx builder-pipeline unpack --tool claude-code --dry-run` prints every destination. It is the
 authority if this table and the CLI ever disagree.
 
 | Kit file | Target |
@@ -26,11 +26,11 @@ authority if this table and the CLI ever disagree.
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |
 | `templates/module-brief.md` | `specs/module-brief.template.md` (or your briefs dir) |
 | `PIPELINE_PROFILE.template.md` | `PIPELINE_PROFILE.md` (repo root, **filled**, §16 included) |
-| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | **Package install: not copied.** They run from the package as `npx builder run <name>` (`npx builder run` lists them). Folder copy (`builder/`): `scripts/`, `scripts/lib/`, `scripts/oracles/` (plain Node, harness-independent) |
+| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | **Package install: not copied.** They run from the package as `npx builder-pipeline run <name>` (`npx builder-pipeline run` lists them). Folder copy (`builder/`): `scripts/`, `scripts/lib/`, `scripts/oracles/` (plain Node, harness-independent) |
 | `hooks/claude-code/*.cjs` | `.claude/hooks/` — **copied, never registered.** Registering is a person's act (below). Package install: the scripts those hooks load are vendored beside them under `.claude/hooks/kit/`, never read from `node_modules` |
 | `hooks/protected-paths.cjs`, `hooks/board-render.cjs` | `.claude/hooks/` — same rule. Register `protected-paths.cjs` on `PreToolUse` with the matcher `Edit\|Write\|MultiEdit\|NotebookEdit\|Bash\|PowerShell` (its header has the snippet): a matcher without `Bash`/`PowerShell` leaves the shell route unguarded, and one without `NotebookEdit` leaves notebook writes unguarded |
 | `agents/experimental/page-keeper.md` | `.claude/agents/page-keeper.md` — only with `--experimental` |
-| `tooling/experimental/page-shell.{cjs,mjs}` | only with `--experimental`. Package install: not copied, run as `npx builder run experimental/page-shell`. Folder copy: `scripts/experimental/` |
+| `tooling/experimental/page-shell.{cjs,mjs}` | only with `--experimental`. Package install: not copied, run as `npx builder-pipeline run experimental/page-shell`. Folder copy: `scripts/experimental/` |
 
 `scripts/unpack.sh claude-code` / `scripts/unpack.ps1 claude-code` does the copies without Node,
 but without the frontmatter transform.
@@ -114,10 +114,12 @@ defaults, and the advisory hooks say they did not run.
 | Hook | Event | What it does | Needs from §16 |
 |---|---|---|---|
 | `bash-output-cap.cjs` | `PostToolUse` · `Bash` | An output over `features.bashCap.limitBytes` is written whole under `paths.logs`. The context gets every error-shaped line with its line number, the tail, and the log path. The tier runner's output, already a digest, passes through. Never fails the tool call: any error leaves the original output in place | `bashCap` on · `limitBytes` · `paths.logs` |
-| `registry-read-guard.cjs` | `PreToolUse` · `Read` | Blocks a seat named in `features.registryGuard.seats` from reading the whole registry, and names the row reader instead: `npx builder run ledger-row registry <ID>`. The orchestrator carries no seat identity in the hook input and keeps Read | `registryGuard` on · `seats` · `paths.registry` · `rowReader` on |
-| `instruction-lint-on-edit.cjs` | `PostToolUse` · `Edit\|Write\|MultiEdit` | When the edited file is an instruction file, runs `npx builder run instruction-lint --files <it>`. A failure goes back to the agent as a blocking decision with the lint's lines, so a dead path or a bare line reference is fixed in the same turn. Never fails the tool call | `instructionLint` on · `files` |
+| `registry-read-guard.cjs` | `PreToolUse` · `Read` | Blocks a seat named in `features.registryGuard.seats` from reading the whole registry, and names the row reader instead: `npx builder-pipeline run ledger-row registry <ID>`. The orchestrator carries no seat identity in the hook input and keeps Read | `registryGuard` on · `seats` · `paths.registry` · `rowReader` on |
+| `instruction-lint-on-edit.cjs` | `PostToolUse` · `Edit\|Write\|MultiEdit` | When the edited file is an instruction file, runs `npx builder-pipeline run instruction-lint --files <it>`. A failure goes back to the agent as a blocking decision with the lint's lines, so a dead path or a bare line reference is fixed in the same turn. Never fails the tool call | `instructionLint` on · `files` |
 | `reanchor-after-compact.cjs` | `SessionStart` · `compact` | After a compaction, hands the session each run in flight: its `state.md` with the `Now:` line, the board and its first open phase, and the open `FIX-n` rows copied verbatim. It reads files only and makes no model call; no run in flight means no output. The orchestrator still re-reads the files: this only stops a summary from losing where they are | `reanchor` on · `maxRuns` · `paths.runs` · `paths.boards` |
 | `reviewer-write-guard.cjs` | `PreToolUse` · `Write\|Edit\|MultiEdit` | The reviewer may write exactly one kind of file: its review, `<runs>/<key>/review-pass<n>.md`. Every other write by that seat is blocked. A grant of Write to one file is only a grant if something enforces the one file | `reviewTemplate` on · `paths.runs` |
+| `lane-gate.cjs` | `TaskCompleted` · `Stop` | Runs the lane's gate (its test command) before a headless worker may call its work done. Exit 0 lets the completion through; a failed gate returns exit 2 with the gate output as the reason, so the verdict stays open. The kit writes this entry into a lane's `--settings` pin only, with the marker `builder-pipeline-lane-gate`, so the entry can be found and removed; it never enters a project's live settings | `accounts` on · the lane's gate command |
+| `lane-shell-allow.cjs` | `PreToolUse` · `Bash` | The loop worker's gate command in its two normalised forms (D69): with a `cd <own worktree> &&` prefix (no `..`, no other directory, no second command) or one `\| head -n N` / `\| tail -n N`. An accepted command answers `permissionDecision: allow`; any other command gets no answer and the exact allow list denies it as before. Written into the loop's `--settings` pin only, with the marker `builder-pipeline-lane-gate` | `boardLoop` on · the lane's gate command and worktree |
 
 **Where the cap takes effect — probed, not assumed.** A disposable project was driven headless with
 a large payload and a small negative control. In the **main session** the large output was replaced
@@ -160,7 +162,7 @@ other triggers.
 
 - **When it speaks:** only when the previous run left docs above the limit.
 - **When it stays silent:** no index, no interpreter, `INDEX_SYNC_SKIP` set, or index scripts that
-  differ from HEAD. It needs `hook-trust.cjs` beside it in the hooks folder (`npx builder unpack --tool
+  differ from HEAD. It needs `hook-trust.cjs` beside it in the hooks folder (`npx builder-pipeline unpack --tool
   claude-code` copies it with the guards); without it, it starts nothing.
 - **The merge trigger:** the post-merge block `sync-hook.sh` installs runs this same hook with
   `--trigger merge`, so both triggers get the same trust check and isolated interpreter.
@@ -197,7 +199,7 @@ started on. Nothing in a file pins it, so a run can silently use the wrong one. 
 `models.orchestrator` set and `features.orchestratorModel` on, run this at P0:
 
 ```
-npx builder run orchestrator-check
+npx builder-pipeline run orchestrator-check
 ```
 
 It reads the current session's transcript and compares the observed model with the declared one.
@@ -208,7 +210,7 @@ other session.
 
 ## Accounting: per-seat cost from the harness's own records
 
-With `features.costAccounting` on (`reader: "claude-code"`), `npx builder run board-render <key>`
+With `features.costAccounting` on (`reader: "claude-code"`), `npx builder-pipeline run board-render <key>`
 fills the agents table from the transcripts Claude Code writes, never from a seat's own report:
 
 - **Each seat from its own transcript** — the per-dispatch subagent file under the session, with
@@ -223,8 +225,8 @@ fills the agents table from the transcripts Claude Code writes, never from a sea
   version, and the table and its version change together. One adopting project found every rate in
   its hand-typed table wrong when it was checked against the published prices.
 
-Instruments that read the same records: `npx builder run cost-window` (spend over a time window,
-for before/after comparisons), `npx builder run seat-peaks` (per-dispatch peak context, which is
+Instruments that read the same records: `npx builder-pipeline run cost-window` (spend over a time window,
+for before/after comparisons), `npx builder-pipeline run seat-peaks` (per-dispatch peak context, which is
 how the builder-batch setting is judged).
 
 ## The batch orchestrator on Claude Code (feature `orchestrator`)
@@ -243,7 +245,7 @@ your CLI version before relying on it.
   Keep it in a small script beside your other tooling and reference the script from the template. A folder the
   account has never opened shows a trust prompt nobody is there to answer: open each lane folder once by hand, or
   reuse long-lived lane folders (list them in `features.worktreeSweep.reserved`). A background launch
-  (`claude --bg`) logs its session id; record it with `npx builder run orch launch-id <log>`, never the first id in
+  (`claude --bg`) logs its session id; record it with `npx builder-pipeline run orch launch-id <log>`, never the first id in
   the log: `--resume <id>` with flags starts a COPY and names the old session first, and the old session's `done`
   would stall the lane at once (exit 1 while the copy id is not in the log yet). It reads UTF-16 logs too
   (PowerShell's `*>`).
@@ -273,9 +275,33 @@ your CLI version before relying on it.
 
   Terminal-only setups keep `manual`. Cloud sessions are never used for lanes: they need network access an
   air-gapped project does not have.
-- **Shells.** In Windows PowerShell, `npm run x -- --flag` can drop the flags: call `npx builder run orch …`
+- **Shells.** In Windows PowerShell, `npm run x -- --flag` can drop the flags: call `npx builder-pipeline run orch …`
   directly. A version manager that swaps Node may also drop the globally installed CLI; reinstall it per Node
   version.
+
+### Worker recipe (a lane on a Claude Code account)
+
+How a lane starts on an account whose `worker` is `claude-code` (`features.accounts`; the rulebook is
+`skills/references/account-selection.md`):
+
+- **Start.** `npx builder-pipeline run orch gate-launch <run> <lane>` prints the launch line: the account, its `maxTurns` and
+  `timeoutMinutes`, the `--settings` pin and the filled command (the account's own `command`, else `launchCommand`).
+  Run that line; never a line you typed yourself.
+- **Environment.** `CLAUDE_CONFIG_DIR` is the account's dir (`accounts/<name>/` under the accounts home, or the
+  account's `configDir`). Every inherited `CLAUDE*` variable is cleared, and no API key or auth token is in the
+  environment: a plan account signs in through its own store, a key account through `apiKeyHelper` in the account's
+  own `settings.json`. The pin (`--settings <run>/pins/<lane>.settings.json`) carries the account's env block, its
+  config dir, its `baseUrl` and the deny rules of a path-root account; it never carries a key.
+- **Flags.** Headless: `claude -p --output-format json --json-schema <schema file> --permission-mode <the project's mode>
+  --permission-prompts none --max-turns <maxTurns>`; the runner owns the wall-clock timeout (`timeoutMinutes`).
+  Interactive terminal lane: the same config dir and pin, the project's permission mode, a first message pointing at
+  `{brief}` and `{result}`. Resume: `--resume <id>` under the same config dir only — a resume on another account
+  starts a copy with no memory of the lane.
+- **What the kit cannot enforce here.** The folder trust prompt (open each lane folder once by hand); what the model
+  does inside the permission mode you chose; a hook or env block the account's user-scope settings add (the settings
+  scan refuses the keys it knows, not every key); the subscription's own rate-limit clock (a `LIMIT` hold reads the
+  reset time the harness reports); a sign-in that expired between the assessment and the launch (the `AUTH` hold
+  then names `claude auth login`).
 
 **The credit worker** (`credit.worker: "claude-code"`, `scripts/lib/orch-worker-claude-code.cjs`) runs
 `claude -p --output-format stream-json --verbose` with the prompt on stdin, `--permission-mode dontAsk` and an exact
@@ -299,7 +325,7 @@ Each item has its measurement in [`EXPERIMENTS.md`](../EXPERIMENTS.md) and a §1
 `experimental-off` until someone turns it on on purpose.
 
 - **The live page** (`features.livePage`). A read-only page that shows the run as it happens,
-  published to the harness's hosted artifact store. `npx builder run board-render <key> --json`
+  published to the harness's hosted artifact store. `npx builder-pipeline run board-render <key> --json`
   writes **one document per section, each under the store's per-document cap** (256 KiB in the store
   this was built against; the limit is a parameter). An oversized section is split into parts that
   add back to the whole; it is never truncated. `page-shell.cjs` is the page: it reads the documents

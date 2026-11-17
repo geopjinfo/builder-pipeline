@@ -15,8 +15,8 @@ That is the whole setup prompt. Everything else is in the `builder-init` skill.
    - the `builder-init` skill, for each AI tool it detects in the project, recorded in `builder.lock.json` (so a later
      inventory knows the skill is the kit's, not yours);
    - the kit itself as a devDependency of the project, at the same `github:…#<tag>` spec (`package.json` is created
-     if there is none), then `npm install --save-dev` it. Every later `npx builder …` then runs this kit from the
-     project's `node_modules` — without it, a bare `npx builder` would fetch the unrelated npm package `builder`. No
+     if there is none), then `npm install --save-dev` it. Every later `npx builder-pipeline …` then runs this kit from the
+     project's `node_modules` — without it, a bare `npx builder-pipeline` would fetch the newest registry release, not your tag. No
      npm on PATH: the dependency is still written, and bootstrap tells you to run `npm install` before going on.
      `--no-dependency` skips this step.
 
@@ -24,13 +24,13 @@ That is the whole setup prompt. Everything else is in the `builder-init` skill.
 2. **`builder-init` (the skill, in your AI tool).** The judgement part:
    - decides **greenfield** (empty or near-empty repo: it interviews you — what is built, for whom, stack, domain —
      and drafts `PIPELINE_PROFILE.md`) or **brownfield** (it reads your code, docs and existing agent setup);
-   - runs `npx builder inventory --json`, which lists every skill, agent, persona and hook you already have and
+   - runs `npx builder-pipeline inventory --json`, which lists every skill, agent, persona and hook you already have and
      scores each against the kit;
    - reviews **every** item against the kit and shows you one table: verdict (keep yours / use the kit's / keep both,
      the kit's renamed `builder-<name>`) with reasons;
-   - waits for your confirm, then records each answer with `npx builder choices set …` into
+   - waits for your confirm, then records each answer with `npx builder-pipeline choices set …` into
      `builder.choices.json` — so a later `upgrade` never undoes them;
-   - installs (`npx builder unpack`), verifies (`npx builder verify`), and runs the persona detector
+   - installs (`npx builder-pipeline unpack`), verifies (`npx builder-pipeline verify`), and runs the persona detector
      (`persona-detect`).
 
    Your own items win by default. Anything that could clash and that you did not decide is **skipped**, not

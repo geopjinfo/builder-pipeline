@@ -20,7 +20,7 @@ const PACK = join(dirname(fileURLToPath(import.meta.url)), '..');
 const made = [];
 after(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 
-function project(kitAt = 'node_modules/@geopjinfo/builder-pipeline') {
+function project(kitAt = 'node_modules/builder-pipeline') {
   const proj = mkdtempSync(join(tmpdir(), 'kit-setup-'));
   made.push(proj);
   const kit = join(proj, ...kitAt.split('/'));
@@ -47,7 +47,7 @@ const NPM_INIT = {
   keywords: [],
   author: '',
   license: 'ISC',
-  devDependencies: { '@geopjinfo/builder-pipeline': 'file:../kit.tgz' },
+  devDependencies: { 'builder-pipeline': 'file:../kit.tgz' },
 };
 const inventory = (cli, proj) => JSON.parse(run(cli, proj, ['inventory', '--json']).stdout);
 

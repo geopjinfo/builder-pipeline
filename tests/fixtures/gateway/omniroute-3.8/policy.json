@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "profile": "hobby",
+  "budget": { "monthlyLimitUsd": 100, "warningThreshold": 0.8, "resetTime": "00:00" },
+  "pool": {
+    "paid": ["anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5", "anthropic/claude-haiku-5-5"],
+    "free": ["example-free/model-a", "example-free/model-b"]
+  },
+  "pricing": { "anthropic/claude-haiku-5-5": { "input": 0.1, "output": 0.5, "cached": 0.01, "cache_creation": 0.125 } },
+  "profiles": { "hobby": { "claudeApiAllowed": true, "freeAllowed": true, "default": "auto-balanced" } },
+  "keys": { "cli": "cli-hobby", "bridge": "bridge-hobby" }
+}

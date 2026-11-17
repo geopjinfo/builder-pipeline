@@ -122,17 +122,17 @@ describe('builder bootstrap', () => {
     assert.ok(!existsSync(join(proj, '.codex', 'agents')));
   });
 
-  test('--tool picks the tools; installed as a package the skill names npx builder', () => {
-    const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
+  test('--tool picks the tools; installed as a package the skill names npx builder-pipeline', () => {
+    const { proj, cli } = project('node_modules/builder-pipeline');
     const r = run(cli, proj, ['bootstrap', '--tool', 'antigravity']);
     assert.equal(r.status, 0, r.out);
     assert.deepEqual(files(proj), ['.agents/skills/builder-init/SKILL.md', 'builder.lock.json']);
-    assert.match(readFileSync(join(proj, '.agents/skills/builder-init/SKILL.md'), 'utf8'), /npx builder inventory/);
+    assert.match(readFileSync(join(proj, '.agents/skills/builder-init/SKILL.md'), 'utf8'), /npx builder-pipeline inventory/);
     assert.equal(run(cli, proj, ['bootstrap', '--tool', 'nope']).status, 1);
   });
 });
 
-const COMMANDS = ['unpack', 'upgrade', 'bootstrap', 'inventory', 'choices', 'doctor', 'personas-check', 'run', 'targets', 'verify', 'features', 'check-ledgers', 'check-targets'];
+const COMMANDS = ['unpack', 'upgrade', 'bootstrap', 'inventory', 'choices', 'doctor', 'personas-check', 'run', 'targets', 'verify', 'features', 'check-ledgers', 'check-targets', 'accounts'];
 
 test('red: the usage text, the README command list and the next steps name every command', () => {
   const { proj, cli } = project();

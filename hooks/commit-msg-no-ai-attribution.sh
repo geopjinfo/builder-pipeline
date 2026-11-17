@@ -7,7 +7,7 @@
 # for every commit, from any tool or person, whatever an agent's own instructions tell it to append — the rule lives
 # here, not in goodwill. Never blocks a commit: on any error the message is left as it was.
 #
-# Arm it (each clone; git hooks are not pushed): `npx builder git-hooks` copies it to the repository's hooks folder
+# Arm it (each clone; git hooks are not pushed): `npx builder-pipeline git-hooks` copies it to the repository's hooks folder
 # (core.hooksPath when set, else .git/hooks) and never overwrites a commit-msg hook already there.
 # (folder layout: node builder/cli.js git-hooks)
 

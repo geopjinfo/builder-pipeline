@@ -1,0 +1,160 @@
+[
+  {
+    "method": "PUT",
+    "path": "/api/combos/c-1",
+    "body": {
+      "name": "claude-auto-balanced-hobby",
+      "strategy": "auto",
+      "models": [
+        "anthropic/claude-sonnet-5-5",
+        "anthropic/claude-opus-5-5",
+        "anthropic/claude-haiku-5-5",
+        "example-free/model-a",
+        "example-free/model-b"
+      ],
+      "config": {
+        "explorationRate": 0,
+        "routerStrategy": "rules",
+        "modePack": "quality-first",
+        "auto": {
+          "explorationRate": 0,
+          "routerStrategy": "rules",
+          "modePack": "quality-first"
+        }
+      }
+    },
+    "why": "combo claude-auto-balanced-hobby updated"
+  },
+  {
+    "method": "POST",
+    "path": "/api/combos",
+    "body": {
+      "name": "claude-auto-coding-hobby",
+      "strategy": "auto",
+      "models": [
+        "anthropic/claude-sonnet-5-5",
+        "anthropic/claude-opus-5-5",
+        "anthropic/claude-haiku-5-5",
+        "example-free/model-a",
+        "example-free/model-b"
+      ],
+      "config": {
+        "explorationRate": 0,
+        "routerStrategy": "rules",
+        "modePack": "quality-first",
+        "auto": {
+          "explorationRate": 0,
+          "routerStrategy": "rules",
+          "modePack": "quality-first"
+        }
+      }
+    },
+    "why": "combo claude-auto-coding-hobby created"
+  },
+  {
+    "method": "POST",
+    "path": "/api/combos",
+    "body": {
+      "name": "claude-auto-cheap-hobby",
+      "strategy": "auto",
+      "models": [
+        "anthropic/claude-sonnet-5-5",
+        "anthropic/claude-opus-5-5",
+        "anthropic/claude-haiku-5-5",
+        "example-free/model-a",
+        "example-free/model-b"
+      ],
+      "config": {
+        "explorationRate": 0,
+        "routerStrategy": "rules",
+        "modePack": "cost-saver",
+        "auto": {
+          "explorationRate": 0,
+          "routerStrategy": "rules",
+          "modePack": "cost-saver"
+        }
+      }
+    },
+    "why": "combo claude-auto-cheap-hobby created"
+  },
+  {
+    "method": "POST",
+    "path": "/api/combos",
+    "body": {
+      "name": "claude-manual-sonnet-hobby",
+      "strategy": "priority",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ],
+      "config": {}
+    },
+    "why": "combo claude-manual-sonnet-hobby created"
+  },
+  {
+    "method": "POST",
+    "path": "/api/combos",
+    "body": {
+      "name": "claude-manual-opus-hobby",
+      "strategy": "priority",
+      "models": [
+        "anthropic/claude-opus-5-5"
+      ],
+      "config": {}
+    },
+    "why": "combo claude-manual-opus-hobby created"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/keys/k-1/access",
+    "body": {
+      "noLog": true,
+      "allowAutoCombos": false,
+      "allowedCombos": [
+        "claude-auto-balanced-hobby",
+        "claude-auto-coding-hobby",
+        "claude-auto-cheap-hobby",
+        "claude-manual-sonnet-hobby",
+        "claude-manual-opus-hobby"
+      ],
+      "catalogScope": "combos",
+      "modelAccessMode": "restricted",
+      "allowedModels": [
+        "anthropic/claude-sonnet-5-5",
+        "anthropic/claude-opus-5-5",
+        "anthropic/claude-haiku-5-5"
+      ]
+    },
+    "why": "key cli-hobby scoped to its combos"
+  },
+  {
+    "method": "POST",
+    "path": "/api/usage/budget",
+    "body": {
+      "apiKeyId": "k-1",
+      "monthlyLimitUsd": 100,
+      "warningThreshold": 0.8,
+      "resetInterval": "monthly",
+      "resetTime": "00:00"
+    },
+    "why": "budget on key k-1"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/pricing",
+    "body": {
+      "example-free/model-a": {
+        "input": 0,
+        "output": 0,
+        "cached": 0,
+        "cache_creation": 0
+      },
+      "example-free/model-b": {
+        "input": 0,
+        "output": 0,
+        "cached": 0,
+        "cache_creation": 0
+      }
+    },
+    "why": "pricing rows: example-free/model-a, example-free/model-b"
+  }
+]

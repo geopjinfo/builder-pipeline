@@ -1,6 +1,6 @@
 # Adapter — Codex (and similar single-agent CLIs)
 
-> **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
+> **Commands.** Written for the npm-package install: a kit script runs as `npx builder-pipeline run <name>`. With the
 > kit copied in as a `builder/` folder ([`UNPACK.md`](../UNPACK.md)), run it from the project's `scripts/` copy with Node.
 
 Codex has no persona-subagent registry, so the mapping preserves the kit's real invariant —
@@ -11,7 +11,7 @@ Codex has no persona-subagent registry, so the mapping preserves the kit's real 
 Codex now has custom agents, repo skills and hooks. The renderer in `adapters/lib/codex.cjs` (pure: text in,
 `{ path, content }` out) produces the native form below, and `unpack --tool codex` installs it (the `.builder/` placement
 further down is now only what the no-Node fallback `scripts/unpack.sh codex` writes). The hook script is copied to
-`.codex/hooks/` and the `hooks.json` block is printed, not written. `npx builder doctor --tool codex` lists
+`.codex/hooks/` and the `hooks.json` block is printed, not written. `npx builder-pipeline doctor --tool codex` lists
 what is partial or unsupported here. Checked against the official docs on 2026-11-14:
 [subagents](https://developers.openai.com/codex/subagents), [skills](https://developers.openai.com/codex/skills),
 [hooks](https://developers.openai.com/codex/hooks), [AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
@@ -41,7 +41,7 @@ Not wired, each for a documented reason (the module's `unconfirmed` list):
 
 ## File placement
 
-`npx builder unpack --tool codex --dry-run` prints every destination and is the authority.
+`npx builder-pipeline unpack --tool codex --dry-run` prints every destination and is the authority.
 
 | Kit file | Target |
 |---|---|
@@ -51,7 +51,7 @@ Not wired, each for a documented reason (the module's `unconfirmed` list):
 | `templates/task-board.md` | `tasks/README.md` |
 | `templates/deferred-registry.md` | `DEFERRED_TASKS.md` (repo root) |
 | `templates/module-brief.md` | `specs/module-brief.template.md` |
-| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | **Package install: not copied.** They run from the package as `npx builder run <name>`. Folder copy (`builder/`): `scripts/`, `scripts/lib/`, `scripts/oracles/` (plain Node, harness-independent) |
+| `scripts/*.mjs` + `scripts/lib/*.cjs` + `oracles/` | **Package install: not copied.** They run from the package as `npx builder-pipeline run <name>`. Folder copy (`builder/`): `scripts/`, `scripts/lib/`, `scripts/oracles/` (plain Node, harness-independent) |
 | `PIPELINE_PROFILE.template.md` | `PIPELINE_PROFILE.md` (repo root, **filled**, §16 included) |
 
 `scripts/unpack.sh codex` / `scripts/unpack.ps1 codex` does the copies without Node. `hooks/claude-code/`
@@ -118,10 +118,10 @@ Codex won't enforce tool scoping or model tiers per persona, so:
 
 ## The run board, while the run happens
 
-Start `npx builder run board-watch` in a second terminal when the board is materialised, and stop
+Start `npx builder-pipeline run board-watch` in a second terminal when the board is materialised, and stop
 it at close-out. There is no after-tool-call hook here, so the watcher is the only automatic path.
 If it is not running, the page is only as fresh as the last explicit
-`npx builder run board-render <key>`.
+`npx builder-pipeline run board-render <key>`.
 
 **The board file is the one progress surface.** Do not keep a parallel to-do list in the session.
 
@@ -129,26 +129,55 @@ If it is not running, the page is only as fresh as the last explicit
 
 | Claude Code step | Here |
 |---|---|
-| Instruction lint on edit | no post-edit hook. Run `npx builder run instruction-lint` before committing any instruction-file change; the P7 record gate runs it anyway |
+| Instruction lint on edit | no post-edit hook. Run `npx builder-pipeline run instruction-lint` before committing any instruction-file change; the P7 record gate runs it anyway |
 | Bash output cap hook | unavailable. Route every suite through the tier runner's digest (`commands.tier`), and never paste raw suite output into a phase |
-| Registry read guard hook | instruction only: seats read one row with `npx builder run ledger-row registry <ID>`; check a seat's transcript if in doubt |
+| Registry read guard hook | instruction only: seats read one row with `npx builder-pipeline run ledger-row registry <ID>`; check a seat's transcript if in doubt |
 | Reviewer write guard hook | post-phase `git status --porcelain`: the only change the reviewer may leave is its review file |
 | Re-anchor after compaction | unavailable. After any compaction, re-read `state.md`, the board's `phase:status` block and the open `FIX-n` rows by hand before the next dispatch (the playbook's rule) |
-| Session-start index refresh | unavailable. The P1 index gate (`npx builder run index-check`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
+| Session-start index refresh | unavailable. The P1 index gate (`npx builder-pipeline run index-check`) is the catch; for the graphify example, `autosync.py --trigger p1` refreshes under the shared lock and embed limit |
 | Subagent spawn depth 1 | not needed: fresh sessions cannot dispatch |
 | Prompt-cache TTL by replay | unavailable: no such settings are exposed |
 | `effort:` frontmatter | ignored. Use a per-run reasoning setting if your Codex version has one (profile §12) |
-| Orchestrator model check | `npx builder run orchestrator-check` prints `unmeasurable here`: no transcript it can read |
-| Per-seat cost accounting (`costAccounting`, `seat-peaks`, `cost-window`) | unavailable. The agents table renders em-dashes (see below) |
+| Orchestrator model check | `npx builder-pipeline run orchestrator-check` prints `unmeasurable here`: no transcript it can read |
+| Per-seat cost accounting (`costAccounting`, `seat-peaks`, `cost-window`) | partial. With `reader: "codex"`, `npx builder-pipeline run cost-window --since <iso> --until <iso>` reads the Codex rollout files under `$CODEX_HOME/sessions` (or `--transcripts <dir>`) and sums each session's tokens per model; one session file is one dispatch, its seat the session's `agent_role` or `codex-session`. The kit ships no OpenAI rates, so a session is unpriced (its tokens are shown, never `$0.00`) unless `--rates <file>` names a table. `seat-peaks` prints "unmeasurable" with its reason, and the agents table renders em-dashes (see below) |
 | Live page · Workflow-driven runs · advisor A/B | unavailable |
 | Batch orchestrator (`orchestrator`, `scripts/orch.mjs`) | runs as is: plain Node over git, with every seat action a command template you fill for this harness (`launchCommand`, `stateCommand`, `stopCommand`, `usageCommand`). A primary-seat pipeline lane is its own session. The credit worker adapter ships for Claude Code only — keep `credit.enabled` false here until one exists for this harness |
 | Language server plugin | unavailable as a plugin; any editor integration you run yourself is outside the pipeline |
+
+Codex keeps no per-dispatch usage records of the shape the board's accounting reader expects, so
+the per-seat model / wall-clock / token / cost columns render as em-dashes. That is the designed
+### Worker recipe (a lane on a Codex account)
+
+How a lane starts on an account whose `worker` is `codex` (`features.accounts`; the rulebook is
+`skills/references/account-selection.md`):
+
+- **Start.** `npx builder-pipeline run orch gate-launch <run> <lane>` prints the account, its caps and the filled command.
+  The account's `command` is the template; the kit fills `{brief}`, `{worktree}`, `{result}`, `{branch}`,
+  `{account}`, `{maxTurns}` and `{timeoutMinutes}`.
+- **Environment.** `CODEX_HOME` is the account's dir (`accounts/<name>/` under the accounts home, or the account's
+  `configDir`); `auth.json` and `config.toml` live there. No `OPENAI_*` variable is inherited: a key enters the
+  account once through `codex login --with-api-key` and is never stored by the kit.
+- **Flags.** Headless: `codex exec --json -s read-only` for a reading role (an auditor, the reviewer, a tester
+  that only reads) or `-s workspace-write` for a building role, with `--output-schema <schema file>` so the result
+  carries the fields the verdict needs. Codex has no turn-cap flag: the runner owns the timeout (`timeoutMinutes`)
+  and `maxTurns` is recorded on the launch line only. A review job uses the harness's review subcommand on the lane's
+  diff. Resume: `codex exec resume <id>` under the same `CODEX_HOME` only.
+- **What the kit cannot enforce here.** No hook runs: the registry guard, the reviewer write guard and the bash cap
+  are instructions, checked by `git status --porcelain` after the phase. No per-path deny rule exists, so a
+  path-root account (a `content` list) is refused on this worker rather than half-enforced. The sandbox is the
+  harness's own (`-s`), not the kit's. Usage is read from the session's own rate-limit records (unmeasured when
+  none is written).
 
 Codex keeps no per-dispatch usage records of the shape the accounting reader expects, so the
 per-seat model / wall-clock / token / cost columns render as em-dashes. That is the designed
 outcome, not a failure: every other section — rows, steps, gates, files, ceiling — is unaffected,
 and an em-dash says *unmeasured* where a zero would claim a measurement nobody took. Set
-`features.costAccounting` to `off` so the board says so.
+`features.costAccounting` to `off` so the board says so, or to `on` with `reader: "codex"` to
+measure spend windows with `cost-window`: it reads the `token_count` events of each rollout file
+(`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`), sums the differences between the cumulative
+totals per model, and lists any file whose shape it does not recognise as `unmeasurable` with the
+line number. The format it reads is written down in `specs/toolkit-cost-codex.spec.md` (maintainer
+repository).
 
 ## qa-audit (if installed)
 

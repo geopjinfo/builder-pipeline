@@ -27,6 +27,16 @@ The sweep spawns one seat per unit per lens plus the gate run — it is token-he
 human before starting** unless they already said run, and offer the cheaper scopes first when the
 scope is unclear: a unit subset, a lens subset, or `since <ref>` (each lens audits only the diff).
 
+## Without a profile
+
+The project has not adopted the pipeline, so there is no §1 layout, §2 gate list or §16 to read. Take the units
+and gates from `args` or from the person, and add the kit tools on named targets to the baseline; each runs with
+the default settings and says so on its first line: `npx builder-pipeline check-ledgers --boards <dir> --registry <file>` ·
+`npx builder-pipeline run spec-check <file>.md` · `npx builder-pipeline run claims-check --files <file>…` · `npx builder-pipeline inventory` ·
+`npx builder-pipeline run instruction-lint <file>…` · `npx builder-pipeline run instruction-budget <file>… [--max-lines <n>]` ·
+`npx builder-pipeline run worktree-sweep --target <branch>` (a dry run; `--apply` removes, and the audit never passes it).
+A `not configured` line is a check that did not run: list it under **Unverified**, never as a pass.
+
 ## Claude Code — the fan-out Workflow
 
 The kit ships [`audit-workflow.js`](audit-workflow.js), a Workflow script: Discover → Gates → Scan

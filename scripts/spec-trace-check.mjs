@@ -1,11 +1,14 @@
 /**
  * Every requirement id must have a test or a requirement-pack step. Rule: scripts/lib/spec-trace.cjs.
  *
- *   npx builder run spec-trace-check                      every id in features.specTrace.requirements
- *   npx builder run spec-trace-check <requirements.md> …  exactly these requirement files (one module's register)
+ *   npx builder-pipeline run spec-trace-check                      every id in features.specTrace.requirements
+ *   npx builder-pipeline run spec-trace-check <requirements.md> …  exactly these requirement files (one module's register)
+ *   --tests <path> · --packs <path>                       trace sources named here (repeatable) in place of §16's; with
+ *                                                         the feature off, named requirement files plus one of these
+ *                                                         run the check with the default id pattern, and say so
  *   --list                                                every requirement with its verdict and traces
  *   --json                                                machine-readable results
- * (folder layout: node scripts/spec-trace-check.mjs in place of npx builder run spec-trace-check)
+ * (folder layout: node scripts/spec-trace-check.mjs in place of npx builder-pipeline run spec-trace-check)
  *
  * Settings: features.specTrace — idPattern (the id shape) · requirements (files or folders that declare ids) ·
  * tests + testPattern (test files: any whole-token mention traces) · packs (requirement-pack files: a step traces —
@@ -32,22 +35,36 @@ if (loaded.errors.length > 0) {
   process.exit(2);
 }
 const feature = profile.feature(loaded.settings, 'specTrace');
-if (!feature.enabled) {
-  console.log(feature.line);
-  process.exit(0);
-}
-
-const args = process.argv.slice(2);
-const asJson = args.includes('--json');
-const list = args.includes('--list');
-const named = args.filter((a) => !a.startsWith('--'));
-const slash = (p) => p.replace(/\\/g, '/');
-const rel = (p) => slash(relative(process.cwd(), p) || p);
 
 const die = (message) => {
   console.error(`${NAME}: ${message}`);
   process.exit(2);
 };
+
+// `--tests <path>` and `--packs <path>` (each repeatable) name the trace sources on the command line. With the feature
+// off, named requirement files plus at least one source run the check with the default id pattern (REQ-403); without
+// them the feature's line is printed and nothing runs (REQ-404). A flag without its value is refused (REQ-405).
+const args = process.argv.slice(2);
+const asJson = args.includes('--json');
+const list = args.includes('--list');
+const named = [];
+const flagged = { tests: [], packs: [] };
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === '--tests' || a === '--packs') {
+    const value = args[i + 1];
+    if (!value || value.startsWith('--')) die(`${a} needs a value — usage: ${runHint(NAME)} [<requirements.md> …] [--tests <path>]… [--packs <path>]… [--list] [--json]`);
+    flagged[a.slice(2)].push(value);
+    i++;
+  } else if (!a.startsWith('--')) named.push(a);
+}
+if (!feature.enabled && (named.length === 0 || flagged.tests.length + flagged.packs.length === 0)) {
+  console.log(feature.line);
+  process.exit(0);
+}
+if (!feature.enabled) console.log(`${feature.line} — checking ${named.join(', ')} with defaults`);
+const slash = (p) => p.replace(/\\/g, '/');
+const rel = (p) => slash(relative(process.cwd(), p) || p);
 
 const walk = (p, out = []) => {
   if (statSync(p).isDirectory()) for (const entry of readdirSync(p).sort()) walk(join(p, entry), out);
@@ -71,8 +88,8 @@ const { config } = feature;
 const idRe = lib.compileId(config.idPattern);
 const testRe = config.testPattern ? new RegExp(config.testPattern) : null;
 const requirementFiles = readAll(named.length ? named : config.requirements, named.length ? 'named requirement file' : 'features.specTrace.requirements');
-const testFiles = readAll(config.tests ?? [], 'features.specTrace.tests', (p) => !testRe || testRe.test(p));
-const packFiles = readAll(config.packs ?? [], 'features.specTrace.packs');
+const testFiles = readAll(flagged.tests.length ? flagged.tests : config.tests ?? [], flagged.tests.length ? '--tests' : 'features.specTrace.tests', (p) => !testRe || testRe.test(p));
+const packFiles = readAll(flagged.packs.length ? flagged.packs : config.packs ?? [], flagged.packs.length ? '--packs' : 'features.specTrace.packs');
 
 const declaredMap = lib.declared(requirementFiles, idRe);
 let steps = [];

@@ -3,8 +3,8 @@
  * orch — the batch orchestrator's fixed steps (feature `orchestrator`). Judgement lives in skills/orchestrator.md;
  * everything mechanical is here, so a killed orchestrating session resumes from the state file, not from memory.
  *
- *   npx builder run orch <command> …       (not through npm run: some shells' npm drops --flags)
- * (folder layout: node scripts/orch.mjs in place of npx builder run orch)
+ *   npx builder-pipeline run orch <command> …       (not through npm run: some shells' npm drops --flags)
+ * (folder layout: node scripts/orch.mjs in place of npx builder-pipeline run orch)
  *
  * Plan → lanes
  *   digest <artifact.md|.html> [--out plan.md] [--run R] [--title T]
@@ -22,13 +22,23 @@
  * Lanes
  *   preflight [--run R]               the project's checks; exit 0 parallel, 6 single-lane only
  *   claim <run> <lane> | release <run> [lane] | claims
- *   gate-launch <run> <lane> [--resume]
- *                                     before a secondary-seat launch: refuses a lane `next` does not say to launch,
- *                                     or one placed on the primary seat; records the git config/hooks baseline;
- *                                     prints the lane's paths and the filled launchCommand. --resume also takes the
+ *   gate-launch <run> <lane> [--resume] [--max-budget-usd N]
+ *                                     before a terminal-worker launch: refuses a lane `next` does not say to launch,
+ *                                     or one placed on the orchestrating session's own account; refuses an account
+ *                                     with no maxTurns or timeoutMinutes, a cap raised in §16 without a decision-log
+ *                                     line, or a failed smoke re-run; records the git config/hooks baseline; prints
+ *                                     the lane's paths, the account, its caps and the filled launch command
+ *                                     (--max-budget-usd is a backstop, never a cap). An api-key account's launch
+ *                                     writes `account.paid` and a decision-log row. Then the pre-launch gate of the
+ *                                     placed account (REQ-401 to REQ-404, REQ-703): content policy, settings scan,
+ *                                     the lane worktree (fresh branch, include files, sparse on path roots) and the
+ *                                     --settings pin the launch command carries. --resume also takes the
  *                                     WAIT-P4 lane `next` offers SELF-AUDIT for, when a lane slot is free. Refused
  *                                     while a linkDirs entry of the lane worktree is a link and the brief names a
  *                                     reinstall step (link-guard)
+ *   worktree <run> <lane>             create the lane worktree (fresh branch, include files copied, sparse on path roots)
+ *   brief <run> <lane> [--write]      the worker brief from the template with the lane facts and its Account: line
+ *                                     filled from the placement (REQ-502); --write writes it once at the lane's brief path
  *   link-guard <folder> [--brief <file>]
  *                                     0 no linked dir · 4 a linkDirs entry is a link (never reinstall there) ·
  *                                     3 a link + a brief naming any reinstall step (unlink it yourself first)
@@ -39,10 +49,15 @@
  *   watch <run> <lane> [--every 20] [--max-min N]
  *                                     the finish notice for a terminal worker: exits when its result is written or
  *                                     its session stops working (0 DONE · 7 stalled). Run it in the background
- *   usage <run> <seat> <pct> | usage-read <run> [secondary|primary|all]
+ *   usage <run> <account> <pct> | usage-read <run> [<account>|all]
  *   status [run] [--split] [--json] | next <run>
+ *                                     every command refreshes the readiness assessment of features.accounts when it
+ *                                     is older than usageStaleMinutes; status, next, claim and gate-launch always do
  *                                     next also prints ADD-LANES (capacity), SELF-AUDIT <lane> (a WAIT-P4 lane while
  *                                     the credit lane is busy with other work) and CREDIT-FILL (spend behind pace)
+ * Board loop (features.boardLoop, experimental-off — EXPERIMENTS.md §17)
+ *   loop <board.md> [--more-passes N]   place the loop runner on a ready account (M3 placement seam), record the job
+ *                                     (kind loop, account, cap) and run it; status shows passes and the stop reason
  *   wait <run> [--timeout 110] [--from N]   block until the run logs an event (exit 0) or the timeout (exit 9)
  *   lease <run> --holder <name> [--ttl 300]  take/renew the run lease; another holder's live lease → exit 3
  *     --holder <name> on claim|set|approve|enqueue|merge|notice: refused (exit 3) while another holder's lease is live
@@ -55,6 +70,10 @@
  *   enqueue <run> <lane>
  *   merge <run> --slot-ok [--gates "<cmd>"] [--repo P] [--integration-wt D] [--direct]
  *                                     one lane at a time into features.orchestrator.target through the gates
+ * Remote lanes (features.remoteLanes, experimental-off — EXPERIMENTS.md §18)
+ *   remote add <run> <machine> --host H [--user U] --root <remoteRoot> | remote preflight <run> <machine>
+ *   remote place <run> <lane> <machine> | remote launch <run> <lane> --settings <pin> --base <branch> [--model M]
+ *   remote poll <run> <lane> | remote cancel <run> <lane>      the flag off prints "remoteLanes: not configured"
  * Credit lane (only with features.orchestrator.credit.enabled)
  *   credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget 0.50] [--allow-missing]
  *               [--queue <worktree>]  the queue the job goes into (default: the job worktree's own)
@@ -79,6 +98,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { runHint } = require('./lib/run-hint.cjs');
@@ -95,8 +115,15 @@ const credit = require('./lib/orch-credit.cjs');
 const snapshots = require('./lib/orch-snapshot.cjs');
 const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
+const orchLoop = require('./lib/orch-loop.cjs');
+const boardLoop = require('./lib/board-loop.cjs');
+const remote = require('./lib/orch-remote.cjs');
+const acct = require('./lib/orch-accounts.cjs');
+const policy = require('./lib/account-policy.cjs');
+const accountPaths = require('./lib/account-paths.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
+const PLACING_CMDS = new Set(['status', 'next', 'claim', 'gate-launch']);
 const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry', 'rerun', 'queue-only']);
 const argv = process.argv.slice(2);
 const cmd = argv.shift();
@@ -119,7 +146,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
+const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|worktree|brief|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -138,6 +165,12 @@ if (!feature.enabled) {
 }
 const cfg = feature.config;
 const settings = loaded.settings;
+// The 1.0 seat view of features.accounts (secondaryConfigDir, credit): the credit lane still reads it; placement reads
+// the account list itself (M3).
+const legacy = profile.accounts.legacyView(settings);
+const accountsOn = profile.accounts.accountsOn(settings);
+const acfg = { ...profile.accounts.FEATURE_DEFAULTS, ...((settings.features && settings.features.accounts) || {}) };
+const accountList = () => (accountsOn ? profile.accounts.list(settings) : []);
 const tierCmd = settings.commands && settings.commands.tier;
 
 let rootCache = null;
@@ -158,7 +191,7 @@ const runIds = () => {
 const testsModeNow = () => pre.testsMode(root(), cfg.tests.mode);
 const testsLine = () => pre.testsLine(testsModeNow(), cfg.tests, tierCmd);
 const creditCtx = () => credit.creditContext(settings);
-const creditOn = () => cfg.credit && cfg.credit.enabled === true;
+const creditOn = () => legacy.credit && legacy.credit.enabled === true;
 const creditOff = () => {
   console.log('orchestrator credit lane: not configured (features.orchestrator.credit.enabled is false)');
   process.exit(0);
@@ -184,7 +217,7 @@ function creditLines() {
   const lines = [];
   try {
     const croot = credit.creditRoot();
-    const st = credit.creditStatus({ root: croot, credit: cfg.credit });
+    const st = credit.creditStatus({ root: croot, credit: legacy.credit });
     lines.push(credit.pressureLine(st));
     lines.push(credit.reviewLine(credit.pendingReviewsAll({ root: croot })));
   } catch (e) {
@@ -193,15 +226,158 @@ function creditLines() {
   return lines.filter(Boolean).join('\n') || null;
 }
 
+/**
+ * The readiness assessment (REQ-307, REQ-309): every probe and usage reader of every account, written to the
+ * accounts-readiness record. Forced before a placement; otherwise only when the last assessment is stale. A fault in
+ * the assessment never stops the command: it is printed, and the accounts stay as last assessed.
+ */
+function assessAccounts(force) {
+  if (!accountsOn) return null;
+  try {
+    return acct.refresh(root(), settings, { force });
+  } catch (e) {
+    console.error(`accounts: assessment skipped — ${e.message.split(/\r?\n/)[0]}`);
+    return null;
+  }
+}
+
+/** The freshest reading for an account in this run: the run's own (`orch usage`) or the assessment's (REQ-309). */
+const readingOf = (s, name) => state.readingFor(s, acct.load(root()).accounts, name);
+
+/** The account lines for status: `<name>  <state>  <usage (time)>  v <version>` plus the budget warning (REQ-313). */
+function accountLines(s) {
+  if (!accountsOn) return [];
+  const rec = acct.load(root()).accounts;
+  const accounts = require('./lib/accounts.cjs');
+  return accountList().map((a) => {
+    const e = rec[a.name] || {};
+    const u = readingOf(s, a.name);
+    const usage = u ? accounts.renderUsage({ percent: u.pct ?? null, usd: u.usd ?? null, source: u.source || 'recorded', at: u.at, unpriced: !!u.unpriced }) : 'unmeasured';
+    const line = e.assessment ? `${a.name}  ${accounts.renderState(e.assessment)}  ${usage}  v ${e.assessment.version}` : `${a.name}  unmeasured (not assessed yet)  ${usage}  v unmeasured`;
+    const warn = acct.budgetWarn(u, a.budget, acfg.softLimitPct);
+    const err = acct.errorHolds(e.error) ? `${e.error.kind} until ${e.error.until || 'the next sign-in'}` : null;
+    return `  ${accounts.redact(line)}${warn ? `  ${warn}` : ''}${err ? `  ${err}` : ''}`;
+  });
+}
+
+/** The budget warning for a lane's account (REQ-313), or ''. */
+function laneWarn(s, name) {
+  if (!accountsOn || !name) return '';
+  const a = accountList().find((x) => x.name === name);
+  const w = a ? acct.budgetWarn(readingOf(s, name), a.budget, acfg.softLimitPct) : null;
+  return w ? ` (${w})` : '';
+}
+
+const cc = () => require('./lib/orch-worker-claude-code.cjs');
+const accountsCfg = () => profile.feature(settings, 'accounts').config;
+/** The live §16 row of the account a lane is placed on (its own seat, else the account `next` would place now), or null. */
+function laneRegistryAccount(s, l) {
+  const name = (l && l.seat) || state.placementNow(root(), s).seat;
+  return (name && accountList().find((a) => a.name === name)) || null;
+}
+const readText = (file) => {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+};
+/** Create the lane worktree when it is absent; an existing one is checked against the roots (REQ-402, REQ-405). */
+function laneWorktree(s, l, roots) {
+  if (fs.existsSync(l.worktree)) {
+    if (roots) {
+      const have = pre.sparseRoots(l.worktree);
+      const same = have && have.length === roots.length && roots.every((r) => have.includes(r));
+      if (!same) die(3, `E_PATH_ROOTS: worktree ${l.worktree} is not a sparse checkout of the roots ${roots.join(', ')} — remove it (or re-create it with orch worktree) before the launch`);
+    }
+    return { worktree: l.worktree, branch: l.branch, created: false, sparse: roots };
+  }
+  const include = (accountsCfg().worktree || {}).include || [];
+  try {
+    return { ...pre.createLaneWorktree({ repo: s.repo, worktree: l.worktree, branch: l.branch, base: s.target || 'HEAD', roots, include }), created: true };
+  } catch (e) {
+    die(3, e.message);
+  }
+  return null;
+}
+/**
+ * The pre-launch gate of a lane (REQ-401 to REQ-404, REQ-703): exits 3 with the check lines on any fault; else creates
+ * the worktree when absent, writes the --settings pin (0600) and returns { pinFile, roots }. No account = no policy.
+ */
+function policyGate(s, run, lane, l, account) {
+  if (!account) return { pinFile: null, roots: null };
+  const home = accountPaths.home();
+  const ap = accountPaths.paths(home, account.name, account);
+  const checks = pre.launchChecks({ account, paths: ap, homeExists: fs.existsSync(home) });
+  if (checks.length) {
+    for (const c of checks) console.log(`CHECK ${c.check}: ${c.message}`);
+    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: checks.map((c) => c.check) });
+    process.exit(3);
+  }
+  const projectDir = s.repo || process.cwd();
+  const roots = policy.pathRoots(account);
+  const lockFiles = (() => {
+    try {
+      return Object.keys(JSON.parse(fs.readFileSync(path.join(projectDir, 'builder.lock.json'), 'utf8')).files || {});
+    } catch {
+      return [];
+    }
+  })();
+  const entries = [
+    { file: path.join(projectDir, '.claude', 'settings.json'), role: 'project' },
+    { file: path.join(projectDir, '.claude', 'settings.local.json'), role: 'project' },
+    ...(l.worktree && fs.existsSync(l.worktree) ? [{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }] : []),
+    { file: ap.settingsFile, role: 'account' },
+  ];
+  const faults = policy.check(
+    account,
+    { visibility: settings.visibility, decisionIdPattern: profile.feature(settings, 'handoffPack').config.decisionIdPattern, decisionsPath: settings.paths.decisions, lockFiles, canDeny: account.worker === 'claude-code' },
+    [...(l.ownedFiles || []), ...(l.hotFiles || [])],
+    readText(path.join(projectDir, settings.paths.decisions)),
+    policy.readSettingsFiles(entries),
+  );
+  if (faults.length) {
+    for (const f of faults) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
+    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: faults.map((f) => f.code) });
+    process.exit(3);
+  }
+  let denyPaths = [];
+  // the lane worktree is made only beside a git checkout (a run may record a plain folder as its repo: no worktree then)
+  if (l.worktree && s.repo && fs.existsSync(path.join(s.repo, '.git'))) {
+    laneWorktree(s, l, roots);
+    if (roots) denyPaths = policy.denyPathsFor(pre.trackedFiles(s.repo, s.target || 'HEAD'), roots);
+  } else if (roots) die(3, `E_PATH_ROOTS: account ${account.name} has path roots (${roots.join(', ')}) and run ${run} records no repo or worktree for ${lane} — a path-root account launches only in a sparse worktree`);
+  // the worktree's own settings files exist only now: scan them too before the pin is written
+  if (l.worktree && fs.existsSync(l.worktree) && !entries.some((e) => e.role === 'worktree')) {
+    const late = policy.check(account, { lockFiles, canDeny: true, visibility: 'public' }, [], null, policy.readSettingsFiles([{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }]));
+    if (late.length) {
+      for (const f of late) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
+      state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: late.map((f) => f.code) });
+      process.exit(3);
+    }
+  }
+  let accountSettings = null;
+  try {
+    accountSettings = JSON.parse(fs.readFileSync(ap.settingsFile, 'utf8'));
+  } catch {
+    /* none: the scan above already judged an unreadable one */
+  }
+  const pinFile = path.join(store.runDir(root(), run), 'pins', `${lane}.settings.json`);
+  cc().writePin(pinFile, cc().pin({ account, configDir: ap.configDir, accountSettings, denyPaths }));
+  return { pinFile, roots };
+}
+
 function printStatus(runId, { split = false } = {}) {
   const s = state.load(root(), runId);
   const age = (t) => (t ? `${Math.round((Date.now() - Date.parse(t)) / 60000)}m` : '-');
   console.log(`run ${s.runId} · target ${s.target} · preflight ${s.preflightMode} · lanes ≤${s.maxLanes} · seats ${(s.seats || []).join(' → ')} · approved ${s.approved ? `yes (${s.approvedBy})` : 'NO'} · paused ${s.paused || fs.existsSync(state.pauseFile(root())) ? 'YES' : 'no'}`);
-  console.log(`usage ${Object.entries(s.usage).map(([a, u]) => `${a}=${u.pct}% (${age(u.at)} ago)`).join(' ') || 'unmeasured'} · merge queue [${s.mergeQueue.join(', ')}]`);
+  console.log(`usage ${Object.entries(s.usage).map(([a, u]) => `${a}=${typeof u.pct === 'number' ? `${u.pct}%` : `$${u.usd}`} (${age(u.at)} ago)`).join(' ') || 'unmeasured'} · merge queue [${s.mergeQueue.join(', ')}]`);
+  const al = accountLines(s);
+  if (al.length) console.log(`accounts:\n${al.join('\n')}`);
   console.log(testsLine());
   console.log('lane | status | level/track | dispatch | rows | seat | session | since-notice | branch');
   for (const [k, l] of Object.entries(s.lanes)) {
-    console.log(`${k} | ${l.status} | ${l.level}/${l.track} | ${l.dispatch} | ${l.rows.join(',')} | ${l.seat || '-'} | ${l.sessionId || '-'} | ${age(l.timings.lastNoticeAt || l.timings.launchedAt)} | ${l.branch}`);
+    console.log(`${k} | ${l.status} | ${l.level}/${l.track} | ${l.dispatch} | ${l.rows.join(',')} | ${l.seat ? `${l.seat}${laneWarn(s, l.seat)}` : '-'} | ${l.sessionId || '-'} | ${age(l.timings.lastNoticeAt || l.timings.launchedAt)} | ${l.branch}`);
   }
   if (split) {
     console.log('\nrow | lane | risk | level/track | dispatch | reason | hot files (queued)');
@@ -248,6 +424,7 @@ try {
     if (flags.holder === true) die(2, `usage: ${cmd} … --holder <name>`);
     lease.check(root(), pos[0], flags.holder);
   }
+  if (!['digest', 'split', 'link-guard', 'launch-id', 'help'].includes(cmd)) assessAccounts(PLACING_CMDS.has(cmd));
   switch (cmd) {
     case 'release-stale': {
       // A claim held by a PAUSED run, by a lane already MERGED or FAILED, or by a run that no longer exists blocks new
@@ -361,7 +538,14 @@ try {
         console.error(m.pct === null ? `lanes ≤${maxLanes}: no "${m.seat} <n>%" figure in ${flags.measured}` : `lanes ≤${maxLanes}: measured ${m.seat} ${m.pct}% ${m.pct < capacity.underPct ? '<' : '≥'} ${capacity.underPct}% (${flags.measured})`);
       }
       const hot = [...cfg.hot, settings.paths.registry, `${settings.paths.boards}/_gate-queue.md`];
-      const res = planLib.split(fs.readFileSync(pos[0], 'utf8'), { ...cfg, hot, maxLanes });
+      // familyReview (experimental, REQ-801/802): off, the key is absent and the split is byte-identical. On, the
+      // writer is --writer <account>, else the first account in registry order that may hold a lane.
+      const fam = profile.feature(settings, 'familyReview');
+      const famAccounts = accountList();
+      const writer = flags.writer || (famAccounts.find((a) => profile.accounts.placeable(a)) || {}).name || null;
+      const familyReview = fam.enabled && accountsOn ? { state: fam.config.state, accounts: famAccounts, writer } : undefined;
+      const res = planLib.split(fs.readFileSync(pos[0], 'utf8'), { ...cfg, hot, maxLanes, ...(familyReview ? { familyReview } : {}) });
+      if (res.familyReview) for (const line of res.familyReview.log) console.error(line);
       res.plan = { ...res.plan, file: path.resolve(pos[0]) }; // init keeps it; ADD-LANES names it
       const bad = planLib.laneOverlaps(res.lanes);
       if (bad.length) die(3, `internal: lanes overlap: ${bad.join('; ')}`);
@@ -383,7 +567,10 @@ try {
       const repo = repoOf();
       const s = state.init(root(), run, res, {
         repo, target: cfg.target, worktreeBase: path.dirname(repo), worktreePrefix: cfg.worktreePrefix || `${path.basename(repo)}-wt-`, branchPrefix: cfg.branchPrefix,
-        preflightMode: flags.mode === 'parallel' ? 'parallel' : 'single', seats: cfg.seats, limits: cfg.limits, stallMinutes: cfg.stallMinutes, usageStaleMinutes: cfg.usageStaleMinutes,
+        preflightMode: flags.mode === 'parallel' ? 'parallel' : 'single', stallMinutes: cfg.stallMinutes,
+        ...(accountsOn
+          ? { accounts: accountList(), softLimitPct: acfg.softLimitPct, placement: acfg.placement, usageStaleMinutes: acfg.usageStaleMinutes }
+          : { seats: legacy.seats, limits: legacy.limits, usageStaleMinutes: cfg.usageStaleMinutes }),
         capacity: cfg.capacity, credit: creditOn(),
       });
       console.log(`run ${run}: ${Object.keys(s.lanes).length} lanes, state ${path.join(store.runDir(root(), run), 'state.json')}`);
@@ -467,10 +654,104 @@ try {
         for (const line of g.lines) console.error(line);
         if (g.code === 3) process.exit(3);
       }
-      if (!resume && acts.some((a) => a.startsWith(`LAUNCH ${lane}:`) && / on primary \(/.test(a))) die(3, `REFUSED launch ${run}/${lane}: placed on the primary seat — start it on the primary account (a sub-agent for a solo lane, its own session for a pipeline lane), not with the secondary launcher`);
+      // the account the lane goes to: the placement `next` made (a resume keeps the lane's own)
+      const placed = resume && l.seat ? l.seat : state.placementNow(root(), s).seat;
+      const acc = state.accountOf(s, placed);
+      if (!resume && acc && acc.worker === 'session') die(3, `REFUSED launch ${run}/${lane}: placed on the ${placed} seat — start it on the ${placed} account (the orchestrating session itself: a sub-agent for a solo lane, its own session for a pipeline lane), not with the terminal launcher`);
+      const reg = accountList().find((a) => a.name === placed) || null; // the live §16 row (caps, smoke, maxTurns)
+      if (reg && !state.isLegacyState(s)) {
+        // REQ-313: a hard cap or soft limit raised in §16 since init needs a decision-log row with both values
+        const decisionsFile = path.join(s.repo || process.cwd(), settings.paths.decisions);
+        let decisions = '';
+        try {
+          decisions = fs.readFileSync(decisionsFile, 'utf8');
+        } catch {
+          /* no log yet */
+        }
+        for (const r of acct.raisedCaps(s.accounts, accountList())) {
+          if (!acct.decisionCovers(decisions, r)) die(3, `REFUSED launch ${run}/${lane}: features.accounts.accounts.${r.name}.budget.${r.field} raised ${r.from} → ${r.to} without a decision-log line — add a row to ${settings.paths.decisions} that carries "${acct.raiseEntry(r.name, r.field, r.from, r.to)}", then launch again`);
+        }
+        const raised = acct.raisedCaps(s.accounts, accountList());
+        if (raised.length) state.update(root(), run, (st) => { st.accounts = accountList().map(state.slimAccount); }, { type: 'accounts.caps', data: { raised } });
+      }
+      // REQ-305: every launch carries a turn cap and a timeout from the account
+      const caps = reg || (acc && !acc.legacy ? acc : null);
+      if (caps) {
+        for (const field of ['maxTurns', 'timeoutMinutes']) {
+          if (!(typeof caps[field] === 'number' && caps[field] > 0)) die(3, `REFUSED launch ${run}/${lane}: account ${placed} has no ${field} — set features.accounts.accounts.${placed}.${field} (every launch carries maxTurns and timeoutMinutes; --max-budget-usd is only a backstop)`);
+        }
+      }
+      // REQ-308: a stale smoke pass re-runs before the account's first launch in this run; a failure refuses
+      if (reg && reg.smokeCommand && !Object.values(s.lanes).some((x) => x.seat === placed && !['PLANNED', 'CLAIMED'].includes(x.status))) {
+        const ap = accountPaths.paths(accountPaths.home(process.env), reg.name, reg);
+        const last = require('./lib/account-probes.cjs').smokeRecord(ap);
+        if (pre.smokeDue(last, Date.now(), acfg.usageStaleMinutes)) {
+          const sm = pre.runSmoke(reg, ap, { cwd: s.repo || process.cwd() });
+          state.event(root(), run, 'account.smoke', { lane, account: placed, ok: sm.ok, exit: sm.exit });
+          if (!sm.ok) {
+            acct.record(root(), placed, { state: 'not ready', reason: `smoke failed (exit ${sm.exit})`, until: null, assessedAt: sm.at });
+            die(3, `REFUSED launch ${run}/${lane}: smoke failed on account ${placed} (exit ${sm.exit}) — the account is not ready; fix it (${reg.smokeCommand}), then launch again`);
+          }
+          console.error(`smoke ${placed}: passed at ${sm.at}`);
+        }
+      }
+      // M4: the placed account's content policy, the settings scan, the lane worktree and the --settings pin (REQ-401 to REQ-404, REQ-703)
+      const gate = reg ? policyGate(s, run, lane, l, reg) : { pinFile: null, roots: null };
       if (!l.integrity) state.integrityBaseline(root(), run, lane); // a resume keeps the first baseline: a change from an earlier attempt is never laundered
-      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch };
-      out({ name: l.name, worktree: l.worktree, branch: l.branch, brief: l.brief, result: l.result, launch: cfg.launchCommand ? pre.fill(cfg.launchCommand, vars) : null });
+      // REQ-303: a launch on a pays-per-use account is written down twice — the run's events and the project's decision log
+      if (!resume && acc && acc.pays === 'api-key') {
+        const decisionsFile = path.join(s.repo || process.cwd(), settings.paths.decisions);
+        acct.appendDecision(decisionsFile, { id: `D-orch-${run}-${lane}`, decision: `lane ${lane} of run ${run} launched on api-key account ${placed}`, why: 'every plan account was full, not ready or excluded; the account pays per use (REQ-303)' });
+        state.event(root(), run, 'account.paid', { lane, account: placed, decisions: settings.paths.decisions });
+      }
+      const model = (settings.models && (settings.models.strong || settings.models.mid)) || null;
+      const pricing = require('./lib/pricing.cjs');
+      const priced = model ? pricing.cost(model, { input_tokens: 1 }) !== null : false;
+      const backstop = flags['max-budget-usd'] && flags['max-budget-usd'] !== true ? Number(flags['max-budget-usd']) : null;
+      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch, account: placed || '', maxTurns: caps ? caps.maxTurns : '', timeoutMinutes: caps ? caps.timeoutMinutes : '', settings: gate.pinFile || '' };
+      const template = (reg && reg.command) || (acc && acc.command) || cfg.launchCommand || legacy.launchCommand || null;
+      let launch = template ? pre.fill(template, vars) : null;
+      if (launch && gate.pinFile && !String(template).includes('{settings}')) launch = cc().withSettings(launch, gate.pinFile);
+      out({
+        name: l.name, worktree: l.worktree, branch: l.branch, brief: l.brief, result: l.result,
+        account: placed, worker: acc ? acc.worker : null, pays: acc ? acc.pays : null, maxTurns: caps ? caps.maxTurns : null, timeoutMinutes: caps ? caps.timeoutMinutes : null,
+        model, price: model ? (priced ? `pinned (pricing ${pricing.VERSION})` : 'unpriced') : 'no model', maxBudgetUsd: backstop, maxBudgetUsdRole: 'backstop only — never a cap',
+        settings: gate.pinFile, sparse: gate.roots, launch,
+      });
+      break;
+    }
+    case 'worktree': {
+      // create a lane's worktree the hygienic way (REQ-405): a fresh branch, the include files copied, sparse on a path-root account
+      const [run, lane] = pos;
+      const s = state.load(root(), run);
+      const l = s.lanes[lane];
+      if (!l) die(2, `no lane ${lane}`);
+      if (!l.worktree || !s.repo) die(3, `refused: run ${run} records no repo or worktree path for ${lane} — re-init with --repo`);
+      const account = laneRegistryAccount(s, l);
+      const r = laneWorktree(s, l, account ? policy.pathRoots(account) : null);
+      console.log(`${r.created ? 'created' : 'exists'} ${r.worktree} on ${r.branch}${r.fresh === false ? ' (branch existed, no worktree held it)' : ''}${r.sparse ? ` · sparse: ${r.sparse.join(', ')}` : ''}${r.copied && r.copied.length ? ` · copied: ${r.copied.join(', ')}` : ''}${r.missing && r.missing.length ? ` · not found: ${r.missing.join(', ')}` : ''}`);
+      break;
+    }
+    case 'brief': {
+      // the worker brief skeleton: the template with the lane facts and the placed account filled in (REQ-502)
+      const [run, lane] = pos;
+      if (!run || !lane) die(2, 'usage: brief <run> <lane> [--write]');
+      const s = state.load(root(), run);
+      const l = s.lanes[lane];
+      if (!l) die(2, `no lane ${lane}`);
+      const installed = path.join(s.repo || process.cwd(), 'specs', 'orchestrator-worker-brief.template.md');
+      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'orchestrator-worker-brief.md');
+      const placed = l.seat || state.placementNow(root(), s).seat || null;
+      const account = placed ? laneRegistryAccount(s, l) || state.accountOf(s, placed) : null;
+      const text = planLib.renderBrief(fs.readFileSync(templateFile, 'utf8'), { run, lane: { ...l, name: lane }, rows: s.rows || [], target: s.target, account });
+      if (!flags.write) {
+        process.stdout.write(text);
+        break;
+      }
+      if (fs.existsSync(l.brief)) die(3, `refused: ${l.brief} exists — the brief is yours once written; edit it, or remove it and run brief --write again`);
+      fs.mkdirSync(path.dirname(l.brief), { recursive: true });
+      fs.writeFileSync(l.brief, text);
+      console.log(`wrote ${l.brief}${account ? ` (Account: ${account.name})` : ' (no placement yet: fill the Account: line)'}`);
       break;
     }
     case 'set': {
@@ -539,19 +820,35 @@ try {
       break;
     }
     case 'usage': {
-      if (pos.length < 3) die(2, 'usage: usage <run> <secondary|primary> <pct>');
-      const seat = String(pos[1]).toLowerCase(); // a seat name in any case is that seat, never another one
-      state.recordUsage(root(), pos[0], seat, pos[2]);
-      console.log(`usage ${seat}=${pos[2]}%`);
+      if (pos.length < 3) die(2, 'usage: usage <run> <account> <pct | $usd>');
+      const seat = String(pos[1]).toLowerCase(); // a name in any case is that account, never another one
+      const usd = /^\$/.test(String(pos[2]));
+      state.recordUsage(root(), pos[0], seat, usd ? { usd: String(pos[2]).slice(1) } : pos[2]);
+      console.log(`usage ${seat}=${usd ? pos[2] : `${pos[2]}%`}`);
       break;
     }
     case 'usage-read': {
       const s = state.load(root(), pos[0]);
       const want = String(pos[1] || 'all').toLowerCase();
-      const seats = want === 'all' ? s.seats : [want];
-      // an unknown seat is refused BEFORE anything is read — it must never be read as another seat and recorded
-      for (const seat of seats) if (!state.SEATS.includes(seat)) die(2, `refused: unknown seat ${JSON.stringify(pos[1])} (${state.SEATS.join('|')}|all)`);
+      const names = state.seatNames(s);
+      const seats = want === 'all' ? names : [want];
+      // an unknown account is refused BEFORE anything is read — it must never be read as another one and recorded
+      for (const seat of seats) if (!names.includes(seat)) die(2, `refused: unknown seat ${JSON.stringify(pos[1])} — the run's accounts: ${names.join('|')}|all`);
       for (const seat of seats) {
+        const a = accountList().find((x) => x.name === seat);
+        if (a && a.usageCommand && !cfg.usageCommand) {
+          // the account's own reader ("$X of $Y"), through the assessment's gatherer
+          const r = require('./lib/account-probes.cjs').collect(a, accountPaths.paths(accountPaths.home(process.env), a.name, a), {});
+          const reading = require('./lib/accounts.cjs').pickReading(r.usage);
+          if (!reading) {
+            state.recordUsageUnknown(root(), pos[0], seat, [`${a.usageCommand}: no "$X of $Y" line`]);
+            console.log(`usage ${seat}=unknown — ${a.usageCommand} printed no "$X of $Y" line`);
+            continue;
+          }
+          state.recordUsage(root(), pos[0], seat, { pct: reading.percent, usd: reading.usd, source: reading.source, at: reading.at });
+          console.log(`usage ${seat}=${typeof reading.percent === 'number' ? `${reading.percent}%` : `$${reading.usd}`} (${reading.source} ${reading.at})`);
+          continue;
+        }
         const u = pre.readUsage(seat, cfg.usageCommand);
         if (u.pct === null) {
           state.recordUsageUnknown(root(), pos[0], seat, u.lines);
@@ -604,6 +901,7 @@ try {
       const ids = pos[0] ? [pos[0]] : runIds();
       if (!ids.length) {
         console.log(`no runs under ${root()}`);
+        for (const l of orchLoop.statusLines(root())) console.log(l);
         const c = creditLines();
         if (c) console.log(c);
         break;
@@ -616,6 +914,7 @@ try {
         printStatus(id, { split: !!flags.split });
         console.log('');
       }
+      for (const l of orchLoop.statusLines(root())) console.log(l);
       const c = creditLines();
       if (c) console.log(c);
       break;
@@ -707,14 +1006,66 @@ try {
       for (const id of runIds()) state.setPaused(root(), id, false);
       console.log('RESUMED — run `status` for relaunch actions');
       break;
+    case 'loop': {
+      const bl = profile.feature(settings, 'boardLoop');
+      if (!bl.enabled) {
+        console.log(bl.line);
+        process.exit(0);
+      }
+      const [boardFile] = pos;
+      if (!boardFile) die(2, 'usage: loop <board.md> [--more-passes N]');
+      const key = path.basename(boardFile).replace(/\.md$/, '');
+      const placed = orchLoop.placeLoop(settings, boardFile, { env: process.env });
+      if (!placed.account) die(3, `REFUSED loop ${boardFile}: no account reads ready — ${placed.reason}`);
+      const more = flags['more-passes'] && flags['more-passes'] !== true ? Number(flags['more-passes']) : 0;
+      orchLoop.recordLoop(root(), key, { account: placed.account, cap: bl.config.maxPasses + more, board: boardFile, status: 'running', passes: 0, stopReason: null });
+      console.log(`loop ${key} placed on ${placed.account} (cap ${bl.config.maxPasses + more})`);
+      boardLoop
+        .runLoop({ cwd: process.cwd(), settings, accountName: placed.account, board: boardFile, morePasses: more, io: { env: process.env, log: (l) => console.log(l) } })
+        .then((r) => {
+          orchLoop.recordLoop(root(), key, { status: 'stopped', passes: r.passes, stopReason: r.reason, rowsDone: r.rowsDone, rowsTotal: r.rowsTotal });
+          process.exit(r.exitCode);
+        })
+        .catch((e) => {
+          orchLoop.recordLoop(root(), key, { status: 'error', error: e.message });
+          die(2, `loop ${key}: ${e.message}`);
+        });
+      break;
+    }
+    case 'remote': {
+      const [sub, run, a, b] = pos;
+      if (!remote.featureOn(settings)) {
+        console.log(remote.notConfigured());
+        process.exit(0);
+      }
+      const rf = profile.feature(settings, 'remoteLanes').config;
+      const env = process.env;
+      if (sub === 'add') out(remote.addMachine(root(), run, a, { host: flags.host, user: flags.user === true ? null : flags.user || null, remoteRoot: flags.root }));
+      else if (sub === 'preflight') out(remote.preflight(root(), run, a, { env }));
+      else if (sub === 'place') out(remote.place(root(), run, a, b, { settings }).line);
+      else if (sub === 'launch') {
+        const acct = (settings.features.accounts && settings.features.accounts.accounts) || {};
+        const l = state.load(root(), run).lanes[a];
+        const maxTurns = Number(flags['max-turns']) || (l && l.account && acct[l.account] && acct[l.account].maxTurns) || null;
+        const r = remote.launch(root(), run, a, { env, settingsFile: flags.settings === true ? null : flags.settings ? path.resolve(flags.settings) : null, base: flags.base, maxTurns, model: flags.model === true ? null : flags.model || null });
+        out(r);
+        if (!r.ok) process.exit(3);
+      } else if (sub === 'poll') {
+        const r = remote.poll(root(), run, a, { env });
+        out(r);
+        console.log(`next poll in ${rf.remotePollSeconds}s`);
+      } else if (sub === 'cancel') out(remote.cancel(root(), run, a, { env }));
+      else die(2, 'usage: remote add|preflight|place|launch|poll|cancel …');
+      break;
+    }
     case 'credit': {
       if (!creditOn()) creditOff();
       const croot = credit.creditRoot();
-      const st = credit.creditStatus({ root: croot, credit: cfg.credit });
+      const st = credit.creditStatus({ root: croot, credit: legacy.credit });
       console.log(credit.statusLine(st));
       if (st.reserve) console.log(`  reserve held back: $${st.reserve.toFixed(2)} — released in the final 7 days`);
       for (const f of st.unreported) console.log(`  unreported cost (counted $0): ${f}`);
-      console.log(`  fallback: ${credit.accountChain(cfg.credit).map((a) => credit.ACCOUNT_LABEL[a]).join(' → ')}`);
+      console.log(`  fallback: ${credit.accountChain(legacy.credit).map((a) => credit.ACCOUNT_LABEL[a]).join(' → ')}${accountsOn ? ` (accounts, registry order: ${[legacy.accounts.credit, ...creditCtx().fallbackAccounts].filter(Boolean).join(' → ')})` : ''}`);
       const p = credit.pressureLine(st);
       if (p) console.log(p);
       const rv = credit.reviewLine(credit.pendingReviewsAll({ root: croot }));
@@ -740,7 +1091,7 @@ try {
     case 'credit-run': {
       if (!creditOn()) creditOff();
       const croot = creditQueueRoot();
-      const common = { root: croot, cwd: process.cwd(), env: process.env, rateRoot: root(), credit: cfg.credit, secondaryConfigDir: cfg.secondaryConfigDir, ctx: creditCtx() };
+      const common = { root: croot, cwd: process.cwd(), env: process.env, rateRoot: root(), credit: legacy.credit, secondaryConfigDir: legacy.secondaryConfigDir, ctx: creditCtx() };
       if (flags['all-queued']) {
         const noneHere = credit.queuedTasks(croot).length === 0;
         const q = await credit.runQueue({ ...common, report: (line) => console.log(line) });
