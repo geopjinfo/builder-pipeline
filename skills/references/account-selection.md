@@ -1,8 +1,8 @@
 # Account selection — the rulebook for the orchestrator
 
 This file says which account a job goes to. The orchestrator reads it before every placement. The fixed parts of
-the rule run inside `orch next`, `orch claim` and `orch gate-launch` (the `placement` rule of
-`scripts/lib/orch-state.cjs`). The judgement parts are yours. The registry is `features.accounts` in §16 of
+the rule run inside `orch next`, `orch claim` and `orch gate-launch` (the placement rule inside `orch`).
+The judgement parts are yours. The registry is `features.accounts` in §16 of
 `PIPELINE_PROFILE.md`; one entry is one account. Every key below is a key of that registry.
 
 ## 1. Terms

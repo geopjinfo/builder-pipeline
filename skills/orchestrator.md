@@ -100,7 +100,7 @@ For each `LAUNCH <lane>` line, in order:
 4. **Place it where `next` says** (`on <account>`). Which account a job may go to — ready only, the content class
    against the project's visibility, the role against the account's `roles`, the soft limit and `needs-account`, the
    pays order with `api-key` last, holds and the one retry, never a resume across accounts — is the rulebook
-   [`references/account-selection.md`](references/account-selection.md). The kit enforces its fixed parts inside
+   `build-module-pipeline/references/account-selection.md` (installed beside the pipeline skill). The kit enforces its fixed parts inside
    `next`, `claim` and `gate-launch`; the judgement parts are yours. In 1.0 terms placement follows `features.orchestrator.seats`
    and each seat's usage `limits`; read usage fresh before every launch (`orch usage-read <run>`, or
    `orch usage <run> <seat> <pct>` by hand). The primary seat's limit sits below the secondary's, because this
