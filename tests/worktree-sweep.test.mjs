@@ -217,3 +217,29 @@ describe('worktree sweep — settings and CLI', () => {
     assert.equal(bad.status, 2);
   });
 });
+
+describe('REQ-405 worktree-sweep --keep', () => {
+  test('red: REQ-405 --keep <lane> leaves that worktree in place and the report lists it as kept', () => {
+    const r = rig();
+    addWt(r, 'wt-r1-l1');
+    addWt(r, 'wt-r1-l2');
+    const lines = [];
+    const out = sweep.run({ ...opts(r), keep: ['l1'], report: (l) => lines.push(l) });
+    assert.deepEqual(out.kept.map((k) => k.name).filter((n) => n.startsWith('wt-')), ['wt-r1-l1']);
+    assert.match(lines.join('\n'), /^KEEP {2}wt-r1-l1 \[b\/wt-r1-l1\] — kept \(--keep l1\)$/m);
+    assert.deepEqual(out.swept.map((k) => k.name), ['wt-r1-l2']);
+    assert.ok(existsSync(join(r.parent, 'wt-r1-l1')));
+    // the whole folder name or the branch tail match too; a part of a name does not
+    assert.equal(sweep.plan(opts(r, { keep: ['wt-r1-l2'] })).find((i) => i.name === 'wt-r1-l2').verdict, 'KEEP');
+    assert.equal(sweep.plan(opts(r, { keep: ['1-l2'] })).find((i) => i.name === 'wt-r1-l2').verdict, 'SWEEP');
+  });
+
+  test('REQ-405 CLI: --keep is passed through and the summary counts it as kept', () => {
+    const r = rig();
+    addWt(r, 'wt-r1-l1');
+    writeFileSync(join(r.repo, 'PIPELINE_PROFILE.md'), `# p\n\n\`\`\`json pipeline-settings\n${JSON.stringify({ schema: 2, features: { worktreeSweep: { state: 'on', target: 'main', idleHours: 0 } } })}\n\`\`\`\n`);
+    const run = spawnSync(process.execPath, [CLI, '--keep', 'l1'], { cwd: r.repo, encoding: 'utf8', env: { ...process.env, BUILDER_NO_BASH_CAP: '1' } });
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    assert.match(run.stdout, /KEEP {2}wt-r1-l1 \[b\/wt-r1-l1\] — kept \(--keep l1\)/);
+  });
+});
