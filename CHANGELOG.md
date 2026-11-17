@@ -46,6 +46,10 @@ versions independently of any project it is pasted into.
   pass; the board, the progress log and git are the only memory. A passing pass is one commit with the trailers
   `Builder-Account:` and `Builder-Requirement:` and no other kit trailer; a failing pass leaves no commit, is pinned to a
   snapshot ref and the tree is restored and cleaned.
+- **The gate command in two normalised forms (D69).** `hooks/claude-code/lane-shell-allow.cjs`, a `PreToolUse` hook the
+  loop's `--settings` pin carries, accepts the gate command with a `cd <own worktree> &&` prefix (no `..`, no other
+  directory, no second command) or one `| head -n N` / `| tail -n N`, and answers nothing for anything else, so the exact
+  allow list keeps denying it. Measured runs lost four of five passes to those two shell habits before this.
 - **Caps and stops.** The gate script, the test roots, the prompt file and the harness configuration are denied; a
   write there, or a board edit outside the chosen row, is FAILED-SCOPE and stops the loop. A row failing
   `maxRetriesPerRow` times is marked BLOCKED on the board and the loop moves on. Stops come from a closed set
