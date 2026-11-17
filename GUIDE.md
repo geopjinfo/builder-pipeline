@@ -345,6 +345,30 @@ dir and your own `~/.claude` and `~/.codex`, `allowWrite` lists the lane worktre
 account key and injects it toward the account's API host only. The wrapper passes the file to `srt` when that tool is
 present, and refuses the launch naming the file when it is invalid.
 
+## 📣 Progress reporter (opt-in, `features.reporter`)
+
+A person who is away gets one page per interval that says what moved, what stalled and what needs them. The reporter
+reads the records the kit already writes: every run's state and next actions, the events since the last report, the
+board counts, the capacity record, the readiness record, the 429 record and the cost window while `costAccounting`
+is on. The sections come in one fixed order: RUNS AND LANES, SINCE LAST REPORT, NEEDS A PERSON, CAPACITY AND ACCOUNTS,
+COST, NEXT. A source that is missing prints its own line and is never dropped. Numbers come from code; the optional
+SUMMARY (model) section is the `progress-reporter` persona's words, labelled as such, and it is dropped when stale
+(`features.reporterSummary`, experimental).
+
+`npx builder-pipeline run report --once` builds and sends one report. `--watch` ticks at start and every
+`intervalMinutes` under a pid lease, so two watchers never double-send; the orchestrator skill starts it at run start
+beside `board-watch`. Only on change: a tick whose state digest equals the last sent one writes the file and sends
+nothing, and every `heartbeatEvery`-th skipped tick sends one heartbeat line. Opt-in alerts (`alertOn`: stall, failed,
+conflict, rate-limit, limit, run-complete) go out at once, once per event.
+
+Channels: `stdout`, `file` (a dated file, `latest.md` and `state.json` under `.pipeline/reports/`), `webhook` (Slack
+mrkdwn under `maxBytes`, or a generic JSON object) and `command` (`{file}` filled, the text on stdin, the headless env
+allowlist). The webhook URL never lives in §16: name `urlEnv` or a 0600 `urlFile`. The transport is `node:https`,
+plain http is for loopback only, no redirect is followed, and the log names host and status, never a body. Every
+payload passes the outbound guard with the project's env secrets first: a hit means NOT SENT, the log reads
+`report.refused` with the kind, the file copy carries `[refused: <kind>]` in that line's place, and the next report's
+header says the last send was refused. A send failure never changes an exit code.
+
 ## ⬆️ From 1.x: the command name
 
 2.0.0 has one command, `builder-pipeline`. The 1.x package also installed a second command, `builder`; that name

@@ -79,3 +79,11 @@ describe('REQ-1401 — the decision beside each experimental flag', () => {
     for (const l of lines) assert.match(l, / · decision: (keep|drop|not yet measured) \(\d{4}-\d{2}-\d{2}\)/, l);
   });
 });
+
+describe('REQ-1601 — the reporter rows of the FEATURES table', () => {
+  test('red: AC-1601c reporter defaults to off and reporterSummary to experimental-off with its §22 decision', () => {
+    const r = run(project());
+    assert.match(r.stdout, /^reporter: not configured$/m);
+    assert.match(r.stdout, /^reporterSummary: experimental-off — not enabled; its measurement is EXPERIMENTS\.md §22 · decision: not yet measured/m);
+  });
+});

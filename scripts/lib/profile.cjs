@@ -195,6 +195,15 @@ const FEATURES = {
     },
     requires: ['target'],
   },
+  /* The progress reporter — scripts/report.mjs, scripts/lib/report.cjs, scripts/lib/notify.cjs (plan M16, D75 to D79):
+   * one report per interval on the configured channels (stdout, file, webhook slack|generic, command), only on change
+   * with a heartbeat, opt-in alerts, the outbound guard in front of every payload. The channel rules are in report.cjs. */
+  reporter: {
+    defaults: { state: 'off', channels: [], intervalMinutes: 30, onlyOnChange: true, heartbeatEvery: 4, alertOn: [], alertPollSeconds: 30, maxBytes: 3500, timeoutMs: 10000, reportsDir: '.pipeline/reports' },
+    requires: ['channels'],
+  },
+  /* The model-written SUMMARY section of the report (agents/experimental/progress-reporter.md) — EXPERIMENTS.md §22. */
+  reporterSummary: { defaults: { state: 'experimental-off' }, requires: [], experiment: '§22' },
   /* Named accounts the orchestrator places lanes on: worker, who pays, content class, roles, budget, note — the
    * registry rules are in scripts/lib/accounts-registry.cjs (plan M1, D22, D32). Replaces the 1.0 seats and credit lane. */
   accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },
@@ -489,6 +498,7 @@ function validate(settings) {
   }
   errors.push(...validateOrchestrator(settings, badRegex));
   errors.push(...accountsRegistry.validateAccounts(settings, { secretPatterns: require('./outbound-guard.cjs').PATTERNS }));
+  errors.push(...require('./report-rules.cjs').validateReporter(settings)); // REQ-1601: channel kinds, formats, urlEnv|urlFile, the alert set
   // The 1.0 seat keys: refused only while the orchestrator is active (D33); `warnings()` carries the other case.
   const legacy = accountsRegistry.legacyKeys(settings.features?.orchestrator);
   if (legacy.length && ACTIVE.has(settings.features?.orchestrator?.state)) errors.push(accountsRegistry.legacyMessage(legacy));

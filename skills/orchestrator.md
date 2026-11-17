@@ -123,6 +123,10 @@ For each `LAUNCH <lane>` line, in order:
 
 ## 4. While lanes run — the hub
 
+At run start, beside `board-watch` and the lane watchers, start the progress reporter once in the background when
+`features.reporter` is on: `npx builder-pipeline run report --watch`. It sends one report per interval on the configured
+channels, only on change, and never fails the run; a second start exits at once naming the live watcher's pid.
+
 - **Messages carry pointers, never content**: "brief at X; write the result to Y"; "heads-up at Z".
 - **Never poll, never sleep-loop.** The watcher records the notice itself; `orch wait <run>` blocks until the run
   logs an event (at most 110 s per call). A primary-seat sub-agent's one-line return is its notice:
