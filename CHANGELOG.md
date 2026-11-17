@@ -48,7 +48,7 @@ versions independently of any project it is pasted into.
   `agents/capacity-steward.md` (tier mid) explains a bind; `skills/orchestrator.md` says when it is dispatched.
   Tests: `tests/capacity.test.mjs`, `tests/capacity-cli.test.mjs`, and new cases in profile, features, orch-state,
   orch-gaps, doctor and board-loop. Docs: FEATURES row, GUIDE § Capacity governor.
-- **M17 evidence and docs for the two agents (REQ-1701 to REQ-1703; D83, D86, D87).** EXPERIMENTS §21 now holds
+- **M17 evidence and docs for the two agents (REQ-1701 to REQ-1703; D83, D105, D106).** EXPERIMENTS §21 now holds
   the capacity governor's measurement from the loop runner's test project: 347 MB per lane (an 8-core, 15 GB Linux
   host; the single-process sample read the gateway wrapper at 44 MB and is kept as the before-evidence), the recorded
   tick log of one forced bind (62 ticks held, released) and the criterion with 0 false binds; the decision is keep.

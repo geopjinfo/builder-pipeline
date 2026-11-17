@@ -701,7 +701,7 @@ single-process sample reads the wrapper (44 MB) and not the model worker. The tr
 descendant. In each run, four of the six passes completed. Two passes exited because the lane-shell hook (D69)
 refused a gate command with a pipe (`cd … && gate | tail`) or a second `cd`, and the retry passed. These exits are
 the hook's correct refusals; the governor took no part in them. A narrower rule for a pipe to `tail` after the gate
-is a follow-up candidate (D87), not a change in this release.
+is a follow-up candidate (D106), not a change in this release.
 
 **Recorded tick log.** Trial T2, 2026-11-17: `capacity --watch` at `intervalSeconds` 15, `minFreeMb` 20000 on the
 15 GB host (a limit the host cannot meet, set to force one bind), `maxLanes` 2, one board loop running.
