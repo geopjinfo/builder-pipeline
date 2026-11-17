@@ -163,6 +163,8 @@ separates working files; it does not sandbox processes and it does not prevent m
 count starts at `maxLanes` and rises only with measured evidence that the machine and accounts carried the load.
 Controls: `orch status` · `next` · `preflight` · `pause` · `stop` · `resume`.
 
+A remote lane (`features.remoteLanes`, experimental) runs on another machine. It works in its own clone there and exchanges work through the origin both hosts reach. The kit never mounts, copies or syncs a worktree: Git's own FAQ warns against sharing a working tree across systems, because the index and the file times disagree. A person logs the remote machine in once; no credential leaves this machine.
+
 ### 🛰️ Progress, restarts and artifacts
 
 The orchestrator is built to be killed. Its memory is **files in the repo**, never the conversation and never a
