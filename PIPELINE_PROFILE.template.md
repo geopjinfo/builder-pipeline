@@ -46,7 +46,7 @@
 
 > **No requirements tracker yet?** Switch on `features.specAuthoring` (§16): the `spec-author` skill writes one
 > ratified `<specs>/<key>.spec.md` per module — requirement rows, acceptance criteria, API contract — before
-> Phase 1, and that file is the module's row source here (`npx builder run spec-check <key> --rows` prints the rows).
+> Phase 1, and that file is the module's row source here (`npx builder-pipeline run spec-check <key> --rows` prints the rows).
 
 ## 4. Protected paths — agents must never edit
 
@@ -292,7 +292,7 @@ The one block the pack's scripts read — exactly one. It holds the tier runner 
 ≤25-line digest), the ledger paths (keep them equal to §11), the model ids (§12), the protected globs
 (mirror §4; the protected-paths hook reads them and only ADDS them to its own list — while any is set, this
 file is protected too, so a person edits it) and the optional features. Replace every `<…>`: an unfilled placeholder fails validation.
-Check it with `npx builder features` (folder layout: `node scripts/features.mjs`). `visibility` is the §1 fact
+Check it with `npx builder-pipeline features` (folder layout: `node scripts/features.mjs`). `visibility` is the §1 fact
 (`private` or `public`) that the account content policy reads before a launch. **States:** `on` runs, and its required keys must be filled
 or the profile is invalid — never a silent skip · `off` prints `<feature>: not configured` and does
 nothing (it means *not told*, never *unimportant*) · `unmeasured` runs and every report says its

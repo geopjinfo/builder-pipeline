@@ -2,13 +2,13 @@
  * The persona roster holds: one roster block in personas/INDEX.md, every entry complete, ids unique, every
  * profile file present, and nothing marked to render that the human has not confirmed. Rule: scripts/lib/personas.cjs.
  *
- *   npx builder run personas-check                     check personas/ under the current directory
- *   npx builder run personas-check <dir>              check that personas directory instead
+ *   npx builder-pipeline run personas-check                     check personas/ under the current directory
+ *   npx builder-pipeline run personas-check <dir>              check that personas directory instead
  *   --render <out>                                     also write one neutral agent file per confirmed entry marked
  *                                                      "render": true, as <out>/persona-<id>.md (refused while any
  *                                                      roster problem stands)
  *   --json                                             machine-readable result
- * (folder layout: node scripts/personas-check.mjs in place of npx builder run personas-check)
+ * (folder layout: node scripts/personas-check.mjs in place of npx builder-pipeline run personas-check)
  *
  * No personas directory → "personas-check: no personas/ — nothing to check", exit 0 (said, never PASS).
  *

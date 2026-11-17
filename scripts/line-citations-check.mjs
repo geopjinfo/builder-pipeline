@@ -1,11 +1,11 @@
 /**
  * A catalogue row is cited by KEY, never by LINE. Rule: scripts/lib/line-citations.cjs.
  *
- *   npx builder run line-citations-check             the gate — every catalogue line citation outside the roster fails
- *   npx builder run line-citations-check --list     also print every offending site
- *   npx builder run line-citations-check --stale    the MEASUREMENT, not the gate: each offender paired with the
+ *   npx builder-pipeline run line-citations-check             the gate — every catalogue line citation outside the roster fails
+ *   npx builder-pipeline run line-citations-check --list     also print every offending site
+ *   npx builder-pipeline run line-citations-check --stale    the MEASUREMENT, not the gate: each offender paired with the
  *                                                    catalogue key before it on its line, cited line vs actual line
- * (folder layout: node scripts/line-citations-check.mjs in place of npx builder run line-citations-check)
+ * (folder layout: node scripts/line-citations-check.mjs in place of npx builder-pipeline run line-citations-check)
  *
  * Settings: paths.logs · features.lineCitations — catalogues (paths; their basenames are what a citation names),
  * roots (walked recursively), extensions, roster (null, or a JSON file { "files": [...], "total": N }), control

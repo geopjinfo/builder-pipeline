@@ -2,19 +2,19 @@
  * What the agent-instruction files state about the repo must still be true of it. Rules and their WHY:
  * scripts/lib/instruction-lint.cjs.
  *
- *   npx builder run instruction-lint                  the gate over every file in `files`
- *   npx builder run instruction-lint a.md b.md       exactly these files in place of `files`. With the feature off they
+ *   npx builder-pipeline run instruction-lint                  the gate over every file in `files`
+ *   npx builder-pipeline run instruction-lint a.md b.md       exactly these files in place of `files`. With the feature off they
  *                                                     are linted with the default settings and no baseline, and the
  *                                                     first line says `instructionLint: not configured — checking
  *                                                     <files> with defaults` (REQ-701); a named file that does not
  *                                                     exist, or an unknown flag, is exit 2 (REQ-703)
- *   npx builder run instruction-lint --files a b     only these files (the edit hook). No figure command runs in this
+ *   npx builder-pipeline run instruction-lint --files a b     only these files (the edit hook). No figure command runs in this
  *                                                     mode (see below); sets naming other files are skipped; the
  *                                                     ratchet still applies
- *   npx builder run instruction-lint --list          also print every count claim and history phrase
- *   npx builder run instruction-lint --refresh       write the current ratchet counts to `baseline` (review the diff:
+ *   npx builder-pipeline run instruction-lint --list          also print every count claim and history phrase
+ *   npx builder-pipeline run instruction-lint --refresh       write the current ratchet counts to `baseline` (review the diff:
  *                                                     a raised count is a decision, never a side effect)
- * (folder layout: node scripts/instruction-lint.mjs in place of npx builder run instruction-lint)
+ * (folder layout: node scripts/instruction-lint.mjs in place of npx builder-pipeline run instruction-lint)
  *
  * Settings (PIPELINE_PROFILE.md §16): features.instructionLint.{state, files, ignorePaths, figures, sets, history,
  * baseline}. `files` are globs from the project root (`**` and `*` supported). `figures` are { file, pattern, command,

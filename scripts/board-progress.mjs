@@ -1,6 +1,6 @@
 /**
- * `npx builder run board-progress <board>` — recompute the progress block at the top of a task board.
- * (folder layout: node scripts/board-progress.mjs in place of npx builder run board-progress)
+ * `npx builder-pipeline run board-progress <board>` — recompute the progress block at the top of a task board.
+ * (folder layout: node scripts/board-progress.mjs in place of npx builder-pipeline run board-progress)
  *
  * WHY THIS EXISTS. A hand-maintained progress bar is a claim nobody re-derives: the rows move and
  * the bar does not, and the board then reports a number that was true a week ago. The bar is not
@@ -10,8 +10,8 @@
  * phases on a per-module build board), counts each row's Status cell, and rewrites ONLY the block
  * between the `progress:auto` markers. Nothing else in the file is touched.
  *
- *   npx builder run board-progress <path>          rewrite the block
- *   npx builder run board-progress <path> --check  exit 1 if the block is stale (CI-friendly)
+ *   npx builder-pipeline run board-progress <path>          rewrite the block
+ *   npx builder-pipeline run board-progress <path> --check  exit 1 if the block is stale (CI-friendly)
  *
  * No path is a usage error (exit 2): there is no default board to fall back on, and guessing one
  * would rewrite whichever file happened to match.

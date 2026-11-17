@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `npx builder run mutation-step <module> [--summary]` — the pipeline's mutation step, NON-BLOCKING.
- * (folder layout: node scripts/mutation-step.mjs in place of npx builder run mutation-step)
+ * `npx builder-pipeline run mutation-step <module> [--summary]` — the pipeline's mutation step, NON-BLOCKING.
+ * (folder layout: node scripts/mutation-step.mjs in place of npx builder-pipeline run mutation-step)
  *
  * Runs `features.mutation.command` with `{module}` replaced by the argument (Stryker is the JS/TS example:
  * a command that mutates the module's pure logic against its own unit tests), writes the tool's output to

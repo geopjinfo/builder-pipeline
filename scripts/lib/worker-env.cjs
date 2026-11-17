@@ -37,7 +37,7 @@ function childEnv(parent, { worker, configDir, accountEnv = {}, platform = proce
   const allow = platform === 'win32' ? [...ALLOW, ...ALLOW_WIN32] : ALLOW;
   for (const k of allow) if (parent[k] !== undefined && !neverInherited(k)) out[k] = parent[k];
   for (const [k, v] of Object.entries(accountEnv || {})) {
-    if (KEY_VARS.test(k)) throw new Error(`refused: ${k} in the account env block — a key never enters a worker through the environment (npx builder accounts key)`);
+    if (KEY_VARS.test(k)) throw new Error(`refused: ${k} in the account env block — a key never enters a worker through the environment (npx builder-pipeline accounts key)`);
     if (v === null || v === undefined) continue;
     out[k] = String(v);
   }

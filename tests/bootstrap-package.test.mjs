@@ -1,7 +1,7 @@
 /**
  * D1 — the setup prompt runs `npx github:<owner>/builder-pipeline#<tag> bootstrap`: the kit then runs from the npx
- * cache, outside the project. builder-init's later `npx builder …` resolves the project's own bin, so unless bootstrap
- * adds the kit to the project, that bare name reaches the unrelated registry package `builder`.
+ * cache, outside the project. builder-init's later `npx builder-pipeline …` resolves the project's own bin, so unless bootstrap
+ * adds the kit to the project, that bare name fetches the newest registry release, not the tag the prompt named.
  *
  * Bootstrap run from outside the project adds the kit as a devDependency at the spec npx fetched (read from the npx
  * root's package.json), then runs `npm install --save-dev <spec>` when npm is on PATH — mocked here by a stub, so the

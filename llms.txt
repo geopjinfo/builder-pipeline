@@ -1,6 +1,6 @@
 # Builder pipeline kit (builder-pipeline)
 
-> A zero-dependency Node (>=18) npm package that gives a software project a multi-agent build pipeline for Claude Code, Codex and Antigravity (and, through prompt files, any agent that reads AGENTS.md or its own rules file). One orchestrator dispatches nine role-scoped personas per module (plan, TDD build, adversarial test, four parallel auditors, docs, review) with git-tracked ledgers checked by scripts, so no work is silently lost and no "done" is unearned. Installing it activates nothing: setup runs `npx builder bootstrap`, then the builder-init skill, and every project fact lives in the project's own PIPELINE_PROFILE.md. Paths below are relative to the package root (in a project: node_modules/builder-pipeline/).
+> A zero-dependency Node (>=18) npm package that gives a software project a multi-agent build pipeline for Claude Code, Codex and Antigravity (and, through prompt files, any agent that reads AGENTS.md or its own rules file). One orchestrator dispatches nine role-scoped personas per module (plan, TDD build, adversarial test, four parallel auditors, docs, review) with git-tracked ledgers checked by scripts, so no work is silently lost and no "done" is unearned. Installing it activates nothing: setup runs `npx builder-pipeline bootstrap`, then the builder-init skill, and every project fact lives in the project's own PIPELINE_PROFILE.md. Paths below are relative to the package root (in a project: node_modules/builder-pipeline/).
 
 ## Start here
 
@@ -9,7 +9,7 @@
 - [SETUP_PROMPT.md](SETUP_PROMPT.md): the one setup prompt (bootstrap, then the builder-init skill)
 - [USAGE.md](USAGE.md): the operator's runbook: stop points, record points, resuming, troubleshooting
 - [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files, instruction-lint and instruction-budget on named files, worktree-sweep --target <branch>)
-- [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files); `npx builder unpack --tools <group>` installs one tool group (spec, audit, orchestrator, hooks, evals, pipeline)
+- [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files); `npx builder-pipeline unpack --tools <group>` installs one tool group (spec, audit, orchestrator, hooks, evals, pipeline)
 - [UNPACK.md § Install one tool group](UNPACK.md): the six tool groups, the core set every install carries, and how upgrade repeats the recorded groups
 
 ## How it works
@@ -26,7 +26,7 @@
 - [skills/builder-init.md](skills/builder-init.md): setup from inside the AI tool (greenfield or brownfield)
 - [skills/spec-author.md](skills/spec-author.md): the opt-in spec authoring stage before Phase 1 (intent to requirement rows, acceptance criteria and an API contract; a person ratifies; templates/spec.md is its shape)
 - [skills/orchestrator.md](skills/orchestrator.md): the opt-in batch orchestrator above the pipeline
-- [skills/references/account-selection.md](skills/references/account-selection.md): the rulebook for choosing an account (`features.accounts`: ready only, content class, roles, budget, pays order, holds); `npx builder accounts` reports readiness, `npx builder accounts migrate` rewrites the 1.0 seat keys once
+- [skills/references/account-selection.md](skills/references/account-selection.md): the rulebook for choosing an account (`features.accounts`: ready only, content class, roles, budget, pays order, holds); `npx builder-pipeline accounts` reports readiness, `npx builder-pipeline accounts migrate` rewrites the 1.0 seat keys once
 - [skills/build-module-lite.md](skills/build-module-lite.md): the experimental lite split (build now, gate later)
 - [agents/](agents/): the nine neutral persona sources
 - [skills-extra/README.md](skills-extra/README.md): the optional utility skills and how they wire in
