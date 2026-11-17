@@ -478,11 +478,12 @@ this section with the project commit sha. Promotion is the maintainer's call, ma
 | 2026-11-17 | 24ae3cd | 3e97890 → 606d88f | stub worker | 3 | 0/6 | 0% | unmeasured | 3 | 0 | 0 | no-progress | dry run of the machinery, no model |
 | 2026-11-17 | accae92 | 5e4f866 → 500cfc8 | gateway lane (Sonnet-class through the local gateway) | 5 | 1/6 | 17% | 0.29 | 43 | 0 | 0 | consecutive-failures | 4 passes INCOMPLETE: the worker ran `cd … && cat …` and the exact allow list denied it; the prompt did not name the Read tools |
 | 2026-11-17 | b5ba4e8 (prompt names the tools) | b5ba4e8 → 1fa2470 | gateway lane (same) | 6 | 6/6 | 100% | 0.33 | 48 | 0 | 0 | all-pass | one row per pass; 82 s wall time; six commits with the two trailers; `./gate.sh` passes all six afterwards |
+| 2026-11-17 | 3bb2343 (integration branch, #28) | 7472eb9 → a5d7834 | gateway lane via `orch loop` (placement over the accounts registry) | 5 | 1/6 | 17% | 0.63 | 49 | 0 | 0 | consecutive-failures | orchestrator-driven (Run 3); 4 passes INCOMPLETE: the worker ran `cd <worktree> && ./gate-row.sh …` and a heredoc write through the shell, which the exact allow list denies; same prompt as the 6/6 run |
 
 **Risk.** A loop with no person between the stages can run on past a wrong plan. The timeout and the silent-failure
 counts exist to show that.
 
-**Decision (2026-11-17).** not yet measured — one model run: 6/6 rows, $0.33, 48 turns, 0 timeouts, 0 silent failures, after one prompt fix (1/6 before it). Promotion stays a person's call; a second project and a second account are owed before keep.
+**Decision (2026-11-17).** not yet measured — three model runs on one project: 1/6, 6/6 ($0.33, 48 turns) and 1/6 ($0.63, orchestrator-driven); the failures are denied shell prefixes under the exact allow list, not wrong solutions. Promotion stays a person's call; a second project, a second account and a steadier allow list are owed before keep.
 
 ## 18. Remote lanes — `remoteLanes` (planned, experimental)
 
@@ -542,6 +543,30 @@ A number here comes from a file in the project Library, never from memory.
 - Library files: `polyglot-loop-model-run1-2026-11-17-{board.md,run.jsonl,progress.md,state.json}` and
   `polyglot-loop-model-run2-2026-11-17-{board.md,run.jsonl,progress.md,state.json}`.
 
+### Run 3 — the loop driven by the orchestrator on the polyglot test bed (2026-11-17, REQ-1406)
+
+- Command: `npx builder run orch loop tasks/polyglot-testbed.md` from the integration branch (`3bb2343`, #28), with
+  `features.orchestrator` on. The orchestrator placed the loop through the accounts registry (`placeLoop`: the first
+  account whose readiness assessment reads ready — the M3 placement fills that seam later), recorded the job in
+  `loops.json` (kind loop, account `gw`, cap 6) and ran the same runner as Run 1b. Writer: the gateway lane (API
+  credits through the local gateway). A loop board has no reader roles, so no second account took part; the Codex and
+  Gemini lanes were ready but idle.
+- Readiness: the account read ready through the key-file route (`accounts install` wrote its wrapper; the key file in
+  the measurement's accounts home is a placeholder that nothing reads, because the gateway lane's real token lives in
+  the devbox wrapper the worker shim starts). The run's `accounts-readiness.json` is in the Library.
+- Result: 5 passes, 1 of 6 rows, stop `consecutive-failures`, cost $0.63, 49 turns, 0 timeouts, 0 silent failures,
+  89 s wall time. Four passes ended INCOMPLETE on a denied shell command: the worker ran
+  `cd <worktree> && ./gate-row.sh T<n> …` and, once, wrote a file through a shell heredoc; the exact allow list permits
+  only the gate command as written. Same prompt as Run 1b-ii, which solved 6 of 6: the model's choice of shell prefix
+  varies between runs, and the exact allow list turns that variance into failed passes. Test bed `7472eb9 → a5d7834`.
+- Fix-rate: `fixLane: unmeasured — no FIX row in 1 board(s)`. `builderBatch` not exercised.
+- Observation for the loop's next change (a person decides): the allow list could accept the gate command with a
+  `cd <worktree> &&` prefix and pipes to `tail`/`head`, or the prompt could forbid `cd`; until then the pass rate of
+  the loop depends on the model's shell habits, not on its solutions.
+- Library files: `polyglot-loop-orch-run3-2026-11-17-{board.md,run.jsonl,progress.md,loops.json,accounts-readiness.json}`.
+  The orchestrator writes `loops.json` for a loop job; there is no `events.jsonl` for a loop (that file belongs to a
+  lane run), so `loops.json` plus the run log are the event record of this run.
+
 ### Run 2 — the 2.0.0 build itself (November 2026)
 
 The 2.0.0 modules were built as device and cloud lanes of the project (one Claude session per module, on George's
@@ -566,8 +591,8 @@ time of writing:
 | C | #9 | false-positive rates |
 | M14 | this PR | the evidence programme |
 
-**Decision (2026-11-17).** not yet measured — one stub dry run and two model runs (the second 6/6 rows, $0.33); the
-orchestrator-driven build run is owed.
+**Decision (2026-11-17).** not yet measured — one stub dry run, two model runs (1/6 then 6/6, $0.33) and one
+orchestrator-driven run (1/6, $0.63, denied shell prefixes); the orchestrator-driven run of a build with lanes is owed.
 
 ## 20. Kit measurements — time to first value and false-positive rates (skeleton)
 
