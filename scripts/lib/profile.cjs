@@ -154,7 +154,7 @@ const FEATURES = {
    * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
    * `target` through `gates`, and runs headless jobs on an api-key account with the guards in scripts/lib/orch-credit.cjs.
    * The 1.0 keys `seats`, `limits`, `secondaryConfigDir` and `credit` are gone: a profile that still carries them is
-   * refused while the orchestrator is active and warned about otherwise (`npx builder accounts migrate`, D33). Every
+   * refused while the orchestrator is active and warned about otherwise (`npx builder-pipeline accounts migrate`, D33). Every
    * command template is the project's own; null means "not available here" and the step says so. */
   orchestrator: {
     defaults: {

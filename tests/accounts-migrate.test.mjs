@@ -97,7 +97,7 @@ describe('builder accounts migrate', () => {
     const check = spawnSync(process.execPath, [join(PACK, 'scripts/features.mjs')], { cwd: proj, encoding: 'utf8', env: { ...process.env, BUILDER_NO_BASH_CAP: '1' } });
     assert.equal(check.status, 0, check.stderr);
     assert.match(check.stderr, /PIPELINE_PROFILE\.md: warning — features\.orchestrator\.seats, limits, secondaryConfigDir, credit: 1\.0 seat keys/);
-    assert.match(check.stderr, /npx builder accounts migrate/);
+    assert.match(check.stderr, /npx builder-pipeline accounts migrate/);
     assert.equal(check.stderr.match(/warning —/g).length, 1, 'said once');
     const r = run(proj, ['migrate']);
     assert.equal(r.status, 0, r.out);

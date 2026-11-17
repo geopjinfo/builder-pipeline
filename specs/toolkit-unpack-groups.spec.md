@@ -4,8 +4,8 @@ Module: toolkit-unpack-groups
 Status: ratified
 Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build thread; see Decision log)
 
-> The kit's own spec for lane E of release 2.0.0: `npx builder unpack --tools GROUP[,GROUP]`. It follows the
-> installed spec template. Check it with `npx builder run spec-check specs/toolkit-unpack-groups.spec.md` (folder
+> The kit's own spec for lane E of release 2.0.0: `npx builder-pipeline unpack --tools GROUP[,GROUP]`. It follows the
+> installed spec template. Check it with `npx builder-pipeline run spec-check specs/toolkit-unpack-groups.spec.md` (folder
 > layout: `node scripts/spec-check.mjs specs/toolkit-unpack-groups.spec.md`). It is maintainer-only and does not ship
 > in the package.
 
@@ -56,7 +56,7 @@ Kind: `behaviour` (what succeeds) · `refusal` (what is refused, and why) · `ef
 |---|---|---|---|---|
 | REQ-801 | Every file `unpack` installs, in the package layout and in the folder layout, for every tool, with and without extras and experimental files, belongs to exactly one of `spec`, `audit`, `orchestrator`, `hooks`, `evals`, `pipeline` or the `core` set | a maintainer of the kit | constraint | brief, tool groups |
 | REQ-802 | A `scripts/lib` file that the scripts of two or more groups require is `core`; one that one group's scripts require alone is in that group | a maintainer of the kit | constraint | DL-2 |
-| REQ-803 | `npx builder unpack --tool HARNESS --tools GROUP[,GROUP]` installs the files of the named groups and the `core` set, and no file of another group | a team that runs another orchestrator | behaviour | brief, tool groups |
+| REQ-803 | `npx builder-pipeline unpack --tool HARNESS --tools GROUP[,GROUP]` installs the files of the named groups and the `core` set, and no file of another group | a team that runs another orchestrator | behaviour | brief, tool groups |
 | REQ-804 | With `hooks` selected in the folder layout, the scripts the hooks load are installed with it | a team that runs another orchestrator | constraint | DL-7 |
 | REQ-805 | An unknown group name is refused with exit 1 and the list of valid groups, and nothing is written | a CI job | refusal | brief, tool groups |
 | REQ-806 | `--tools all`, or no `--tools`, installs every group, and the install list is the one `unpack` produced before this change | a team that runs another orchestrator | constraint | brief, tool groups |

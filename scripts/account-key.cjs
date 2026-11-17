@@ -32,13 +32,13 @@ function main(argv, env = process.env, platform = process.platform) {
   try {
     st = fs.lstatSync(file);
   } catch (e) {
-    fail(e.code === 'ENOENT' ? `no key for account "${name}" — enter one with: npx builder accounts key ${name}` : `${file}: ${e.message}`);
+    fail(e.code === 'ENOENT' ? `no key for account "${name}" — enter one with: npx builder-pipeline accounts key ${name}` : `${file}: ${e.message}`);
   }
   if (st.isSymbolicLink()) fail(`${file}: is a symlink — refusing to read through it`);
   if (!st.isFile()) fail(`${file}: not a regular file`);
-  if (platform !== 'win32' && (st.mode & 0o077)) fail(`${file}: mode 0${(st.mode & 0o777).toString(8)} is wider than 0600 — run: chmod 600 on it, or enter the key again with npx builder accounts key ${name}`);
+  if (platform !== 'win32' && (st.mode & 0o077)) fail(`${file}: mode 0${(st.mode & 0o777).toString(8)} is wider than 0600 — run: chmod 600 on it, or enter the key again with npx builder-pipeline accounts key ${name}`);
   const value = fs.readFileSync(file, 'utf8').replace(/\r?\n$/, '');
-  if (!value) fail(`${file}: is empty — enter the key again with: npx builder accounts key ${name}`);
+  if (!value) fail(`${file}: is empty — enter the key again with: npx builder-pipeline accounts key ${name}`);
   process.stdout.write(value);
 }
 

@@ -61,7 +61,7 @@ Scoped exceptions:
 
 - the persona-detect skill (detect and refresh), which reads and proposes but never overwrites a
   confirmed persona;
-- `npx builder personas-check`, which validates the roster and renders confirmed personas;
+- `npx builder-pipeline personas-check`, which validates the roster and renders confirmed personas;
 - an agent rendered from a confirmed persona, which reads its own profile only;
 - `<any other, with the record that granted it — or "none">`.
 

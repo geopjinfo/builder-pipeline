@@ -139,11 +139,11 @@ describe('builder doctor accounts rows (REQ-701, REQ-107)', () => {
     assert.equal(text.status, 0, text.out);
     const legacy = text.out.split('\n').filter((l) => /legacy seats/.test(l));
     assert.equal(legacy.length, 1, text.out);
-    assert.match(legacy[0], /^ {2}advisory {4}accounts — profile: legacy seats, run npx builder accounts migrate$/);
+    assert.match(legacy[0], /^ {2}advisory {4}accounts — profile: legacy seats, run npx builder-pipeline accounts migrate$/);
     assert.equal(json.status, 0, json.out);
     const rows = accountRows(json);
     assert.equal(rows.length, 1);
-    assert.equal(rows[0].note, 'profile: legacy seats, run npx builder accounts migrate');
+    assert.equal(rows[0].note, 'profile: legacy seats, run npx builder-pipeline accounts migrate');
     assert.equal(rows[0].state, 'legacy');
   });
 

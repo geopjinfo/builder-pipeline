@@ -5,24 +5,24 @@
  * Zero dependencies; Node >= 18. Run from the TARGET repo root, as the package install runs it
  * (folder layout: `node builder/cli.js <command>`, with the kit unpacked as a builder/ folder):
  *
- *   npx builder unpack --tool claude-code
- *   npx builder unpack --tool claude-code,codex
- *   npx builder unpack --tool all [--dry-run] [--no-extras] [--experimental]
- *   npx builder unpack --tool claude-code --models strong=opus,mid=haiku
- *   npx builder unpack --tool claude-code --tools spec,audit   (one tool group or several; default all — scripts/lib/tool-groups.cjs)
- *   npx builder upgrade [--tool claude-code] [--dry-run] [--prune]   (an install from an older kit release)
- *   npx builder uninstall --tool codex | --all [--dry-run]   (remove what the lock says the kit wrote)
- *   npx builder --version
- *   npx builder targets
- *   npx builder verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
- *   npx builder features         (which optional checks are on, off, unmeasured or experimental)
- *   npx builder check-ledgers    (mechanical board/registry gates — wire into CI)
- *   npx builder check-targets    (qa-audit environment safety — wire into CI)
- *   npx builder bootstrap [--tool …]        (the builder-init skill, + the kit as a devDependency when run via npx — cli/bootstrap.cjs)
- *   npx builder inventory [--json]          (project items vs the kit — cli/inventory.cjs)
- *   npx builder choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
- *   npx builder doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
- *   npx builder personas-check | run <script> [args]
+ *   npx builder-pipeline unpack --tool claude-code
+ *   npx builder-pipeline unpack --tool claude-code,codex
+ *   npx builder-pipeline unpack --tool all [--dry-run] [--no-extras] [--experimental]
+ *   npx builder-pipeline unpack --tool claude-code --models strong=opus,mid=haiku
+ *   npx builder-pipeline unpack --tool claude-code --tools spec,audit   (one tool group or several; default all — scripts/lib/tool-groups.cjs)
+ *   npx builder-pipeline upgrade [--tool claude-code] [--dry-run] [--prune]   (an install from an older kit release)
+ *   npx builder-pipeline uninstall --tool codex | --all [--dry-run]   (remove what the lock says the kit wrote)
+ *   npx builder-pipeline --version
+ *   npx builder-pipeline targets
+ *   npx builder-pipeline verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
+ *   npx builder-pipeline features         (which optional checks are on, off, unmeasured or experimental)
+ *   npx builder-pipeline check-ledgers    (mechanical board/registry gates — wire into CI)
+ *   npx builder-pipeline check-targets    (qa-audit environment safety — wire into CI)
+ *   npx builder-pipeline bootstrap [--tool …]        (the builder-init skill, + the kit as a devDependency when run via npx — cli/bootstrap.cjs)
+ *   npx builder-pipeline inventory [--json]          (project items vs the kit — cli/inventory.cjs)
+ *   npx builder-pipeline choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
+ *   npx builder-pipeline doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
+ *   npx builder-pipeline personas-check | run <script> [args]
  *
  * unpack/upgrade read builder.choices.json: a kit skill or persona that clashes with a project item and has no
  * recorded choice is skipped and reported, never installed (setupClashCheck below).
@@ -99,23 +99,23 @@ const TOOLS = {
 /**
  * The kit's own prose says `builder/<file>` and `node builder/cli.js` — true in the folder layout, a folder copied into the
  * project as `builder/`. Installed as a package it lives at `node_modules/builder-pipeline/` and runs as
- * `npx builder`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
+ * `npx builder-pipeline`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
  * installs into the project (Markdown) and every line the CLI prints goes through kitPaths(), so it names the kit
  * where it actually is. With the kit at `builder/` nothing changes, byte for byte.
  */
 const posixPath = (p) => p.split(path.sep).join('/');
 const KIT_REL = posixPath(path.relative(CWD, KIT)) || '.';
-const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder' : `node ${KIT_REL}/cli.js`;
+const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder-pipeline' : `node ${KIT_REL}/cli.js`;
 const KIT_ENTRY = /(?<![.\w@/-])builder\/(?=(?:cli\.js|[A-Z][A-Z_]*(?:\.template)?\.md|adapters|agents|examples|hooks|oracles|scripts|skills-extra|skills|templates|tooling|tests)\b)/g;
-/** Installed as a package, the kit's scripts run from it (`npx builder run <name>`) and are not copied into the project. */
-const PACKAGED = RUN === 'npx builder';
+/** Installed as a package, the kit's scripts run from it (`npx builder-pipeline run <name>`) and are not copied into the project. */
+const PACKAGED = RUN === 'npx builder-pipeline';
 /** Where the kit scripts are for this install: the package itself, or the project's scripts/ copies. */
 const SCRIPTS_HOME = PACKAGED ? path.join(KIT, 'scripts') : path.join(CWD, 'scripts');
 function kitPaths(text) {
   if (KIT_REL === 'builder') return text;
   let out = text.replace(/\bnode builder\/cli\.js\b/g, RUN).replace(KIT_ENTRY, `${KIT_REL}/`);
   if (PACKAGED) {
-    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx builder run ${name}` : m));
+    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx builder-pipeline run ${name}` : m));
   }
   return out;
 }
@@ -847,7 +847,7 @@ function installCommon(tools = []) {
    */
   console.log('\n[common] scripts');
   if (PACKAGED) {
-    // Installed as a package the scripts run from it — `npx builder run <name>` — so a kit update reaches them with
+    // Installed as a package the scripts run from it — `npx builder-pipeline run <name>` — so a kit update reaches them with
     // the version bump, and the project carries no copies to drift (plan BU-4).
     console.log(`run from the package: ${RUN} run <name>   (list them: ${RUN} run)`);
   }
@@ -1606,7 +1606,7 @@ const ctx = () => ({ CWD, KIT, RUN, VERSION, TOOLS, ADAPTERS, MARKER, DRY: () =>
 function die(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
 function main() {
-  // Every line the CLI prints names the kit where it is (kitPaths above): `npx builder verify`, not a builder/ folder
+  // Every line the CLI prints names the kit where it is (kitPaths above): `npx builder-pipeline verify`, not a builder/ folder
   // the project does not have.
   for (const k of ['log', 'error']) {
     const write = console[k].bind(console);

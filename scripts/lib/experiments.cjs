@@ -77,10 +77,10 @@ function recordRow(file, n, row) {
 /** The trial matrix: what each 2.0 experimental feature runs against and the rule that promotes it. */
 const MATRIX = Object.freeze([
   { flag: 'familyReview', section: 16, bed: 'three modules of an adopting project, three without', command: 'the pipeline with features.familyReview experimental-on', keep: 'accepted findings rise, loop-backs do not, cost per task inside budget' },
-  { flag: 'boardLoop', section: 17, bed: 'the polyglot test bed (six aider exercises, pytest gate)', command: 'npx builder run board-loop <account> tasks/<board>.md --record-experiment EXPERIMENTS.md', keep: "a person's call on pass rate, cost, turns, timeouts and silent failures" },
-  { flag: 'remoteLanes', section: 18, bed: 'the polyglot test bed, one local and one remote lane', command: 'npx builder run orch remote preflight|launch|poll on the same board', keep: 'equal pass rate and no orphaned worker; drop on ssh failures or orphans in more than one run in three' },
-  { flag: 'builderBatch', section: 6, bed: 'the §19 recorded run', command: 'npx builder run seat-peaks and cost-window over the run window', keep: 'p90 peak and builder cost per row both fall' },
-  { flag: 'fixLane', section: 7, bed: 'the §19 recorded run', command: 'npx builder run fix-rate over the run boards', keep: 'fix-of-fix rate at or below the baseline and loop-back cost not higher' },
+  { flag: 'boardLoop', section: 17, bed: 'the polyglot test bed (six aider exercises, pytest gate)', command: 'npx builder-pipeline run board-loop <account> tasks/<board>.md --record-experiment EXPERIMENTS.md', keep: "a person's call on pass rate, cost, turns, timeouts and silent failures" },
+  { flag: 'remoteLanes', section: 18, bed: 'the polyglot test bed, one local and one remote lane', command: 'npx builder-pipeline run orch remote preflight|launch|poll on the same board', keep: 'equal pass rate and no orphaned worker; drop on ssh failures or orphans in more than one run in three' },
+  { flag: 'builderBatch', section: 6, bed: 'the §19 recorded run', command: 'npx builder-pipeline run seat-peaks and cost-window over the run window', keep: 'p90 peak and builder cost per row both fall' },
+  { flag: 'fixLane', section: 7, bed: 'the §19 recorded run', command: 'npx builder-pipeline run fix-rate over the run boards', keep: 'fix-of-fix rate at or below the baseline and loop-back cost not higher' },
 ]);
 
 module.exports = { DECISION, parse, decisionFault, decisionFor, falsePositiveRates, recordRow, MATRIX };

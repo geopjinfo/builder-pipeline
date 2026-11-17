@@ -199,27 +199,27 @@ family, a config dir, a start command and a budget (`percent` or `usd`, with a s
 are lowercase, at most 16 characters, and never a reserved word. A value shaped like a secret is refused at load; the
 refusal names the kind and never the text.
 
-> **Commands.** Written for the npm-package install: the CLI is `npx builder <command>` and a kit script runs as
-> `npx builder run <name>`. With the kit copied in as a `builder/` folder ([`UNPACK.md`](UNPACK.md)), the CLI is
+> **Commands.** Written for the npm-package install: the CLI is `npx builder-pipeline <command>` and a kit script runs as
+> `npx builder-pipeline run <name>`. With the kit copied in as a `builder/` folder ([`UNPACK.md`](UNPACK.md)), the CLI is
 > `node builder/cli.js <command>` and a script runs from the project's `scripts/` copy with Node (folder layout).
 
-**The report.** `npx builder accounts` prints one block per account: the state (`ready`, `not ready` with its
+**The report.** `npx builder-pipeline accounts` prints one block per account: the state (`ready`, `not ready` with its
 reason, or `unmeasured`), the usage reading with its source and time, the version and the note. It exits 1 when one
 account is not ready. `--json` prints the same facts and exits 0. While the feature is off, it prints
 `accounts: not configured`. A reading is `measured`, `estimate` or `unmeasured`; the report never prints `0 %` for a
-reading nobody took. `npx builder doctor` prints the same lines as advisory rows; its exit code does not change.
+reading nobody took. `npx builder-pipeline doctor` prints the same lines as advisory rows; its exit code does not change.
 
 **The commands.** Each command changes the registry in §16 only, and nothing else in the profile.
 
 | Command | What it does |
 |---|---|
-| `npx builder accounts` | the readiness report, one block per account |
-| `npx builder accounts add <name> --worker <w> --pays <p> [--roles ...] [--content ...]` | add one account to the registry and create its account dir |
-| `npx builder accounts note <name> "<text>"` | set the account's `note`; the orchestrator obeys the note as a rule |
-| `npx builder accounts key <name>` | store the key of an `api-key` account in its key file, read from a prompt; the key never enters the profile |
-| `npx builder accounts remove <name>` | remove the account from the registry; its key file is deleted, its config dir is kept |
-| `npx builder accounts list` | the registry in order, one line per account |
-| `npx builder accounts migrate [--dry-run]` | rewrite the 1.0 seat keys into accounts (see below) |
+| `npx builder-pipeline accounts` | the readiness report, one block per account |
+| `npx builder-pipeline accounts add <name> --worker <w> --pays <p> [--roles ...] [--content ...]` | add one account to the registry and create its account dir |
+| `npx builder-pipeline accounts note <name> "<text>"` | set the account's `note`; the orchestrator obeys the note as a rule |
+| `npx builder-pipeline accounts key <name>` | store the key of an `api-key` account in its key file, read from a prompt; the key never enters the profile |
+| `npx builder-pipeline accounts remove <name>` | remove the account from the registry; its key file is deleted, its config dir is kept |
+| `npx builder-pipeline accounts list` | the registry in order, one line per account |
+| `npx builder-pipeline accounts migrate [--dry-run]` | rewrite the 1.0 seat keys into accounts (see below) |
 
 **Placement.** The orchestrator places a lane with one rule, inside `orch next`, `orch claim` and
 `orch gate-launch`:
@@ -266,8 +266,8 @@ of things an orchestrator never does. The `note` of an account is a rule in that
 The 1.0 keys `features.orchestrator.seats`, `limits`, `secondaryConfigDir` and `credit` are gone in 2.0. While the
 orchestrator is on, the loader refuses them. While it is off, the loader prints one warning. Both name the fix:
 
-1. Run `npx builder accounts migrate --dry-run`. Read the notes.
-2. Run `npx builder accounts migrate`. It rewrites the `pipeline-settings` block of `PIPELINE_PROFILE.md` once.
+1. Run `npx builder-pipeline accounts migrate --dry-run`. Read the notes.
+2. Run `npx builder-pipeline accounts migrate`. It rewrites the `pipeline-settings` block of `PIPELINE_PROFILE.md` once.
    `primary` becomes the `session` account. `secondary` becomes a `claude-code` account with its config dir and start
    command. `credit` becomes an `api-key` account with a USD budget and the credit guards. Every byte outside the
    block stays.
@@ -278,13 +278,13 @@ orchestrator is on, the loader refuses them. While it is off, the loader prints 
 6. Finished run states keep their `seats`; `migrate` adds the `accounts` list beside them and archives each original
    as `state.json.bak`. The placement decisions of 1.0 are kept; the golden fixture proves it.
 
-`npx builder doctor` shows the state before and after: one row reads `profile: legacy seats, run npx builder
+`npx builder-pipeline doctor` shows the state before and after: one row reads `profile: legacy seats, run npx builder-pipeline
 accounts migrate` until the rewrite is done.
 
 #### Looping a board
 
 The `boardLoop` key of the settings block (experimental, off by default) lets the orchestrator run one module board
-to its end without a person between the steps: `npx builder run board-loop <account> <board>`, or `orch loop <board>` from the
+to its end without a person between the steps: `npx builder-pipeline run board-loop <account> <board>`, or `orch loop <board>` from the
 orchestrator skill. The loop places each step on the named account with the rule above and stops at every stop point
 the board declares. No measurements exist yet for this feature. It stays `experimental-off` until a measured run
 shows that the loop keeps the same gates as a person-driven board ([EXPERIMENTS.md](EXPERIMENTS.md)). It lands in
@@ -315,10 +315,10 @@ flowchart LR
 
 One person, several accounts. §16 `features.accounts` lists them: who the worker is (`claude-code`, `codex` or the
 session itself), who pays (`subscription`, `gateway`, `free`, `api-key`), what content the account may see, which roles
-it may hold, and a budget. Keys never live in the profile: `npx builder accounts key <name>` stores one with echo off
+it may hold, and a budget. Keys never live in the profile: `npx builder-pipeline accounts key <name>` stores one with echo off
 in the account's own folder under the accounts home (`~/.builder-pipeline`, or `BUILDER_ACCOUNTS_HOME`).
 
-`npx builder accounts install` writes one wrapper pair per account, `bin/<name>` and `bin/<name>.ps1`, and the
+`npx builder-pipeline accounts install` writes one wrapper pair per account, `bin/<name>` and `bin/<name>.ps1`, and the
 account's composed settings. A wrapper does four things: it unsets the denylist (nothing of a parent session's
 Anthropic, Claude, OpenAI, Codex or Gemini setup, no Node preload, no proxy or CA override, no XDG config), it checks
 the account's sandbox-runtime settings, it points the tool at the account's own config dir, and it starts the tool. No
@@ -331,19 +331,31 @@ the files sit in kit-created folders only, and the free-model MCP registration i
 
 **Gateway and free accounts.** A gateway fronts API keys, never a subscription. The gateway policy
 (`<accounts home>/gateway/policy.json`, no secrets) says the budget, the model pool, the pricing rows and one profile.
-`npx builder accounts policy show | dry-run | apply` drives the gateway through a pinned adapter (OmniRoute pinned per
+`npx builder-pipeline accounts policy show | dry-run | apply` drives the gateway through a pinned adapter (OmniRoute pinned per
 version with a golden request plan; Bifrost declared, not yet pinned): the management token comes from a 0600 file, the
 client never follows a redirect, plain http reaches loopback only, and every error is reduced to the method, the path
 and the status. `apply` records a marker with the policy's sha256 and the gateway version; `builder verify` reads that
 marker and shows drift as an advisory row, without touching the network. A policy that closes the free lane makes
 `accounts install` write a refusal wrapper that only explains why (its marker line is `# builder-pipeline: closed`); an
-unreadable policy leaves a working wrapper alone. `npx builder accounts usage-snapshot` writes per-key spend and budget
+unreadable policy leaves a working wrapper alone. `npx builder-pipeline accounts usage-snapshot` writes per-key spend and budget
 as numbers the readiness assessment reads, never a token or a key.
 
 **Sandbox-runtime settings.** Each Claude Code account gets `srt-settings.json`: `denyRead` lists every other account
 dir and your own `~/.claude` and `~/.codex`, `allowWrite` lists the lane worktree, and the credentials block masks the
 account key and injects it toward the account's API host only. The wrapper passes the file to `srt` when that tool is
 present, and refuses the launch naming the file when it is invalid.
+
+## ⬆️ From 1.x: the command name
+
+2.0.0 has one command, `builder-pipeline`. The 1.x package also installed a second command, `builder`; that name
+belongs to an unrelated package on the npm registry, so 2.0.0 drops it. Every file the kit ships and every file it
+installs already says `npx builder-pipeline <cmd>` and `npx builder-pipeline run <name>`.
+
+Your own files are not rewritten: `upgrade` never touches project-owned files (your scripts, your CI workflow, your
+`AGENTS.md` or `CLAUDE.md` text outside the kit's pointer block). In those files, change the command name after `npx`
+from `builder` to `builder-pipeline` yourself, then run `npx builder-pipeline verify`. The file names
+`builder.lock.json`, `builder.config.json` and `builder.choices.json` do not change, and neither does the
+folder layout form, `node builder/cli.js <cmd>`.
 
 ## 📚 Where the truth lives
 
@@ -368,10 +380,10 @@ Every build checks the deferred registry on entry (did I unblock a row?) and upd
   `registry`, `decisions`, …), model tiers, protected globs and every optional feature on or off. Every persona and
   every script reads it; nothing in the kit assumes a stack, a test runner or a folder layout of its own.
 - **Overlays.** Keep a project's own version of a kit skill or persona instead of editing the kit's: record `keep`
-  (yours only) or `both` (yours, plus the kit's as `builder-<name>`) with `npx builder choices set <kind>:<name>
+  (yours only) or `both` (yours, plus the kit's as `builder-<name>`) with `npx builder-pipeline choices set <kind>:<name>
   <keep|kit|both> --by <you>`. Upgrades honour it.
 - **Local hooks and gates.** Your hooks stay yours; the kit's are copied, never armed (the settings blocks are in
-  `adapters/<tool>.md`). Wire `npx builder check-ledgers` (and `check-targets` with qa-audit) into CI beside your own
+  `adapters/<tool>.md`). Wire `npx builder-pipeline check-ledgers` (and `check-targets` with qa-audit) into CI beside your own
   gates; an optional check the project cannot run prints `<feature>: not configured`, never a pass.
 
 ## 📦 What's in the box

@@ -1,8 +1,8 @@
 /**
- * What this project already has, and how much of it looks like the kit — `npx builder run inventory`.
- * (folder layout: node scripts/inventory.mjs in place of npx builder run inventory)
+ * What this project already has, and how much of it looks like the kit — `npx builder-pipeline run inventory`.
+ * (folder layout: node scripts/inventory.mjs in place of npx builder-pipeline run inventory)
  *
- *   npx builder run inventory [--json] [--root <project dir>] [--kit <kit dir>] [--threshold 0.3]
+ *   npx builder-pipeline run inventory [--json] [--root <project dir>] [--kit <kit dir>] [--threshold 0.3]
  *
  * Lists every skill, agent, persona, playbook and hook under the harness folders (scripts/lib/inventory.cjs
  * LOCATIONS), the greenfield/brownfield call with its evidence, and every project↔kit pair that shares a name, a

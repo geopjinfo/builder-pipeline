@@ -12,7 +12,7 @@ in Phase 1 and cites its rows. **A person ratifies it; you never do.**
 
 **Load `PIPELINE_PROFILE.md` (repo root) first.** With no profile, the project has not adopted the pipeline: write
 the spec into `specs/` with the template's default id shape (`REQ-\d+`), check it with
-`npx builder run spec-check specs/<key>.spec.md` (a path, not a key: the checker then runs with defaults and says so),
+`npx builder-pipeline run spec-check specs/<key>.spec.md` (a path, not a key: the checker then runs with defaults and says so),
 and skip the §3, §6 and `features.specAuthoring` reads below.
 
 **With a profile:** §3 names the oracles (catalogues you consult and never extend),

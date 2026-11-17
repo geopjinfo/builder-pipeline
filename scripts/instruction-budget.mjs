@@ -1,8 +1,8 @@
 /**
  * The root agent-instruction file stays under a line budget. Rule and its WHY: scripts/lib/instruction-budget.cjs.
  *
- *   npx builder run instruction-budget                          every file in `files` against `maxLines`
- *   npx builder run instruction-budget a.md b.md [--max-lines N]  exactly these files in place of `files`, against N
+ *   npx builder-pipeline run instruction-budget                          every file in `files` against `maxLines`
+ *   npx builder-pipeline run instruction-budget a.md b.md [--max-lines N]  exactly these files in place of `files`, against N
  *                                                                 lines (default: `maxLines`, 200 without a profile).
  *                                                                 With the feature off they are judged with the default
  *                                                                 settings and the first line says `instructionBudget:
@@ -10,7 +10,7 @@
  *                                                                 (REQ-704); a named file that does not exist, a flag
  *                                                                 without a valid value or an unknown flag is exit 2
  *                                                                 (REQ-706)
- * (folder layout: node scripts/instruction-budget.mjs in place of npx builder run instruction-budget)
+ * (folder layout: node scripts/instruction-budget.mjs in place of npx builder-pipeline run instruction-budget)
  *
  * Prints `path  N/max` per listed file (`MISSING/max` for an absent one), then one verdict line.
  *

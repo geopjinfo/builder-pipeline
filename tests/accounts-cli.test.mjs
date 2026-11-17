@@ -1,5 +1,5 @@
 /**
- * `npx builder accounts add | note | key | key --remove | remove | list` (REQ-1001 to REQ-1006, REQ-108; D2, D9, D19,
+ * `npx builder-pipeline accounts add | note | key | key --remove | remove | list` (REQ-1001 to REQ-1006, REQ-108; D2, D9, D19,
  * D20), every subcommand through cli.js in a temp project with BUILDER_ACCOUNTS_HOME inside the temp dir and a stub
  * `codex` on PATH.
  *

@@ -141,7 +141,7 @@ function rewriteProfile(ctx, cmd, loaded, mutate, codeOf = () => null) {
     ctx.die(`${code}: accounts ${cmd}: the settings would not validate — nothing written:\n  ${fresh.join('\n  ')}`);
   }
   writeAtomic(loaded.file, text);
-  if (before.size) console.log(`accounts ${cmd}: note — ${PROFILE} still has ${before.size} unrelated problem(s) (run npx builder features); the accounts change was written`);
+  if (before.size) console.log(`accounts ${cmd}: note — ${PROFILE} still has ${before.size} unrelated problem(s) (run npx builder-pipeline features); the accounts change was written`);
   return after.settings;
 }
 
@@ -352,7 +352,7 @@ function cmdAdd(ctx, argv) {
   if (why) ctx.die(`E_ACCOUNT_NAME: accounts add: ${why}`);
   const account = accountFromFlags(ctx, flags);
   const loaded = loadProfile(ctx, 'add');
-  if (rawAccounts(loaded.raw)[name]) ctx.die(`E_ACCOUNT_EXISTS: accounts add: account "${name}" is already in ${PROFILE} §16 — use \`npx builder accounts note ${name} …\` to change its note, or \`npx builder accounts remove ${name}\` first`);
+  if (rawAccounts(loaded.raw)[name]) ctx.die(`E_ACCOUNT_EXISTS: accounts add: account "${name}" is already in ${PROFILE} §16 — use \`npx builder-pipeline accounts note ${name} …\` to change its note, or \`npx builder-pipeline accounts remove ${name}\` first`);
   const settings = rewriteProfile(ctx, 'add', loaded, (raw) => {
     raw.features = raw.features && typeof raw.features === 'object' ? raw.features : {};
     const f = raw.features.accounts && typeof raw.features.accounts === 'object' && !Array.isArray(raw.features.accounts) ? raw.features.accounts : {};
@@ -366,7 +366,7 @@ function cmdAdd(ctx, argv) {
   if (p.configDir !== p.dir) secrets().ensureOwnerDir(p.configDir);
   console.log(`accounts add: "${name}" written to ${PROFILE} §16 (features.accounts on; worker ${account.worker}, pays ${account.pays})`);
   console.log(`  account dir ${p.dir} (${dir.acl})${p.configDir !== p.dir ? `; config dir ${p.configDir}` : ''}`);
-  if (account.pays === 'api-key' || account.pays === 'gateway') console.log(`  next: npx builder accounts key ${name}   (hidden entry; the value never goes on the command line)`);
+  if (account.pays === 'api-key' || account.pays === 'gateway') console.log(`  next: npx builder-pipeline accounts key ${name}   (hidden entry; the value never goes on the command line)`);
 }
 
 function cmdNote(ctx, argv) {
@@ -385,7 +385,7 @@ async function cmdKey(ctx, argv) {
   const [name, ...extra] = positional;
   if (!name) ctx.die('accounts key: usage: accounts key <name> [--remove]   (the key is read from the terminal with echo off; never from argv or the environment)');
   // No argv form, no env form (REQ-1002): refuse before anything is read or written. The extra words are never echoed.
-  if (extra.length) ctx.die(`accounts key: the key is entered hidden at the prompt, never on the command line — run \`npx builder accounts key ${name}\` with no further argument (a value typed into a command line is in the shell history already: rotate it)`);
+  if (extra.length) ctx.die(`accounts key: the key is entered hidden at the prompt, never on the command line — run \`npx builder-pipeline accounts key ${name}\` with no further argument (a value typed into a command line is in the shell history already: rotate it)`);
   const unknown = Object.keys(flags);
   if (unknown.length) ctx.die(`accounts key: unknown option --${unknown[0]} — there is no --env, --file or --value form; the key is entered hidden at the prompt`);
   const loaded = loadProfile(ctx, 'key');
@@ -486,7 +486,7 @@ function cmdList(ctx, argv) {
   const accounts = registry().list(parsed.settings);
   if (!accounts.length) {
     if (json) console.log('[]');
-    else console.log(`features.accounts: not configured — no account in ${PROFILE} §16; add one with: npx builder accounts add <name> --worker <w> --pays <p>`);
+    else console.log(`features.accounts: not configured — no account in ${PROFILE} §16; add one with: npx builder-pipeline accounts add <name> --worker <w> --pays <p>`);
     return;
   }
   const rows = accounts.map((a) => listRow(a.name, a));
@@ -636,7 +636,7 @@ async function cmdPolicy(ctx, argv) {
   const home = accountPaths().home(process.env);
   const r = await gatewayPolicy().run(action, gatewayCfg(parsed.settings, flags), { home });
   console.log(JSON.stringify(r, null, 2));
-  if (action === 'dry-run' && r.plan.length) console.log(`accounts policy dry-run: ${r.plan.length} request(s) would be sent — apply with: npx builder accounts policy apply`);
+  if (action === 'dry-run' && r.plan.length) console.log(`accounts policy dry-run: ${r.plan.length} request(s) would be sent — apply with: npx builder-pipeline accounts policy apply`);
   if (action === 'dry-run' && !r.plan.length) console.log('accounts policy dry-run: the gateway matches the policy');
 }
 
