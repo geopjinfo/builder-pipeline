@@ -60,7 +60,7 @@ const store = require('./orch-store.cjs');
 const ratelimit = require('./orch-ratelimit.cjs');
 const { integritySnapshot, integrityDiff } = require('./orch-integrity.cjs');
 
-const WORKERS = { 'claude-code': () => require('./orch-worker-claude-code.cjs') };
+const WORKERS = { 'claude-code': () => require('./orch-worker-claude-code.cjs'), codex: () => require('./orch-worker-codex.cjs') };
 const workerOf = (name) => {
   if (!WORKERS[name]) throw new Error(`refused: unknown credit worker ${JSON.stringify(name)} (known: ${Object.keys(WORKERS).join(', ')})`);
   return WORKERS[name]();
