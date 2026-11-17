@@ -120,5 +120,6 @@ test('CLI: feature off prints not configured; another reader prints unmeasurable
   assert.equal(off.stdout.trim(), 'orchestratorModel: not configured');
   const other = run('orchestrator-other');
   assert.equal(other.status, 0);
-  assert.equal(other.stdout.trim(), 'orchestrator model: unmeasurable with this harness');
+  // The fixture names the `codex` reader: the line says which reader, and why the check cannot run on it.
+  assert.match(other.stdout.trim(), /^orchestrator model: unmeasurable with this harness \(reader "codex": /);
 });

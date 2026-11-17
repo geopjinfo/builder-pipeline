@@ -51,15 +51,15 @@ function observe(records, recent = RECENT_TURNS) {
 
 /**
  * @param {{ declared: string|null, observed: { dominant: string|null, turns: number } | null, measurable?: boolean }} input
- *   `measurable: false` — the harness writes no transcript this check can read.
+ *   `measurable: false` — the harness writes no transcript this check can read; `reason` says which reader and why.
  * @returns {{ code: number, warn: boolean, state: string, line: string }}
  */
-function verdict({ declared, observed, measurable = true }) {
+function verdict({ declared, observed, measurable = true, reason = null }) {
   if (!declared) {
     return { code: EXIT.OK, warn: false, state: 'undeclared', line: 'orchestrator model: none declared in models.orchestrator — nothing to check' };
   }
   if (!measurable) {
-    return { code: EXIT.OK, warn: false, state: 'unmeasurable', line: 'orchestrator model: unmeasurable with this harness' };
+    return { code: EXIT.OK, warn: false, state: 'unmeasurable', line: `orchestrator model: unmeasurable with this harness${reason ? ` (${reason})` : ''}` };
   }
   if (!observed || !observed.dominant || !observed.turns) {
     return {
