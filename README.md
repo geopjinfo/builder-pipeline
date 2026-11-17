@@ -132,6 +132,7 @@ records, how to resume, and the troubleshooting table.
 | `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
 | `features` | which optional checks are on, off, unmeasured or experimental |
 | `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why |
+| `accounts migrate [--dry-run]` | rewrite the 1.0 orchestrator seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into `features.accounts`; only the settings block changes, with a `PIPELINE_PROFILE.md.bak` backup |
 | `check-ledgers` | the mechanical board / registry gates — wire into CI |
 | `check-targets` | qa-audit environment safety — wire into CI |
 | `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
