@@ -114,18 +114,35 @@ function historyHits(text, patterns = DEFAULT_HISTORY) {
  *                                                installed), or null; such a path is reported in notChecked, not a problem
  * }} opts
  */
+/**
+ * The path resolver the lint applies to an inline-code token (exported for scripts/lib/docs-check.cjs, D92; the lint's
+ * own rule is unchanged). A token resolves from the project root, from the citing file's folder, or as the tail of
+ * some file in `index` (a bare name by its basename, a partial path by its suffix).
+ * @param {{ exists: (rel: string) => boolean, index?: string[] }} env  `exists` answers for a root-relative path
+ * @returns {{ resolves: (token: string, fromPath?: string) => boolean, fromFile: (token: string, fromPath: string) => string }}
+ */
+function makeResolver({ exists, index = [] }) {
+  const basenames = new Set(index.map((p) => p.slice(p.lastIndexOf('/') + 1)));
+  const atTail = (t) => (t.includes('/') ? index.some((p) => p === t || p.endsWith(`/${t}`)) : basenames.has(t));
+  const dirOf = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+  const fromFile = (token, fromPath) => {
+    const here = dirOf(String(fromPath || '').replace(/\\/g, '/'));
+    return here ? `${here}/${token}`.split('/').reduce((acc, s) => (s === '..' ? acc.slice(0, -1) : s === '.' ? acc : [...acc, s]), []).join('/') : token;
+  };
+  const resolves = (token, fromPath = '') => exists(token) || exists(fromFile(token, fromPath)) || atTail(token);
+  return { resolves, fromFile };
+}
+
 function lint(files, opts) {
   const { exists, index = [], ignorePaths = [], figures = [], sets = [], history = null, baseline = null, unchecked = () => null } = opts;
   const notChecked = [];
   const ignore = ignorePaths.map((p) => new RegExp(p));
-  const basenames = new Set(index.map((p) => p.slice(p.lastIndexOf('/') + 1)));
-  const atTail = (t) => (t.includes('/') ? index.some((p) => p === t || p.endsWith(`/${t}`)) : basenames.has(t));
+  const resolver = makeResolver({ exists, index });
   const problems = [];
   const counts = {};
   const historyCounts = {};
   const detail = { counts: [], history: [] };
   if (files.length === 0) problems.push('no instruction file matched — a lint over nothing asserts nothing');
-  const dirOf = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
   const figureLines = new Map();
 
   for (const f of figures) {
@@ -152,12 +169,10 @@ function lint(files, opts) {
   }
 
   for (const { path, text } of files) {
-    const here = dirOf(path);
     const dirExists = (seg) => exists(seg);
     for (const { n, token } of pathCandidates(text, { dirExists })) {
       if (ignore.some((re) => re.test(token))) continue;
-      const fromFile = here ? `${here}/${token}`.split('/').reduce((acc, s) => (s === '..' ? acc.slice(0, -1) : s === '.' ? acc : [...acc, s]), []).join('/') : token;
-      if (exists(token) || exists(fromFile) || atTail(token)) continue;
+      if (resolver.resolves(token, path)) continue;
       // A path inside a dependency that is not installed (a fresh clone before `npm install`) cannot be judged.
       const why = unchecked(token);
       if (why) notChecked.push(`${path}:${n}: \`${token}\` not checked — ${why}`);
@@ -181,4 +196,4 @@ function lint(files, opts) {
   return { ok: problems.length === 0 && ratchet.length === 0, problems, ratchet, counts, history: historyCounts, detail, notChecked };
 }
 
-module.exports = { lint, pathCandidates, bareLineRefs, countClaims, historyHits, proseLines, DEFAULT_HISTORY };
+module.exports = { lint, makeResolver, pathCandidates, bareLineRefs, countClaims, historyHits, proseLines, DEFAULT_HISTORY };
