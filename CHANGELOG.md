@@ -5,6 +5,34 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M12 remote lanes (experimental-off)
+
+- **`features.remoteLanes` (REQ-1201 to REQ-1211, D58), `experimental-off`.** A lane runs on another machine over plain
+  ssh; git through a shared origin is the only data path. `scripts/lib/orch-remote.cjs` and `orch remote
+  add | preflight | place | launch | poll | cancel`. A machine is a row in `state.json` (`host`, `user`, `remoteRoot`,
+  `status`, `lastSeen`, the preflight result); a lane may carry `machine`. With the flag off, a plan machine prints
+  `remoteLanes: not configured` and the lane stays local; with it on, an unknown machine is refused naming the row.
+- **Transport and preflight.** `ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 user@host
+  <cmd>`, Node built-ins only. Exit 255 is the event `remote_unknown`, never a lane verdict; exit 1 is the remote
+  command's. One preflight per machine runs `claude auth status`, `claude --version`, `git --version` and tests
+  `remoteRoot/.git`; a failing check names itself, a missing login is `machine_unauthenticated`, and a `remoteRoot` on a
+  mount path is refused before any call. The kit never mounts, copies or syncs a worktree (GUIDE carries Git's own
+  warning against sharing a working tree across systems).
+- **Launch, poll, collect.** One ssh call starts a lane: `git fetch origin`, `git worktree add` on a fresh lane branch
+  from the origin base, the `--settings` pin written into the worktree and every hook it names checked (a missing hook
+  refuses the launch and the event names it), then `setsid nohup claude -p … --output-format json > .lane/out.json` with
+  the pid in `.lane/pid` and `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`; the exit tail commits, pushes the lane branch,
+  writes `.lane/head` and removes the pin. Polls check the pid and the mtimes of `.lane/out.json` and `.lane/err.log`;
+  `lane.heartbeat` is the orchestrator's clock, remote times are stored as `remoteTs` and never order anything; a stall
+  judged on remote mtimes is `FAILED-STALL`; cancel kills the remote process group and the lane stays cancelling until a
+  poll confirms exit. On exit the orchestrator fetches the lane branch, judges the REQ-604 verdict against the fetched
+  tip (`FAILED-STALE-VERDICT` on another head) and queues a PASS lane for the existing merge path. Every `.lane/err.log`
+  line passes the outbound guard before it enters `events.jsonl`; no credential, `.env` or ssh key ever goes to the
+  remote. `features` prints `remoteLanes: experimental-off` and names EXPERIMENTS §18.
+- Tests: `tests/orch-remote.test.mjs` on a stub `ssh` (`tests/fixtures/orch/stub-ssh.cjs`) that records argv and plays
+  scripted exits (255, 1, live pid, stale mtimes, a pushed branch with a matching or another head, a secret-shaped
+  err.log line). The M9 loop runner's dispatch point is a TODO in the module header.
+
 ### Added — M6 worker adapters (2.0.0 line)
 
 - **Allowlisted child env (REQ-601, D42).** `scripts/lib/worker-env.cjs` builds a headless worker's env from `PATH`,
