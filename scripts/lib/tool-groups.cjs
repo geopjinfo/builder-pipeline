@@ -42,6 +42,8 @@ const PERSONAS = {
   'repo-auditor': 'audit',
   // 2.1.0 (M15): the read-only explainer of the capacity governor's record goes with the orchestrator
   'capacity-steward': 'orchestrator',
+  // 2.1.0: the progress reporter persona (experimental) goes with the orchestrator, whose skill starts the watcher
+  'progress-reporter': 'orchestrator',
 };
 
 /** Skills (skills/*.md, skills-extra/<name>/), by name. `references` is the pipeline skill's own folder. */
@@ -112,6 +114,7 @@ const SCRIPTS = {
   'board-loop': 'orchestrator',
   // 2.1.0: the capacity governor is one more term in the orchestrator's lane-cap rule (M15)
   capacity: 'orchestrator',
+  report: 'orchestrator', // 2.1.0 M16: the progress reporter
   'account-key': CORE,
   experiments: 'evals',
   'first-value': 'evals',
@@ -133,6 +136,9 @@ const LIBS = {
   'line-citations': 'audit',
   'contract-oracle': 'audit',
   'index-check': 'audit',
+  'report-rules': CORE, // the rules of features.reporter, read by the settings loader (every group)
+  report: 'orchestrator', // the progress reporter (2.1.0 M16) and its channels ship with the orchestrator
+  notify: 'orchestrator',
   'outbound-guard': CORE, // the outbound guard is read by the audit, orchestrator, pipeline, evals and spec groups
   wiring: 'audit',
   'rules-module': 'audit',
@@ -147,7 +153,7 @@ const LIBS = {
   'bash-cap': 'hooks',
   reanchor: 'hooks',
   'board-freshness': 'pipeline',
-  'board-parse': 'pipeline',
+  'board-parse': CORE, // read by the pipeline boards tooling and by the progress reporter (orchestrator), 2.1.0
   'page-docs': 'pipeline',
   'run-log': CORE,
   'table-row': 'pipeline',
@@ -233,6 +239,7 @@ const HOOK_LOADS = [
   'scripts/lib/pricing.cjs',
   'scripts/lib/profile.cjs',
   'scripts/lib/reanchor.cjs',
+  'scripts/lib/report-rules.cjs', // profile.cjs validates features.reporter (2.1.0 M16)
   'scripts/lib/run-hint.cjs',
   'scripts/lib/run-log.cjs',
   'scripts/lib/session-usage.cjs',

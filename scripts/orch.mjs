@@ -903,6 +903,7 @@ try {
         console.log(`no runs under ${root()}`);
         for (const l of orchLoop.statusLines(root())) console.log(l);
         console.log(capacityLib.statusLine(root()));
+        console.log(require('./lib/report.cjs').statusLine(process.cwd(), settings)); // REQ-1613
         const c = creditLines();
         if (c) console.log(c);
         break;
@@ -917,6 +918,7 @@ try {
       }
       for (const l of orchLoop.statusLines(root())) console.log(l);
       console.log(capacityLib.statusLine(root()));
+      console.log(require('./lib/report.cjs').statusLine(process.cwd(), settings)); // REQ-1613
       const c = creditLines();
       if (c) console.log(c);
       break;
