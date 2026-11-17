@@ -223,6 +223,43 @@ versions independently of any project it is pasted into.
   env value in the output, `list` runs no probe), `accounts-probes` (Antigravity ready / sign in / timeout / missing /
   `readyCommand`; gateway wrapper, closed marker, key presence, ps1 and Codex branches; the snapshot wiring), and the
   registry rule in `orch-state`. Usage text and the README command row name the report.
+### Added — M11 wrappers, gateway and free accounts
+
+- **`npx builder accounts install` (REQ-1101, REQ-1103, REQ-1109; D41, D52).** One wrapper pair (sh and ps1) per
+  `claude-code` or `codex` account under the accounts home, from `templates/account-wrapper.sh` and `.ps1`
+  (`scripts/lib/account-wrappers.cjs`). A wrapper unsets the denylist, checks the sandbox-runtime settings, sets
+  `CLAUDE_CONFIG_DIR` or `CODEX_HOME` and starts the tool; it never exports `ANTHROPIC_AUTH_TOKEN` or
+  `ANTHROPIC_API_KEY`. A gateway or api-key Claude account gets `apiKeyHelper` in its composed `settings.json`; a
+  gateway Claude account also gets the base URL, model aliases through `ANTHROPIC_DEFAULT_*_MODEL` and `modelOverrides`;
+  a subscription account never a base URL. A gateway Codex account gets `config.toml` with
+  `model_providers.gateway.env_key = "BUILDER_GATEWAY_KEY"`, the one variable its wrapper exports. The free lane's
+  combo is resolved at write time from the gateway policy: a closed lane gets a refusal wrapper that only explains why
+  (marker line `# builder-pipeline: closed`), an unreadable policy leaves a working wrapper alone. Each Claude Code
+  account gets `srt-settings.json` (`denyRead` of every other account dir and the user's `~/.claude` and `~/.codex`,
+  `allowWrite` of the lane worktree, the key masked and injected toward the API host only); `scripts/lib/srt-check.cjs`
+  refuses the launch naming the file when it is invalid. The Antigravity wrapper drops `SSH_*` only while a session bus
+  is reachable (REQ-1106).
+- **`accounts.lock.json` (REQ-1102; D19, D38).** `scripts/lib/accounts-lock.cjs` records every written file with its
+  sha256 under the accounts home, keeps and names a file changed since the kit wrote it, backs it up under
+  `backups/<stamp>/` before `--force` replaces it, and never writes outside kit-created folders. The free-model MCP
+  registration is printed, never written.
+- **`accounts policy show | dry-run | apply` and `accounts usage-snapshot` (REQ-1104, REQ-1105; D8, D43).**
+  `scripts/lib/gateway-policy.cjs` over `scripts/lib/gateways/` (OmniRoute pinned at 3.8 with a golden request plan,
+  `tests/fixtures/gateway/omniroute-3.8/`; Bifrost declared, refused until pinned). Idempotent; the token from a 0600
+  file owned by the user; Node fetch with `redirect: 'error'`; plain http to loopback only; errors reduced to method,
+  path and status; an applied marker with the policy sha256 and the gateway version. An unknown gateway is refused with
+  the known list; a policy naming a subscription provider is refused. The usage snapshot writes `keys.<name>: { spend,
+  maxBudget, budgetResetAt }` as the assessment reads it, never a token or a key.
+- **Free-model MCP server (REQ-1107; D15, D43), `features.freeModelMcp` experimental-off.**
+  `tooling/experimental/free-model-mcp.cjs`: stdio JSON-RPC on the 2026-07-28 protocol (`server/discover`, per-request
+  `_meta` echoed, `resultType`) with the legacy `initialize` fallback, Node built-ins only, one tool, one fixed route,
+  loopback only, no redirects, the key read at call time and replaced in error text, per-account `promptMaxBytes`, the
+  outbound guard over the prompt and the system text (a secret shape refuses the call naming the kind).
+- **`builder verify` policy drift row (REQ-1108).** An advisory row names the drifted policy keys and the apply
+  command, read from the applied marker; nothing is written and the exit code is unchanged.
+- GUIDE: "Accounts and wrappers". FEATURES: the wrappers row and the `freeModelMcp` experimental row. Tests:
+  `tests/accounts-install.test.mjs`, `tests/gateway-policy.test.mjs` (stub management API on loopback),
+  `tests/free-model-mcp.test.mjs` (both client generations, stub gateway on loopback).
 
 ### Added — M10 accounts command (2.0.0 line)
 

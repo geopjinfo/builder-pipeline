@@ -1,0 +1,7 @@
+{
+  "/api/combos": { "combos": [ { "id": "c-1", "name": "claude-auto-balanced-hobby", "strategy": "auto", "models": ["anthropic/claude-sonnet-5-5"] } ] },
+  "/api/keys": { "keys": [ { "id": "k-1", "name": "cli-hobby", "key": "or-REDACTED-NEVER-PRINTED" } ] },
+  "/api/pricing": { "pricing": { "anthropic/claude-haiku-5-5": { "input": 0.1, "output": 0.5, "cached": 0.01, "cache_creation": 0.125 } } },
+  "/api/usage/budget?apiKeyId=k-1": { "activeLimitUsd": 100, "totalCostPeriod": 12.5, "totalCostToday": 0.4, "totalEntries": 7, "nextResetAt": 1764547200000 },
+  "/api/version": { "version": "3.8.52" }
+}
