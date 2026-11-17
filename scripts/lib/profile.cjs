@@ -185,6 +185,11 @@ const FEATURES = {
     requires: ['roots', 'extensions', 'baseline'],
     experiment: '§23',
   },
+  /* Tree hygiene (specs/repo-hygiene.spec.md, M19; D87, D89, D97) — one feature per check, flat, default off. ignoreCheck
+   * reports; sizeCheck and secretScan fail the gate (exit 1) on a finding. Lists add to the built-in catalogues. */
+  ignoreCheck: { defaults: { state: 'off', extra: [], allow: [] }, requires: [] },
+  sizeCheck: { defaults: { state: 'off', maxFileKb: 512, history: false, maxCommits: 500, allow: [] }, requires: [] },
+  secretScan: { defaults: { state: 'off', roots: ['.'], allow: [], history: false, maxCommits: 200 }, requires: [] },
   /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
    * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
    * `target` through `gates`, and runs headless jobs on an api-key account with the guards in scripts/lib/orch-credit.cjs.
@@ -574,6 +579,18 @@ function validate(settings) {
     errors.push(`features.costAccounting.reader: one of ${COST_READERS.map((r) => `"${r}"`).join(' | ')}, got ${JSON.stringify(reader)}`);
   }
   errors.push(...validateHygiene(settings, badRegex));
+  // Tree hygiene (REQ-1811 to REQ-1813): string lists, booleans, and no negative number anywhere.
+  for (const [name, lists, numbers, bools] of [
+    ['ignoreCheck', ['extra', 'allow'], [], []],
+    ['sizeCheck', ['allow'], ['maxFileKb', 'maxCommits'], ['history']],
+    ['secretScan', ['roots', 'allow'], ['maxCommits'], ['history']],
+  ]) {
+    const f = settings.features?.[name];
+    if (!isObject(f)) continue;
+    for (const k of lists) if (f[k] !== undefined && (!Array.isArray(f[k]) || f[k].some((x) => typeof x !== 'string' || !x))) errors.push(`features.${name}.${k}: an array of non-empty strings`);
+    for (const k of numbers) if (f[k] !== undefined && !(Number.isInteger(f[k]) && f[k] > 0)) errors.push(`features.${name}.${k}: a positive integer`);
+    for (const k of bools) if (f[k] !== undefined && typeof f[k] !== 'boolean') errors.push(`features.${name}.${k}: true or false`);
+  }
   errors.push(...validateOrchestrator(settings, badRegex));
   errors.push(...accountsRegistry.validateAccounts(settings, { secretPatterns: require('./outbound-guard.cjs').PATTERNS }));
   errors.push(...require('./report-rules.cjs').validateReporter(settings)); // REQ-1601: channel kinds, formats, urlEnv|urlFile, the alert set

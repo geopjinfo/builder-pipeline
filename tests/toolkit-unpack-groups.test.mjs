@@ -90,7 +90,7 @@ describe('REQ-801…802 — the group table covers the real install list', () =>
     for (const f of readdirSync(join(PACK, 'tooling', 'experimental'))) for (const file of closure(join(PACK, 'tooling', 'experimental', f))) note('evals', file);
     // The hooks are users too (the hooks group carries what they load, DL-7); a lib only a hook loads is the hooks group's.
     // The hooks load these through hook-trust (cli.js HOOK_SCRIPTS), so a static closure of the hook files misses them.
-    const HOOK_SCRIPTS = ['lib/profile.cjs', 'lib/board-freshness.cjs', 'lib/bash-cap.cjs', 'lib/reanchor.cjs', 'board-render.mjs', 'instruction-lint.mjs'];
+    const HOOK_SCRIPTS = ['lib/profile.cjs', 'lib/board-freshness.cjs', 'lib/bash-cap.cjs', 'lib/reanchor.cjs', 'lib/secret-scan.cjs', 'board-render.mjs', 'instruction-lint.mjs'];
     const hookUsers = new Set();
     for (const entry of HOOK_SCRIPTS) for (const file of closure(join(scriptsDir, ...entry.split('/')))) hookUsers.add(relative(scriptsDir, file).split('\\').join('/'));
     for (const lib of readdirSync(join(scriptsDir, 'lib'))) {
