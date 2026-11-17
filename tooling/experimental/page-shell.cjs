@@ -5,10 +5,10 @@
  * rendered board file is the page, and this file has no use. See EXPERIMENTS.md.
  *
  * WHAT IT IS. A page body that holds NO run data of its own. It reads, live, the section documents that
- * `npx builder run board-render <key> --json` writes (one document per board section, a large section
+ * `npx builder-pipeline run board-render <key> --json` writes (one document per board section, a large section
  * split into numbered parts), from the page store's `page` collection, and renders them. With no data it
  * renders an em-dash notice and says so.
- * (folder layout: node scripts/board-render.mjs in place of npx builder run board-render)
+ * (folder layout: node scripts/board-render.mjs in place of npx builder-pipeline run board-render)
  *
  * WHAT IT MAY NOT DO. Viewers are read-only: the store is declared with reads for viewers and writes for
  * the owner only, and the page carries no control that writes — no write call, no click handler, no

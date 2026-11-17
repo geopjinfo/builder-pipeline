@@ -127,7 +127,7 @@ Rules for the block:
 ## 5. Finish
 
 1. Save the filled `PIPELINE_PROFILE.md` (delete the template's leading note block).
-2. Run `npx builder verify` — fix every §16 error it names — then `npx builder features`
+2. Run `npx builder-pipeline verify` — fix every §16 error it names — then `npx builder-pipeline features`
    (kit copied in as a `builder/` folder instead of installed: run the same commands through `builder/cli.js` with Node).
 3. Report to the human: a one-screen summary of what you derived, the feature states, plus the
    full list of `⚠ CONFIRM` lines as questions to answer in one batch. Apply their answers and run

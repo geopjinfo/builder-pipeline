@@ -158,9 +158,12 @@ flowchart LR
     Q2 -- no --> STD["🟡 Standard<br/>full or lite pipeline<br/>(standardPipeline)"]
 ```
 
-Lanes never share a file (`orch claim` refuses overlap); each lane gets its own git worktree and branch. The lane
+Lanes never share a file (`orch claim` refuses overlap); each lane gets its own git worktree and branch. A worktree
+separates working files; it does not sandbox processes and it does not prevent merge conflicts. The lane
 count starts at `maxLanes` and rises only with measured evidence that the machine and accounts carried the load.
 Controls: `orch status` · `next` · `preflight` · `pause` · `stop` · `resume`.
+
+A remote lane (`features.remoteLanes`, experimental) runs on another machine. It works in its own clone there and exchanges work through the origin both hosts reach. The kit never mounts, copies or syncs a worktree: Git's own FAQ warns against sharing a working tree across systems, because the index and the file times disagree. A person logs the remote machine in once; no credential leaves this machine.
 
 ### 🛰️ Progress, restarts and artifacts
 
@@ -187,32 +190,107 @@ flowchart LR
 A restarted session re-arms a watcher for each lane still `LAUNCHED` and carries on. It never rebuilds a run from
 scrollback, and it never reads state from a published page: the page can be stale, the files cannot.
 
-### 👥 Multi-account seats
+### 👥 Accounts
 
-Work runs on **seats**: the primary account (where the orchestrator session lives), an optional secondary account
-(terminal workers), and an optional API-credit lane. Usage is read fresh before every launch.
+Work runs on **accounts**. The registry is `features.accounts` in §16 of `PIPELINE_PROFILE.md`. One entry is one
+account. Each account names its worker (`session`, `claude-code`, `codex`, `api-key`), who pays (`subscription`,
+`gateway`, `free`, `api-key`), a content class (`public`, `scratch`, `any`, or a list of path roots), its roles, a
+family, a config dir, a start command and a budget (`percent` or `usd`, with a soft and a hard value). Account names
+are lowercase, at most 16 characters, and never a reserved word. A value shaped like a secret is refused at load; the
+refusal names the kind and never the text.
+
+> **Commands.** Written for the npm-package install: the CLI is `npx builder-pipeline <command>` and a kit script runs as
+> `npx builder-pipeline run <name>`. With the kit copied in as a `builder/` folder ([`UNPACK.md`](UNPACK.md)), the CLI is
+> `node builder/cli.js <command>` and a script runs from the project's `scripts/` copy with Node (folder layout).
+
+**The report.** `npx builder-pipeline accounts` prints one block per account: the state (`ready`, `not ready` with its
+reason, or `unmeasured`), the usage reading with its source and time, the version and the note. It exits 1 when one
+account is not ready. `--json` prints the same facts and exits 0. While the feature is off, it prints
+`accounts: not configured`. A reading is `measured`, `estimate` or `unmeasured`; the report never prints `0 %` for a
+reading nobody took. `npx builder-pipeline doctor` prints the same lines as advisory rows; its exit code does not change.
+
+**The commands.** Each command changes the registry in §16 only, and nothing else in the profile.
+
+| Command | What it does |
+|---|---|
+| `npx builder-pipeline accounts` | the readiness report, one block per account |
+| `npx builder-pipeline accounts add <name> --worker <w> --pays <p> [--roles ...] [--content ...]` | add one account to the registry and create its account dir |
+| `npx builder-pipeline accounts note <name> "<text>"` | set the account's `note`; the orchestrator obeys the note as a rule |
+| `npx builder-pipeline accounts key <name>` | store the key of an `api-key` account in its key file, read from a prompt; the key never enters the profile |
+| `npx builder-pipeline accounts remove <name>` | remove the account from the registry; its key file is deleted, its config dir is kept |
+| `npx builder-pipeline accounts list` | the registry in order, one line per account |
+| `npx builder-pipeline accounts migrate [--dry-run]` | rewrite the 1.0 seat keys into accounts (see below) |
+
+**Placement.** The orchestrator places a lane with one rule, inside `orch next`, `orch claim` and
+`orch gate-launch`:
 
 ```mermaid
 flowchart TD
-    J["lane or job to place"] --> CR{"credit-eligible job<br/>and credit.enabled?"}
-    CR -- yes --> CL["💳 credit lane<br/>headless, API key"]
-    CR -- no --> SEC{"secondary under<br/>its limit (80%)?"}
-    SEC -- yes --> SW["🖥️ secondary seat<br/>terminal worker"]
-    SEC -- no --> PRI{"primary under<br/>its limit (60%)?"}
-    PRI -- yes --> PW["🏠 primary seat<br/>sub-agent or own session"]
-    PRI -- no --> HOLD["⛔ USAGE-HOLD<br/>launch nothing, tell the human"]
+    J["lane or job to place"] --> F["filter: ready · role allowed<br/>· content class allowed"]
+    F --> O["order: registry order<br/>api-key accounts last"]
+    O --> B{"usage under<br/>the soft limit?"}
+    B -- yes --> GO["🚀 launch on the first account"]
+    B -- "no, job marked needs-account" --> GO
+    B -- "no, plain job" --> NEXT["NEEDS-IT-ONLY<br/>try the next account"]
+    NEXT --> HOLD["⛔ no account left<br/>launch nothing, tell the human"]
 ```
 
-| Seat | Runs | Never runs |
-|---|---|---|
-| **Primary** (orchestrator account) | the orchestrator; SOLO lanes as sub-agents; pipeline lanes in their own session; the test slot and every merge | — |
-| **Secondary** | lane workers in their own worktree (plan → build → test) | merges |
-| **Credit lane** | bounded jobs: `code-reading`, `record-fixes`, `docs`, `sweeps`, the tester and the four auditor seats | building, planning, reviewing, orchestrating |
+- A lane needs the module-builder role. A headless job (a tester, an auditor, a credit job) needs only its own role.
+- At or above `budget.hard` the account is not ready. At or above the soft limit (`budget.soft`, else
+  `softLimitPct`) the account takes only a job marked needs-account.
+- A reading older than `usageStaleMinutes` is unmeasured. Only the first account in order may launch unmeasured.
+- `orch next` prints one `SKIP <account>: <why>` line per account it passes over. `orch status` prints one line
+  per account with its state and reading.
+- A `LIMIT`, `BUDGET` or `AUTH` fault marks the account not ready until its `until` time. The job runs once more on
+  the next ready account. An `OVERLOAD` fault retries the same account with a backoff; it never changes the account.
+- `features.accounts.placement: shadow` computes the account the rule would pick, records it as a
+  `placement.shadow` event, and places the 1.0 way (the first ready account in order).
 
-The primary limit sits below the secondary's because the orchestrator session itself runs there. Limits are
-`features.orchestrator.limits`. The plan accounts never receive the API key.
+**The policy gate and the pin.** Before a launch, `orch gate-launch` checks the account against the project. It
+refuses with exit 3 when: the account's content class does not fit the project's `visibility` (§1 of the profile);
+a claimed file lies outside the account's path roots; a `free` or `gateway` account, or an account with a
+`baseUrl`, has no decision-log row that names it; or a settings file carries `apiKeyHelper`, an `env.ANTHROPIC_*`
+variable, a proxy variable or a hook not recorded in `builder.lock.json`. The refusal names the key and the file,
+never a value. A passing launch writes the account's `--settings` pin to `<run>/pins/<lane>.settings.json`: the
+account's env block, its config dir, its `baseUrl` and the deny rules of a path-root account. The pin never holds a
+key. Each lane runs in its own git worktree on a fresh branch. A worktree separates working files; it does not
+sandbox processes and it does not prevent merge conflicts.
 
-### 💳 Credit lane (only with `credit.enabled`)
+**The rulebook.** The judgement parts of placement are in `skills/references/account-selection.md`. `unpack`
+installs it beside the pipeline skill. The orchestrator skill (§3) points at it. It covers: ready only, the content
+class, the roles, the budget, the pays order with `api-key` last, holds, resume, drafts, shadow mode, and the list
+of things an orchestrator never does. The `note` of an account is a rule in that book, not a comment.
+
+#### Migrating from 1.0 seats
+
+The 1.0 keys `features.orchestrator.seats`, `limits`, `secondaryConfigDir` and `credit` are gone in 2.0. While the
+orchestrator is on, the loader refuses them. While it is off, the loader prints one warning. Both name the fix:
+
+1. Run `npx builder-pipeline accounts migrate --dry-run`. Read the notes.
+2. Run `npx builder-pipeline accounts migrate`. It rewrites the `pipeline-settings` block of `PIPELINE_PROFILE.md` once.
+   `primary` becomes the `session` account. `secondary` becomes a `claude-code` account with its config dir and start
+   command. `credit` becomes an `api-key` account with a USD budget and the credit guards. Every byte outside the
+   block stays.
+3. The command writes `PIPELINE_PROFILE.md.bak` first. Keep it until the first run is green.
+4. A second run changes nothing. The command is idempotent.
+5. The command refuses while a run holds a `LAUNCHED` or `STALLED` lane. Finish or stop the run (`orch status`),
+   then migrate.
+6. Finished run states keep their `seats`; `migrate` adds the `accounts` list beside them and archives each original
+   as `state.json.bak`. The placement decisions of 1.0 are kept; the golden fixture proves it.
+
+`npx builder-pipeline doctor` shows the state before and after: one row reads `profile: legacy seats, run npx builder-pipeline
+accounts migrate` until the rewrite is done.
+
+#### Looping a board
+
+The `boardLoop` key of the settings block (experimental, off by default) lets the orchestrator run one module board
+to its end without a person between the steps: `npx builder-pipeline run board-loop <account> <board>`, or `orch loop <board>` from the
+orchestrator skill. The loop places each step on the named account with the rule above and stops at every stop point
+the board declares. No measurements exist yet for this feature. It stays `experimental-off` until a measured run
+shows that the loop keeps the same gates as a person-driven board ([EXPERIMENTS.md](EXPERIMENTS.md)). It lands in
+its own change; a kit without the key prints `boardLoop: not configured`.
+
+### 💳 Credit lane (only with an `api-key` account)
 
 ```mermaid
 flowchart LR
@@ -220,7 +298,7 @@ flowchart LR
     RUN --> OK{"result"}
     OK -- "PASS, no file changes" --> DONE["✅ done"]
     OK -- "PASS, files changed" --> REV["⏸ REVIEW PENDING<br/>orch credit-review"] --> DONE
-    OK -- "account fault<br/>cap · credit out · API error · 429" --> FB["↪ fallback<br/>secondary → primary"]
+    OK -- "account fault<br/>cap · credit out · API error · 429" --> FB["↪ fallback<br/>the next ready account in order"]
     OK -- "job fault<br/>scope · denied · no PASS" --> FIXB["✋ no fallback<br/>fix the brief"]
 ```
 
@@ -232,6 +310,52 @@ flowchart LR
 - **Review hold fails closed:** `orch merge` refuses a lane while a credit job that changed its files is unreviewed.
 - **Auditors on credit:** a lane parked at `WAIT-P4` gets its four auditors via `orch credit-audit`; if the credit
   lane is busy, the lane self-audits instead of waiting.
+
+## 🔑 Accounts and wrappers (`features.accounts`)
+
+One person, several accounts. §16 `features.accounts` lists them: who the worker is (`claude-code`, `codex` or the
+session itself), who pays (`subscription`, `gateway`, `free`, `api-key`), what content the account may see, which roles
+it may hold, and a budget. Keys never live in the profile: `npx builder-pipeline accounts key <name>` stores one with echo off
+in the account's own folder under the accounts home (`~/.builder-pipeline`, or `BUILDER_ACCOUNTS_HOME`).
+
+`npx builder-pipeline accounts install` writes one wrapper pair per account, `bin/<name>` and `bin/<name>.ps1`, and the
+account's composed settings. A wrapper does four things: it unsets the denylist (nothing of a parent session's
+Anthropic, Claude, OpenAI, Codex or Gemini setup, no Node preload, no proxy or CA override, no XDG config), it checks
+the account's sandbox-runtime settings, it points the tool at the account's own config dir, and it starts the tool. No
+wrapper exports a key: a Claude Code account reads its token through `apiKeyHelper`; a Codex gateway account binds one
+provider entry to one budget-capped key. A subscription account's settings never name a base URL.
+
+Every file the install writes is recorded in `accounts.lock.json` under the accounts home. A file changed since the kit
+wrote it is kept and named; `--force` backs it up first and replaces it. Nothing is armed in a live tool configuration:
+the files sit in kit-created folders only, and the free-model MCP registration is printed, never written.
+
+**Gateway and free accounts.** A gateway fronts API keys, never a subscription. The gateway policy
+(`<accounts home>/gateway/policy.json`, no secrets) says the budget, the model pool, the pricing rows and one profile.
+`npx builder-pipeline accounts policy show | dry-run | apply` drives the gateway through a pinned adapter (OmniRoute pinned per
+version with a golden request plan; Bifrost declared, not yet pinned): the management token comes from a 0600 file, the
+client never follows a redirect, plain http reaches loopback only, and every error is reduced to the method, the path
+and the status. `apply` records a marker with the policy's sha256 and the gateway version; `builder verify` reads that
+marker and shows drift as an advisory row, without touching the network. A policy that closes the free lane makes
+`accounts install` write a refusal wrapper that only explains why (its marker line is `# builder-pipeline: closed`); an
+unreadable policy leaves a working wrapper alone. `npx builder-pipeline accounts usage-snapshot` writes per-key spend and budget
+as numbers the readiness assessment reads, never a token or a key.
+
+**Sandbox-runtime settings.** Each Claude Code account gets `srt-settings.json`: `denyRead` lists every other account
+dir and your own `~/.claude` and `~/.codex`, `allowWrite` lists the lane worktree, and the credentials block masks the
+account key and injects it toward the account's API host only. The wrapper passes the file to `srt` when that tool is
+present, and refuses the launch naming the file when it is invalid.
+
+## ⬆️ From 1.x: the command name
+
+2.0.0 has one command, `builder-pipeline`. The 1.x package also installed a second command, `builder`; that name
+belongs to an unrelated package on the npm registry, so 2.0.0 drops it. Every file the kit ships and every file it
+installs already says `npx builder-pipeline <cmd>` and `npx builder-pipeline run <name>`.
+
+Your own files are not rewritten: `upgrade` never touches project-owned files (your scripts, your CI workflow, your
+`AGENTS.md` or `CLAUDE.md` text outside the kit's pointer block). In those files, change the command name after `npx`
+from `builder` to `builder-pipeline` yourself, then run `npx builder-pipeline verify`. The file names
+`builder.lock.json`, `builder.config.json` and `builder.choices.json` do not change, and neither does the
+folder layout form, `node builder/cli.js <cmd>`.
 
 ## 📚 Where the truth lives
 
@@ -256,10 +380,10 @@ Every build checks the deferred registry on entry (did I unblock a row?) and upd
   `registry`, `decisions`, …), model tiers, protected globs and every optional feature on or off. Every persona and
   every script reads it; nothing in the kit assumes a stack, a test runner or a folder layout of its own.
 - **Overlays.** Keep a project's own version of a kit skill or persona instead of editing the kit's: record `keep`
-  (yours only) or `both` (yours, plus the kit's as `builder-<name>`) with `npx builder choices set <kind>:<name>
+  (yours only) or `both` (yours, plus the kit's as `builder-<name>`) with `npx builder-pipeline choices set <kind>:<name>
   <keep|kit|both> --by <you>`. Upgrades honour it.
 - **Local hooks and gates.** Your hooks stay yours; the kit's are copied, never armed (the settings blocks are in
-  `adapters/<tool>.md`). Wire `npx builder check-ledgers` (and `check-targets` with qa-audit) into CI beside your own
+  `adapters/<tool>.md`). Wire `npx builder-pipeline check-ledgers` (and `check-targets` with qa-audit) into CI beside your own
   gates; an optional check the project cannot run prints `<feature>: not configured`, never a pass.
 
 ## 📦 What's in the box
@@ -329,11 +453,12 @@ Details + pipeline wiring: [`skills-extra/README.md`](skills-extra/README.md).
 
 ## 🧬 Provenance
 
-Extracted 2026-08 from a production platform where this pipeline built 15+ modules, and uplifted
+Extracted 2026-08 from one production backend, where its author built and used it, and uplifted
 2026-09 with true accounting, record checkers, fixed output shapes, declared optional features and
-labelled experiments. Every rule exists because its absence caused a real defect there; the war
-stories are kept (anonymized) in [`DESIGN.md`](DESIGN.md) so future tuners know which rules are
-load-bearing.
+labelled experiments. That project's data cannot ship (the kit keeps no project ids); published
+measurements start with 2.0.0 ([`EXPERIMENTS.md`](EXPERIMENTS.md)). Every rule exists because its
+absence caused a real defect there; the war stories are kept (anonymized) in [`DESIGN.md`](DESIGN.md)
+so future tuners know which rules are load-bearing.
 
 > 📶 Nothing the pack requires needs the internet. Badges and Mermaid diagrams are optional
 > renderings: in an offline viewer the badges degrade to alt-text and the diagrams remain as

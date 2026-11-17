@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `npx builder run cost-window --since <iso> --until <iso> [--rates <pricing.cjs>] [--json]`
- * (folder layout: node scripts/cost-window.mjs in place of npx builder run cost-window)
+ * `npx builder-pipeline run cost-window --since <iso> --until <iso> [--rates <pricing.cjs>] [--transcripts <dir>] [--json]`
+ * (folder layout: node scripts/cost-window.mjs in place of npx builder-pipeline run cost-window)
  *
  * Every token the harness recorded in a time window, by seat, priced at the current rate table — or at
  * another table passed with `--rates`, to compare like with like. It reads the transcripts directly: every
@@ -11,8 +11,13 @@
  * It counts EVERYTHING in the window, pipeline or not; narrow the window to one run to measure a run.
  * A dispatch whose model has no rate is counted as unpriced and SAID, never added as $0.
  *
- * HARNESS. Reads Claude Code transcripts only (`features.costAccounting.reader === "claude-code"`).
- * Other harnesses write no usage this can read — the script says "unmeasurable with this harness", exit 0.
+ * HARNESS. `features.costAccounting.reader` picks the reader: `claude-code` reads the Claude Code project
+ * transcripts (session-usage.cjs); `codex` reads Codex CLI rollout files (codex-usage.cjs) under
+ * `--transcripts <dir>`, else `$CODEX_HOME/sessions`, else `~/.codex/sessions` — one session file is one dispatch,
+ * its seat the session's `agent_role` or `codex-session`, and a file whose shape the reader does not know is
+ * listed as `unmeasurable: <file>: <reason>`. Codex models have no shipped rate, so they are unpriced unless
+ * `--rates` names a table. Any other reader value is refused by the profile loader; the "unmeasurable with this
+ * harness" line stays as the last guard, exit 0.
  *
  * Exit codes: 0 report printed · 2 usage error or invalid profile.
  * The pure helpers below are exported for tests; the CLI runs only when this file is invoked directly.
@@ -84,7 +89,7 @@ function main() {
   const since = arg('--since');
   const until = arg('--until');
   if (!since || !until) {
-    console.error(`usage: ${runHint('cost-window')} --since <iso> --until <iso> [--rates <pricing.cjs>] [--json]`);
+    console.error(`usage: ${runHint('cost-window')} --since <iso> --until <iso> [--rates <pricing.cjs>] [--transcripts <dir>] [--json]`);
     process.exit(2);
   }
   const profile = require('./lib/profile.cjs');
@@ -98,6 +103,7 @@ function main() {
     console.log(accounting.line);
     process.exit(0);
   }
+  if (accounting.config.reader === 'codex') return codexMain(argv, arg, since, until);
   if (accounting.config.reader !== 'claude-code') {
     console.log('cost window: unmeasurable with this harness');
     process.exit(0);
@@ -123,6 +129,29 @@ function main() {
   const result = summarise(seats);
   if (argv.includes('--json')) console.log(JSON.stringify({ since, until, rates: pricing.version, ...result }, null, 2));
   else console.log(render(result, { since, until, rates: pricing.version, dir }));
+}
+
+/** The Codex CLI reader: every rollout file under the sessions directory, one dispatch each, priced per model. */
+function codexMain(argv, arg, since, until) {
+  const codex = require('./lib/codex-usage.cjs');
+  const su = require('./lib/session-usage.cjs');
+  const pricing = require(arg('--rates') ? resolve(arg('--rates')) : './lib/pricing.cjs');
+  const dir = codex.sessionsDir(arg('--transcripts'));
+  const { sessions, unmeasurable, coverage } = codex.collect(dir, { since, until });
+  const seats = new Map();
+  for (const s of sessions) {
+    if (s.summary.turns === 0) continue;
+    addSummary(seats, s.seat, s.summary, su.costOf(s.summary, pricing));
+  }
+  const result = summarise(seats);
+  const notes = unmeasurable.map((u) => `unmeasurable: ${u.file}: ${u.reason}`);
+  if (coverage.truncated) notes.push(`coverage: scanned ${coverage.scanned} of ${coverage.total} session files (cap ${coverage.limit}) — the window may be under-counted`);
+  if (argv.includes('--json')) {
+    console.log(JSON.stringify({ since, until, reader: 'codex', rates: pricing.version, transcripts: dir, ...result, unmeasurable, coverage }, null, 2));
+    return;
+  }
+  for (const n of notes) console.log(n);
+  console.log(render(result, { since, until, rates: pricing.version, dir }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

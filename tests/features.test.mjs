@@ -27,8 +27,19 @@ describe('features', () => {
     assert.match(r.stdout, /^no PIPELINE_PROFILE\.md — defaults in use$/m);
     assert.match(r.stdout, /^claims: on$/m);
     assert.match(r.stdout, /^contractOracle: not configured$/m);
-    assert.match(r.stdout, /^fixLane: on \(unmeasured/m);
-    assert.match(r.stdout, /^livePage: experimental — not enabled$/m);
+    assert.match(r.stdout, /^fixLane: not configured/m);
+    assert.match(r.stdout, /^livePage: experimental — not enabled · decision: not yet measured \(\d{4}-\d{2}-\d{2}\)/m);
+  });
+
+  test('red: REQ-801 familyReview is experimental-off by default: the loader knows it and its line says "not enabled" (AC-801a)', () => {
+    const r = run(project());
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    // REQ-1401 appends the EXPERIMENTS §16 decision to each line; the flag line itself is unchanged
+    assert.match(r.stdout, /^familyReview: experimental — not enabled( · decision: .*)?$/m);
+    assert.match(r.stdout, /^routerHint: experimental — not enabled( · decision: .*)?$/m);
+    const on = run(project(block({ schema: 2, features: { familyReview: { state: 'experimental-on' } } })));
+    assert.equal(on.status, 0, on.stdout);
+    assert.match(on.stdout, /^familyReview: experimental — enabled; its measurement is owed/m);
   });
 
   test('a profile without the settings block is said, and defaults apply', () => {
@@ -57,5 +68,14 @@ describe('features', () => {
     const r = run(project('```json pipeline-settings\n{ nope\n```\n'));
     assert.equal(r.status, 1);
     assert.match(r.stdout, /not valid JSON/);
+  });
+});
+
+describe('REQ-1401 — the decision beside each experimental flag', () => {
+  test('red: every experimental line carries the decision from EXPERIMENTS.md', () => {
+    const r = run(project());
+    const lines = r.stdout.split(/\r?\n/).filter((l) => /: experimental/.test(l));
+    assert.ok(lines.length >= 10, lines.join('\n'));
+    for (const l of lines) assert.match(l, / · decision: (keep|drop|not yet measured) \(\d{4}-\d{2}-\d{2}\)/, l);
   });
 });

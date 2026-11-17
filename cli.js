@@ -5,23 +5,24 @@
  * Zero dependencies; Node >= 18. Run from the TARGET repo root, as the package install runs it
  * (folder layout: `node builder/cli.js <command>`, with the kit unpacked as a builder/ folder):
  *
- *   npx builder unpack --tool claude-code
- *   npx builder unpack --tool claude-code,codex
- *   npx builder unpack --tool all [--dry-run] [--no-extras] [--experimental]
- *   npx builder unpack --tool claude-code --models strong=opus,mid=haiku
- *   npx builder upgrade [--tool claude-code] [--dry-run] [--prune]   (an install from an older kit release)
- *   npx builder uninstall --tool codex | --all [--dry-run]   (remove what the lock says the kit wrote)
- *   npx builder --version
- *   npx builder targets
- *   npx builder verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
- *   npx builder features         (which optional checks are on, off, unmeasured or experimental)
- *   npx builder check-ledgers    (mechanical board/registry gates — wire into CI)
- *   npx builder check-targets    (qa-audit environment safety — wire into CI)
- *   npx builder bootstrap [--tool …]        (the builder-init skill, + the kit as a devDependency when run via npx — cli/bootstrap.cjs)
- *   npx builder inventory [--json]          (project items vs the kit — cli/inventory.cjs)
- *   npx builder choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
- *   npx builder doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
- *   npx builder personas-check | run <script> [args]
+ *   npx builder-pipeline unpack --tool claude-code
+ *   npx builder-pipeline unpack --tool claude-code,codex
+ *   npx builder-pipeline unpack --tool all [--dry-run] [--no-extras] [--experimental]
+ *   npx builder-pipeline unpack --tool claude-code --models strong=opus,mid=haiku
+ *   npx builder-pipeline unpack --tool claude-code --tools spec,audit   (one tool group or several; default all — scripts/lib/tool-groups.cjs)
+ *   npx builder-pipeline upgrade [--tool claude-code] [--dry-run] [--prune]   (an install from an older kit release)
+ *   npx builder-pipeline uninstall --tool codex | --all [--dry-run]   (remove what the lock says the kit wrote)
+ *   npx builder-pipeline --version
+ *   npx builder-pipeline targets
+ *   npx builder-pipeline verify           (install + PIPELINE_PROFILE.md, including its §16 settings block)
+ *   npx builder-pipeline features         (which optional checks are on, off, unmeasured or experimental)
+ *   npx builder-pipeline check-ledgers    (mechanical board/registry gates — wire into CI)
+ *   npx builder-pipeline check-targets    (qa-audit environment safety — wire into CI)
+ *   npx builder-pipeline bootstrap [--tool …]        (the builder-init skill, + the kit as a devDependency when run via npx — cli/bootstrap.cjs)
+ *   npx builder-pipeline inventory [--json]          (project items vs the kit — cli/inventory.cjs)
+ *   npx builder-pipeline choices list|set|unset|check (builder.choices.json — scripts/choices.mjs)
+ *   npx builder-pipeline doctor [--tool …] [--json]  (per-tool feature support — cli/doctor.cjs)
+ *   npx builder-pipeline personas-check | run <script> [args]
  *
  * unpack/upgrade read builder.choices.json: a kit skill or persona that clashes with a project item and has no
  * recorded choice is skipped and reported, never installed (setupClashCheck below).
@@ -30,6 +31,9 @@
  * graphify, ledger-audit — see skills-extra/README.md) and the personas they ship (skills-extra/<name>/agents/).
  * --experimental also installs the experimental files (agents/experimental/, tooling/experimental/). They are
  * shipped but unproven; EXPERIMENTS.md names the measurement that promotes or removes each one.
+ * --tools <group>[,<group>] installs one part of the kit: spec, audit, orchestrator, hooks, evals or pipeline, plus the
+ * core set every install carries (the pointer block, the profile, the ledger seeds, the shared libs). Every file place()
+ * lands goes through scripts/lib/tool-groups.cjs; the lock records the groups (install.toolGroups) and upgrade repeats them.
  *
  * Safe by design: copy-if-absent (never overwrites), pointer blocks are appended once
  * (marker-guarded), --dry-run previews everything, hooks are copied but never armed. The kit itself is
@@ -66,6 +70,7 @@ const VERSION = require('./package.json').version;
 const SKILLS = ['build-module-pipeline', 'scaffold-module', 'module-readiness-check', 'setup-builder', 'build-module-lite', 'build-module-lite-gate-batch', 'orchestrator', 'builder-init', 'persona-detect', 'spec-author'];
 const ADAPTERS = require('./adapters/lib/index.cjs');
 const choicesLib = require('./scripts/lib/choices.cjs');
+const toolGroups = require('./scripts/lib/tool-groups.cjs');
 
 // ---------------------------------------------------------------------------
 // Tool registry. Two install styles:
@@ -93,24 +98,24 @@ const TOOLS = {
 // --------------------------- where the kit lives ---------------------------
 /**
  * The kit's own prose says `builder/<file>` and `node builder/cli.js` — true in the folder layout, a folder copied into the
- * project as `builder/`. Installed as a package it lives at `node_modules/@<scope>/builder-pipeline/` and runs as
- * `npx builder`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
+ * project as `builder/`. Installed as a package it lives at `node_modules/builder-pipeline/` and runs as
+ * `npx builder-pipeline`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
  * installs into the project (Markdown) and every line the CLI prints goes through kitPaths(), so it names the kit
  * where it actually is. With the kit at `builder/` nothing changes, byte for byte.
  */
 const posixPath = (p) => p.split(path.sep).join('/');
 const KIT_REL = posixPath(path.relative(CWD, KIT)) || '.';
-const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder' : `node ${KIT_REL}/cli.js`;
+const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder-pipeline' : `node ${KIT_REL}/cli.js`;
 const KIT_ENTRY = /(?<![.\w@/-])builder\/(?=(?:cli\.js|[A-Z][A-Z_]*(?:\.template)?\.md|adapters|agents|examples|hooks|oracles|scripts|skills-extra|skills|templates|tooling|tests)\b)/g;
-/** Installed as a package, the kit's scripts run from it (`npx builder run <name>`) and are not copied into the project. */
-const PACKAGED = RUN === 'npx builder';
+/** Installed as a package, the kit's scripts run from it (`npx builder-pipeline run <name>`) and are not copied into the project. */
+const PACKAGED = RUN === 'npx builder-pipeline';
 /** Where the kit scripts are for this install: the package itself, or the project's scripts/ copies. */
 const SCRIPTS_HOME = PACKAGED ? path.join(KIT, 'scripts') : path.join(CWD, 'scripts');
 function kitPaths(text) {
   if (KIT_REL === 'builder') return text;
   let out = text.replace(/\bnode builder\/cli\.js\b/g, RUN).replace(KIT_ENTRY, `${KIT_REL}/`);
   if (PACKAGED) {
-    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx builder run ${name}` : m));
+    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx builder-pipeline run ${name}` : m));
   }
   return out;
 }
@@ -135,6 +140,32 @@ function kitScript(name) {
 let DRY = false;
 let NO_EXTRAS = false;
 let EXPERIMENTAL = false;
+/** `--tools`: the sorted tool groups to install, or null for every group (no filter: the install is unchanged). */
+let TOOL_GROUPS = null;
+/** Files place() met per group this run: { installed: { group: n }, skipped: { group: n } } (the dry-run tally). */
+const GROUP_TALLY = { installed: {}, skipped: {} };
+let LEDGERS = null;
+/** True when `dst` installs for this run's tool groups; tallies it either way. An unmapped file is a refusal. */
+function inToolGroups(dst) {
+  const key = lockKey(dst);
+  if (!LEDGERS) LEDGERS = ledgerPaths();
+  const group = toolGroups.groupOf(key, LEDGERS);
+  if (group === null) {
+    if (!TOOL_GROUPS) return true;
+    die(`${key}: not in any tool group (scripts/lib/tool-groups.cjs) — map it before installing with --tools`);
+  }
+  const ok = !TOOL_GROUPS || toolGroups.selected(key, new Set(TOOL_GROUPS), LEDGERS);
+  const t = ok ? GROUP_TALLY.installed : GROUP_TALLY.skipped;
+  t[group] = (t[group] || 0) + 1;
+  return ok;
+}
+/** The dry-run tally: `spec: 8 files, core: 25 files` and, with --tools, the groups left out. */
+function groupTallyLines() {
+  const fmt = (t) => Object.keys(t).sort().map((g) => `${g}: ${t[g]} file${t[g] === 1 ? '' : 's'}`).join(', ');
+  const lines = [`tool groups: ${TOOL_GROUPS ? TOOL_GROUPS.join(', ') : 'all'}${TOOL_GROUPS ? ' + core' : ''} — ${fmt(GROUP_TALLY.installed) || 'no files'}`];
+  if (Object.keys(GROUP_TALLY.skipped).length) lines.push(`not selected — ${fmt(GROUP_TALLY.skipped)}`);
+  return lines;
+}
 const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
 
 /**
@@ -143,7 +174,7 @@ const log = (tag, p) => console.log(`${tag.padEnd(15)}${p}`);
  * the set unpack installs.
  */
 let MODE = 'unpack';
-const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0, 'stale (removed from the kit)': 0, pruned: 0, 'removed (choice is no longer both)': 0 } };
+const UPGRADE = { stamp: null, seen: new Set(), counts: { updated: 0, added: 0, unchanged: 0, 'kept-project-owned': 0, 'kept (by hand)': 0, 'kept (local edit)': 0, 'stale (removed from the kit)': 0, 'kept (outside the tool groups)': 0, pruned: 0, 'removed (choice is no longer both)': 0 } };
 /** --prune: an upgrade backs up and deletes the lock-matched files the kit no longer installs (leftovers() below). */
 let PRUNE = false;
 /**
@@ -184,7 +215,7 @@ const lockKey = (dst) => posixPath(dst);
  */
 /**
  * `install` records how the project installed the kit — { tools, models (the --models overrides), noExtras,
- * experimental } — so `upgrade` repeats the same install without the flags being typed again (explicit flags still
+ * experimental, toolGroups (the --tools groups; absent = all) } — so `upgrade` repeats the same install without the flags being typed again (explicit flags still
  * override), and a pointer file several tools share speaks for every tool installed, not only the latest command's.
  * A write that names no record (bootstrap) keeps the one already there.
  */
@@ -202,7 +233,10 @@ function writeLock({ bootstrap = false, install = null } = {}) {
 }
 function installRecord() {
   const models = Object.fromEntries(Object.entries(MODEL_OVERRIDES).filter(([, m]) => Object.keys(m).length));
-  return { tools: [...POINTER_TOOLS].sort(), models, noExtras: NO_EXTRAS, experimental: EXPERIMENTAL };
+  const record = { tools: [...POINTER_TOOLS].sort(), models, noExtras: NO_EXTRAS, experimental: EXPERIMENTAL };
+  // Absent = every group, so a lock from before --tools reads as the full install it was.
+  if (TOOL_GROUPS) record.toolGroups = TOOL_GROUPS.slice();
+  return record;
 }
 
 /**
@@ -295,6 +329,16 @@ function leftovers(tools) {
       continue;
     }
     if (MODE !== 'upgrade') continue;
+    // Narrowing with --tools (DL-8): a locked file outside the selected groups is a deletion only --prune performs.
+    if (TOOL_GROUPS && !inToolGroups(key)) {
+      if (!matches) say('kept (local edit)', key, 'outside the selected tool groups, and changed since the kit wrote it — delete it by hand if unwanted');
+      else if (PRUNE) {
+        removeKitFile(key);
+        LOCK.drop.add(key);
+        say('pruned', key, 'outside the selected tool groups; backed up first');
+      } else say('kept (outside the tool groups)', key, `not in --tools ${TOOL_GROUPS.join(',')} — re-run with --prune to back it up and delete it`);
+      continue;
+    }
     if (!matches) {
       say('kept (local edit)', key, 'removed from the kit, and changed since the kit wrote it — move the change, then delete it by hand');
     } else if (PRUNE) {
@@ -378,6 +422,8 @@ function place(dst, produce, owner, replace = false) {
   // Two tools can map one source to one destination (codex + antigravity share .agents/skills/, opencode + generic
   // share .builder/): it is written and reported once.
   if (UPGRADE.seen.has(lockKey(dst))) return;
+  // --tools: a file outside the selected groups is not placed and not seen, so leftovers() can name it.
+  if (!inToolGroups(dst)) return;
   UPGRADE.seen.add(lockKey(dst));
   if (MODE !== 'upgrade') {
     if (exists && !replace) {
@@ -801,7 +847,7 @@ function installCommon(tools = []) {
    */
   console.log('\n[common] scripts');
   if (PACKAGED) {
-    // Installed as a package the scripts run from it — `npx builder run <name>` — so a kit update reaches them with
+    // Installed as a package the scripts run from it — `npx builder-pipeline run <name>` — so a kit update reaches them with
     // the version bump, and the project carries no copies to drift (plan BU-4).
     console.log(`run from the package: ${RUN} run <name>   (list them: ${RUN} run)`);
   }
@@ -925,6 +971,7 @@ function cmdUnpack(tools) {
     choicesLib.write(CWD, choicesLib.empty());
     log('wrote:', `${choicesLib.FILE} (no clashes to decide)`);
   }
+  if (DRY || TOOL_GROUPS) for (const line of groupTallyLines()) console.log(line);
   console.log(`\n${DRY ? 'Dry run — nothing written.' : 'Unpacked.'}${EXPERIMENTAL ? ' Experimental files included.' : ''} Next steps:
   1. Open builder/DISCOVERY.md in your AI agent → it fills PIPELINE_PROFILE.md (incl. §16 settings) from
      THIS project's docs (not the kit's source project).
@@ -956,8 +1003,10 @@ function cmdUpgrade(tools) {
   const c = UPGRADE.counts;
   const backups = path.join('.builder', `backup-${UPGRADE.stamp}`);
   const stale = c['stale (removed from the kit)'];
+  const outside = c['kept (outside the tool groups)'];
   const removed = c.pruned + c['removed (choice is no longer both)'];
-  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}${stale ? `, ${stale} stale (removed from the kit — --prune deletes them)` : ''}${removed ? `, ${removed} removed` : ''}.`);
+  console.log(`\n${DRY ? 'Dry run — nothing written. Would be: ' : 'Upgraded: '}${c.updated} updated, ${c.added} added, ${c.unchanged} unchanged, ${c['kept-project-owned']} kept-project-owned${c['kept (by hand)'] ? `, ${c['kept (by hand)']} to re-wire by hand` : ''}${c['kept (local edit)'] ? `, ${c['kept (local edit)']} kept (local edit — see above; --force overwrites)` : ''}${stale ? `, ${stale} stale (removed from the kit — --prune deletes them)` : ''}${outside ? `, ${outside} kept outside the tool groups (--prune deletes them)` : ''}${removed ? `, ${removed} removed` : ''}.`);
+  if (DRY || TOOL_GROUPS) for (const line of groupTallyLines()) console.log(line);
   if (c.updated > 0 || removed > 0) console.log(DRY ? `Each updated file would be backed up first under ${backups}/.` : `Every overwritten file was backed up first under ${backups}/ (same relative path) — delete it once satisfied; it is not ignored by git.`);
   console.log(`Next steps:
   1. Read builder/CHANGELOG.md for what changed since your last release, and diff your project-owned files
@@ -1108,7 +1157,17 @@ function seatProblems() {
 
 function cmdVerify() {
   let fail = 0;
-  const check = (ok, msg) => { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fail++; };
+  /**
+   * The tool groups the lock records (DL-9): a check whose files are outside them is SKIP, not FAIL — a `spec`-only
+   * install has no personas by design. `groups` names the group(s) a check's files belong to; none = always checked.
+   */
+  const installed = lockMeta().install && Array.isArray(lockMeta().install.toolGroups) ? lockMeta().install.toolGroups : null;
+  const inGroups = (...gs) => !installed || gs.some((x) => x === toolGroups.CORE || installed.includes(x));
+  const check = (ok, msg, ...gs) => {
+    if (gs.length && !inGroups(...gs)) return console.log(`  SKIP  ${msg} (not in the tool groups: ${installed.join(', ')})`);
+    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${msg}`);
+    if (!ok) fail++;
+  };
   const profileAbs = path.join(CWD, 'PIPELINE_PROFILE.md');
   /**
    * The ledgers live where §16 `paths` says, not where the installer first put them. An adopter whose
@@ -1118,6 +1177,7 @@ function cmdVerify() {
   const { boards: boardsDir, registry: registryFile, decisions: decisionsFile } = ledgerPaths();
 
   console.log('Install:');
+  console.log(`  info  tool groups: ${installed ? `${installed.join(', ')} (${LOCK_FILE})` : 'all'}`);
   check(fs.existsSync(profileAbs), 'PIPELINE_PROFILE.md exists at repo root');
   check(fs.existsSync(path.join(CWD, boardsDir, 'README.md')), `${boardsDir}/README.md (board rules) exists (paths.boards)`);
   check(fs.existsSync(path.join(CWD, registryFile)), `${registryFile} exists (paths.registry)`);
@@ -1152,25 +1212,42 @@ function cmdVerify() {
     fs.existsSync(path.join(SCRIPTS_HOME, 'board-progress.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'board-check-all.mjs')),
     `board scripts installed (${sh}/board-{progress,check-all}.mjs)`,
+    'pipeline',
   );
   check(
     fs.existsSync(path.join(SCRIPTS_HOME, 'board-render.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'board-watch.mjs')) &&
       fs.existsSync(path.join(SCRIPTS_HOME, 'lib', 'board-parse.cjs')),
     `run-board tooling installed (${sh}/board-{render,watch}.mjs + ${sh}/lib/*.cjs)`,
+    'pipeline',
   );
-  const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')];
+  // Only the checkers of the installed groups are expected (the package layout holds them all in the package).
+  const checkers = ['features.mjs', 'claims-check.mjs', 'output-check.mjs', 'handoff-pack.mjs', 'handoff-check.mjs', 'ledger-row.mjs', path.join('lib', 'profile.cjs')]
+    .filter((s) => inGroups(toolGroups.groupOf(`scripts/${posixPath(s)}`)));
   const missing = checkers.filter((s) => !fs.existsSync(path.join(SCRIPTS_HOME, s)));
   check(missing.length === 0, `checkers installed (${sh}/{${checkers.map(posixPath).join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
+  // REQ-1108: gateway policy drift, advisory only (the diff `accounts policy dry-run` would print, read from the applied
+  // marker, no network, nothing written). The exit code is unchanged by it.
+  try {
+    const ap = require('./scripts/lib/account-paths.cjs');
+    const gp = require('./scripts/lib/gateway-policy.cjs');
+    const loadedP = require('./scripts/lib/profile.cjs').load(CWD);
+    const g = (loadedP.settings.features && loadedP.settings.features.accounts && loadedP.settings.features.accounts.gateway) || {};
+    const row = gp.driftRow(ap.home(process.env), g);
+    if (row) console.log(`  ADVISORY  ${row}`);
+  } catch (_) {
+    /* no accounts home or no policy: nothing to advise */
+  }
 
-  const personaAt = ['.claude/agents/module-planner.md', '.codex/agents/module-planner.toml', '.agents/agents/module-planner.md', '.builder/personas/module-planner.md'];
-  check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)');
+  // The planner is the pipeline group's persona, the reviewer the audit group's: an install of one group alone has one.
+  const personaAt = ['module-planner', 'module-reviewer'].flatMap((n) => [`.claude/agents/${n}.md`, `.codex/agents/${n}.toml`, `.agents/agents/${n}.md`, `.builder/personas/${n}.md`]);
+  check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)', 'pipeline', 'audit');
   const seats = seatProblems();
   check(seats.problems.length === 0, seats.problems.length === 0
     ? `pipeline seats are the kit's (${seats.checked.join(', ') || 'no persona folder'})`
-    : `pipeline seats not the kit's — the pipeline skills dispatch these by name: ${seats.problems.join('; ')}`);
+    : `pipeline seats not the kit's — the pipeline skills dispatch these by name: ${seats.problems.join('; ')}`, 'pipeline');
 
   const wired = Object.values(TOOLS)
     .map((t) => t.pointer)
@@ -1337,10 +1414,32 @@ function ledgerPaths() {
   };
 }
 
-function cmdCheckLedgers() {
+/**
+ * `--boards <dir>` and `--registry <file>` name the ledgers in place of §16 `paths` and the defaults (REQ-201), so the
+ * gate runs over another tool's boards in a project that never adopted the pipeline. A flag without its value is a
+ * usage error (REQ-202), never a silent default.
+ */
+function ledgerFlags(args) {
+  const out = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--boards' || a === '--registry') {
+      const value = args[i + 1];
+      if (!value || value.startsWith('--')) die(`check-ledgers: ${a} needs a value — usage: ${RUN} check-ledgers [--boards <dir>] [--registry <file>]`);
+      out[a.slice(2)] = value.replace(/[\\/]+$/, '');
+      i++;
+    } else die(`check-ledgers: unknown argument "${a}" — usage: ${RUN} check-ledgers [--boards <dir>] [--registry <file>]`);
+  }
+  return out;
+}
+
+function cmdCheckLedgers(args = []) {
   const problems = [];
   const note = (file, row, rule, msg) => problems.push({ file, row, rule, msg });
-  const { boards: boardsDir, registry: registryFile } = ledgerPaths();
+  const flags = ledgerFlags(args);
+  const paths = ledgerPaths();
+  const boardsDir = flags.boards ?? paths.boards;
+  const registryFile = flags.registry ?? paths.registry;
 
   // Registry first (boards cross-reference it)
   const regPath = path.join(CWD, registryFile);
@@ -1412,7 +1511,19 @@ function cmdCheckLedgers() {
  * Its exit code is the command's. No name = the list of scripts.
  */
 function cmdRun(args) {
-  const [name, ...rest] = args;
+  const [name, ...given] = args;
+  // `--config <path>` is the kit's, not the script's: it becomes BUILDER_CONFIG, the settings source a project without
+  // a profile uses (REQ-104). The script then sees only its own arguments.
+  const rest = [];
+  const env = { ...process.env, BUILDER_PROJECT_ROOT: CWD, BUILDER_KIT_ROOT: KIT };
+  for (let i = 0; i < given.length; i++) {
+    if (given[i] === '--config') {
+      const value = given[i + 1];
+      if (!value || value.startsWith('--')) die(`run: --config <path> needs the path of a settings file (the bare JSON of profile §16)`);
+      env.BUILDER_CONFIG = path.resolve(CWD, value);
+      i++;
+    } else rest.push(given[i]);
+  }
   if (!name) {
     const list = (dir, prefix) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.(mjs|cjs|js)$/.test(f)).map((f) => prefix + f.replace(/\.(mjs|cjs|js)$/, '')) : []);
     // One name per script: `page-shell.cjs` + `page-shell.mjs` are one runnable name (kitScript picks .mjs first).
@@ -1423,11 +1534,7 @@ function cmdRun(args) {
   }
   const file = kitScript(name);
   if (!file) die(`no kit script "${name}" — list them with: ${RUN} run`);
-  const r = require('child_process').spawnSync(process.execPath, [file, ...rest], {
-    cwd: CWD,
-    stdio: 'inherit',
-    env: { ...process.env, BUILDER_PROJECT_ROOT: CWD, BUILDER_KIT_ROOT: KIT },
-  });
+  const r = require('child_process').spawnSync(process.execPath, [file, ...rest], { cwd: CWD, stdio: 'inherit', env });
   if (r.error) die(`${name}: ${r.error.message}`);
   process.exit(r.status === null ? 1 : r.status);
 }
@@ -1499,7 +1606,7 @@ const ctx = () => ({ CWD, KIT, RUN, VERSION, TOOLS, ADAPTERS, MARKER, DRY: () =>
 function die(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
 function main() {
-  // Every line the CLI prints names the kit where it is (kitPaths above): `npx builder verify`, not a builder/ folder
+  // Every line the CLI prints names the kit where it is (kitPaths above): `npx builder-pipeline verify`, not a builder/ folder
   // the project does not have.
   for (const k of ['log', 'error']) {
     const write = console[k].bind(console);
@@ -1522,7 +1629,7 @@ function main() {
   if (cmd === 'targets') return cmdTargets();
   if (cmd === 'verify') return cmdVerify();
   if (cmd === 'features') return cmdFeatures();
-  if (cmd === 'check-ledgers') return cmdCheckLedgers();
+  if (cmd === 'check-ledgers') return cmdCheckLedgers(argv.slice(1));
   if (cmd === 'check-targets') return cmdCheckTargets();
   if (cmd === 'inventory') return require('./cli/inventory.cjs').cmdInventory(ctx(), argv.slice(1));
   // The worker scripts already hold these commands' behaviour; the CLI runs them in the project folder.
@@ -1530,6 +1637,7 @@ function main() {
   if (cmd === 'bootstrap') return require('./cli/bootstrap.cjs').cmdBootstrap(ctx(), argv.slice(1));
   if (cmd === 'doctor') return require('./cli/doctor.cjs').cmdDoctor(ctx(), argv.slice(1));
   if (cmd === 'git-hooks') return require('./cli/git-hooks.cjs').cmdGitHooks(ctx(), argv.slice(1));
+  if (cmd === 'accounts') return require('./cli/accounts.cjs').cmdAccounts(ctx(), argv.slice(1));
   if (cmd !== 'unpack' && cmd !== 'upgrade') {
     console.log(`builder kit ${VERSION}`);
     console.log(`usage: node builder/cli.js <command> [options]
@@ -1542,15 +1650,32 @@ function main() {
     upgrade [--tool <list|all>]         refresh kit-owned files (backup first; --force over local edits);
                                         names files this release dropped as stale, --prune deletes them (backup first)
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
+      [--tools <group list|all>]        one tool group or several: spec, audit, orchestrator, hooks, evals, pipeline (default all;
+                                        the core files come with any group; upgrade repeats what builder.lock.json recorded)
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
+    accounts [--json]                   the readiness report (one block per account, as gh auth status): state with its reason, usage with its source, version, key present or absent, lease; exit 1 when any account is not ready, 0 with --json; "accounts: not configured" with the feature off
+    accounts add <name> --worker <w> --pays <p> [--content ...] [--roles a,b] [--family ...] [--note "..."] [--config-dir ...] [--command "..."] [--base-url ...] [--budget-hard N --budget-kind percent|usd]
+                                        write one account into features.accounts (§16) and make its folder under the accounts home
+    accounts note <name> <text>         replace the account's note
+    accounts key <name> [--remove]      enter the API key with echo off (never on the command line) into the account's own folder, or hand it to codex login; --remove deletes it
+    accounts remove <name>              delete the wrappers, the key and the §16 entry; the folder stays; refused while a worker holds the account's lease
+    accounts list [--json]              one line per account: worker, pays, content, roles, key present or absent (never the value), lease state, key file mode
+    accounts migrate [--dry-run]        rewrite the 1.0 seat keys (seats, limits, secondaryConfigDir, credit) into features.accounts (backup first)
+    accounts install [--dry-run] [--force] [--policy <file>]
+                                        write one wrapper pair (sh, ps1) and the composed settings per account under the accounts home, recorded in accounts.lock.json; a policy-closed lane gets a refusal wrapper
+    accounts policy show|dry-run|apply [--gateway <g>]
+                                        the gateway policy through its adapter (omniroute pinned; bifrost declared): read, plan, or apply and record the applied marker
+    accounts usage-snapshot [--out <file>]
+                                        per-key spend and budget as the assessment reads them (numbers only)
   check
     verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check
   other
     run [<script> [args]] | targets | --version
 
   e.g. node builder/cli.js unpack --tool claude-code,codex
-       node builder/cli.js upgrade --dry-run   (repeats the --tool/--models/--no-extras/--experimental builder.lock.json recorded)`);
+       node builder/cli.js unpack --tool claude-code --tools audit   (the review and audit gates alone)
+       node builder/cli.js upgrade --dry-run   (repeats the --tool/--tools/--models/--no-extras/--experimental builder.lock.json recorded)`);
     process.exit(cmd ? 1 : 0);
   }
 
@@ -1561,6 +1686,19 @@ function main() {
    * overrides on record for the tools it does not re-render.
    */
   const recorded = lockMeta().install || null;
+  const g = argv.indexOf('--tools');
+  if (g !== -1) {
+    if (!argv[g + 1] || argv[g + 1].startsWith('--')) die(`--tools needs a value: ${toolGroups.GROUPS.join(', ')} (comma-separated), or all`);
+    try {
+      TOOL_GROUPS = toolGroups.parse(argv[g + 1]);
+    } catch (e) {
+      die(e.message);
+    }
+  } else if (cmd === 'upgrade' && recorded && Array.isArray(recorded.toolGroups)) {
+    TOOL_GROUPS = toolGroups.parse(recorded.toolGroups.filter((x) => toolGroups.GROUPS.includes(x)).join(','));
+    if (TOOL_GROUPS) console.log(`tool groups: ${TOOL_GROUPS.join(', ')} (from ${LOCK_FILE}; --tools overrides)`);
+  }
+  if (TOOL_GROUPS && g !== -1) console.log(`tool groups: ${TOOL_GROUPS.join(', ')}`);
   if (recorded) {
     const upgrading = cmd === 'upgrade';
     if (upgrading && !argv.includes('--no-extras') && !argv.includes('--extras')) NO_EXTRAS = recorded.noExtras === true;

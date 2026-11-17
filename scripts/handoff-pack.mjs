@@ -1,8 +1,8 @@
 /**
  * Generate a run's handoff pack skeleton at close-out. Check it with scripts/handoff-check.mjs.
  *
- *   npx builder run handoff-pack <key> [--base <ref>] [--out <path>] [--date YYYY-MM-DD]
- * (folder layout: node scripts/handoff-pack.mjs in place of npx builder run handoff-pack)
+ *   npx builder-pipeline run handoff-pack <key> [--base <ref>] [--out <path>] [--date YYYY-MM-DD]
+ * (folder layout: node scripts/handoff-pack.mjs in place of npx builder-pipeline run handoff-pack)
  *
  * Reads the board (<boards>/<key>.md: rows done / deferred / dropped / open), the run log (<runs>/<key>/run.jsonl:
  * verdict, last result per gate), the registry diff against --base (default: main), the decision ids the board

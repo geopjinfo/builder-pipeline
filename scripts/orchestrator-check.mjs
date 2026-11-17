@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `npx builder run orchestrator-check [--session <id>] [--transcript <file.jsonl>]`
- * (folder layout: node scripts/orchestrator-check.mjs in place of npx builder run orchestrator-check)
+ * `npx builder-pipeline run orchestrator-check [--session <id>] [--transcript <file.jsonl>]`
+ * (folder layout: node scripts/orchestrator-check.mjs in place of npx builder-pipeline run orchestrator-check)
  *
  * Pipeline step 0: is this session on the declared orchestrator model (`models.orchestrator`)?
  * Verdict: `scripts/lib/orchestrator-check.cjs`.
@@ -17,7 +17,7 @@
  * running session's id to the shells it starts), else the project transcript written most recently (a
  * concurrent session can make that one wrong, hence the order). A session named by id that is not in this
  * checkout's folder is looked up in every project folder (a worktree run). `--transcript` reads a file directly.
- * Any other reader prints "orchestrator model: unmeasurable with this harness" and exits 0.
+ * Any other reader prints "orchestrator model: unmeasurable with this harness" and exits 0; the `codex` reader adds why.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -99,9 +99,12 @@ function sessionFile() {
 }
 
 const measurable = reader === 'claude-code' || Boolean(arg('--transcript'));
+// The Codex reader prices sessions (cost-window) but cannot name the current session this check would read.
+const reason = !measurable && reader === 'codex' ? 'reader "codex": the kit cannot name the current Codex session; cost-window reads its transcripts' : null;
 const result = verdict({
   declared,
   measurable,
+  reason,
   observed: measurable ? observe(records(sessionFile()), recent) : null,
 });
 console.log(result.line);

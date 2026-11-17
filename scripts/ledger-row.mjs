@@ -1,9 +1,9 @@
 /**
  * One ledger row, not the ledger. Rules: scripts/lib/table-row.cjs.
  *
- *   npx builder run ledger-row registry <ID> [<ID> …]           rows of paths.registry
- *   npx builder run ledger-row board <board.md | key> <ROW> …    rows of a task board (<paths.boards>/<key>.md)
- * (folder layout: node scripts/ledger-row.mjs in place of npx builder run ledger-row)
+ *   npx builder-pipeline run ledger-row registry <ID> [<ID> …]           rows of paths.registry
+ *   npx builder-pipeline run ledger-row board <board.md | key> <ROW> …    rows of a task board (<paths.boards>/<key>.md)
+ * (folder layout: node scripts/ledger-row.mjs in place of npx builder-pipeline run ledger-row)
  *
  * Prints the section, the table header and the row, with its `file:line`. Settings: paths.registry · paths.boards ·
  * features.rowReader.state (off → "rowReader: not configured", exit 0).

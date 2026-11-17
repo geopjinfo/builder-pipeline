@@ -5,7 +5,7 @@ description: Use to build, then operate, an OpenAPI-driven full-API e2e test har
 
 # E2E harness — OpenAPI-driven, drift-gated, deterministic-first
 
-The pattern (proven on a 460-test production harness): the **API contract is the test oracle**.
+The pattern (taken from one production harness of several hundred tests): the **API contract is the test oracle**.
 Every operation in the OpenAPI document gets a scenario pack; a **drift gate** hashes the
 contract so CI knows exactly which operations changed; the model regenerates **only the delta** —
 detection, execution, and reporting are deterministic and cost zero tokens.

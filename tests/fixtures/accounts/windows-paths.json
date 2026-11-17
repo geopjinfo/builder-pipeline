@@ -1,0 +1,14 @@
+{
+  "_synthetic": "SYNTHETIC fixture: Windows-style paths for the owner-only ACL branch (REQ-1006). No real machine, user or key.",
+  "home": "D:\\work\\accounts-home",
+  "user": "alpha",
+  "accounts": {
+    "alpha": { "dir": "D:\\work\\accounts-home\\accounts\\alpha", "keyFile": "D:\\work\\accounts-home\\accounts\\alpha\\key" },
+    "bravo": { "dir": "D:\\work\\accounts-home\\accounts\\bravo", "configDir": "E:\\codex-homes\\bravo", "keyFile": "D:\\work\\accounts-home\\accounts\\bravo\\key" }
+  },
+  "icaclsOutput": [
+    "D:\\work\\accounts-home\\accounts\\alpha\\key HOST\\alpha:(F)",
+    "",
+    "Successfully processed 1 files; Failed processing 0 files"
+  ]
+}

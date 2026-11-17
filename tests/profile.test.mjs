@@ -29,7 +29,8 @@ test('an off feature says "not configured" and does not run', () => {
 test('a feature the profile never mentions takes its default, and the default is stated', () => {
   const { settings } = profile.parse(sample);
   assert.equal(profile.feature(settings, 'claims').enabled, true);
-  assert.match(profile.feature(settings, 'builderBatch').line, /unmeasured/);
+  assert.equal(profile.feature(settings, 'builderBatch').line, 'builderBatch: not configured'); // off by default since 2.0.0 (REQ-1403)
+  assert.match(profile.feature({ features: { builderBatch: { state: 'unmeasured' } } }, 'builderBatch').line, /unmeasured/);
   assert.match(profile.feature(settings, 'livePage').line, /experimental — not enabled/);
 });
 
@@ -95,4 +96,20 @@ test('red: an unknown orchestrator primaryLaunch mode is refused; both known mod
 
 test('feature() refuses a name the pack does not know', () => {
   assert.throws(() => profile.feature(profile.DEFAULTS, 'nope'), /unknown feature/);
+});
+
+test('red: REQ-401 the top-level visibility fact is private by default and a closed set', () => {
+  assert.equal(profile.parse(block({ schema: 2 })).settings.visibility, 'private');
+  assert.equal(profile.parse(block({ schema: 2, visibility: 'public' })).settings.visibility, 'public');
+  assert.deepEqual(profile.parse(block({ schema: 2, visibility: 'public' })).errors, []);
+  const { errors } = profile.parse(block({ schema: 2, visibility: 'internal' }));
+  assert.ok(errors.some((e) => e.startsWith('visibility: "public" or "private"')), errors.join('\n'));
+  assert.equal(profile.DEFAULTS.visibility, 'private');
+});
+
+test('REQ-401 the template §16 block carries visibility private', () => {
+  const tpl = readFileSync(join(here, '..', 'PIPELINE_PROFILE.template.md'), 'utf8');
+  const raw = JSON.parse(/```json pipeline-settings\r?\n([\s\S]*?)\r?\n```/.exec(tpl)[1]);
+  assert.equal(raw.visibility, 'private');
+  assert.match(tpl, /\*\*Visibility:\*\*/);
 });

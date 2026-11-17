@@ -18,10 +18,17 @@
  *              lane runs in a clean guard config dir; a plan account gets its own config dir (secondary) or the
  *              default (primary), and never the API key or an auth token. Values are never read or printed.
  *
+ *   errors     `classifyError(response)` is the shared rule of scripts/lib/account-errors.cjs (REQ-306): LIMIT, BUDGET,
+ *              OVERLOAD or AUTH with an until time; `errorResponse(result, stderr)` shapes a failed run's texts for it.
+ *   pin        the `--settings` file every lane launch passes (REQ-404, D40): the account's own env block, its
+ *              config dir and its baseUrl, plus `permissions.deny` for everything outside a path-root account's
+ *              roots (REQ-402). Written into the run dir at 0600; it never carries a key or a key helper.
+ *
  * Tests drive a stub binary through BUILDER_CREDIT_WORKER_BIN (tests/fixtures/orch/stub-worker.cjs).
  */
 const fs = require('fs');
 const path = require('path');
+const { childEnv } = require('./worker-env.cjs');
 
 const NAME = 'claude-code';
 const API_KEY_VAR = 'ANTHROPIC_API_KEY';
@@ -70,6 +77,37 @@ function env(base, home, account, { guardDir = DEFAULT_GUARD_DIR, secondaryConfi
     out.CLAUDE_CONFIG_DIR = path.join(home, secondaryConfigDir);
   }
   return out;
+}
+
+/**
+ * The --settings pin of a lane launch. `accountSettings` is the parsed account settings file (or null); only its
+ * `env` block is carried — never `apiKeyHelper`, hooks or anything else. `denyPaths` come from account-policy
+ * denyPathsFor().
+ */
+function pin({ account = {}, configDir = null, accountSettings = null, denyPaths = [] }) {
+  const env = {};
+  const own = accountSettings && accountSettings.env && typeof accountSettings.env === 'object' && !Array.isArray(accountSettings.env) ? accountSettings.env : {};
+  for (const [k, v] of Object.entries(own)) if (typeof v === 'string') env[k] = v;
+  if (account.baseUrl) env.ANTHROPIC_BASE_URL = account.baseUrl;
+  if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
+  const out = { env };
+  if (denyPaths && denyPaths.length) out.permissions = { deny: denyPaths.flatMap((p) => [`Read(${p})`, `Edit(${p})`, `Write(${p})`]) };
+  return out;
+}
+
+/** The launch command with the pin: `{settings}` filled when the template names it, else `--settings "<file>"` appended. */
+const withSettings = (command, pinFile) => (String(command).includes('{settings}') ? String(command).split('{settings}').join(pinFile) : `${command} --settings ${JSON.stringify(pinFile)}`);
+
+/** Write the pin at 0600 (owner only). */
+function writePin(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
+  try {
+    fs.chmodSync(file, 0o600);
+  } catch (_) {
+    /* a filesystem without modes */
+  }
+  return file;
 }
 
 /** A guard dir that carries user memory, plugins or MCP servers is refused (it would leak into the worker). */
@@ -131,6 +169,11 @@ const resultLine = (result) => (result && typeof result.result === 'string' ? re
 const runSucceeded = (result, exitCode) => !!result && !result.is_error && result.subtype === 'success' && exitCode === 0;
 /** The API error texts of a failed run (for classification). */
 const errorTexts = (result) => (result && result.is_error ? [String(result.result ?? ''), JSON.stringify(result.errors ?? '')] : []);
+
+/** The shared exhaustion rule (REQ-306, D46): one of LIMIT, BUDGET, OVERLOAD, AUTH with `until`, or null. */
+const classifyError = (response, opts) => require('./account-errors.cjs').classifyError(response, opts);
+/** A failed run's texts as the response `classifyError` reads: the status code is read from "API Error: NNN" in them. */
+const errorResponse = (result, stderrText = '') => ({ text: [...errorTexts(result), String(stderrText || '')].join('\n') });
 
 const describeInput = (i = {}) => String(i.command ?? i.file_path ?? i.path ?? i.pattern ?? JSON.stringify(i)).slice(0, 160);
 
@@ -201,8 +244,84 @@ function readLaunchLog(file) {
   return b.toString('utf8');
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Account mode (plan M6, REQ-601, REQ-603 to REQ-605). A lane on a `features.accounts` account: allowlisted env, the
+// account's config dir, runner-owned clocks (worker-runner.cjs), a structured verdict (worker-verdict.cjs) and a gate
+// hook in the `--settings` pin. The credit-lane exports above are unchanged.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** The text every kit hook entry carries, so it can be found and removed again (REQ-605). */
+const KIT_HOOK_MARKER = 'builder-pipeline-lane-gate';
+const PERMISSION_MODES = Object.freeze(['dontAsk', 'default', 'acceptEdits', 'plan']);
+
+/**
+ * The launch argv of an account lane (REQ-603, REQ-604). `maxTurns` and an absolute `settingsFile` are required;
+ * the pin's path comes from the launch options (the preflight writes it), never from here. Never --bare, never
+ * bypass permissions.
+ */
+function launchArgs({ model, maxTurns, permissionMode = 'dontAsk', settingsFile, schema, budgetUsd = null }) {
+  if (!(Number.isInteger(maxTurns) && maxTurns > 0)) throw new Error(`refused: maxTurns must be a positive integer (REQ-305; got ${JSON.stringify(maxTurns)})`);
+  if (typeof settingsFile !== 'string' || !path.isAbsolute(settingsFile)) throw new Error(`refused: the --settings pin must be an absolute path (got ${JSON.stringify(settingsFile)})`);
+  if (!PERMISSION_MODES.includes(permissionMode)) throw new Error(`refused: permissionMode must be one of ${PERMISSION_MODES.join(' | ')}`);
+  if (!schema || typeof schema !== 'object') throw new Error('refused: a result schema is required (--json-schema, REQ-604)');
+  const out = ['-p', '--output-format', 'stream-json', '--verbose'];
+  if (model) out.push('--model', String(model));
+  out.push('--max-turns', String(maxTurns), '--permission-mode', permissionMode, '--permission-prompts', 'none', '--settings', settingsFile, '--json-schema', JSON.stringify(schema), '--strict-mcp-config', '--no-session-persistence');
+  if (budgetUsd !== null && budgetUsd !== undefined) out.push('--max-budget-usd', String(budgetUsd));
+  if (out.includes('--bare') || out.includes('--dangerously-skip-permissions')) throw new Error('internal: a bypass flag is never used');
+  return out;
+}
+
+/** The child env of an account lane: the allowlist, the account block and CLAUDE_CONFIG_DIR (REQ-601). */
+const accountEnv = (parent, { configDir, accountEnv: block = {} }) => childEnv(parent, { worker: NAME, configDir, accountEnv: block });
+
+/** The structured verdict of a run: the result event's `structured_output`, else its `result` text when that is JSON, else null. */
+function structuredVerdict(events) {
+  const r = resultOf(events);
+  if (!r) return null;
+  if (r.structured_output && typeof r.structured_output === 'object') return r.structured_output;
+  if (typeof r.result === 'string') {
+    try {
+      const v = JSON.parse(r.result);
+      return v && typeof v === 'object' ? v : null;
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
+
+const shellQuote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
+
+/**
+ * The hook entries of a lane's `--settings` pin: TaskCompleted and Stop both run the lane's gate through
+ * hooks/claude-code/lane-gate.cjs; exit 2 refuses the completion (REQ-605). Every entry carries the marker.
+ */
+function gateHookEntries({ gateCommand, hookScript, timeoutSeconds = 1200 }) {
+  if (typeof gateCommand !== 'string' || !gateCommand.trim()) throw new Error('refused: the lane gate command is required (REQ-605)');
+  if (typeof hookScript !== 'string' || !path.isAbsolute(hookScript)) throw new Error('refused: the gate hook script must be an absolute path');
+  const command = `node ${shellQuote(hookScript)} --gate ${shellQuote(gateCommand)} --marker ${KIT_HOOK_MARKER}`;
+  const entry = () => [{ hooks: [{ type: 'command', command, timeout: timeoutSeconds }] }];
+  return { TaskCompleted: entry(), Stop: entry() };
+}
+
+const isKitHook = (h) => !!h && typeof h.command === 'string' && h.command.includes(KIT_HOOK_MARKER);
+
+/** `hooks` without the kit's entries; an event left with no entry is dropped. */
+function removeKitHooks(hooks) {
+  const out = {};
+  for (const [event, groups] of Object.entries(hooks || {})) {
+    const kept = (Array.isArray(groups) ? groups : [])
+      .map((g) => ({ ...g, hooks: (Array.isArray(g.hooks) ? g.hooks : []).filter((h) => !isKitHook(h)) }))
+      .filter((g) => g.hooks.length);
+    if (kept.length) out[event] = kept;
+  }
+  return out;
+}
+
 module.exports = {
   NAME, API_KEY_VAR, KEY_SOURCE, CONFIG_GLOBS, DEFAULT_GUARD_DIR,
-  settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, denials, resolveBin,
-  launchSessionId, readLaunchLog,
+  settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, errorResponse, classifyError, denials, resolveBin,
+  launchSessionId, readLaunchLog, pin, withSettings, writePin,
+  KIT_HOOK_MARKER, PERMISSION_MODES, launchArgs, accountEnv, structuredVerdict, gateHookEntries, isKitHook, removeKitHooks,
 };

@@ -1,10 +1,10 @@
 /**
  * Fixed seat output formats. Rules: scripts/lib/output-check.cjs.
  *
- *   npx builder run output-check plan <runs>/<key>/plan.md
- *   npx builder run output-check findings <runs>/<key>/findings-<seat>.json [--diff-base <ref>]
- *   npx builder run output-check review <runs>/<key>/review-pass<n>.md
- * (folder layout: node scripts/output-check.mjs in place of npx builder run output-check)
+ *   npx builder-pipeline run output-check plan <runs>/<key>/plan.md
+ *   npx builder-pipeline run output-check findings <runs>/<key>/findings-<seat>.json [--diff-base <ref>]
+ *   npx builder-pipeline run output-check review <runs>/<key>/review-pass<n>.md
+ * (folder layout: node scripts/output-check.mjs in place of npx builder-pipeline run output-check)
  *
  * Settings (PIPELINE_PROFILE.md): features.planSchema.{state, sections, tables, taskColumns, oracle} —
  * oracle = { table, column, source, keyColumn }: every cell of that plan column must be a value of the source CSV's
