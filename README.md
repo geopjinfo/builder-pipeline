@@ -132,7 +132,7 @@ records, how to resume, and the troubleshooting table.
 | `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
 | `features` | which optional checks are on, off, unmeasured or experimental |
 | `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why |
-| `accounts migrate [--dry-run]` | rewrite the 1.0 orchestrator seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into `features.accounts`; only the settings block changes, with a `PIPELINE_PROFILE.md.bak` backup |
+| `accounts add \| note \| key \| remove \| list \| migrate` | manage the accounts in `features.accounts` (§16): `add <name> --worker <w> --pays <p>` writes one account and makes its folder, `note` replaces its note, `key <name>` takes the API key with echo off (never on the command line; stored 0600 in the account's own folder, or handed to `codex login`), `key --remove` and `remove` take them out again (the folder stays), `list [--json]` shows key present or absent, lease state and key file mode; `migrate [--dry-run]` rewrites the 1.0 seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into accounts, settings block only, with a `PIPELINE_PROFILE.md.bak` backup |
 | `check-ledgers` | the mechanical board / registry gates — wire into CI |
 | `check-targets` | qa-audit environment safety — wire into CI |
 | `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
