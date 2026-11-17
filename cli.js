@@ -1229,7 +1229,8 @@ function cmdVerify() {
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
 
-  const personaAt = ['.claude/agents/module-planner.md', '.codex/agents/module-planner.toml', '.agents/agents/module-planner.md', '.builder/personas/module-planner.md'];
+  // The planner is the pipeline group's persona, the reviewer the audit group's: an install of one group alone has one.
+  const personaAt = ['module-planner', 'module-reviewer'].flatMap((n) => [`.claude/agents/${n}.md`, `.codex/agents/${n}.toml`, `.agents/agents/${n}.md`, `.builder/personas/${n}.md`]);
   check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)', 'pipeline', 'audit');
   const seats = seatProblems();
   check(seats.problems.length === 0, seats.problems.length === 0
