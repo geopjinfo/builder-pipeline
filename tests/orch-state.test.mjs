@@ -777,3 +777,68 @@ describe('placementNow agrees with next (REQ-312)', () => {
     assert.equal(state.placementNow(on, state.load(on, 'pn')).seat, 'bravo');
   });
 });
+
+/* ------------------------------------------------------------------ 2.1.0: the capacity governor (M15) ---- */
+
+import { writeFileSync as writeRecord } from 'node:fs';
+const capacityLib = require('../scripts/lib/capacity.cjs');
+
+describe('REQ-1507, REQ-1508 — the capacity record is one more min() term in nextActions and the resume slot', () => {
+  const record = (root, lanes, { at = Date.now(), plannedMax = 3, binding = 'memory', ttlSeconds = 180 } = {}) =>
+    writeRecord(join(root, 'capacity.json'), JSON.stringify({ lanes, plannedMax, binding, caps: {}, reasons: [], at: new Date(at).toISOString(), ttlSeconds, tick: 1 }));
+  const three = (opts = {}) => {
+    const { dir, root } = project();
+    state.init(root, 'cg', { ...lanes(3), maxLanes: 3 }, { preflightMode: 'parallel', seats: ['secondary', 'primary'], ...opts });
+    state.approve(root, 'cg', 'lead');
+    return { dir, root };
+  };
+
+  test('red: maxLanes 3, no 429, a record at 1, three PLANNED lanes → exactly one LAUNCH and one CAPACITY line (AC-1508a)', () => {
+    const { root } = three();
+    record(root, 1);
+    const acts = state.nextActions(root, state.load(root, 'cg'));
+    assert.equal(acts.filter((a) => a.startsWith('LAUNCH ')).length, 1, acts.join('\n'));
+    assert.deepEqual(acts.filter((a) => a.startsWith('CAPACITY:')), ['CAPACITY: lanes capped at 1 of 3 — memory']);
+    const control = three();
+    assert.equal(state.nextActions(control.root, state.load(control.root, 'cg')).filter((a) => a.startsWith('LAUNCH ')).length, 3, 'positive control: no record, three launches');
+  });
+
+  test('red: a record 10 minutes old with ttl 180 is ignored — the planned cap applies and the first line says so (AC-1507a)', () => {
+    const { root } = three();
+    const at = Date.now();
+    record(root, 1, { at: at - 10 * 60000 });
+    const acts = state.nextActions(root, state.load(root, 'cg'), at);
+    assert.equal(acts.filter((a) => a.startsWith('LAUNCH ')).length, 3, acts.join('\n'));
+    assert.match(acts.find((a) => a.startsWith('CAPACITY:')), /^CAPACITY: record from .* is 600 s old, over its ttl of 180 s — ignored; the planned cap applies$/);
+  });
+
+  test('red: BUILDER_ORCH_LANE_CAP=1 bounds a record at 3 → exactly one LAUNCH (AC-1508d)', () => {
+    const { root } = three();
+    record(root, 3);
+    const acts = state.nextActions(root, state.load(root, 'cg'), Date.now(), { env: { BUILDER_ORCH_LANE_CAP: '1' } });
+    assert.equal(acts.filter((a) => a.startsWith('LAUNCH ')).length, 1, acts.join('\n'));
+    assert.ok(acts.includes('CAPACITY: lanes capped at 1 of 3 — BUILDER_ORCH_LANE_CAP'), acts.join('\n'));
+  });
+
+  test('a record at 0 launches nothing and the 429 hold still wins the line order', () => {
+    const { root } = three();
+    record(root, 0, { binding: 'rate-limit' });
+    const acts = state.nextActions(root, state.load(root, 'cg'));
+    assert.equal(acts.filter((a) => a.startsWith('LAUNCH ')).length, 0, acts.join('\n'));
+    assert.ok(acts.includes('CAPACITY: lanes capped at 0 of 3 — rate-limit'));
+  });
+
+  test('red: the resume slot counts the record — one live lane and a record at 1 means no free slot, naming it (AC-1508c)', () => {
+    const { root } = project();
+    state.init(root, 'cg', { ...lanes(1), maxLanes: 3 }, { preflightMode: 'parallel', seats: ['secondary', 'primary'] });
+    state.approve(root, 'cg', 'lead');
+    state.setLane(root, 'cg', 'l1', { status: 'LAUNCHED', sessionId: 's1' });
+    record(root, 1);
+    const slot = state.resumeSlot(root, state.load(root, 'cg'));
+    assert.equal(slot.free, false);
+    assert.equal(slot.why, '1 of 1 live; capacity: 1 of 3 — memory');
+    record(root, 2);
+    assert.equal(state.resumeSlot(root, state.load(root, 'cg')).free, true);
+    assert.equal(capacityLib.laneCap(root).lanes, 2);
+  });
+});
