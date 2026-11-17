@@ -479,11 +479,12 @@ this section with the project commit sha. Promotion is the maintainer's call, ma
 | 2026-11-17 | accae92 | 5e4f866 → 500cfc8 | gateway lane (Sonnet-class through the local gateway) | 5 | 1/6 | 17% | 0.29 | 43 | 0 | 0 | consecutive-failures | 4 passes INCOMPLETE: the worker ran `cd … && cat …` and the exact allow list denied it; the prompt did not name the Read tools |
 | 2026-11-17 | b5ba4e8 (prompt names the tools) | b5ba4e8 → 1fa2470 | gateway lane (same) | 6 | 6/6 | 100% | 0.33 | 48 | 0 | 0 | all-pass | one row per pass; 82 s wall time; six commits with the two trailers; `./gate.sh` passes all six afterwards |
 | 2026-11-17 | 3bb2343 (integration branch, #28) | 7472eb9 → a5d7834 | gateway lane via `orch loop` (placement over the accounts registry) | 5 | 1/6 | 17% | 0.63 | 49 | 0 | 0 | consecutive-failures | orchestrator-driven (Run 3); 4 passes INCOMPLETE: the worker ran `cd <worktree> && ./gate-row.sh …` and a heredoc write through the shell, which the exact allow list denies; same prompt as the 6/6 run |
+| 2026-11-17 | 57c55f2 (D69 hook) | 7472eb9 → c85b58e | gateway lane via `orch loop` | 6 | 5/6 | 83% | 0.37 | 56 | 0 | 0 | max-passes | orchestrator-driven (Run 4, D69): one pass INCOMPLETE on `cd ../.. && … 2>&1 \| tail -15; git rev-parse HEAD` (a `..`, a redirection and a second command: refused by design); then five rows in five passes; the cap of 6 stopped the loop with one row open |
 
 **Risk.** A loop with no person between the stages can run on past a wrong plan. The timeout and the silent-failure
 counts exist to show that.
 
-**Decision (2026-11-17).** not yet measured — three model runs on one project: 1/6, 6/6 ($0.33, 48 turns) and 1/6 ($0.63, orchestrator-driven); the failures are denied shell prefixes under the exact allow list, not wrong solutions. Promotion stays a person's call; a second project, a second account and a steadier allow list are owed before keep.
+**Decision (2026-11-17).** not yet measured — four model runs on one project: 1/6, 6/6 ($0.33), 1/6 ($0.63, orchestrator-driven, exact allow list) and 5/6 ($0.37, orchestrator-driven after D69, stopped by the pass cap); no wrong solution in any run. Promotion stays a person's call; a second project and a second account are owed before keep.
 
 ## 18. Remote lanes — `remoteLanes` (planned, experimental)
 
@@ -567,6 +568,20 @@ A number here comes from a file in the project Library, never from memory.
   The orchestrator writes `loops.json` for a loop job; there is no `events.jsonl` for a loop (that file belongs to a
   lane run), so `loops.json` plus the run log are the event record of this run.
 
+### Run 4 — the orchestrator-driven loop after D69 (2026-11-17)
+
+- Same command, board, account and prompt as Run 3; kit commit `57c55f2` (#23 with D69: the loop's pin carries the
+  `lane-shell-allow.cjs` PreToolUse hook, which accepts the gate command with a `cd <own worktree> &&` prefix or one
+  `| head/tail -n N`, nothing wider). Test bed `7472eb9 → c85b58e`.
+- Result: 6 passes, 5 of 6 rows, stop `max-passes`, cost $0.37, 56 turns, 0 timeouts, 0 silent failures, 90 s wall
+  time. Pass 1 ended INCOMPLETE on `cd ../.. && ./gate-row.sh T1 2>&1 | tail -15; git rev-parse HEAD`: a `..` segment,
+  a redirection and a second command, each refused by design. Passes 2 to 6 solved one row each; the cap of 6 stopped
+  the loop with one row (T6) open, so a cap of rows plus one would have closed the board.
+- Against Run 3 (1/6, $0.63) on the same prompt: D69 turned the shell-prefix failures into passes without widening the
+  shell; the one remaining refusal was a command the rule is meant to refuse.
+- Fix-rate: `fixLane: unmeasured — no FIX row in 1 board(s)`. `builderBatch` not exercised.
+- Library files: `polyglot-loop-orch-run4-2026-11-17-{board.md,run.jsonl,progress.md,loops.json,accounts-readiness.json}`.
+
 ### Run 2 — the 2.0.0 build itself (November 2026)
 
 The 2.0.0 modules were built as device and cloud lanes of the project (one Claude session per module, on George's
@@ -591,8 +606,8 @@ time of writing:
 | C | #9 | false-positive rates |
 | M14 | this PR | the evidence programme |
 
-**Decision (2026-11-17).** not yet measured — one stub dry run, two model runs (1/6 then 6/6, $0.33) and one
-orchestrator-driven run (1/6, $0.63, denied shell prefixes); the orchestrator-driven run of a build with lanes is owed.
+**Decision (2026-11-17).** not yet measured — one stub dry run, two model runs (1/6 then 6/6, $0.33) and two
+orchestrator-driven runs (1/6 before D69, 5/6 after it, $0.37); the orchestrator-driven run of a build with lanes is owed.
 
 ## 20. Kit measurements — time to first value and false-positive rates (skeleton)
 
