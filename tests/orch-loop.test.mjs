@@ -72,6 +72,7 @@ describe('REQ-908 — orch loop', () => {
     assert.equal(jobs.demo.passes, 1);
     const st = r.orch(['status']);
     assert.match(st.stdout, /loop demo .*alpha.*1 pass.*all-pass/);
+    assert.match(st.stdout, /^reporter: not configured$/m); // REQ-1613
     const rows = readFileSync(join(r.repo, '.pipeline', 'loop', 'demo.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((e) => e.kind === 'pass');
     assert.equal(rows.length, 1);
     for (const k of ['pass', 'row', 'rowsPassing', 'retries', 'gateDigest', 'turns', 'cost', 'stopReason']) assert.ok(k in rows[0], k);

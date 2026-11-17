@@ -37,8 +37,8 @@ export function sections(md) {
 describe('EXPERIMENTS.md decision rows', () => {
   const all = sections(text);
 
-  test('sections 1 to 20 are present, numbered without a gap', () => {
-    assert.deepEqual(all.map((s) => s.n), Array.from({ length: 20 }, (_, i) => i + 1));
+  test('sections 1 to 22 are present, numbered without a gap', () => {
+    assert.deepEqual(all.map((s) => s.n), Array.from({ length: 22 }, (_, i) => i + 1));
   });
 
   test('red: every section has a non-blank decision row with a date and a verdict', () => {
@@ -102,7 +102,7 @@ describe('M14 — the evidence programme (REQ-1402, REQ-1405, REQ-1401)', () => 
   });
   test('red: the parser reads the decision of every section, and `experiments --check` passes on the shipped file', () => {
     const all = exp.parse(text);
-    assert.equal(all.length, 20);
+    assert.equal(all.length, 22);
     for (const s of all) assert.ok(['keep', 'drop', 'not yet measured'].includes(s.decision.verdict), `§${s.n}`);
     assert.equal(all.find((s) => s.n === 17).flag, 'boardLoop');
     assert.equal(all.find((s) => s.n === 6).flag, 'builderBatch');
@@ -123,5 +123,19 @@ describe('M14 — the evidence programme (REQ-1402, REQ-1405, REQ-1401)', () => 
     const r = spawnSync(process.execPath, [CLI, '--record', '17', '--row', '| 2026-11-18 | two |', '--file', f], { encoding: 'utf8' });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(readFileSync(f, 'utf8'), /\| 2026-11-18 \| two \|/);
+  });
+});
+
+describe('REQ-1614 — reporterSummary is experimental-off with a §22 entry', () => {
+  test('red: §22 names reporterSummary, carries the bytes row, the suppression ratio row and the summary criterion, and a decision row', () => {
+    const s22 = sections(text).find((s) => s.n === 22);
+    assert.ok(s22, '§22 exists');
+    assert.match(s22.title, /reporterSummary/);
+    assert.match(s22.body, /bytes/i);
+    assert.match(s22.body, /suppression ratio/i);
+    assert.match(s22.body, /true/i);
+    assert.ok(DECISION.test(s22.body));
+    assert.equal(profile.FEATURES.reporterSummary.defaults.state, 'experimental-off');
+    assert.equal(profile.FEATURES.reporter.defaults.state, 'off');
   });
 });

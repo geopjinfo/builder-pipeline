@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -179,4 +179,13 @@ test('every features.<name> the prose names is a feature the settings loader kno
 test('REQ-405 GUIDE states what a worktree does not do: no process sandbox, no merge-conflict prevention (D50)', () => {
   const guide = flat(read('GUIDE.md'));
   assert.match(guide, /worktree separates working files; it does not sandbox processes and it does not prevent merge conflicts/i);
+});
+
+describe('REQ-1613 — the orchestrator skill starts the reporter beside board-watch (AC-1613c)', () => {
+  test('red: skills/orchestrator.md names features.reporter and the report --watch command', () => {
+    const text = flat(read('skills/orchestrator.md'));
+    assert.match(text, /features\.reporter/);
+    assert.match(text, /run report --watch/);
+    assert.match(text, /board-watch/);
+  });
 });

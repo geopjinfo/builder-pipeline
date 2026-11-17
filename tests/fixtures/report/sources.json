@@ -1,0 +1,110 @@
+{
+  "runs": [
+    {
+      "runId": "r1",
+      "target": "dev",
+      "approved": true,
+      "paused": false,
+      "lanes": {
+        "l1": {
+          "status": "MERGED",
+          "account": "alpha",
+          "rows": [
+            "T1",
+            "T2"
+          ]
+        },
+        "l2": {
+          "status": "LAUNCHED",
+          "account": "bravo",
+          "rows": [
+            "T3"
+          ]
+        },
+        "l3": {
+          "status": "STALLED",
+          "account": "alpha",
+          "rows": [
+            "T4"
+          ],
+          "stallReason": "no notice in time"
+        }
+      },
+      "next": [
+        "CHECK l3: stalled (no notice in time) \u2014 read its result/log pointer, then relaunch, or move it to the other seat",
+        "WAIT l2: launched 12m ago"
+      ],
+      "mergeQueue": []
+    }
+  ],
+  "loops": {
+    "demo": {
+      "kind": "loop",
+      "account": "alpha",
+      "cap": 6,
+      "passes": 4,
+      "stopReason": null,
+      "status": "running"
+    }
+  },
+  "events": [
+    {
+      "at": "2026-11-17T09:50:00.000Z",
+      "type": "lane.set",
+      "lane": "l1",
+      "status": "MERGED",
+      "runId": "r1"
+    },
+    {
+      "at": "2026-11-17T09:55:00.000Z",
+      "type": "lane.set",
+      "lane": "l3",
+      "status": "STALLED",
+      "runId": "r1"
+    }
+  ],
+  "eventsOffset": {
+    "r1": 14
+  },
+  "boards": [
+    {
+      "file": "tasks/pay1.md",
+      "settled": 3,
+      "doing": 1,
+      "total": 5
+    },
+    {
+      "file": "tasks/demo.md",
+      "settled": 4,
+      "doing": 1,
+      "total": 6
+    }
+  ],
+  "capacity": null,
+  "readiness": {
+    "accounts": {
+      "alpha": {
+        "state": "ready",
+        "reason": null,
+        "percent": 42
+      },
+      "bravo": {
+        "state": "not ready",
+        "reason": "signed out",
+        "percent": null
+      }
+    },
+    "updatedAt": "2026-11-17T09:40:00.000Z"
+  },
+  "ratelimit": {
+    "holdUntil": null,
+    "lanes": 2,
+    "hits": 0
+  },
+  "cost": {
+    "configured": false
+  },
+  "summary": null,
+  "lastSent": null,
+  "lastRefused": null
+}
