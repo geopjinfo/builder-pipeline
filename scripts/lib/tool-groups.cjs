@@ -184,6 +184,9 @@ const LIBS = {
   'worker-runner': 'orchestrator',
   'worker-verdict': 'orchestrator',
   'board-loop': 'orchestrator',
+  // M8: the second reader is orch-plan's (orchestrator); router-hint is advisory and wired to no command yet, so core
+  'family-review': 'orchestrator',
+  'router-hint': CORE,
 };
 
 /** Project-owned seeds and the pointer files, by destination. The ledger paths follow §16 `paths`; see groupOf(). */

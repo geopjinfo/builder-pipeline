@@ -39,7 +39,7 @@ try {
 const { decisionFor } = require('./lib/experiments.cjs');
 for (const name of Object.keys(profile.FEATURES)) {
   const f = profile.feature(loaded.settings, name);
-  const d = /^(experimental-off|experimental-on|unmeasured)$/.test(f.state) && experiments ? decisionFor(experiments, name, profile.FEATURES[name].experiment || null) : null;
+  const d = /^(experimental-off|experimental-on|unmeasured)$/.test(f.state) && experiments ? decisionFor(experiments, name, profile.FEATURES[name].experiment || profile.FEATURES[name].decisionSection || null) : null;
   console.log(d ? `${f.line} · decision: ${d.verdict} (${d.date})` : f.line);
 }
 

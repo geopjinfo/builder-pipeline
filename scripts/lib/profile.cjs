@@ -130,7 +130,7 @@ const FEATURES = {
   familyReview: { defaults: { state: 'experimental-off' }, requires: [] },
   /* Advisory account suggestion, risk flag and second-opinion advice for a lane; never changes a placement; any call
    * goes behind outboundGuard after the data-recipient decision is recorded — scripts/lib/router-hint.cjs (M8b, D15). */
-  routerHint: { defaults: { state: 'experimental-off' }, requires: [] },
+  routerHint: { defaults: { state: 'experimental-off' }, requires: [], decisionSection: '§16' }, // measured inside §16 with familyReview
   /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
    * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue
    * treats as bookkeeping (re-opens nothing) / docs (re-opens no module phase) — see scripts/lib/gate-queue.cjs. */
