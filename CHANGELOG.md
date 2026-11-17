@@ -11,8 +11,22 @@ versions independently of any project it is pasted into.
   D85).** REQ-1501 to REQ-1516 (M15 capacity governor: `features.capacity`, one more min() term in the lane-cap
   rule, lowers only), REQ-1601 to REQ-1618 (M16 progress reporter: `features.reporter`, channels stdout, file,
   webhook and command behind the outbound guard) and REQ-1701 to REQ-1704 (M17 evidence, docs, 2.1.0 release).
-  Ratified under the owner's mandate; `node scripts/spec-check.mjs capacity-reporter --ratified` passes. The spec
-  does not ship in the package (`specs/` is on the skip list). No code yet.
+  Ratified under the owner's mandate; `npx builder-pipeline run spec-check capacity-reporter --ratified` passes. The spec
+  does not ship in the package (`specs/` is on the skip list).
+- **M15 capacity governor — `features.capacity`, default off (REQ-1501 to REQ-1516; D70 to D74, D83).**
+  `scripts/capacity.mjs` (`--once | --watch`, a pid lease per orch root) and `scripts/lib/capacity.cjs` (pure
+  `govern()` over the host readings, the accounts readiness record and the 429 record) write `<orch root>/capacity.json`.
+  `orch next`, `gate-launch --resume` (now `orch-state resumeSlot`) and the loop runner apply the record as one more
+  min() term in the lane cap: it lowers only, never above `maxLanes` or `BUILDER_ORCH_LANE_CAP`, never stops a lane;
+  an unmeasured signal never binds (load on win32, disk when `statfs` fails); a drop applies at once and a rise by one
+  lane after `riseAfterTicks` ticks; a record older than `ttlSeconds` is ignored and said. The loop runner holds at
+  0 lanes (new stop reason `capacity`, one `capacity.hold` run-log row) and, while the feature is on, samples its
+  worker's peak RSS (`ps -o rss=`, unmeasured on win32) into the pass row as `passPeakRssMb` — the evidence for
+  `perLaneMb`, which is a §16 project fact (null in the template). `orch status` prints one `capacity:` line;
+  `doctor` adds one advisory row; `worker-runner` takes an `onSpawn` hook. New read-only persona
+  `agents/capacity-steward.md` (tier mid) explains a bind; `skills/orchestrator.md` says when it is dispatched.
+  Tests: `tests/capacity.test.mjs`, `tests/capacity-cli.test.mjs`, and new cases in profile, features, orch-state,
+  orch-gaps, doctor and board-loop. Docs: FEATURES row, GUIDE § Capacity governor.
 
 ## [2.0.0] — 2026-11-17
 

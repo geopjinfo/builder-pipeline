@@ -195,6 +195,14 @@ const FEATURES = {
     },
     requires: ['target'],
   },
+  /* The capacity governor — scripts/capacity.mjs, scripts/lib/capacity.cjs (plan M15, D70 to D74, D83). One more min()
+   * term in the lane-cap rule: lanes = min(maxLanes, 429 cap, record lanes). It lowers only and never stops a lane.
+   * `perLaneMb` is this project's measured per-lane peak RSS (the loop runner writes passPeakRssMb into each pass row;
+   * EXPERIMENTS.md §21 holds the kit's own figure) and is required while the feature is on. */
+  capacity: {
+    defaults: { state: 'off', perLaneMb: null, reserveCores: 2, maxLoadPerCore: 1.0, minFreeMb: 1024, minDiskMb: 2048, intervalSeconds: 60, ttlSeconds: 180, riseAfterTicks: 3, holdMaxMinutes: 60, explainAfterTicks: 10 },
+    requires: ['perLaneMb'],
+  },
   /* Named accounts the orchestrator places lanes on: worker, who pays, content class, roles, budget, note — the
    * registry rules are in scripts/lib/accounts-registry.cjs (plan M1, D22, D32). Replaces the 1.0 seats and credit lane. */
   accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },
@@ -392,6 +400,29 @@ function validate(settings) {
       return e.message;
     }
   };
+  // features.capacity (REQ-1501): every number is validated at load — a governor fed a negative reserve or a zero
+  // interval would bind on nonsense or spin
+  {
+    const c = settings.features?.capacity;
+    if (c && typeof c === 'object') {
+      const num = (key, { min, integer = false, nullable = false }) => {
+        const v = c[key];
+        if (v === undefined || (nullable && v === null)) return;
+        const ok = typeof v === 'number' && Number.isFinite(v) && v >= min && (!integer || Number.isInteger(v));
+        if (!ok) errors.push(`features.capacity.${key}: ${integer ? 'a whole number' : 'a number'} ${min === 0 ? '0 or more' : `of ${min} or more`}${nullable ? ', or null' : ''}, got ${JSON.stringify(v)}`);
+      };
+      num('perLaneMb', { min: 1, integer: true, nullable: true });
+      num('reserveCores', { min: 0, integer: true });
+      num('maxLoadPerCore', { min: 0.1 });
+      num('minFreeMb', { min: 0, integer: true });
+      num('minDiskMb', { min: 0, integer: true });
+      num('intervalSeconds', { min: 1, integer: true });
+      num('ttlSeconds', { min: 1, integer: true });
+      num('riseAfterTicks', { min: 1, integer: true });
+      num('holdMaxMinutes', { min: 1, integer: true });
+      num('explainAfterTicks', { min: 1, integer: true });
+    }
+  }
   for (const [name, key] of [
     ['claims', 'registryIdPattern'],
     ['handoffPack', 'decisionIdPattern'],

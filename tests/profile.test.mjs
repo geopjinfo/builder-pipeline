@@ -113,3 +113,27 @@ test('REQ-401 the template §16 block carries visibility private', () => {
   assert.equal(raw.visibility, 'private');
   assert.match(tpl, /\*\*Visibility:\*\*/);
 });
+
+/* ------------------------------------------------------------------ 2.1.0: the capacity governor (M15) ---- */
+
+test('REQ-1501 capacity on without perLaneMb is invalid naming the key; a negative reserveCores is invalid (AC-1501a, AC-1501b)', () => {
+  const on = profile.parse(block({ schema: 2, features: { capacity: { state: 'on' } } }));
+  assert.ok(on.errors.some((e) => e.startsWith('features.capacity.perLaneMb: required while the feature is on')), on.errors.join('\n'));
+  const neg = profile.parse(block({ schema: 2, features: { capacity: { state: 'on', perLaneMb: 1500, reserveCores: -1 } } }));
+  assert.ok(neg.errors.some((e) => e.startsWith('features.capacity.reserveCores: a whole number 0 or more')), neg.errors.join('\n'));
+  const zero = profile.parse(block({ schema: 2, features: { capacity: { state: 'on', perLaneMb: 1500, intervalSeconds: 0 } } }));
+  assert.ok(zero.errors.some((e) => e.startsWith('features.capacity.intervalSeconds: a whole number of 1 or more')), zero.errors.join('\n'));
+  const ok = profile.parse(block({ schema: 2, features: { capacity: { state: 'on', perLaneMb: 1500 } } }));
+  assert.deepEqual(ok.errors, []);
+  assert.equal(profile.feature(ok.settings, 'capacity').config.riseAfterTicks, 3, 'the defaults fill the rest');
+  const off = profile.parse(block({ schema: 2, features: { capacity: { state: 'off' } } }));
+  assert.deepEqual(off.errors, [], 'off needs no perLaneMb');
+});
+
+test('REQ-1514 the template §16 block carries capacity off with perLaneMb null — the kit ships no machine figure (AC-1514b)', () => {
+  const tpl = readFileSync(join(here, '..', 'PIPELINE_PROFILE.template.md'), 'utf8');
+  const raw = JSON.parse(/```json pipeline-settings\r?\n([\s\S]*?)\r?\n```/.exec(tpl)[1]);
+  assert.equal(raw.features.capacity.state, 'off');
+  assert.equal(raw.features.capacity.perLaneMb, null);
+  assert.equal(profile.FEATURES.capacity.defaults.perLaneMb, null);
+});
