@@ -2,9 +2,10 @@
 /**
  * The README badges, computed from source — a maintainer tool (specs/toolkit-distribution.spec.md, REQ-505 to REQ-507).
  *
- *   node scripts/readme-badges.cjs            check README.md against the generated block; exit 1 on a mismatch
- *   node scripts/readme-badges.cjs --write    rewrite the badge block in README.md
- *   node scripts/readme-badges.cjs [--write] FILE   the same on another file
+ * It runs in the kit repository (folder layout, from the kit root; it is not an `npx builder run` target):
+ *   folder layout: node scripts/readme-badges.cjs            check README.md against the generated block; exit 1 on a mismatch
+ *   folder layout: node scripts/readme-badges.cjs --write    rewrite the badge block in README.md
+ *   folder layout: node scripts/readme-badges.cjs [--write] FILE   the same on another file
  *
  * WHY. A hand-written badge drifts: the README said "10 phases" while the phase table had 13 numbered rows. Each value
  * here has one source, named next to it, and tests/toolkit-distribution.test.mjs fails when the README differs.
