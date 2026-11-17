@@ -77,6 +77,10 @@ const SKILLS = {
 const SCRIPTS = {
   'spec-check': 'spec',
   'spec-trace-check': 'spec',
+  // M20 repo hygiene (deps-check, docs-check, dead-code): in `audit` until M21 adds the `hygiene` group (REQ-1839, D93)
+  'deps-check': 'audit',
+  'docs-check': 'audit',
+  'dead-code': 'audit',
   'claims-check': 'audit',
   'output-check': 'audit',
   'fix-rate': 'audit',
@@ -131,6 +135,10 @@ const SCRIPTS = {
 const LIBS = {
   'spec-check': 'spec',
   'spec-trace': 'spec',
+  // M20 repo hygiene libs: `audit` until M21 adds the `hygiene` group (REQ-1839, D93); dead-code requires deps-check and ratchet
+  'deps-check': 'audit',
+  'docs-check': 'audit',
+  'dead-code': 'audit',
   'claims-check': 'audit',
   'fix-rate': 'audit',
   inventory: 'audit',
