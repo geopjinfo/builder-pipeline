@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -16,15 +16,6 @@ const profile = require('../scripts/lib/profile.cjs');
 const STUB_SSH = join(FIX, 'stub-ssh.cjs');
 const ORCH = join(PACK, 'scripts', 'orch.mjs');
 
-/** A PATH whose first entry holds an `ssh` that runs the stub. */
-function sshOnPath(dir) {
-  const bin = join(dir, 'bin');
-  mkdirSync(bin, { recursive: true });
-  const sh = join(bin, 'ssh');
-  writeFileSync(sh, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(STUB_SSH)} "$@"\n`);
-  chmodSync(sh, 0o755);
-  return `${bin}:${process.env.PATH}`;
-}
 
 const SPLIT = { lanes: [{ name: 'l1', rows: ['R1'], level: 'L1', track: 'LITE', ownedFiles: ['a.txt'], hotFiles: [] }], rows: [], maxLanes: 2 };
 const MACHINE = { host: 'box.local', user: 'dev', remoteRoot: '/srv/work/proj' };
@@ -41,7 +32,7 @@ function rig(script = [], { remoteLanes = { state: 'experimental-on' } } = {}) {
   const scriptFile = join(dir, 'ssh-script.json');
   writeFileSync(scriptFile, JSON.stringify(script));
   const log = join(dir, 'ssh.jsonl');
-  const env = { ...process.env, PATH: sshOnPath(dir), BUILDER_SSH_SCRIPT: scriptFile, BUILDER_SSH_LOG: log };
+  const env = { ...process.env, BUILDER_SSH_BIN: STUB_SSH, BUILDER_SSH_SCRIPT: scriptFile, BUILDER_SSH_LOG: log }; // the stub on every platform (no .cmd shim: the remote command carries newlines)
   const calls = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l).argv) : []);
   const events = () => readFileSync(join(root, 'runs', 'r1', 'events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const settings = profile.load(repo).settings;
@@ -51,6 +42,8 @@ const PREFLIGHT_OK = { match: 'claude auth status', code: 0, stdout: '__AUTH=0\n
 
 describe('REQ-1202 — the transport', () => {
   test('red: ssh is spawned with -T, BatchMode, ConnectTimeout, ServerAliveInterval, user@host and the command', () => {
+    assert.deepEqual(remote.sshBin({}), ['ssh', []]);
+    assert.throws(() => remote.sshBin({ BUILDER_SSH_BIN: 'relative.cjs' }), /absolute/);
     const r = rig();
     const res = remote.ssh({ ...MACHINE }, 'true', { env: r.env });
     assert.equal(res.code, 0);
