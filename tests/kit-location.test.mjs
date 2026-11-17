@@ -1,5 +1,5 @@
 /**
- * The kit names itself where it is. Installed as a package (`node_modules/@<scope>/builder-pipeline/`) it runs as
+ * The kit names itself where it is. Installed as a package (`node_modules/builder-pipeline/`) it runs as
  * `npx builder`, and the files it installs and the lines it prints must say so — not `node builder/cli.js` or
  * `builder/DISCOVERY.md`, a folder that project does not have. A kit copied in as `builder/` keeps its old text.
  */
@@ -41,7 +41,7 @@ const OLD = /node builder\/cli\.js|(?<![.\w@/-])builder\/(?:DISCOVERY|USAGE|UNPA
 
 describe('the kit names itself where it is installed', () => {
   test('red: installed as a package, every installed Markdown file and the next steps say npx builder and the package path', () => {
-    const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
+    const { proj, cli } = project('node_modules/builder-pipeline');
     // opencode is a dotBuilder tool (codex installs natively now; tests/native-tools.test.mjs covers it in package mode).
     const r = run(cli, proj, ['unpack', '--tool', 'claude-code,opencode']);
     assert.equal(r.status, 0, r.stderr);
@@ -49,7 +49,7 @@ describe('the kit names itself where it is installed', () => {
     assert.doesNotMatch(r.stdout, /node builder\/cli\.js/);
     const stale = mdFiles(proj).filter((f) => OLD.test(readFileSync(f, 'utf8'))).map((f) => relative(proj, f));
     assert.deepEqual(stale, [], `still name a builder/ folder: ${stale.join(', ')}`);
-    assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /node_modules\/@geopjinfo\/builder-pipeline\/DISCOVERY\.md/);
+    assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /node_modules\/builder-pipeline\/DISCOVERY\.md/);
     // A project's own .builder/ folder is not the kit: its paths are left alone.
     assert.match(readFileSync(join(proj, 'AGENTS.md'), 'utf8'), /`\.builder\/playbooks\/build-module-pipeline\.md`/);
   });
@@ -57,14 +57,14 @@ describe('the kit names itself where it is installed', () => {
   test('red: installed as a package, every kit file an installed Markdown file names is one the package ships', () => {
     // The package ships package.json "files" only — the kit's own tests/ stay out — so a rewritten
     // `builder/tests/run.mjs` would send a package user to a file that is not there.
-    const at = 'node_modules/@geopjinfo/builder-pipeline';
+    const at = 'node_modules/builder-pipeline';
     const { proj, cli } = project(at);
     for (const extra of ['tests', '.git']) rmSync(join(proj, ...at.split('/'), extra), { recursive: true, force: true });
     const r = run(cli, proj, ['unpack', '--tool', 'claude-code,opencode,codex']);
     assert.equal(r.status, 0, r.stderr);
     const missing = [];
     for (const f of mdFiles(proj)) {
-      for (const m of readFileSync(f, 'utf8').matchAll(/node_modules\/@geopjinfo\/builder-pipeline\/([\w./-]*[\w/])/g)) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/node_modules\/builder-pipeline\/([\w./-]*[\w/])/g)) {
         if (!existsSync(join(proj, ...at.split('/'), ...m[1].split('/')))) missing.push(`${relative(proj, f)}: ${m[1]}`);
       }
     }

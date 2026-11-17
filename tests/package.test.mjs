@@ -13,9 +13,11 @@ const PACK = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(PACK, 'package.json'), 'utf8'));
 
 describe('package.json — an installable package', () => {
-  test('red: not private, and the bin "builder" runs cli.js, which starts with a node shebang', () => {
+  test('red: not private, and the bins "builder-pipeline" and "builder" run cli.js, which starts with a node shebang', () => {
     assert.notEqual(pkg.private, true, 'a private package cannot be installed as a dependency by name');
-    assert.equal(pkg.bin && pkg.bin.builder, 'cli.js');
+    assert.equal(pkg.name, 'builder-pipeline');
+    assert.equal(pkg.bin && pkg.bin['builder-pipeline'], 'cli.js');
+    assert.equal(pkg.bin && pkg.bin.builder, 'cli.js', 'the builder bin stays until the 2.0.0 release-prep PR (specs/toolkit-distribution.spec.md DL-2)');
     assert.match(readFileSync(join(PACK, 'cli.js'), 'utf8'), /^#!\/usr\/bin\/env node\r?\n/);
   });
 

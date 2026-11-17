@@ -1,7 +1,7 @@
 /**
  * The two sample-project runs (a greenfield and a brownfield repo set up end to end by hand, reported in the kit's
  * sample-run reports) as one automated test. Each sample is built under the OS temp dir; the kit is copied in as
- * `node_modules/@geopjinfo/builder-pipeline` — the package layout, with no network and no npm install — and the
+ * `node_modules/builder-pipeline` — the package layout, with no network and no npm install — and the
  * setup runs exactly as the setup prompt drives it:
  *
  *   bootstrap → inventory --json → choices → unpack --tool claude-code,codex,antigravity → verify → doctor
@@ -20,7 +20,7 @@ import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const PACK = join(dirname(fileURLToPath(import.meta.url)), '..');
-const KIT_AT = ['node_modules', '@geopjinfo', 'builder-pipeline'];
+const KIT_AT = ['node_modules', 'builder-pipeline'];
 const TOOLS = 'claude-code,codex,antigravity';
 const MARKER = '<!-- builder-kit:pipeline -->';
 const MARKER_END = '<!-- /builder-kit:pipeline -->';

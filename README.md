@@ -17,7 +17,7 @@ agent pipeline that builds one feature module at a time — planned, coded TDD-f
 adversarially, audited in parallel, documented, and gate-reviewed — with durable ledgers so no
 work is silently lost and no "done" is unearned.
 
-It ships as an npm package (`@geopjinfo/builder-pipeline`, installed from a git tag) with a zero-dependency Node
+It ships as an npm package (`builder-pipeline`, from the npm registry or from a git tag) with a zero-dependency Node
 CLI, `builder`. It works with **Claude Code, Codex and Antigravity** natively, and with any other agent that reads
 `AGENTS.md` (or its own rules file) through prompt files.
 
@@ -36,6 +36,12 @@ Node 18 or newer. From the project root, pin a release tag:
 ```
 npm i -D github:geopjinfo/builder-pipeline#<tag>
 npx builder --version
+```
+
+Or install from the npm registry (the registry listing starts with 2.0.0; earlier releases exist only as git tags):
+
+```
+npm i -D builder-pipeline
 ```
 
 The tag is the version: every project names exactly one, and nothing changes until you bump it. After the one

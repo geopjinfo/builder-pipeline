@@ -164,7 +164,7 @@ describe('the profile cannot be shrunk by an agent while §16 adds anything', ()
 describe('package mode: the installed hook reads §16 with node_modules gone', () => {
   test('red: unpack from the package, delete node_modules, and the .claude/hooks copy still refuses a §16 path', () => {
     const proj = lab(settings({ schema: 2, protected: ['src/secret/'] }));
-    const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+    const kit = join(proj, 'node_modules', 'builder-pipeline');
     mkdirSync(kit, { recursive: true });
     cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
     const u = spawnSync(process.execPath, [join(kit, 'cli.js'), 'unpack', '--tool', 'claude-code'], { cwd: proj, encoding: 'utf8' });

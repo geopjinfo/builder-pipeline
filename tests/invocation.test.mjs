@@ -59,7 +59,7 @@ describe('run commands come from the one helper', () => {
       assert.equal(r.status, 0, r.stderr);
       return r.stdout.trim();
     };
-    assert.equal(probe('node_modules/@geopjinfo/builder-pipeline/scripts/lib'), 'npx builder run ledger-row registry X|npx builder verify');
+    assert.equal(probe('node_modules/builder-pipeline/scripts/lib'), 'npx builder run ledger-row registry X|npx builder verify');
     assert.equal(probe('proj/.claude/hooks/kit/lib'), 'npx builder run ledger-row registry X|npx builder verify');
     assert.equal(probe('proj/scripts/lib'), 'node scripts/ledger-row.mjs registry X|node builder/cli.js verify');
   });
@@ -67,7 +67,7 @@ describe('run commands come from the one helper', () => {
 
 describe('a usage line printed from the package says npx builder run', () => {
   const proj = temp('kit-hint-pkg-');
-  const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+  const kit = join(proj, 'node_modules', 'builder-pipeline');
   mkdirSync(kit, { recursive: true });
   cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
 
@@ -189,7 +189,7 @@ describe('every shipped file gives install-neutral commands', () => {
 
   test('red: the Markdown the CLI installs holds no kit form in the package layout (so its source may keep the folder form)', () => {
     const proj = temp('kit-hint-all-');
-    const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+    const kit = join(proj, 'node_modules', 'builder-pipeline');
     mkdirSync(kit, { recursive: true });
     cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
     const u = spawnSync(process.execPath, [join(kit, 'cli.js'), 'unpack', '--tool', 'all', '--experimental'], { cwd: proj, encoding: 'utf8' });

@@ -2,7 +2,7 @@
 
 <!-- folder-layout: this whole document — every command on this page is the builder/ folder form (tests/invocation.test.mjs) -->
 
-> **Secondary.** The primary install is the npm package from a git tag — `npm i -D github:geopjinfo/builder-pipeline#<tag>`,
+> **Secondary.** The primary install is the npm package, from the registry (`npm i -D builder-pipeline`, from 2.0.0) or from a git tag (`npm i -D github:geopjinfo/builder-pipeline#<tag>`),
 > then the one setup prompt ([`README.md`](README.md) § Getting started). This page is the folder-copy path: a release
 > archive extracted as `builder/` and run as `node builder/cli.js <command>`, for a project without npm or a fetch.
 

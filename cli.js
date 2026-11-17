@@ -93,7 +93,7 @@ const TOOLS = {
 // --------------------------- where the kit lives ---------------------------
 /**
  * The kit's own prose says `builder/<file>` and `node builder/cli.js` — true in the folder layout, a folder copied into the
- * project as `builder/`. Installed as a package it lives at `node_modules/@<scope>/builder-pipeline/` and runs as
+ * project as `builder/`. Installed as a package it lives at `node_modules/builder-pipeline/` and runs as
  * `npx builder`. KIT_REL is the kit as the project sees it; RUN is how the project runs the CLI. Every text the kit
  * installs into the project (Markdown) and every line the CLI prints goes through kitPaths(), so it names the kit
  * where it actually is. With the kit at `builder/` nothing changes, byte for byte.

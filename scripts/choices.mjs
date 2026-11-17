@@ -31,7 +31,7 @@ function findKit() {
   const isKit = (d) => d && existsSync(join(d, 'agents')) && existsSync(join(d, 'cli.js'));
   for (const d of [process.env.BUILDER_KIT_ROOT, join(dirname(fileURLToPath(import.meta.url)), '..'), join(root, 'builder')]) if (isKit(d)) return resolve(d);
   try {
-    return dirname(require.resolve('@geopjinfo/builder-pipeline/package.json', { paths: [root] }));
+    return dirname(require.resolve('builder-pipeline/package.json', { paths: [root] }));
   } catch {
     return null;
   }

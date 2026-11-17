@@ -1,5 +1,5 @@
 /**
- * D3 — installed as a package (node_modules/@geopjinfo/builder-pipeline), the board-render and instruction-lint hooks
+ * D3 — installed as a package (node_modules/builder-pipeline), the board-render and instruction-lint hooks
  * looked for `<project>/scripts/lib`, which a package install never creates, so they were silent no-ops.
  *
  * The design: a hook never loads anything from node_modules (agent-writable, outside the project's history). unpack
@@ -26,7 +26,7 @@ const run = (cli, cwd, args) => spawnSync(process.execPath, [cli, ...args], { cw
 const out = (r) => `${r.stdout}${r.stderr}`;
 const HOOKS = ['.claude', 'hooks'];
 
-function project(kitAt = 'node_modules/@geopjinfo/builder-pipeline') {
+function project(kitAt = 'node_modules/builder-pipeline') {
   const proj = mkdtempSync(join(tmpdir(), 'kit-hooks-'));
   made.push(proj);
   const kit = join(proj, ...kitAt.split('/'));
@@ -107,7 +107,7 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     // The hook runs its vendored copy — there is no scripts/ copy in the package layout.
     assert.ok(existsSync(join(proj, ...HOOKS, 'kit', 'instruction-lint.mjs')));
     assert.ok(!existsSync(join(proj, 'scripts', 'instruction-lint.mjs')));
-    assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /node_modules\/@geopjinfo\/builder-pipeline\//, 'the pointer cites the package');
+    assert.match(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), /node_modules\/builder-pipeline\//, 'the pointer cites the package');
     const r = hook(proj, 'instruction-lint-on-edit.cjs', { tool_name: 'Edit', tool_input: { file_path: join(proj, 'CLAUDE.md') } });
     assert.equal(r.status, 0);
     assert.doesNotMatch(r.stdout, /"decision":"block"/, r.stdout);
@@ -148,7 +148,7 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     const { proj } = installed();
     const trust = require(join(proj, ...HOOKS, 'hook-trust.cjs'));
     const lib = join(proj, ...HOOKS, 'kit', 'lib', 'profile.cjs');
-    writeFileSync(lib, `require('../../../../node_modules/@geopjinfo/builder-pipeline/scripts/lib/profile.cjs');\n${readFileSync(lib, 'utf8')}`);
+    writeFileSync(lib, `require('../../../../node_modules/builder-pipeline/scripts/lib/profile.cjs');\n${readFileSync(lib, 'utf8')}`);
     git(proj, 'add', '-A', '-f');
     git(proj, 'commit', '-q', '-m', 'planted');
     const r = trust.locate(proj, join(proj, ...HOOKS), join('lib', 'profile.cjs'));
