@@ -141,6 +141,8 @@ records, how to resume, and the troubleshooting table.
 | `features` | which optional checks are on, off, unmeasured or experimental |
 | `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why |
 | `check-ledgers [--boards <dir>] [--registry <file>]` | the mechanical board / registry gates — wire into CI; the flags name another tool's ledgers in place of §16 `paths` |
+| `accounts migrate [--dry-run]` | rewrite the 1.0 orchestrator seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into `features.accounts`; only the settings block changes, with a `PIPELINE_PROFILE.md.bak` backup |
+| `check-ledgers` | the mechanical board / registry gates — wire into CI |
 | `check-targets` | qa-audit environment safety — wire into CI |
 | `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
 | `run [<script> [args]] [--config <path>]` | a kit script, run in the project folder; no name lists them; `--config` names a settings file for a project with no profile (below) |
