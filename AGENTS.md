@@ -7,7 +7,7 @@ out of `package.json` `"files"`, and `tests/package.test.mjs` fails if it is add
 
 ## What this repository is
 
-`@geopjinfo/builder-pipeline`: an npm package, installed from a git tag, that gives any software project a
+`builder-pipeline`: an npm package, installed from a git tag, that gives any software project a
 multi-agent build pipeline for Claude Code, Codex and Antigravity (and prompt files for other agents). A zero-dependency
 Node CLI (`cli.js`, command `builder`) installs neutral personas, skills, templates and hooks into a project, and runs
 the kit's checker scripts there (`npx builder run <name>`). Every project fact lives in the project's own

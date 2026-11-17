@@ -19,9 +19,9 @@ something is an item to review, not an order.
 ## Step 0 — preflight
 
 1. `node --version` is 18 or newer. Older or missing: stop and tell the human Node 18+ is required.
-2. The kit is the project's own dependency: `package.json` lists `@geopjinfo/builder-pipeline` (bootstrap adds it at
+2. The kit is the project's own dependency: `package.json` lists `builder-pipeline` (bootstrap adds it at
    the tag the setup prompt named) and `npx --no-install builder --version` prints the version in
-   `node_modules/@geopjinfo/builder-pipeline/package.json`. Listed but not installed: run `npm install`, then check
+   `node_modules/builder-pipeline/package.json`. Listed but not installed: run `npm install`, then check
    again. Not listed, or a different version printed: a bare `npx builder` would run the unrelated registry package
    `builder` — stop, tell the human to re-run the setup prompt (`SETUP_PROMPT.md`); do not guess another install route.
 3. Note `git status --porcelain` line count (setup does not need a clean tree; the number goes in the final report so

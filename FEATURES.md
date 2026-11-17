@@ -15,7 +15,7 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder features` pr
 
 | Feature | What it does | How to use | Claude Code | Codex | Antigravity | Status | Docs |
 |---|---|---|---|---|---|---|---|
-| Install | the package, pinned to a release tag; inert until setup runs | `npm i -D github:geopjinfo/builder-pipeline#<tag>` | any | any | any | stable | [README](README.md) |
+| Install | the package, from the npm registry (from 2.0.0) or pinned to a release tag; inert until setup runs | `npm i -D builder-pipeline` or `npm i -D github:geopjinfo/builder-pipeline#<tag>` | any | any | any | stable | [README](README.md) |
 | Bootstrap | adds only the `builder-init` skill, for each detected (or named) tool, and — run through npx — adds the kit to the project as a devDependency so later `npx builder` runs it | `npx builder bootstrap [--tool <list>]` | yes — `.claude/skills/` | yes — `.agents/skills/` | yes — `.agents/skills/` | stable | [SETUP_PROMPT](SETUP_PROMPT.md) |
 | `builder-init` skill | greenfield (interview) or brownfield (read the repo); installs, fills the profile, verifies, runs the persona detector | `/builder-init` · `$builder-init` · ask for it by name | yes | yes | yes | stable | [skills/builder-init.md](skills/builder-init.md) |
 | Inventory + overlap review | lists the project's own skills, agents, personas and hooks and scores their overlap with the kit | `npx builder inventory [--json] [--threshold n]` | any | any | any | stable | [README](README.md) |

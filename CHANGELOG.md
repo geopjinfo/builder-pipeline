@@ -24,6 +24,17 @@ versions independently of any project it is pasted into.
   `skills/spec-author.md`. `specs/` is maintainer-only (package skip list). Tests: `tests/toolkit-standalone.test.mjs`
   (one test per acceptance criterion).
 
+### Changed
+
+- **Distribution (`specs/toolkit-distribution.spec.md`, REQ-501 to REQ-512; lane M13 of 2.0.0).** The kit is
+  published under the MIT licence (`LICENSE`, `"license": "MIT"`, the file ships). The package is `builder-pipeline`
+  (the registry name `builder` belongs to an unrelated package) with two bins, `builder-pipeline` and `builder`; the
+  `builder` bin and the `npx builder …` prose go in the 2.0.0 release-prep PR (spec DL-2). Every shipped document names
+  the new package; the README, UNPACK.md, FEATURES.md and RELEASING.md give the registry form `npm i -D
+  builder-pipeline` (the listing starts with 2.0.0) beside the git-tag form. The fixture installs in the suite moved to
+  `node_modules/builder-pipeline` (spec DL-10). Tests: `tests/toolkit-distribution.test.mjs` (one test per acceptance
+  criterion), `tests/package.test.mjs` (two bins).
+
 ## [1.1.0] — 2026-11-16
 
 ### Added

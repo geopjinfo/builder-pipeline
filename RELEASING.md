@@ -3,8 +3,9 @@
 For the kit's maintainers. **This file does not ship:** this file is not in `package.json` `"files"`, so a project that
 installs the package never sees it (`tests/genericity.test.mjs` walks exactly that list).
 
-A release is a git tag on `main`. Projects install from the tag (`npm i -D github:geopjinfo/builder-pipeline#<tag>`),
-so nothing reaches them until a tag exists and they bump to it.
+A release is a git tag on `main`, published to the npm registry under the same version. Projects install from the
+registry (`npm i -D builder-pipeline`) or from the tag (`npm i -D github:geopjinfo/builder-pipeline#<tag>`), so nothing
+reaches them until a tag exists and they bump to it. The first registry release is 2.0.0.
 
 ## The routine
 

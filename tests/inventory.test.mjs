@@ -173,7 +173,7 @@ describe('mode()', () => {
 
   test('greenfield: a package.json that only installed the kit is not evidence of a codebase', () => {
     const root = tempDir('green-');
-    put(root, 'package.json', JSON.stringify({ name: 'x', devDependencies: { '@geopjinfo/builder-pipeline': 'github:geopjinfo/builder-pipeline#v1' } }));
+    put(root, 'package.json', JSON.stringify({ name: 'x', devDependencies: { 'builder-pipeline': 'github:geopjinfo/builder-pipeline#v1' } }));
     const m = inv.mode(root);
     assert.equal(m.mode, 'greenfield', JSON.stringify(m.evidence));
     assert.deepEqual(m.evidence.manifests, ['package.json']);
@@ -182,7 +182,7 @@ describe('mode()', () => {
 
   test('greenfield: the profiles persona-detect wrote (roster-listed, plus its library files) are not mode evidence (N1)', () => {
     const root = tempDir('green-');
-    put(root, 'package.json', JSON.stringify({ name: 'x', devDependencies: { '@geopjinfo/builder-pipeline': '1.0.0' } }));
+    put(root, 'package.json', JSON.stringify({ name: 'x', devDependencies: { 'builder-pipeline': '1.0.0' } }));
     const roster = { personas: [{ id: 'member', set: 'product' }, { id: 'auditor', set: 'governance' }, { id: 'pm', set: 'delivery' }] };
     put(root, 'personas/INDEX.md', `# Personas\n\n\`\`\`json\n${JSON.stringify(roster, null, 2)}\n\`\`\`\n`);
     for (const p of roster.personas) put(root, `personas/${p.set}/${p.id}.md`, `# ${p.id}\n\nA proposed persona.\n`);

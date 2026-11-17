@@ -123,7 +123,7 @@ describe('--tool all and package mode', () => {
   });
 
   test('red: installed as a package, the native texts go through kitPaths (no builder/ folder named)', () => {
-    const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
+    const { proj, cli } = project('node_modules/builder-pipeline');
     assert.equal(run(cli, proj, ['unpack', '--tool', 'codex,antigravity', '--no-extras']).status, 0);
     for (const rel of ['.agents/skills/build-module-pipeline/SKILL.md', '.codex/agents/module-builder.toml', '.agents/agents/module-builder.md']) {
       assert.doesNotMatch(read(proj, rel), /node builder\/cli\.js|node scripts\/features\.mjs/, rel);

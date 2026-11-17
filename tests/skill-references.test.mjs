@@ -50,7 +50,7 @@ describe('the pipeline skill and its reference files (kit source)', () => {
 describe('installed as a package with --tool all, every reference link resolves', () => {
   const proj = mkdtempSync(join(tmpdir(), 'kit-refs-'));
   made.push(proj);
-  const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+  const kit = join(proj, 'node_modules', 'builder-pipeline');
   mkdirSync(kit, { recursive: true });
   cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
   const r = spawnSync(process.execPath, [join(kit, 'cli.js'), 'unpack', '--tool', 'all'], { cwd: proj, encoding: 'utf8' });

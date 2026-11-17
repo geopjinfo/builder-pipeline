@@ -18,7 +18,7 @@ after(() => { for (const d of made) rmSync(d, { recursive: true, force: true });
 function project() {
   const proj = mkdtempSync(join(tmpdir(), 'kit-lock-'));
   made.push(proj);
-  const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+  const kit = join(proj, 'node_modules', 'builder-pipeline');
   mkdirSync(kit, { recursive: true });
   cpSync(PACK, kit, { recursive: true, filter: (src) => !/[\\/](?:\.git|tests|node_modules)(?:[\\/]|$)/.test(`/${relative(PACK, src)}`) });
   return { proj, kit, cli: join(kit, 'cli.js') };

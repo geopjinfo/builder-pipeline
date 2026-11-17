@@ -1,5 +1,5 @@
 /**
- * The kit installed as a package (node_modules/@geopjinfo/builder-pipeline) — what the sample-project run found broken:
+ * The kit installed as a package (node_modules/builder-pipeline) — what the sample-project run found broken:
  *   D2  board-check-all spawned `scripts/board-progress.mjs` relative to the working directory, and its --fix printed
  *       PASS after the child crashed;
  *   D3  the board-render and instruction-lint hooks looked for `<project>/scripts/lib`, which a package install never
@@ -24,7 +24,7 @@ after(() => { for (const d of made) rmSync(d, { recursive: true, force: true });
 
 const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
 
-function project(kitAt = 'node_modules/@geopjinfo/builder-pipeline') {
+function project(kitAt = 'node_modules/builder-pipeline') {
   const proj = mkdtempSync(join(tmpdir(), 'kit-pkg-'));
   made.push(proj);
   const kit = join(proj, ...kitAt.split('/'));
@@ -76,7 +76,7 @@ describe('D8 — installed files name paths that exist in the package layout', (
 
   test('red: builder-init names where the profile template and persona-detect are', () => {
     const skill = readFileSync(join(proj, '.claude', 'skills', 'builder-init', 'SKILL.md'), 'utf8');
-    assert.match(skill, /node_modules\/@geopjinfo\/builder-pipeline\/PIPELINE_PROFILE\.template\.md/);
+    assert.match(skill, /node_modules\/builder-pipeline\/PIPELINE_PROFILE\.template\.md/);
     assert.doesNotMatch(skill, /`skills\/persona-detect\.md`/);
   });
 
@@ -87,7 +87,7 @@ describe('D8 — installed files name paths that exist in the package layout', (
     assert.doesNotMatch(up.stdout, /(?<![\w@/.-])builder\//);
     const v = run(cli, proj, ['verify']);
     assert.doesNotMatch(v.stdout, /\(scripts\/board-/);
-    assert.match(v.stdout, /board scripts installed \(node_modules\/@geopjinfo\/builder-pipeline\/scripts\//);
+    assert.match(v.stdout, /board scripts installed \(node_modules\/builder-pipeline\/scripts\//);
   });
 
   test('control: the folder layout keeps its node scripts/ forms in the installed board rules', () => {

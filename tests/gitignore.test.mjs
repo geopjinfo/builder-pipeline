@@ -27,7 +27,7 @@ const run = (cli, cwd, args) => spawnSync(process.execPath, [cli, ...args], { cw
 const lines = (proj) => readFileSync(join(proj, '.gitignore'), 'utf8').split(/\r?\n/);
 
 describe('unpack and .gitignore', () => {
-  for (const kitAt of ['node_modules/@geopjinfo/builder-pipeline', 'builder']) {
+  for (const kitAt of ['node_modules/builder-pipeline', 'builder']) {
     test(`red: with the Claude Code hooks installed, logs/bash/ is ignored once (${kitAt})`, () => {
       const { proj, cli } = project(kitAt);
       const first = run(cli, proj, ['unpack', '--tool', 'claude-code']);
@@ -43,7 +43,7 @@ describe('unpack and .gitignore', () => {
   }
 
   test('no bash-cap hook installed (codex only): logs/bash/ is not added', () => {
-    const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
+    const { proj, cli } = project('node_modules/builder-pipeline');
     const r = run(cli, proj, ['unpack', '--tool', 'codex']);
     assert.equal(r.status, 0, r.stderr);
     assert.ok(lines(proj).includes('.pipeline/'));

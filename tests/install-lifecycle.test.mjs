@@ -2,7 +2,7 @@
  * The install lifecycle after the first unpack: upgrade over a release that removed files (I1), a folder->package
  * move (I2), install flags remembered in builder.lock.json (I3), a shared pointer that speaks for every installed
  * tool (I4), a "both" choice moved to "kit" (I5), `uninstall` (I6) and the pointer keeping its file's line endings
- * (I8). The kit runs as a package: <proj>/node_modules/@geopjinfo/builder-pipeline.
+ * (I8). The kit runs as a package: <proj>/node_modules/builder-pipeline.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -28,7 +28,7 @@ const copyKit = (to) => cpSync(PACK, to, { recursive: true, filter: (src) => !/[
 function project() {
   const proj = mkdtempSync(join(tmpdir(), 'kit-life-'));
   made.push(proj);
-  const kit = join(proj, 'node_modules', '@geopjinfo', 'builder-pipeline');
+  const kit = join(proj, 'node_modules', 'builder-pipeline');
   mkdirSync(kit, { recursive: true });
   copyKit(kit);
   return { proj, kit, cli: join(kit, 'cli.js') };

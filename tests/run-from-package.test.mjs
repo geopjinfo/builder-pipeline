@@ -26,7 +26,7 @@ function project(kitAt) {
 const run = (cli, cwd, args) => spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
 
 describe('builder run — kit scripts run from the package', () => {
-  const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
+  const { proj, cli } = project('node_modules/builder-pipeline');
   const unpacked = run(cli, proj, ['unpack', '--tool', 'claude-code']);
 
   test('red: a package install copies no kit script and the installed prose says npx builder run', () => {

@@ -3,7 +3,7 @@
  * Where a kit script runs from, and how a person is told to run one. THE ONE PLACE a kit script or hook spells a
  * run command — `tests/invocation.test.mjs` fails on a hard-coded one anywhere else under scripts/ or hooks/.
  *
- * WHY. The kit runs in two layouts. Installed as a package it lives under `node_modules/@geopjinfo/builder-pipeline/`
+ * WHY. The kit runs in two layouts. Installed as a package it lives under `node_modules/builder-pipeline/`
  * and its scripts run from there (`npx builder run <name>`), with the project as the working directory; the few the
  * Claude Code hooks use are vendored into `.claude/hooks/kit/` (package layout only). Copied in as a `builder/`
  * folder, unpack copies the scripts to the project's `scripts/` (`node scripts/<name>.mjs`). A script that spawned

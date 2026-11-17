@@ -123,7 +123,7 @@ describe('builder bootstrap', () => {
   });
 
   test('--tool picks the tools; installed as a package the skill names npx builder', () => {
-    const { proj, cli } = project('node_modules/@geopjinfo/builder-pipeline');
+    const { proj, cli } = project('node_modules/builder-pipeline');
     const r = run(cli, proj, ['bootstrap', '--tool', 'antigravity']);
     assert.equal(r.status, 0, r.out);
     assert.deepEqual(files(proj), ['.agents/skills/builder-init/SKILL.md', 'builder.lock.json']);

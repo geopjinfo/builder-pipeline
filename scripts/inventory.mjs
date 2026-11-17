@@ -32,7 +32,7 @@ function findKit() {
   const beside = join(dirname(fileURLToPath(import.meta.url)), '..');
   if (existsSync(join(beside, 'agents')) && existsSync(join(beside, 'cli.js'))) return beside;
   try {
-    return dirname(require.resolve('@geopjinfo/builder-pipeline/package.json', { paths: [process.cwd()] }));
+    return dirname(require.resolve('builder-pipeline/package.json', { paths: [process.cwd()] }));
   } catch {
     return null;
   }
