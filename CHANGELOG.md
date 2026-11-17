@@ -173,6 +173,34 @@ versions independently of any project it is pasted into.
   hold no key shape; fakes are built at runtime). On Windows the codex binary is resolved on PATH (PATHEXT) and run
   through the shell, and the tests assert the documented Windows behaviour (mode check skipped) instead of POSIX modes. The Antigravity adapter note says `accounts key` refuses an
   Antigravity account. Usage text and the README command row cover the new subcommands.
+### Added — M6 worker adapters (2.0.0 line)
+
+- **Allowlisted child env (REQ-601, D42).** `scripts/lib/worker-env.cjs` builds a headless worker's env from `PATH`,
+  `HOME`, `LANG`, `TERM`, `TMPDIR` and the account's own block, and sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME`. It never
+  inherits `ANTHROPIC_*` (`ANTHROPIC_BASE_URL` included), `CLAUDE*`, `OPENAI_*`, `CODEX_*`, `GEMINI_*`, `NODE_OPTIONS`,
+  `NODE_EXTRA_CA_CERTS`, `SSL_CERT_*`, `*_PROXY`, `LD_PRELOAD` or `XDG_CONFIG_HOME`, and it refuses a key variable in
+  the account block (a key never enters through the environment, D20).
+- **Runner-owned clocks (REQ-603, D12).** `scripts/lib/worker-runner.cjs` starts a worker with the prompt on stdin,
+  reads its event stream, and enforces the pass timeout and the stall window itself: a worker that never exits is
+  `FAILED-TIMEOUT` and is stopped; one that stops emitting is `FAILED-STALL`; a key-source fault stops it before any
+  model call (`STOPPED-KEY-SOURCE`).
+- **Codex adapter (`scripts/lib/orch-worker-codex.cjs`, REQ-602, D26).** `codex exec --json --output-schema`, the
+  sandbox never `danger-full-access`, `CODEX_HOME` set, the verdict read from the last agent message, `classifyError`
+  (LIMIT, BUDGET, OVERLOAD, AUTH with an until time, `scripts/lib/worker-errors.cjs`). The CLI exposes no key source in
+  its stream, so the proof is `codex login status` before the launch: a login that does not match how the account pays,
+  or no login, stops the job; text the kit cannot read is `unconfirmed`. Registered in the credit lane's worker table.
+- **Verdict schema (REQ-604, D13, D47).** `scripts/lib/worker-verdict.cjs`: `verdict` (PASS, CHANGES_REQUESTED, ERROR),
+  `summary`, `filesTouched`, `head`, `requirements`. A missing or malformed field, exit 0 with no verdict, or a claimed
+  id the verdict does not judge is `FAILED`; another head is `FAILED-STALE-VERDICT`; a denied tool is `INCOMPLETE`.
+- **Claude Code adapter in account mode (REQ-603 to REQ-605).** `launchArgs` carries `--max-turns`, `--permission-mode`,
+  `--permission-prompts none`, `--settings <pin>` and `--json-schema`; `accountEnv` uses the allowlist;
+  `structuredVerdict` reads the result's `structured_output`. `gateHookEntries` gives the `--settings` pin a
+  `TaskCompleted` and a `Stop` hook that run the lane's gate through the new `hooks/claude-code/lane-gate.cjs`: a
+  failed gate is exit 2 with the gate output as the reason. Every entry carries the marker `builder-pipeline-lane-gate`
+  and `removeKitHooks` takes them out again. The pin's path comes from the launch options (the preflight writes it).
+- Tests: `tests/orch-worker-codex.test.mjs` (stub `codex` on `BUILDER_CODEX_WORKER_BIN`,
+  `tests/fixtures/orch/stub-codex.cjs`) and `tests/orch-worker-claude-code.test.mjs` (the stub worker). The credit
+  lane's own exports are unchanged.
 
 ### Added — M1 account registry (2.0.0 line)
 
