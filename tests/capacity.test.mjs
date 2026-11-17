@@ -184,6 +184,14 @@ describe('REQ-1510, REQ-1618 — the watcher lease', () => {
 });
 
 describe('REQ-1516 — the pass RSS sampler', () => {
+  test('red: a wrapper lane is measured by its process tree, not by the wrapper pid alone', () => {
+    // pid 42 is a gateway wrapper (shell, 3 MB); its child 43 is npx (40 MB); the worker 44 is the grandchild (1.5 GB);
+    // 99 is an unrelated process and must not count
+    const listing = '    1     0  1024\n   42     1  3072\n   43    42 40960\n   44    43 1572864\n   99     1 999999\n';
+    assert.equal(cap.rssMb(42, { platform: 'linux', ps: () => listing }), Math.round((3072 + 40960 + 1572864) / 1024));
+    assert.equal(cap.rssMb(44, { platform: 'linux', ps: () => listing }), 1536, 'a leaf pid is its own RSS');
+    assert.equal(cap.rssMb(7, { platform: 'linux', ps: () => listing }), null, 'a pid that is not in the listing is unmeasured');
+  });
   test('red: ps prints 1572864 kB → 1536 MB; win32 → null (AC-1516a, AC-1516b)', () => {
     assert.equal(cap.rssMb(42, { platform: 'linux', ps: () => ' 1572864\n' }), 1536);
     assert.equal(cap.rssMb(42, { platform: 'win32', ps: () => '1572864' }), null);

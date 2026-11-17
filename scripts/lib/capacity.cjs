@@ -311,16 +311,48 @@ function releaseLease(root, io = {}) {
 /* --------------------------------------------------------------- pass RSS ---- */
 
 /**
- * The peak RSS of a pid in MB, sampled with `ps -o rss= -p <pid>` (kB) on Unix; null (unmeasured) on win32 or when
- * ps fails (REQ-1516, D83). `io.ps(pid)` is injectable and returns the ps text.
+ * The resident memory of a pid AND its descendants, in MB (REQ-1516, D83). A lane launched through a wrapper (a gateway
+ * account's shell script, `npx`, a login shell) has the worker as a grandchild: the wrapper's own RSS is a few tens of
+ * MB and says nothing about the lane, so the sample walks the process tree from one `ps -eo pid=,ppid=,rss=` listing
+ * (kB per row) and sums it. null (unmeasured) on win32 or when ps fails. `io.ps(pid)` is injectable and returns the
+ * listing text; a single bare number is read as the pid's own RSS (a stub).
  */
 function rssMb(pid, io = {}) {
   const platform = io.platform || process.platform;
   if (platform === 'win32') return null;
   try {
-    const text = io.ps ? io.ps(pid) : require('node:child_process').spawnSync('ps', ['-o', 'rss=', '-p', String(pid)], { encoding: 'utf8', timeout: 5000 }).stdout;
-    const kb = Number(String(text || '').trim().split(/\s+/)[0]);
-    return Number.isFinite(kb) && kb > 0 ? Math.round(kb / 1024) : null;
+    const text = io.ps ? io.ps(pid) : require('node:child_process').spawnSync('ps', ['-eo', 'pid=,ppid=,rss='], { encoding: 'utf8', timeout: 5000 }).stdout;
+    const rows = String(text || '')
+      .split(/\r?\n/)
+      .map((l) => l.trim().split(/\s+/).filter(Boolean))
+      .filter((r) => r.length);
+    if (!rows.length) return null;
+    if (rows.length === 1 && rows[0].length === 1) {
+      const kb = Number(rows[0][0]);
+      return Number.isFinite(kb) && kb > 0 ? Math.round(kb / 1024) : null;
+    }
+    const children = new Map();
+    const rss = new Map();
+    for (const r of rows) {
+      if (r.length < 3) continue;
+      const [p, pp, kb] = r.map(Number);
+      if (!Number.isInteger(p)) continue;
+      rss.set(p, Number.isFinite(kb) ? kb : 0);
+      if (!children.has(pp)) children.set(pp, []);
+      children.get(pp).push(p);
+    }
+    if (!rss.has(Number(pid))) return null;
+    let total = 0;
+    const seen = new Set();
+    const queue = [Number(pid)];
+    while (queue.length) {
+      const p = queue.shift();
+      if (seen.has(p)) continue;
+      seen.add(p);
+      total += rss.get(p) || 0;
+      for (const c of children.get(p) || []) queue.push(c);
+    }
+    return total > 0 ? Math.round(total / 1024) : null;
   } catch (_) {
     return null;
   }
