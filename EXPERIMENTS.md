@@ -457,6 +457,16 @@ record: accepted findings per auditor family, reviewer loop-backs (`FIX-n` rows 
 per task (`npx builder run cost-window` over the review window). **Keep** if accepted findings rise, loop-backs do
 not rise, and cost per task stays inside the module budget. **Drop** otherwise.
 
+**routerHint (M8b, advisory).** `features.routerHint`, default `experimental-off`. On, the kit prints three lines for
+a lane: an account suggestion (the pays order, the content class against the project visibility), a risk flag (a
+content class the visibility refuses, a Full lane) and whether a second opinion is advised (the §16 second-reader
+rule). It never changes a placement: a probability is not an exit code (D15). A call to a decisions-style API goes
+through `features.outboundGuard`; a call that would send task text to an account whose data-recipient decision is
+not in the decision log is refused with `E_DATA_RECIPIENT` first. Off, nothing of it runs. **What it must prove.**
+Over ten lanes, record the suggested account against the account the rulebook placed, and the risk flag against the
+lane's outcome (a `FIX-n` row or a merge revert). **Keep** if the suggestion matches the placement in eight of ten
+lanes and every flagged lane had a finding. **Drop** otherwise. No measurement yet.
+
 **Risk.** A second reader doubles the review cost of a lane. A family view can hide a cross-family defect: a security
 finding that is also an invariant break is read once, in one list. The reviewer still reads every finding.
 
