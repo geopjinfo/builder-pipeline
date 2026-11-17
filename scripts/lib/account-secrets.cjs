@@ -145,8 +145,9 @@ function writeKeyFile(keyFile, value, opts = {}) {
     refuseSymlink(keyFile, 'the key path');
     fs.renameSync(target, keyFile);
   }
+  // Windows has no POSIX mode bits worth reporting (stat says 0666 for every file): the ACL of the dir rules there.
   if (process.platform !== 'win32') fs.chmodSync(keyFile, 0o600);
-  return { rotated: Boolean(existing), mode: octal(fs.statSync(keyFile).mode) };
+  return { rotated: Boolean(existing), mode: process.platform === 'win32' ? null : octal(fs.statSync(keyFile).mode) };
 }
 
 /** Delete the key file if present (and never follow a link: a symlink is unlinked, not its target). */
@@ -233,6 +234,28 @@ function forceFileStore(configFile) {
 }
 
 /**
+ * Where `bin` is: an absolute or relative path is checked as given (plus PATHEXT on Windows); a bare name is searched
+ * on PATH. Null when nothing runnable is found. Resolving first keeps "codex is not installed" one named refusal on
+ * every platform (a Windows shell would otherwise exit 1 with "not recognized").
+ */
+function resolveBin(bin, env = process.env, platform = process.platform) {
+  const exts = platform === 'win32' ? ['', ...String(env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  const runnable = (p) => exts.map((e) => p + e).find((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } }) || null;
+  if (/[\\/]/.test(bin)) return runnable(bin);
+  for (const dir of String(env.PATH || '').split(path.delimiter).filter(Boolean)) {
+    const hit = runnable(path.join(dir, bin));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Spawn `bin` synchronously; on Windows through the shell (a `.cmd` shim is not an executable), quoted. */
+function spawnBin(spawn, bin, args, opts, platform = process.platform) {
+  const win = platform === 'win32';
+  return spawn(win ? `"${bin}"` : bin, args, { ...opts, windowsHide: true, shell: win });
+}
+
+/**
  * Sign a Codex account in with an API key (REQ-1003): CODEX_HOME = the account's config dir, the credentials store
  * forced to "file", the value piped to `codex login --with-api-key` on stdin. The kit writes no key. Reports the
  * exit status and the mode of the auth file Codex wrote.
@@ -242,20 +265,24 @@ function codexLogin({ configDir, configFile, authFile, value, env = process.env,
   if (why) throw err(why.split(':')[0], why);
   ensureOwnerDir(configDir, { platform });
   forceFileStore(configFile);
-  const r = spawn(codexBin, ['login', '--with-api-key'], { input: value, encoding: 'utf8', env: scrubEnv(env, configDir), stdio: ['pipe', 'pipe', 'pipe'] });
-  if (r.error) throw err('E_CODEX_MISSING', `codex: ${r.error.code === 'ENOENT' ? 'not found on PATH — install the Codex CLI first' : r.error.message}`);
+  const bin = resolveBin(codexBin, env, platform);
+  if (!bin) throw err('E_CODEX_MISSING', 'codex: not found on PATH — install the Codex CLI first');
+  const r = spawnBin(spawn, bin, ['login', '--with-api-key'], { input: value, encoding: 'utf8', env: scrubEnv(env, configDir), stdio: ['pipe', 'pipe', 'pipe'] }, platform);
+  if (r.error) throw err('E_CODEX_MISSING', `codex: ${r.error.message}`);
   const auth = assessKey(authFile, { platform, icacls });
   return { ok: r.status === 0 && auth.present, status: r.status, auth, stdout: String(r.stdout || ''), stderr: String(r.stderr || '') };
 }
 
 /** `codex logout` under the account's CODEX_HOME (REQ-1003, REQ-1004). */
-function codexLogout({ configDir, env = process.env, codexBin = 'codex', spawn = spawnSync }) {
-  const r = spawn(codexBin, ['logout'], { encoding: 'utf8', env: scrubEnv(env, configDir), stdio: ['ignore', 'pipe', 'pipe'] });
-  if (r.error) return { ok: false, status: null, reason: r.error.code === 'ENOENT' ? 'codex not found on PATH' : r.error.message };
+function codexLogout({ configDir, env = process.env, codexBin = 'codex', spawn = spawnSync, platform = process.platform }) {
+  const bin = resolveBin(codexBin, env, platform);
+  if (!bin) return { ok: false, status: null, reason: 'codex not found on PATH' };
+  const r = spawnBin(spawn, bin, ['logout'], { encoding: 'utf8', env: scrubEnv(env, configDir), stdio: ['ignore', 'pipe', 'pipe'] }, platform);
+  if (r.error) return { ok: false, status: null, reason: r.error.message };
   return { ok: r.status === 0, status: r.status, stdout: String(r.stdout || ''), stderr: String(r.stderr || '') };
 }
 
 module.exports = {
   KEY_FLAGS, CODEX_ENV_ALLOW, valueProblem, readSecret, ensureOwnerDir, runIcacls, writeKeyFile, removeKeyFile, editJson, helperCommand,
-  assessKey, scrubEnv, forceFileStore, codexLogin, codexLogout, octal, refuseSymlink,
+  assessKey, scrubEnv, forceFileStore, resolveBin, codexLogin, codexLogout, octal, refuseSymlink,
 };

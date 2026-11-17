@@ -11,7 +11,7 @@ import { EventEmitter } from 'node:events';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -43,6 +43,26 @@ function fakeTty() {
   s.resume = () => s;
   s.pause = () => s;
   return s;
+}
+/**
+ * Plant a symlink; false when this platform refuses (Windows without the privilege). The symlink assertions then do
+ * not apply: nothing can plant a link there either.
+ */
+function trySymlink(target, link) {
+  try { symlinkSync(target, link); return true; } catch (e) { if (process.platform === 'win32' && (e.code === 'EPERM' || e.code === 'ENOSYS')) return false; throw e; }
+}
+/** The fixture codex stub as a `codex` command in `bin`: a shebang file on POSIX, a `.js` + `.cmd` shim on Windows. */
+function stubCodex(bin) {
+  mkdirSync(bin, { recursive: true });
+  const stub = join(PACK, 'tests', 'fixtures', 'accounts', 'codex-stub.cjs');
+  if (process.platform === 'win32') {
+    writeFileSync(join(bin, 'codex.js'), readFileSync(stub, 'utf8'));
+    writeFileSync(join(bin, 'codex.cmd'), `@"${process.execPath}" "%~dp0codex.js" %*\r\n`);
+    return join(bin, 'codex.cmd');
+  }
+  const codex = join(bin, 'codex');
+  writeFileSync(codex, `#!/bin/sh\nexec "${process.execPath}" "${stub}" "$@"\n`, { mode: 0o755 });
+  return codex;
 }
 const sink = () => { const w = { text: '' }; w.write = (t) => { w.text += t; return true; }; return w; };
 
@@ -118,7 +138,9 @@ describe('writeKeyFile and the helper (REQ-1002)', () => {
       assert.equal(first.mode, '0600');
     }
     assert.ok(secrets.KEY_FLAGS & (fsConstants().O_EXCL), 'O_EXCL in the flags');
-    assert.ok(secrets.KEY_FLAGS & (fsConstants().O_NOFOLLOW || 0x20000), 'O_NOFOLLOW in the flags');
+    // Windows has no O_NOFOLLOW: the flag set then carries O_EXCL alone and the lstat check refuses a planted link.
+    if (fsConstants().O_NOFOLLOW) assert.ok(secrets.KEY_FLAGS & fsConstants().O_NOFOLLOW, 'O_NOFOLLOW in the flags');
+    else assert.equal(process.platform, 'win32', 'only Windows lacks O_NOFOLLOW');
     const next = fakeKey('charlie');
     const second = secrets.writeKeyFile(p.keyFile, next);
     assert.equal(second.rotated, true);
@@ -133,7 +155,7 @@ describe('writeKeyFile and the helper (REQ-1002)', () => {
     mkdirSync(p.dir, { recursive: true, mode: 0o700 });
     const target = join(h, 'victim');
     writeFileSync(target, 'untouched\n');
-    symlinkSync(target, p.keyFile);
+    if (!trySymlink(target, p.keyFile)) return; // no symlinks on this Windows: nothing can be planted
     assert.throws(() => secrets.writeKeyFile(p.keyFile, fakeKey()), (e) => e.code === 'EEXIST');
     assert.equal(readFileSync(target, 'utf8'), 'untouched\n');
     assert.ok(lstatSync(p.keyFile).isSymbolicLink(), 'the link itself is left for the owner to inspect');
@@ -163,7 +185,7 @@ describe('writeKeyFile and the helper (REQ-1002)', () => {
     assert.deepEqual(JSON.parse(readFileSync(p.settingsFile, 'utf8')), { env: { KEEP: '1' } });
     rmSync(p.settingsFile);
     writeFileSync(join(h, 'victim.json'), '{}');
-    symlinkSync(join(h, 'victim.json'), p.settingsFile);
+    if (!trySymlink(join(h, 'victim.json'), p.settingsFile)) return;
     assert.throws(() => secrets.editJson(p.settingsFile, (s) => { s.x = 1; }), (e) => e.code === 'EEXIST');
     assert.equal(readFileSync(join(h, 'victim.json'), 'utf8'), '{}');
   });
@@ -189,18 +211,25 @@ describe('scripts/account-key.cjs read (REQ-1002, REQ-1005)', () => {
     assert.equal(spawnSync(process.execPath, [helper], { encoding: 'utf8' }).status, 2);
   });
 
-  test('red: REQ-1005 a key file wider than 0600 is refused on POSIX, and a symlinked key path always', { skip: !POSIX && 'POSIX modes' }, () => {
+  test('red: REQ-1005 a key file wider than 0600 is refused on POSIX (on Windows the mode check is skipped), and a symlinked key path always', () => {
     const h = home();
     const p = paths(h, 'alpha');
-    secrets.writeKeyFile(p.keyFile, fakeKey());
+    const value = fakeKey();
+    secrets.writeKeyFile(p.keyFile, value);
     chmodSync(p.keyFile, 0o644);
     const r = read(h, 'alpha');
-    assert.equal(r.status, 2);
-    assert.match(r.stderr, /mode 0644 is wider than 0600/);
-    assert.equal(r.stdout, '');
+    if (POSIX) {
+      assert.equal(r.status, 2);
+      assert.match(r.stderr, /mode 0644 is wider than 0600/);
+      assert.equal(r.stdout, '');
+    } else {
+      // Windows: stat modes carry no owner-only meaning; the helper reads, the folder ACL rules (REQ-1005).
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, value);
+    }
     rmSync(p.keyFile);
     writeFileSync(join(h, 'victim'), fakeKey('foxtrot'));
-    symlinkSync(join(h, 'victim'), p.keyFile);
+    if (!trySymlink(join(h, 'victim'), p.keyFile)) return;
     const s = read(h, 'alpha');
     assert.equal(s.status, 2);
     assert.match(s.stderr, /is a symlink/);
@@ -209,7 +238,7 @@ describe('scripts/account-key.cjs read (REQ-1002, REQ-1005)', () => {
 });
 
 describe('assessKey and ensureOwnerDir (REQ-1005, REQ-1006)', () => {
-  test('red: REQ-1005 POSIX: absent, 0600 ready, 0644 not ready naming the mode; never the value', { skip: !POSIX && 'POSIX modes' }, () => {
+  test('red: REQ-1005 absent; POSIX: 0600 ready, 0644 not ready naming the mode; Windows: mode skipped, ACL or mode unverified reported; never the value', () => {
     const h = home();
     const p = paths(h, 'alpha');
     assert.deepEqual(secrets.assessKey(p.keyFile), { present: false, ready: false, mode: null, acl: null, reason: 'key absent' });
@@ -217,12 +246,19 @@ describe('assessKey and ensureOwnerDir (REQ-1005, REQ-1006)', () => {
     secrets.writeKeyFile(p.keyFile, value);
     const ok = secrets.assessKey(p.keyFile);
     assert.equal(ok.ready, true);
-    assert.equal(ok.mode, '0600');
     chmodSync(p.keyFile, 0o644);
     const bad = secrets.assessKey(p.keyFile);
     assert.equal(bad.present, true);
-    assert.equal(bad.ready, false);
-    assert.equal(bad.reason, 'not ready (key file mode 0644)');
+    if (POSIX) {
+      assert.equal(ok.mode, '0600');
+      assert.equal(bad.ready, false);
+      assert.equal(bad.reason, 'not ready (key file mode 0644)');
+    } else {
+      assert.equal(ok.mode, null, 'no POSIX mode on Windows');
+      assert.equal(bad.ready, true, 'chmod means nothing on Windows: the mode check is skipped');
+      assert.equal(typeof bad.acl, 'string');
+      assert.match(bad.reason, /ACL |mode unverified/);
+    }
     assertNoValue(JSON.stringify(bad), value);
   });
 
@@ -260,19 +296,9 @@ describe('assessKey and ensureOwnerDir (REQ-1005, REQ-1006)', () => {
 });
 
 describe('codex login through the stub (REQ-1003)', () => {
-  /** A `codex` on PATH that is the fixture stub. */
-  function stubCodex(h) {
-    const bin = join(h, 'bin');
-    mkdirSync(bin, { recursive: true });
-    const stub = join(PACK, 'tests', 'fixtures', 'accounts', 'codex-stub.cjs');
-    const codex = join(bin, 'codex');
-    writeFileSync(codex, `#!/bin/sh\nexec "${process.execPath}" "${stub}" "$@"\n`, { mode: 0o755 });
-    return codex;
-  }
-
-  test('red: REQ-1003 the store is forced to file, the value reaches the stub on stdin under CODEX_HOME, the env is scrubbed, and the auth mode is reported', { skip: !POSIX && 'sh stub' }, () => {
+  test('red: REQ-1003 the store is forced to file, the value reaches the stub on stdin under CODEX_HOME, the env is scrubbed, and the auth mode is reported', () => {
     const h = home();
-    const codex = stubCodex(h);
+    const codex = stubCodex(join(h, 'bin'));
     const p = paths(h, 'bravo');
     mkdirSync(p.configDir, { recursive: true });
     writeFileSync(p.codexConfigFile, 'model = "stub"\ncli_auth_credentials_store = "keyring"\n');
@@ -288,12 +314,18 @@ describe('codex login through the stub (REQ-1003)', () => {
     for (const k of ['LEAK_ME', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'BUILDER_ACCOUNTS_HOME']) assert.equal(calls[0].envNames.includes(k), false, k);
     assert.equal(JSON.parse(readFileSync(p.codexAuthFile, 'utf8')).OPENAI_API_KEY, value, 'the stub (the harness) wrote the key');
     assert.equal(r.auth.present, true);
-    assert.equal(r.auth.mode, '0600');
+    if (POSIX) assert.equal(r.auth.mode, '0600');
+    else assert.equal(typeof r.auth.acl, 'string', 'Windows: the ACL is reported instead of a mode');
     // The kit wrote no file holding the value: only the harness's own auth.json does.
     const holders = [];
     const walk = (d) => { for (const n of readdirSync(d, { withFileTypes: true })) { const f = join(d, n.name); if (n.isDirectory()) walk(f); else if (readFileSync(f, 'utf8').includes(value)) holders.push(f); } };
     walk(h);
     assert.deepEqual(holders, [p.codexAuthFile]);
+    // A bare name is found on PATH too (a .cmd shim on Windows), and a missing name resolves to nothing.
+    // PATHEXT spells the extension as the user set it (.CMD); Windows paths compare without case.
+    const found = secrets.resolveBin('codex', { PATH: join(h, 'bin') + delimiter + '/nowhere', PATHEXT: '.COM;.EXE;.BAT;.CMD' });
+    assert.equal(process.platform === 'win32' ? String(found).toLowerCase() : found, process.platform === 'win32' ? codex.toLowerCase() : codex);
+    assert.equal(secrets.resolveBin('codex-zz', { PATH: join(h, 'bin'), PATHEXT: '.COM;.EXE;.BAT;.CMD' }), null);
     assertNoValue(r.stdout + r.stderr + JSON.stringify(r.auth), value);
     const out = secrets.codexLogout({ configDir: p.configDir, env, codexBin: codex });
     assert.equal(out.ok, true);
