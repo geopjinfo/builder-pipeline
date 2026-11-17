@@ -34,8 +34,9 @@ describe('features', () => {
   test('red: REQ-801 familyReview is experimental-off by default: the loader knows it and its line says "not enabled" (AC-801a)', () => {
     const r = run(project());
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /^familyReview: experimental — not enabled$/m);
-    assert.match(r.stdout, /^routerHint: experimental — not enabled$/m);
+    // REQ-1401 appends the EXPERIMENTS §16 decision to each line; the flag line itself is unchanged
+    assert.match(r.stdout, /^familyReview: experimental — not enabled( · decision: .*)?$/m);
+    assert.match(r.stdout, /^routerHint: experimental — not enabled( · decision: .*)?$/m);
     const on = run(project(block({ schema: 2, features: { familyReview: { state: 'experimental-on' } } })));
     assert.equal(on.status, 0, on.stdout);
     assert.match(on.stdout, /^familyReview: experimental — enabled; its measurement is owed/m);

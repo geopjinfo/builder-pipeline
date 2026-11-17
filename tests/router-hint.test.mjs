@@ -37,7 +37,7 @@ describe('routerHint is experimental-off and runs nothing while off (M8b)', () =
     made.push(dir);
     const r = spawnSync(process.execPath, [join(here, '..', 'scripts', 'features.mjs')], { cwd: dir, encoding: 'utf8' });
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /^routerHint: experimental — not enabled$/m);
+    assert.match(r.stdout, /^routerHint: experimental — not enabled( · decision: .*)?$/m); // REQ-1401 appends the §16 decision
   });
 
   test('red: off, run() returns the "not enabled" line, suggests nothing and never calls out', async () => {
