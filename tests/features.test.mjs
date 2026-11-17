@@ -35,6 +35,7 @@ describe('features', () => {
     const r = run(project());
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /^familyReview: experimental — not enabled$/m);
+    assert.match(r.stdout, /^routerHint: experimental — not enabled$/m);
     const on = run(project(block({ schema: 2, features: { familyReview: { state: 'experimental-on' } } })));
     assert.equal(on.status, 0, on.stdout);
     assert.match(on.stdout, /^familyReview: experimental — enabled; its measurement is owed/m);
