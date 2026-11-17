@@ -5,6 +5,13 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Repository hygiene for this repository.** A generic `.gitignore` (dependencies, the kit's own run output, editor
+  and OS files; no tool folders) and AGENTS.md rule 15 extended: stage by name, plain commit and PR text, branch names
+  `feature/<topic>` with no assistant name, arm the commit-msg hook per clone, check `git status --ignored` before a
+  push. Maintainer files only; nothing shipped changes.
+
 ## [2.0.0] — 2026-11-17
 
 ### Breaking
