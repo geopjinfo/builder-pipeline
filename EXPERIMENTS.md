@@ -522,11 +522,29 @@ there, and prints the wall time. The test fails above 300 s.
 `inventory`) runs on three public repositories. A person classifies every finding as true or false. A check above
 20% false positives is reported as a defect.
 
-| Check | Repositories (commit sha) | Findings | False | Rate |
+Run of 2026-11-17, kit at 36bfdc0 (release 1.1.0), Node v22.23.4, no `PIPELINE_PROFILE.md` in the repositories (default
+settings). Repositories, shallow clones: `expressjs/express` 43fca52d, `fastify/fastify` 46797238, `pallets/flask`
+49943b5a (three well-known, active projects in two languages, with no agent harness folders) and `ruvnet/claude-flow`
+8cb2fbc7 (added because it has `.claude/agents`, `.claude/skills` and `.agents/skills`, so `inventory` has input).
+Each check ran from the repository root with the kit's scripts. A finding is one printed violation, problem, item,
+overlap or clash. One person classified every finding by hand against the file it names.
+
+| Check | Input | Findings | False | Rate |
 |---|---|---|---|---|
-| — | — | — | — | — |
+| `check-ledgers` | the 4 repository roots | 8 (LG-0 ×2 per repository: no registry file, no boards directory) | 0 | 0% |
+| `claims-check --files --no-run-counts` | every `*.md` outside `node_modules`, 97 documents | 0 (no citation, retracted-phrase or owed-note problem; count claims come from a claims file, and none was given) | 0 | no finding to rate |
+| `output-check plan` and `review` | each repository's README as the document | 68 (17 per repository: missing sections, missing tables, wrong title) | 0 | 0%, negative control only |
+| `fix-rate <files>` | the same 97 documents | 0 (no `FIX-n` row) | 0 | no finding to rate |
+| `inventory` | the 4 repository roots | 187 (4 mode calls, 181 items, 1 overlap, 1 clash) | 2 | 1.1% |
+
+The two false `inventory` findings are both on `claude-flow`: `.claude/skills/dual-mode/README.md` listed as a skill
+(the folder has no `SKILL.md`), and `.claude/agents/MIGRATION_SUMMARY.md` listed as an agent named "Migration
+Summary" (the file is a note, not a persona). The one overlap (`security-auditor`, same name, wording score 0.079) and
+the clash it raises are true. No check is above 20%. `claims-check` and `fix-rate` found nothing on these
+repositories: their inputs are seat outputs and boards, which a project without a pipeline run does not have. A rate
+for them needs a run on an adopting project's boards and claims file.
 
 **Risk.** A rate taken on three repositories is a small sample. Name the repositories and the shas so the run can
 be repeated.
 
-**Decision (2026-11-17).** not yet measured — time to first value 1.1 s on one machine (limit 300 s); the false-positive table is still empty.
+**Decision (2026-11-17).** not yet measured — time to first value 1.1 s on one machine (limit 300 s); false-positive rates 0% to 1.1% over four public repositories (no check above 20%).
