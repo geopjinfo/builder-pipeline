@@ -235,6 +235,68 @@ function leaseGate(ctx, cmd, names) {
 
 // --------------------------- subcommands ------------------------------------------
 
+/** The orch root for `cwd` (BUILDER_ORCH_DIR, else the checkout's .pipeline/orchestrator). */
+function orchRootOf(cwd, env = process.env) {
+  try {
+    return require('../scripts/lib/orch-store.cjs').orchRoot(env, cwd);
+  } catch {
+    return path.join(cwd, '.pipeline', 'orchestrator');
+  }
+}
+
+/**
+ * Rewrite every finished 1.0 run state under the orch root to name accounts (REQ-311). Pure over the file set: a
+ * state that already carries `accounts`, has no `seats`, or holds a live lane is left alone.
+ * @returns {{ rewritten: string[], skipped: Array<[string, string]> }}
+ */
+function migrateStates(cwd, settings, { env = process.env, dry = false } = {}) {
+  const orchState = require('../scripts/lib/orch-state.cjs');
+  const runs = path.join(orchRootOf(cwd, env), 'runs');
+  const out = { rewritten: [], skipped: [] };
+  if (!fs.existsSync(runs)) return out;
+  const named = registry().list(settings);
+  for (const id of fs.readdirSync(runs)) {
+    const file = path.join(runs, id, 'state.json');
+    let text;
+    let state;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+      state = JSON.parse(text);
+    } catch {
+      continue;
+    }
+    if (!state || typeof state !== 'object' || !Array.isArray(state.seats)) continue;
+    if (Array.isArray(state.accounts) && state.accounts.length) {
+      out.skipped.push([id, 'already names accounts']);
+      continue;
+    }
+    if (Object.values(state.lanes || {}).some((l) => l && LIVE.has(l.status))) {
+      out.skipped.push([id, 'live lane']);
+      continue;
+    }
+    const synthetic = orchState.accountsOf(state);
+    const accounts = state.seats.map((seat) => {
+      const row = named.find((a) => a.name === seat);
+      if (row) return orchState.slimAccount(row);
+      const { legacy, ...rest } = synthetic.find((a) => a.name === seat);
+      return rest;
+    });
+    const next = { ...state, accounts, placement: 'on' };
+    delete next.limits;
+    for (const l of Object.values(next.lanes || {})) if (l && typeof l === 'object' && l.account === undefined) l.account = l.seat ?? null;
+    out.rewritten.push(id);
+    if (dry) continue;
+    fs.writeFileSync(`${file}.bak`, text);
+    fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+  }
+  return out;
+}
+
+function reportStates(r, dry) {
+  for (const id of r.rewritten) console.log(`  run ${id}: state.json ${dry ? 'would name' : 'names'} accounts (backup state.json.bak)`);
+  for (const [id, why] of r.skipped) console.log(`  run ${id}: state.json left alone (${why})`);
+}
+
 function cmdMigrate(ctx, argv) {
   const dry = argv.includes('--dry-run');
   const unknown = argv.filter((a) => a !== '--dry-run');
@@ -245,7 +307,13 @@ function cmdMigrate(ctx, argv) {
   const r = migrateText(text);
   if (r.errors.length) ctx.die(r.errors.join('\n'));
   if (!r.changed) {
-    console.log(`accounts migrate: ${r.notes.join('; ')}`);
+    // the profile is already 2.0: finished 1.0 run states may still need their accounts (REQ-311)
+    const parsed = profileLib().parse(text);
+    const live0 = liveRuns(ctx.CWD);
+    if (live0.length) ctx.die(`accounts migrate: run(s) ${live0.join(', ')} hold a LAUNCHED or STALLED lane — finish or stop them (orch status), then migrate`);
+    const states = parsed.errors.length ? { rewritten: [], skipped: [] } : migrateStates(ctx.CWD, parsed.settings, { dry });
+    console.log(`accounts migrate: ${r.notes.join('; ')}${states.rewritten.length ? `; ${states.rewritten.length} finished run state(s) ${dry ? 'would be' : ''} rewritten` : ''}`);
+    reportStates(states, dry);
     return;
   }
   const after = profileLib().parse(r.text);
@@ -256,12 +324,14 @@ function cmdMigrate(ctx, argv) {
   leaseGate(ctx, 'migrate', Object.keys(rawAccounts(readBlock(text).raw)));
   for (const n of r.notes) console.log(`  ${n}`);
   if (dry) {
+    reportStates(migrateStates(ctx.CWD, after.settings, { dry: true }), true);
     console.log(`accounts migrate --dry-run: ${PROFILE} §16 would be rewritten (backup ${PROFILE}.bak); nothing written`);
     return;
   }
   fs.writeFileSync(`${file}.bak`, text);
   fs.writeFileSync(file, r.text);
   console.log(`accounts migrate: ${PROFILE} rewritten (the pipeline-settings block only; backup ${PROFILE}.bak)`);
+  reportStates(migrateStates(ctx.CWD, after.settings), false);
 }
 
 function cmdAdd(ctx, argv) {

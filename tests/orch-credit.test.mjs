@@ -244,6 +244,12 @@ describe('kinds, the model floor and the allow list', () => {
 
   test('the allow list names whole commands only; a read-only kind may write its records and nothing else', () => {
     const c2 = credit.creditContext({ models: { mid: 'mid-model' }, features: { accounts: { state: 'on', accounts: { credit: { worker: 'claude-code', pays: 'api-key', guards: { seatCommands: { 'module-tester': ['make test-unit'] } } } } } } });
+    // REQ-303 (M3): the fallback chain reads the account order of the registry; guards.fallback names it explicitly
+    const order = (accounts) => credit.creditContext({ features: { accounts: { state: 'on', accounts } } }).fallbackAccounts;
+    assert.deepEqual(order({ bravo: { worker: 'claude-code', pays: 'subscription', command: 'x {brief}' }, alpha: { worker: 'session', pays: 'subscription' }, credit: { worker: 'claude-code', pays: 'api-key' } }), ['bravo', 'alpha']);
+    assert.deepEqual(order({ alpha: { worker: 'session', pays: 'subscription' }, bravo: { worker: 'claude-code', pays: 'subscription', command: 'x {brief}' }, credit: { worker: 'claude-code', pays: 'api-key', guards: { fallback: ['bravo', 'nobody'] } } }), ['bravo']);
+    assert.deepEqual(order({ alpha: { worker: 'session', pays: 'subscription' } }), [], 'no api-key account: no chain');
+    assert.deepEqual(credit.creditContext({}).fallbackAccounts, []);
     const auditor = credit.allowList({ kind: 'vuln-auditor', key: 'k1', scope: ['src/**'] }, c2);
     assert.equal(auditor.filter((x) => x.startsWith('Bash(')).some((x) => x.includes('*')), false);
     assert.deepEqual(auditor.filter((x) => x.startsWith('Edit(src')), []);
