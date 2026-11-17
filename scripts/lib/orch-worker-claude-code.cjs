@@ -20,6 +20,9 @@
  *
  *   errors     `classifyError(response)` is the shared rule of scripts/lib/account-errors.cjs (REQ-306): LIMIT, BUDGET,
  *              OVERLOAD or AUTH with an until time; `errorResponse(result, stderr)` shapes a failed run's texts for it.
+ *   pin        the `--settings` file every lane launch passes (REQ-404, D40): the account's own env block, its
+ *              config dir and its baseUrl, plus `permissions.deny` for everything outside a path-root account's
+ *              roots (REQ-402). Written into the run dir at 0600; it never carries a key or a key helper.
  *
  * Tests drive a stub binary through BUILDER_CREDIT_WORKER_BIN (tests/fixtures/orch/stub-worker.cjs).
  */
@@ -73,6 +76,37 @@ function env(base, home, account, { guardDir = DEFAULT_GUARD_DIR, secondaryConfi
     out.CLAUDE_CONFIG_DIR = path.join(home, secondaryConfigDir);
   }
   return out;
+}
+
+/**
+ * The --settings pin of a lane launch. `accountSettings` is the parsed account settings file (or null); only its
+ * `env` block is carried — never `apiKeyHelper`, hooks or anything else. `denyPaths` come from account-policy
+ * denyPathsFor().
+ */
+function pin({ account = {}, configDir = null, accountSettings = null, denyPaths = [] }) {
+  const env = {};
+  const own = accountSettings && accountSettings.env && typeof accountSettings.env === 'object' && !Array.isArray(accountSettings.env) ? accountSettings.env : {};
+  for (const [k, v] of Object.entries(own)) if (typeof v === 'string') env[k] = v;
+  if (account.baseUrl) env.ANTHROPIC_BASE_URL = account.baseUrl;
+  if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
+  const out = { env };
+  if (denyPaths && denyPaths.length) out.permissions = { deny: denyPaths.flatMap((p) => [`Read(${p})`, `Edit(${p})`, `Write(${p})`]) };
+  return out;
+}
+
+/** The launch command with the pin: `{settings}` filled when the template names it, else `--settings "<file>"` appended. */
+const withSettings = (command, pinFile) => (String(command).includes('{settings}') ? String(command).split('{settings}').join(pinFile) : `${command} --settings ${JSON.stringify(pinFile)}`);
+
+/** Write the pin at 0600 (owner only). */
+function writePin(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
+  try {
+    fs.chmodSync(file, 0o600);
+  } catch (_) {
+    /* a filesystem without modes */
+  }
+  return file;
 }
 
 /** A guard dir that carries user memory, plugins or MCP servers is refused (it would leak into the worker). */
@@ -212,5 +246,5 @@ function readLaunchLog(file) {
 module.exports = {
   NAME, API_KEY_VAR, KEY_SOURCE, CONFIG_GLOBS, DEFAULT_GUARD_DIR,
   settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, errorResponse, classifyError, denials, resolveBin,
-  launchSessionId, readLaunchLog,
+  launchSessionId, readLaunchLog, pin, withSettings, writePin,
 };

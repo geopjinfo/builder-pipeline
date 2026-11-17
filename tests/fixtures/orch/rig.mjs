@@ -15,8 +15,10 @@ export const ORCH = join(PACK, 'scripts', 'orch.mjs');
 export const FIX = join(PACK, 'tests', 'fixtures', 'orch');
 export const STUB = join(FIX, 'stub-worker.cjs');
 export const registry = require(join(PACK, 'scripts', 'lib', 'accounts-registry.cjs'));
+const accountPaths = require(join(PACK, 'scripts', 'lib', 'account-paths.cjs'));
 
 export const tmp = (p) => mkdtempSync(join(tmpdir(), `orch-${p}-`));
+const ACCOUNTS_HOME = tmp('accounts-home');
 export const ACCOUNTS_HOME_OF = () => ACCOUNTS_HOME;
 export const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -54,6 +56,8 @@ export function profileText({ orchestrator = {}, models = { strong: 'strong-mode
     }
     for (const [name, a] of Object.entries(accounts)) if (!rows[name]) rows[name] = a;
     for (const a of Object.values(rows)) delete a.name; // a row's name is its key, never a field
+    // every terminal account has its dir, as a signed-in account would: the pre-launch dir check (REQ-703) judges a missing one
+    for (const [name, a] of Object.entries(rows)) if (a.worker !== 'session') mkdirSync(accountPaths.paths(ACCOUNTS_HOME, name, a).configDir, { recursive: true });
   }
   return `# profile\n\n\`\`\`json pipeline-settings\n${JSON.stringify(block, null, 2)}\n\`\`\`\n`;
 }
@@ -110,7 +114,6 @@ export function stubBin(dir = tmp('bin'), { claude = 'const d = process.env.CLAU
   return dir;
 }
 const STUBS = stubBin();
-const ACCOUNTS_HOME = tmp('accounts-home');
 
 /** Run the CLI in `cwd` with the store at `root`; the stub harnesses are first on PATH and the accounts home is scratch. */
 export function orch(cwd, root, args, env = {}) {
