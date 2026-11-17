@@ -10,8 +10,8 @@
  * LAUNCHED or STALLED is always KEEP. Snapshot refs of merged runs are listed with the delete command, never deleted.
  *
  * Settings (PIPELINE_PROFILE.md §16): features.runSweep.{state, keepDays, roots}. Off → "runSweep: not configured",
- * exit 0 — unless --keep-days or --apply is given: then it runs with the defaults and says so (REQ-1807).
- * Exit 0 ok, or the feature is off · 1 a move failed · 2 usage or an invalid profile.
+ * exit 3 — unless --keep-days or --apply is given: then it runs with the defaults and says so (REQ-1807).
+ * Exit 0 ok · 1 a move failed · 2 usage or an invalid profile · 3 the feature is off.
  */
 import { createRequire } from 'node:module';
 
@@ -50,8 +50,8 @@ if (loaded.errors.length > 0) {
 const feature = profile.feature(loaded.settings, 'runSweep');
 const standalone = !feature.enabled && (val('--keep-days') !== undefined || flag('--apply'));
 if (!feature.enabled && !standalone) {
-  console.log(feature.line);
-  process.exit(0);
+  console.log(feature.line); // off is exit 3, never a pass (spec INVARIANTS)
+  process.exit(3);
 }
 const cfg = standalone ? { ...profile.FEATURES.runSweep.defaults } : feature.config;
 const keepDays = val('--keep-days') !== undefined ? Number(val('--keep-days')) : cfg.keepDays;

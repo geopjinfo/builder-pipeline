@@ -148,7 +148,7 @@ describe('branch-sweep — CLI', () => {
     assert.equal(res.status, 0, res.out);
     assert.match(res.stdout.split('\n')[0], /^branchSweep: not configured — checking branches against main with defaults/);
     const none = run(r.repo, []);
-    assert.equal(none.status, 0, none.out); // off and no target: the step says so, never guesses a branch
+    assert.equal(none.status, 3, none.out); // off and no target: the step says so (exit 3, spec INVARIANTS), never guesses a branch
     assert.match(none.stdout, /^branchSweep: not configured$/m);
     const bad = run(r.repo, ['--stale-days']);
     assert.equal(bad.status, 2);
