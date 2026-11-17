@@ -360,6 +360,8 @@ error, because a typo would otherwise switch a check off in silence.
     "walkPriority":     { "state": "experimental-off" },
     "ruleNotes":        { "state": "experimental-off" },
     "mutationGate":     { "state": "experimental-off" },
+    "familyReview":     { "state": "experimental-off" },
+    "routerHint":       { "state": "experimental-off" },
     "liteSplit":        { "state": "experimental-off", "cap": 4, "trigger": 3, "ledgers": ["(^|/)CHANGELOG\\.md$"], "docsOnly": ["(^|/)README\\.md$"] },
     "remoteLanes":      { "state": "experimental-off", "remotePollSeconds": 30 },
     "boardLoop":        { "state": "experimental-off", "promptFile": "LOOP_PROMPT.md", "gate": null, "maxPasses": null, "passTimeoutMinutes": 60, "maxTurnsPerPass": 20, "stallMinutes": 5, "maxRetriesPerRow": 2, "maxConsecutiveFailures": 3, "maxConsecutiveNoProgress": 3, "testRoots": ["test/", "tests/"] },

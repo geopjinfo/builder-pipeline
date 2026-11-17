@@ -439,24 +439,40 @@ reviewer weighs it like any other unverified claim.
 
 **Decision (2026-11-17).** not yet measured — no measurement: no two lanes with marked notes.
 
-## 16. Review by auditor family — `familyReview` (planned, experimental)
+## 16. Review by auditor family — `familyReview` (experimental)
 
-**What ships.** Nothing yet. The 2.0 build adds it. The reviewer groups the auditor findings by family (standards,
-invariants, security, tests) and reads each family as one list before it writes its verdict. The pipeline, the
-seats and the FIX loop are unchanged.
+**What ships.** `features.familyReview`, default `experimental-off`. On, the plan split (`orch split`) assigns a
+second reader to each lane. The second reader is a registry account (`features.accounts.accounts.<name>`) whose
+worker `family` is not the writer's family and whose `tier` is at or above the writer's tier. The tiers are
+`free < mid < strong`. An account with no `tier` is unknown and never qualifies. If no such account exists, the lane
+has no second reader and the plan carries the reason line `familyReview: no second reader — no other-family account
+at or above tier <x>`. The second reader reads the P4 findings as one list and writes its own review file. It never
+replaces the reviewer seat (D14). The pipeline, the seats and the FIX loop are unchanged. Off, nothing of it runs:
+the plan split is byte-identical with the key absent. Family diversity is not assumed to be the mechanism; the
+measurement decides.
 
-**Opt in.** Set the feature to `experimental-on` in `PIPELINE_PROFILE.md` §16 when the 2.0 build has shipped it.
-Off, the reviewer reads the findings in dispatch order, as today.
+**Opt in.** Set `features.familyReview` to `experimental-on` in `PIPELINE_PROFILE.md` §16. Give each account a
+`tier` and a `family`. Off, the reviewer reads the findings in dispatch order, as today.
 
 **Measurement.** Three modules with the feature on and three comparable modules with it off. For each module
 record: accepted findings per auditor family, reviewer loop-backs (`FIX-n` rows raised by the review pass), and cost
 per task (`npx builder-pipeline run cost-window` over the review window). **Keep** if accepted findings rise, loop-backs do
 not rise, and cost per task stays inside the module budget. **Drop** otherwise.
 
-**Risk.** A family view can hide a cross-family defect: a security finding that is also an invariant break is read
-once, in one list. The reviewer still reads every finding.
+**routerHint (M8b, advisory).** `features.routerHint`, default `experimental-off`. On, the kit prints three lines for
+a lane: an account suggestion (the pays order, the content class against the project visibility), a risk flag (a
+content class the visibility refuses, a Full lane) and whether a second opinion is advised (the §16 second-reader
+rule). It never changes a placement: a probability is not an exit code (D15). A call to a decisions-style API goes
+through `features.outboundGuard`; a call that would send task text to an account whose data-recipient decision is
+not in the decision log is refused with `E_DATA_RECIPIENT` first. Off, nothing of it runs. **What it must prove.**
+Over ten lanes, record the suggested account against the account the rulebook placed, and the risk flag against the
+lane's outcome (a `FIX-n` row or a merge revert). **Keep** if the suggestion matches the placement in eight of ten
+lanes and every flagged lane had a finding. **Drop** otherwise. No measurement yet.
 
-**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+**Risk.** A second reader doubles the review cost of a lane. A family view can hide a cross-family defect: a security
+finding that is also an invariant break is read once, in one list. The reviewer still reads every finding.
+
+**Decision (2026-11-17).** not yet measured — no measurement: the second reader is built; no module has run with it.
 
 ## 17. Board loop on a throwaway project — `boardLoop` (planned, experimental)
 

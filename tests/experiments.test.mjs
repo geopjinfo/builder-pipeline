@@ -61,6 +61,16 @@ describe('EXPERIMENTS.md decision rows', () => {
     assert.match(titles[18] || '', /remoteLanes/);
   });
 
+  test('red: REQ-801 §16 states the familyReview measurement: findings per auditor family, loop-backs, cost per task, three modules each way, and the keep rule (AC-801a)', () => {
+    const s16 = all.find((s) => s.n === 16);
+    assert.ok(s16, 'no §16');
+    for (const must of [/accepted findings per auditor family/i, /loop-backs/i, /cost per task/i, /three modules/i, /\*\*Keep\*\*/, /\*\*Drop\*\*/, /second reader/i, /at or above the writer'?s tier/i, /features\.familyReview/, /no measurement/i]) {
+      assert.match(s16.body, must, `§16 lacks ${must}`);
+    }
+    assert.match(s16.body, /nothing of it runs|runs nothing/i, '§16 does not say the feature runs nothing while off');
+    assert.equal(all.filter((s) => s.n === 16).length, 1, 'one §16, never a second');
+  });
+
   test('the parser: a decision row inside one section does not satisfy another', () => {
     const md = '## 1. A\n\n**Decision (2026-01-01).** drop — 0 of 3\n\n## 2. B\n\nno row here\n';
     const two = sections(md);

@@ -13,6 +13,7 @@
  *   content         public | scratch | any | [path roots]            (M4 enforces it at launch)
  *   roles           subset of ROLES; [] or absent = every role
  *   family          anthropic | openai | google | other (the model family, for the cross-family rules)
+ *   tier            free | mid | strong (ordered; the cross-family second reader of M8 compares tiers); null = unknown, never "at or above"
  *   note            free text the rulebook quotes before a launch
  *   configDir       the worker's own config dir (CLAUDE_CONFIG_DIR / CODEX_HOME); null = <accounts home>/accounts/<name>
  *   baseUrl         a gateway's base URL; refused on a subscription account (E_BASEURL_SUB)
@@ -39,6 +40,8 @@ const WORKERS = Object.freeze(['claude-code', 'codex', 'session', 'antigravity']
 const PAYS = Object.freeze(['subscription', 'gateway', 'free', 'api-key']);
 const CONTENT = Object.freeze(['public', 'scratch', 'any']);
 const FAMILIES = Object.freeze(['anthropic', 'openai', 'google', 'other']);
+/** The ordered tiers (REQ-802): an account with none is unknown and never qualifies as a second reader. */
+const TIERS = Object.freeze(['free', 'mid', 'strong']);
 /** The roles the orchestrator knows: the nine personas and the orchestrator itself. */
 const ROLES = Object.freeze([
   'orchestrator', 'module-planner', 'module-builder', 'module-tester', 'module-reviewer',
@@ -76,7 +79,7 @@ const LEGACY_DEFAULTS = Object.freeze({
 });
 
 const ACCOUNT_DEFAULTS = Object.freeze({
-  worker: null, pays: null, content: 'any', roles: [], family: null, note: '', configDir: null, baseUrl: null, command: null,
+  worker: null, pays: null, content: 'any', roles: [], family: null, tier: null, note: '', configDir: null, baseUrl: null, command: null,
   budget: null, maxTurns: null, timeoutMinutes: null, usageCommand: null, readyCommand: null, smokeCommand: null, versionCommand: null,
   guards: null,
 });
@@ -152,6 +155,7 @@ function validateAccounts(settings, opts = {}) {
     if (!strList(a.roles) && !(Array.isArray(a.roles) && a.roles.length === 0)) errors.push(`${atA('roles')}: a list of roles`);
     else for (const r of a.roles) if (!ROLES.includes(r)) errors.push(`${atA('roles')}: unknown role "${r}" — known: ${ROLES.join(', ')}`);
     if (a.family !== null && !FAMILIES.includes(a.family)) errors.push(`${atA('family')}: null, or one of ${FAMILIES.join(' | ')}`);
+    if (a.tier !== null && !TIERS.includes(a.tier)) errors.push(`${atA('tier')}: null, or one of ${TIERS.join(' | ')}`);
     if (typeof a.note !== 'string') errors.push(`${atA('note')}: a string`);
     for (const k of ['configDir', 'baseUrl', 'command', 'usageCommand', 'readyCommand', 'smokeCommand', 'versionCommand']) if (!optStr(a[k])) errors.push(`${atA(k)}: null, or a non-empty string`);
     if (a.worker === 'session' && a.configDir) errors.push(`${atA('configDir')}: a session account runs in the orchestrating session's own config; leave it null`);
@@ -350,6 +354,6 @@ function migrate(raw) {
 }
 
 module.exports = {
-  WORKERS, PAYS, CONTENT, FAMILIES, ROLES, HEADLESS_ROLES, BUDGET_KINDS, placeable, LEGACY_KEYS, LEGACY_DEFAULTS, ACCOUNT_DEFAULTS, FEATURE_DEFAULTS, MIGRATE_HINT, NAME_RULE, RESERVED,
+  WORKERS, PAYS, CONTENT, FAMILIES, TIERS, ROLES, HEADLESS_ROLES, BUDGET_KINDS, placeable, LEGACY_KEYS, LEGACY_DEFAULTS, ACCOUNT_DEFAULTS, FEATURE_DEFAULTS, MIGRATE_HINT, NAME_RULE, RESERVED,
   validateAccounts, legacyKeys, legacyMessage, list, accountsOn, legacyView, migrate, withDefaults,
 };

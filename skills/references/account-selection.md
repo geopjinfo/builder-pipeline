@@ -63,6 +63,10 @@ launch pass.
 | a SOLO lane (record-only) | the `session` account, as a sub-agent | a ready terminal worker account | an `api-key` account |
 | a P4 auditor or a P3 tester | a ready account limited to the headless roles | the lane's own account (the worker runs its owed seats itself: `SELF-AUDIT`) | the orchestrating session |
 | a second opinion on P4 findings | an account of another `family` than the writer's, at or above the writer's tier, when one exists | none: say that no second family is configured | a `scratch` account |
+
+The second opinion is the `features.familyReview` experiment: on, `orch split` gives each lane a second reader on an
+account whose `family` differs from the writer's and whose `tier` (`free`, `mid`, `strong`) is at or above the
+writer's, or logs why there is none.
 | a code-reading or docs credit job | a ready `gateway` or `free` account with the role | an `api-key` account, announced | a `session` account |
 
 Spread parallel lanes over accounts. Two lanes on one account share its turn budget and its rate limit; one `LIMIT`

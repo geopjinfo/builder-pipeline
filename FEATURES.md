@@ -109,6 +109,8 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder-pipeline fea
 | `boardLoop` | the loop runner above a board: a fresh worker per pass, runner-owned row choice, gate plus verdict, one commit per passing pass, named stops (`npx builder-pipeline run board-loop`, `orch loop`) | Claude Code workers | [§17](EXPERIMENTS.md) |
 | `tokenEconomizer` · `planReview` | third-party cost plugin on trial lanes · fresh-context plan review | protocol only | [§9–10](EXPERIMENTS.md) |
 | `rankedSearch` · `riskHint` · `walkPriority` · `ruleNotes` | cheap-model advice, each through the outbound guard, never a gate | protocol only | [§12–15](EXPERIMENTS.md) |
+| `routerHint` | an account suggestion, a risk flag (content class vs visibility, a Full lane) and whether a second opinion is advised, printed for a lane; never changes a placement; a call goes behind the outbound guard after the data-recipient decision is recorded | any (`features.outboundGuard` on) | [§16](EXPERIMENTS.md) |
+| `familyReview` | a second reader for a lane's P4 findings on an account of another worker `family`, at or above the writer's `tier`; off, nothing of it runs | any (`features.accounts` on) | [§16](EXPERIMENTS.md) |
 
 ## Bundled utility skills (installed unless `--no-extras`)
 
