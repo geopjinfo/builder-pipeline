@@ -5,6 +5,15 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Spec for the 2.1.0 capacity and reporter agents (`specs/capacity-reporter.spec.md`; plan decisions D70 to
+  D85).** REQ-1501 to REQ-1516 (M15 capacity governor: `features.capacity`, one more min() term in the lane-cap
+  rule, lowers only), REQ-1601 to REQ-1618 (M16 progress reporter: `features.reporter`, channels stdout, file,
+  webhook and command behind the outbound guard) and REQ-1701 to REQ-1704 (M17 evidence, docs, 2.1.0 release).
+  Ratified under the owner's mandate; `node scripts/spec-check.mjs capacity-reporter --ratified` passes. The spec
+  does not ship in the package (`specs/` is on the skip list). No code yet.
+
 ## [2.0.0] — 2026-11-17
 
 ### Breaking
