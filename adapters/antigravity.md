@@ -1,5 +1,8 @@
 # Adapter — Google Antigravity
 
+> **Commands.** Written for the npm-package install: a kit script runs as `npx builder run <name>`. With the
+> kit copied in as a `builder/` folder ([`UNPACK.md`](../UNPACK.md)), run it from the project's `scripts/` copy with Node.
+
 Antigravity has custom subagents, skills and hooks under one workspace folder, `.agents/`. The renderer in
 `adapters/lib/antigravity.cjs` (pure: text in, `{ path, content }` out) produces the layout below from the neutral
 personas and skills. `cli.js` writes the files.
