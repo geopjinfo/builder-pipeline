@@ -44,9 +44,22 @@ const now = () => new Date().toISOString();
 const target = (m) => (m.user ? `${m.user}@${m.host}` : m.host);
 const q = (s) => (/^[\w@%+=:,./-]+$/.test(String(s)) ? String(s) : `'${String(s).replace(/'/g, `'\\''`)}'`);
 
+/**
+ * The ssh binary: `ssh` on PATH (REQ-1202). BUILDER_SSH_BIN names another binary as an absolute path — a `.cjs`/`.js`
+ * file runs under this Node — so the tests drive a stub on every platform (a `.cmd` shim cannot be spawned without a
+ * shell, and the remote command carries newlines a shell would break).
+ */
+function sshBin(env) {
+  const b = env && env.BUILDER_SSH_BIN;
+  if (!b) return ['ssh', []];
+  if (!path.isAbsolute(b) || !fs.existsSync(b)) throw new Error(`refused: BUILDER_SSH_BIN must be an absolute path to an existing file (${b})`);
+  return /\.(c|m)?js$/.test(b) ? [process.execPath, [b]] : [b, []];
+}
+
 /** The remote command over ssh. `code` is the remote command's exit code, or 255 when ssh itself failed. */
 function ssh(machine, cmd, { env = process.env, timeoutMs = 120000 } = {}) {
-  const r = spawnSync('ssh', [...SSH_OPTS, target(machine), cmd], { env, encoding: 'utf8', timeout: timeoutMs, windowsHide: true, input: '' });
+  const [bin, pre] = sshBin(env);
+  const r = spawnSync(bin, [...pre, ...SSH_OPTS, target(machine), cmd], { env, encoding: 'utf8', timeout: timeoutMs, windowsHide: true, input: '' });
   const code = r.status === null ? SSH_FAILED : r.status;
   return { code, stdout: r.stdout || '', stderr: r.stderr || '', sshFailed: code === SSH_FAILED, error: r.error ? r.error.message : null };
 }
@@ -332,5 +345,5 @@ function cancel(root, runId, lane, { env = process.env } = {}) {
 
 module.exports = {
   FEATURE, STATUS, SSH_OPTS, SSH_FAILED, MOUNT_PATHS,
-  ssh, mountPathFault, featureOn, notConfigured, remoteEvent, addMachine, preflight, preflightCommand, place, hooksNamed, launchCommand, launch, pollCommand, poll, collect, cancel, redact,
+  sshBin, ssh, mountPathFault, featureOn, notConfigured, remoteEvent, addMachine, preflight, preflightCommand, place, hooksNamed, launchCommand, launch, pollCommand, poll, collect, cancel, redact,
 };
