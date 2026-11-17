@@ -190,7 +190,18 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
   const pin = path.join(cwd, '.pipeline', 'loop', `${key}.settings.json`);
   const p = accountPaths.paths(accountPaths.home(env), accountName, account);
   const bin = env.BUILDER_LOOP_WORKER_BIN || claude.resolveBin(env);
-  const expectedKey = account.pays === 'subscription' ? 'none' : claude.API_KEY_VAR;
+  // REQ-602: a subscription account must start on its login ('none'); any other account on a key — the API key variable,
+  // an auth token (a gateway) or the apiKeyHelper of its settings. Anything else stops the worker before a model call.
+  // A gateway account reached through its base URL may hold an auth token the CLI reports as 'none' (no API key in play):
+  // the request goes to the gateway, never to a plan account, so 'none' is acceptable there too.
+  const acceptableKeySources = account.pays === 'subscription' ? ['none'] : account.pays === 'gateway' ? [claude.API_KEY_VAR, 'ANTHROPIC_AUTH_TOKEN', 'apiKeyHelper', 'none'] : [claude.API_KEY_VAR, 'ANTHROPIC_AUTH_TOKEN', 'apiKeyHelper'];
+  const keySourceVerdict = (events) => {
+    for (const ev of events) {
+      if (ev && ev.type === 'system' && ev.subtype === 'init') return acceptableKeySources.includes(ev.apiKeySource) ? 'ok' : `apiKeySource is ${JSON.stringify(ev.apiKeySource)}, not one of ${acceptableKeySources.join(' | ')} — worker stopped before any model call`;
+      if (!(ev && ev.type === 'system' && /^hook/.test(String(ev.subtype)))) return `first non-hook stream event is ${ev && ev.type}/${ev && ev.subtype}, not system/init — worker stopped`;
+    }
+    return events.length > 50 ? 'no system/init within 50 events — worker stopped' : null;
+  };
 
   const finish = (reason, extra = {}) => {
     const rows = readRows(fs.readFileSync(boardFile, 'utf8'));
@@ -231,7 +242,7 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     if (env.BUILDER_LOOP_WORKER_BIN) for (const k of Object.keys(env)) if (k.startsWith('BUILDER_LOOP_STUB_')) childEnvironment[k] = env[k];
     const args = claude.launchArgs({ model: account.model || null, maxTurns: cfg.maxTurnsPerPass, settingsFile: pin, schema: VERDICT_SCHEMA });
     const started = Date.now();
-    const res = await runWorker({ bin, args, env: childEnvironment, cwd, prompt: input, passTimeoutMs: cfg.passTimeoutMinutes * 60000, stallTimeoutMs: cfg.stallMinutes * 60000, keySourceVerdict: (events) => claude.keySourceVerdict(events, expectedKey) });
+    const res = await runWorker({ bin, args, env: childEnvironment, cwd, prompt: input, passTimeoutMs: cfg.passTimeoutMinutes * 60000, stallTimeoutMs: cfg.stallMinutes * 60000, keySourceVerdict });
     const changed = changedFiles(cwd).filter((fl) => !fl.startsWith('.pipeline/'));
     // scope: denied paths and the board outside the chosen row (REQ-906, REQ-912)
     const scopeFaults = [];
@@ -253,7 +264,7 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     const gateDigest = capOutput(gate.text, limit);
     const head = git(cwd, ['rev-parse', 'HEAD']).out;
     const verdict = readVerdict(claude.structuredVerdict(res.events), { head, claimed: ids, exitCode: res.exitCode, denials: claude.denials(res.events) });
-    const why = scopeFaults.length ? `FAILED-SCOPE: ${scopeFaults.join('; ')}` : res.outcome !== 'EXITED' ? res.outcome : gate.status !== 0 ? `gate exit ${gate.status}` : verdict.job !== 'VERDICT' ? `${verdict.job}: ${verdict.reason}` : verdict.verdict.verdict !== 'PASS' ? `verdict ${verdict.verdict.verdict}` : null;
+    const why = scopeFaults.length ? `FAILED-SCOPE: ${scopeFaults.join('; ')}` : res.outcome !== 'EXITED' ? `${res.outcome}${res.keyFault ? `: ${res.keyFault}` : ''}` : gate.status !== 0 ? `gate exit ${gate.status}` : verdict.job !== 'VERDICT' ? `${verdict.job}: ${verdict.reason}` : verdict.verdict.verdict !== 'PASS' ? `verdict ${verdict.verdict.verdict}` : null;
     const passed = why === null;
     const turns = res.events.filter((e) => e && e.type === 'assistant').length;
     const result = claude.resultOf(res.events);

@@ -9,7 +9,9 @@ progress note. Nothing else survives between passes: the board, the progress log
 Rules for this pass:
 
 1. Work on the one row named below and on nothing else. The runner flipped it to IN-PROGRESS; you never edit the board.
-2. Read the row's test seed and the gate digest first. Make the smallest change that makes the row's gate pass.
+2. Read the row's test seed and the gate digest first, with the Read, Grep and Glob tools. The only shell command you may
+   run is the gate command named below: any other shell command is denied and the pass ends INCOMPLETE. Make the
+   smallest change that makes the row's gate pass.
 3. Run the gate command yourself before you finish. Do not edit the gate script, the test roots, this prompt file or
    the harness configuration: a write there fails the pass.
 4. Do not commit, push, or create branches. The runner commits a passing pass.
