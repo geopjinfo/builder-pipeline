@@ -460,7 +460,7 @@ once, in one list. The reviewer still reads every finding.
 
 ## 17. Board loop on a throwaway project — `boardLoop` (planned, experimental)
 
-**What ships.** Nothing yet. The 2.0 build adds it. The orchestrator loops one brief through Stage 0 to Stage 5 on a
+**What ships.** `features.boardLoop` (M9): `npx builder run board-loop` and `orch loop`. The orchestrator loops one brief through Stage 0 to Stage 5 on a
 throwaway project without a person between the stages. The board stays the one progress surface.
 
 **Opt in.** Set the feature to `experimental-on` when the 2.0 build has shipped it, on a throwaway project only.
@@ -471,10 +471,18 @@ exercise (`npx builder run cost-window`, or `unmeasured` when the harness keeps 
 timeouts, and silent failures (a stage that ended without a verdict and without an error). Write the numbers in
 this section with the project commit sha. Promotion is the maintainer's call, made on these numbers.
 
+**Measurements.**
+
+| Date | Kit commit | Test bed commits | Account | Passes | Rows done | Pass rate | Cost (USD) | Turns | Timeouts | Silent failures | Stop | Note |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-11-17 | 24ae3cd | 3e97890 → 606d88f | stub worker | 3 | 0/6 | 0% | unmeasured | 3 | 0 | 0 | no-progress | dry run of the machinery, no model |
+| 2026-11-17 | accae92 | 5e4f866 → 500cfc8 | gateway lane (Sonnet-class through the local gateway) | 5 | 1/6 | 17% | 0.29 | 43 | 0 | 0 | consecutive-failures | 4 passes INCOMPLETE: the worker ran `cd … && cat …` and the exact allow list denied it; the prompt did not name the Read tools |
+| 2026-11-17 | b5ba4e8 (prompt names the tools) | b5ba4e8 → 1fa2470 | gateway lane (same) | 6 | 6/6 | 100% | 0.33 | 48 | 0 | 0 | all-pass | one row per pass; 82 s wall time; six commits with the two trailers; `./gate.sh` passes all six afterwards |
+
 **Risk.** A loop with no person between the stages can run on past a wrong plan. The timeout and the silent-failure
 counts exist to show that.
 
-**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+**Decision (2026-11-17).** not yet measured — one model run: 6/6 rows, $0.33, 48 turns, 0 timeouts, 0 silent failures, after one prompt fix (1/6 before it). Promotion stays a person's call; a second project and a second account are owed before keep.
 
 ## 18. Remote lanes — `remoteLanes` (planned, experimental)
 
@@ -517,6 +525,23 @@ A number here comes from a file in the project Library, never from memory.
 - Library files (uploaded flat; the evidence set `evidence/polyglot-loop-dryrun-2026-11-17/` names them): `board.md`
   (the board after the run), `run.jsonl` (three pass rows), `progress.md` (the notes fed forward), `state.json`.
 
+### Run 1b — the loop runner with a model on the polyglot test bed (2026-11-17)
+
+- Run id: `polyglot-testbed`, two runs on the same board, both through the gateway lane (API credits through the local
+  gateway, a Sonnet-class model; the account `gw` of the test bed profile, `pays: gateway`). Kit commits `accae92` and
+  `b5ba4e8` (branch of #23).
+- Run 1b-i: 5 passes, 1 of 6 rows, stop `consecutive-failures`, cost $0.29, 43 turns, 0 timeouts, 0 silent failures.
+  Four passes ended INCOMPLETE: the worker ran a shell command (`cd … && cat …`) that the exact allow list denies, and
+  REQ-604 makes a denied tool INCOMPLETE. The prompt had not named the Read tools. Test bed `5e4f866 → 500cfc8`.
+- Run 1b-ii, after the prompt template named the Read, Grep and Glob tools and the one allowed shell command: 6 passes,
+  6 of 6 rows, stop `all-pass`, cost $0.33, 48 turns, 0 timeouts, 0 silent failures, 82 s wall time. Six commits, each
+  with `Builder-Account: gw` and `Builder-Requirement:`; `./gate.sh` passes all six exercises afterwards. Test bed
+  `b5ba4e8 → 1fa2470`.
+- Fix-rate: `fixLane: unmeasured — no FIX row in 1 board(s)` (a loop board carries no FIX rows). `builderBatch` was not
+  exercised.
+- Library files: `polyglot-loop-model-run1-2026-11-17-{board.md,run.jsonl,progress.md,state.json}` and
+  `polyglot-loop-model-run2-2026-11-17-{board.md,run.jsonl,progress.md,state.json}`.
+
 ### Run 2 — the 2.0.0 build itself (November 2026)
 
 The 2.0.0 modules were built as device and cloud lanes of the project (one Claude session per module, on George's
@@ -541,8 +566,8 @@ time of writing:
 | C | #9 | false-positive rates |
 | M14 | this PR | the evidence programme |
 
-**Decision (2026-11-17).** not yet measured — one stub dry run (3 passes, 0/6 rows, stop no-progress, cost unmeasured);
-the run with a model and the orchestrator-driven build run are owed.
+**Decision (2026-11-17).** not yet measured — one stub dry run and two model runs (the second 6/6 rows, $0.33); the
+orchestrator-driven build run is owed.
 
 ## 20. Kit measurements — time to first value and false-positive rates (skeleton)
 

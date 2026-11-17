@@ -14,7 +14,9 @@ versions independently of any project it is pasted into.
   section's table, the recording path a scheduled run uses. `features` prints the decision beside every experimental or
   unmeasured flag.
 - **EXPERIMENTS §19: the recorded runs.** Run 1 is the loop runner's dry run on the polyglot test bed (stub worker,
-  3 passes, 0 of 6 rows, stop no-progress, cost unmeasured, fix-rate unmeasured), with its files in the project Library;
+  3 passes, 0 of 6 rows, stop no-progress, cost unmeasured, fix-rate unmeasured); Run 1b is the same board with a model
+  through the gateway lane (1/6 rows before the prompt named the Read tools, then 6/6 rows for $0.33 in 48 turns), with
+  the files in the project Library and the rows in §17;
   Run 2 records how the 2.0.0 build itself ran (device and cloud lanes, not the orchestrator) and lists every module PR.
   Tests: `tests/experiments.test.mjs` (the parser, the check, the matrix, the record path, §19 and §20 shape, a check
   above 20% false positives must be off by default), `tests/release-check.test.mjs` (§19 names every module PR and the
