@@ -15,6 +15,14 @@ versions independently of any project it is pasted into.
   keep, because no measured criterion holds yet. Test: `tests/experiments.test.mjs` (sections 1 to 20 present, a
   non-blank decision row in each, a keep row never on "no measurement").
 
+### Time to first value (REQ-1404)
+
+- **`first-value` script and test.** `npx builder run first-value [--json] [--keep]` creates an empty git repository in
+  a temporary folder, packs the checkout with `npm pack`, installs the tarball there, then runs `npx builder inventory`
+  and `npx builder run claims-check --files README.md` in that project. It prints the wall time and the time of each
+  step. `--json` prints the numbers; `--keep` leaves the folder. Test: `tests/first-value.test.mjs` fails above 300 s
+  and on an accepted unknown flag. The first measurement is in EXPERIMENTS.md §20.
+
 ## [1.1.0] — 2026-11-16
 
 ### Added
