@@ -46,8 +46,8 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder features` pr
 | Scaffold + readiness | golden-path module copy; Definition-of-Done checklist before a PR | `scaffold-module`, `module-readiness-check` skills | yes | yes | yes | stable | [skills/](skills/) |
 | Spec authoring stage | before Phase 1, turns an intent into one `<specs>/<key>.spec.md`: requirement rows, Given/When/Then criteria, an OpenAPI 3 contract, oracle amendments, open questions; a person ratifies it; the pipeline's step 0.7 refuses a draft; `--rows` / `--pack` / `--contract` feed the §3 tracker, the requirement pack and the contract oracle | `spec-author` skill; `npx builder run spec-check <key> [--ratified\|--pack\|--rows\|--contract <out>]` · `features.specAuthoring` | yes | yes | yes | opt-in | [skills/spec-author.md](skills/spec-author.md), [templates/spec.md](templates/spec.md) |
 | Setup / upgrade skill | harness detection, unpack, profile discovery, re-verify | `setup-builder` skill | yes | yes | yes | stable | [skills/setup-builder.md](skills/setup-builder.md) |
-| Builder batches | P2 dispatches the builder at most `rows` board rows at a time | `features.builderBatch` | yes | yes | yes | unmeasured | [EXPERIMENTS §6](EXPERIMENTS.md) |
-| Narrow FIX lane | `FIX-n` rows grouped by file area, each fixer gets only its list; fix-of-fix rate measured | `features.fixLane`; `npx builder run fix-rate` | yes | yes | yes | unmeasured | [EXPERIMENTS §7](EXPERIMENTS.md) |
+| Builder batches | P2 dispatches the builder at most `rows` board rows at a time | `features.builderBatch` | yes | yes | yes | off (set `unmeasured` to switch on) | [EXPERIMENTS §6](EXPERIMENTS.md) |
+| Narrow FIX lane | `FIX-n` rows grouped by file area, each fixer gets only its list; fix-of-fix rate measured | `features.fixLane`; `npx builder run fix-rate` | yes | yes | yes | off (set `unmeasured` to switch on) | [EXPERIMENTS §7](EXPERIMENTS.md) |
 
 ## Records, ledgers and checks
 
@@ -104,6 +104,7 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder features` pr
 | `mutationGate` | a blocking mutation threshold, set from measured runs | any | [§5](EXPERIMENTS.md) |
 | `liteSplit` | the lite split above | any | [§8](EXPERIMENTS.md) |
 | `remoteLanes` | a lane on another machine over plain ssh; git through a shared origin is the only data path (`orch remote …`) | Claude Code workers; ssh and git on both hosts | [§18](EXPERIMENTS.md) |
+| Experiments summary | `npx builder run experiments [--check \| --matrix \| --record <n> --row …]`: one line per EXPERIMENTS section with its decision, the check that refuses a blank or unsupported decision, the trial matrix, and the recording path a scheduled run uses | `scripts/experiments.mjs` | yes | yes | yes | always | [EXPERIMENTS](EXPERIMENTS.md) |
 | `boardLoop` | the loop runner above a board: a fresh worker per pass, runner-owned row choice, gate plus verdict, one commit per passing pass, named stops (`npx builder run board-loop`, `orch loop`) | Claude Code workers | [§17](EXPERIMENTS.md) |
 | `tokenEconomizer` · `planReview` | third-party cost plugin on trial lanes · fresh-context plan review | protocol only | [§9–10](EXPERIMENTS.md) |
 | `rankedSearch` · `riskHint` · `walkPriority` · `ruleNotes` | cheap-model advice, each through the outbound guard, never a gate | protocol only | [§12–15](EXPERIMENTS.md) |

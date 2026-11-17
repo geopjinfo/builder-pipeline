@@ -320,21 +320,10 @@ function experimentRow({ date, commit, passes, rowsDone, rowsTotal, costUsd, tur
   return `| ${date} | ${commit} | ${passes} | ${rate} | ${costUsd === null || costUsd === undefined ? 'unmeasured' : `$${Number(costUsd).toFixed(2)}`} | ${turns} | ${timeouts} | ${silentFailures} | ${note} |`;
 }
 
-/** Append `row` to the table of §17 in `file`; the flag itself is never touched. */
+/** Append `row` to the table of §17 in `file`; the flag itself is never touched (experiments.cjs recordRow). */
 function recordExperiment(file, row) {
   if (!fs.existsSync(file)) throw new Error(`no §17 to record into: ${file} does not exist`);
-  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-  const start = lines.findIndex((l) => /^## 17\./.test(l));
-  if (start === -1) throw new Error(`no §17 in ${file}`);
-  let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
-  if (end === -1) end = lines.length;
-  let lastRow = -1;
-  for (let i = start; i < end; i++) if (lines[i].startsWith('|') && !/^\|[-: |]+\|$/.test(lines[i]) && i > start) lastRow = i;
-  if (lastRow === -1) throw new Error(`no §17 table in ${file} to append to`);
-  const sepIdx = lines.findIndex((l, i) => i > start && i < end && /^\|[-: |]+\|$/.test(l));
-  const at = Math.max(lastRow, sepIdx) + 1;
-  lines.splice(at, 0, row);
-  fs.writeFileSync(file, lines.join('\n'));
+  require('./experiments.cjs').recordRow(file, 17, row);
 }
 
 module.exports = { FEATURE, STOPS, BYPASS, HARNESS_CONFIG, readRows, setStatus, isOpen, bypassFault, capOutput, denyList, denied, changedFiles, commitMessage, runLoop, experimentRow, recordExperiment, statePath, logPath, progressPath };

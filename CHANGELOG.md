@@ -105,57 +105,30 @@ versions independently of any project it is pasted into.
   `tests/orch-plan.test.mjs` (`renderBrief` and `orch brief`), `tests/pack-prose.test.mjs` (the features names).
 
 ### Added — M3 placement over accounts (2.0.0 line)
+### Added — M14 evidence programme (2.0.0 line)
 
-- **`placement()` walks the account list (REQ-301 to REQ-304; plan decisions D1, D3, D24).** A run records its
-  accounts at init (`accounts`, registry order; the state-file field that names a lane's account is still `seat`).
-  Placement filters them by the lane's role (`roles` empty = any; a lane needs module-builder) and content class, puts
-  `pays: api-key` accounts last, and reads percent or USD budgets alike: at or above `budget.hard` the account is not
-  ready and the line names the cap; at or above the soft limit (`budget.soft`, else `softLimitPct`) it takes only a
-  job marked needs-account and a plain job reads `NEEDS-IT-ONLY`; a reading older than `usageStaleMinutes` is
-  unmeasured and only the first account in order may launch unmeasured. `next` prints one `SKIP <account>: <why>` line
-  per account passed over. A 1.0 run state (`seats`, `limits`) is read as synthetic accounts and placed exactly as 1.0
-  did (`tests/orch-placements-golden.test.mjs` stays green); it is never written back in the old shape (REQ-311).
-- **gate-launch over accounts (REQ-303, REQ-305, REQ-308, REQ-313; D12, D31, D49).** The launch line carries the
-  account, its `maxTurns` and `timeoutMinutes` (refused naming the field when missing), the model and `unpriced` when
-  the pricing table has no rate for it, and `--max-budget-usd` as a backstop that is never a cap; `{account}`,
-  `{maxTurns}` and `{timeoutMinutes}` fill the launch command (an account's own `command` wins). A launch on an
-  api-key account writes `account.paid` to events.jsonl and a row to the project's decision log (`paths.decisions`).
-  A hard cap or soft limit raised in §16 since init refuses the launch until a decision-log line carries the account,
-  the field, the old and the new value. An account's `smokeCommand` re-runs before its first launch in a run when the
-  last pass is older than `usageStaleMinutes`; a failure refuses naming the account (`scripts/lib/orch-preflight.cjs`
-  `smokeDue`, `runSmoke`).
-- **`scripts/lib/account-errors.cjs` — `classifyError(response)` (REQ-306; D35, D46).** One rule for every worker
-  adapter: `{ status, headers, body, text }` → `{ kind, until, reason }` with kind LIMIT (429 + Retry-After, or a
-  usage-limit refusal text with a reset time such as "resets at 3pm (Europe/London)"), BUDGET (400/402/403/429 with a
-  budget body, or `resetsAt`), OVERLOAD (529, 503 or an overloaded body; `until` is the next backoff step) or AUTH
-  (401, a 403 auth body, an expired credential); null for a plain job fault. The Claude Code adapter re-exports it.
-  LIMIT, BUDGET and AUTH mark the account not ready until `until` in `<orch root>/accounts-readiness.json`
-  (`scripts/lib/orch-accounts.cjs`); OVERLOAD is never an account state; the global 429 record is unchanged.
-- **The retry rule (REQ-310; D46).** `orch-accounts.cjs` `runWithRetry()`: on LIMIT, BUDGET or AUTH the job runs once
-  more on the next ready account its roles and content class allow, and the status line says so once; on OVERLOAD the
-  same prompt retries on the same account after min(10 s · 2^n, 5 min), at most `overloadRetries` (default 4) times,
-  then `FAILED-OVERLOAD` with the account still ready. The clock and the sleep are injected; no test sleeps.
-- **Readiness inside every orch command (REQ-307, REQ-309; D31).** `status`, `next`, `claim` and `gate-launch` run the
-  full readiness assessment (every probe, every usage reader) before placing; every other command runs it when the
-  record is older than `usageStaleMinutes`. `status` prints one line per account with its state, the reading and its
-  time, and `budget warn <used> of <cap>` at or above the soft limit, on the account line and the lane row (REQ-313).
-- **Shadow placement (REQ-312; D52).** `features.accounts.placement: shadow` computes the account the rule would
-  choose, writes a `placement.shadow` event `{ chosen, reason, placed }` and places the 1.0 way (first ready account by
-  order).
-- **`accounts migrate` rewrites finished run states (REQ-311; D34).** Every state with no LAUNCHED or STALLED lane
-  gains `accounts` and a lane `account` beside its `seat`; the original is archived as `state.json.bak`.
-- Tests: `tests/account-errors.test.mjs` (the four kinds, the per-account record, the retry rule with an injected
-  clock, the budget warning, the decision-log row), `tests/orch-preflight.test.mjs` (the smoke re-run),
-  `tests/orch-state.test.mjs` (placement cases, shadow, the 1.0 fixture, gate-launch refusals),
-  `tests/accounts-migrate.test.mjs` (the state rewrite). The rig puts stub `claude` and `codex` executables first on
-  PATH, so no orch test probes a real harness.
+- **`npx builder run experiments` (REQ-1401, REQ-1402, REQ-1405; D57).** `scripts/experiments.mjs` over
+  `scripts/lib/experiments.cjs`: one line per EXPERIMENTS.md section with its flag, default state and decision; `--check`
+  exits 1 on a section without a decision row or a keep without a number; `--matrix` prints the trial matrix (feature,
+  section, test bed, command, keep rule, decision); `--record <n> --row "| … |"` appends one measurement row to a
+  section's table, the recording path a scheduled run uses. `features` prints the decision beside every experimental or
+  unmeasured flag.
+- **EXPERIMENTS §19: the recorded runs.** Run 1 is the loop runner's dry run on the polyglot test bed (stub worker,
+  3 passes, 0 of 6 rows, stop no-progress, cost unmeasured, fix-rate unmeasured); Run 1b is the same board with a model
+  through the gateway lane (1/6 rows before the prompt named the Read tools, then 6/6 rows for $0.33 in 48 turns), with
+  the files in the project Library and the rows in §17;
+  Run 2 records how the 2.0.0 build itself ran (device and cloud lanes, not the orchestrator) and lists every module PR.
+  Tests: `tests/experiments.test.mjs` (the parser, the check, the matrix, the record path, §19 and §20 shape, a check
+  above 20% false positives must be off by default), `tests/release-check.test.mjs` (§19 names every module PR and the
+  evidence files).
 
-### Changed
+### Changed — M14 (REQ-1403)
 
-- Placement now reads `features.accounts` (the account list, `softLimitPct`, `usageStaleMinutes`, `placement`,
-  `overloadRetries`) instead of the 1.0 `seats` / `limits` keys; `legacyView()` serves only the credit lane's headless
-  runner and the golden fixture. `orch usage <run> <account> <pct | $usd>` and `usage-read <run> [<account>|all]` take
-  account names; `creditContext()` carries `fallbackAccounts`, the api-key fallback chain in registry order.
+- **`builderBatch` and `fixLane` ship off by default.** The §19 run did not measure them, so 2.0.0 sets both to `off`;
+  set a feature to `unmeasured` to switch it on, and its report says the benefit is unmeasured. The template, FEATURES
+  and EXPERIMENTS §6 and §7 say so.
+- **`fix-rate` with no FIX row is unmeasured, never a pass.** It prints `fixLane: unmeasured — no FIX row in N board(s)`
+  and exits 3 (the not-configured code); no `0.0%` is printed. Test: `tests/fix-rate.test.mjs`.
 
 ### Added — M4 content policy and settings scan (2.0.0 line)
 
@@ -434,6 +407,58 @@ versions independently of any project it is pasted into.
 - Tests: `tests/orch-worker-codex.test.mjs` (stub `codex` on `BUILDER_CODEX_WORKER_BIN`,
   `tests/fixtures/orch/stub-codex.cjs`) and `tests/orch-worker-claude-code.test.mjs` (the stub worker). The credit
   lane's own exports are unchanged.
+### Added — M3 placement over accounts (2.0.0 line)
+
+- **`placement()` walks the account list (REQ-301 to REQ-304; plan decisions D1, D3, D24).** A run records its
+  accounts at init (`accounts`, registry order; the state-file field that names a lane's account is still `seat`).
+  Placement filters them by the lane's role (`roles` empty = any; a lane needs module-builder) and content class, puts
+  `pays: api-key` accounts last, and reads percent or USD budgets alike: at or above `budget.hard` the account is not
+  ready and the line names the cap; at or above the soft limit (`budget.soft`, else `softLimitPct`) it takes only a
+  job marked needs-account and a plain job reads `NEEDS-IT-ONLY`; a reading older than `usageStaleMinutes` is
+  unmeasured and only the first account in order may launch unmeasured. `next` prints one `SKIP <account>: <why>` line
+  per account passed over. A 1.0 run state (`seats`, `limits`) is read as synthetic accounts and placed exactly as 1.0
+  did (`tests/orch-placements-golden.test.mjs` stays green); it is never written back in the old shape (REQ-311).
+- **gate-launch over accounts (REQ-303, REQ-305, REQ-308, REQ-313; D12, D31, D49).** The launch line carries the
+  account, its `maxTurns` and `timeoutMinutes` (refused naming the field when missing), the model and `unpriced` when
+  the pricing table has no rate for it, and `--max-budget-usd` as a backstop that is never a cap; `{account}`,
+  `{maxTurns}` and `{timeoutMinutes}` fill the launch command (an account's own `command` wins). A launch on an
+  api-key account writes `account.paid` to events.jsonl and a row to the project's decision log (`paths.decisions`).
+  A hard cap or soft limit raised in §16 since init refuses the launch until a decision-log line carries the account,
+  the field, the old and the new value. An account's `smokeCommand` re-runs before its first launch in a run when the
+  last pass is older than `usageStaleMinutes`; a failure refuses naming the account (`scripts/lib/orch-preflight.cjs`
+  `smokeDue`, `runSmoke`).
+- **`scripts/lib/account-errors.cjs` — `classifyError(response)` (REQ-306; D35, D46).** One rule for every worker
+  adapter: `{ status, headers, body, text }` → `{ kind, until, reason }` with kind LIMIT (429 + Retry-After, or a
+  usage-limit refusal text with a reset time such as "resets at 3pm (Europe/London)"), BUDGET (400/402/403/429 with a
+  budget body, or `resetsAt`), OVERLOAD (529, 503 or an overloaded body; `until` is the next backoff step) or AUTH
+  (401, a 403 auth body, an expired credential); null for a plain job fault. The Claude Code adapter re-exports it.
+  LIMIT, BUDGET and AUTH mark the account not ready until `until` in `<orch root>/accounts-readiness.json`
+  (`scripts/lib/orch-accounts.cjs`); OVERLOAD is never an account state; the global 429 record is unchanged.
+- **The retry rule (REQ-310; D46).** `orch-accounts.cjs` `runWithRetry()`: on LIMIT, BUDGET or AUTH the job runs once
+  more on the next ready account its roles and content class allow, and the status line says so once; on OVERLOAD the
+  same prompt retries on the same account after min(10 s · 2^n, 5 min), at most `overloadRetries` (default 4) times,
+  then `FAILED-OVERLOAD` with the account still ready. The clock and the sleep are injected; no test sleeps.
+- **Readiness inside every orch command (REQ-307, REQ-309; D31).** `status`, `next`, `claim` and `gate-launch` run the
+  full readiness assessment (every probe, every usage reader) before placing; every other command runs it when the
+  record is older than `usageStaleMinutes`. `status` prints one line per account with its state, the reading and its
+  time, and `budget warn <used> of <cap>` at or above the soft limit, on the account line and the lane row (REQ-313).
+- **Shadow placement (REQ-312; D52).** `features.accounts.placement: shadow` computes the account the rule would
+  choose, writes a `placement.shadow` event `{ chosen, reason, placed }` and places the 1.0 way (first ready account by
+  order).
+- **`accounts migrate` rewrites finished run states (REQ-311; D34).** Every state with no LAUNCHED or STALLED lane
+  gains `accounts` and a lane `account` beside its `seat`; the original is archived as `state.json.bak`.
+- Tests: `tests/account-errors.test.mjs` (the four kinds, the per-account record, the retry rule with an injected
+  clock, the budget warning, the decision-log row), `tests/orch-preflight.test.mjs` (the smoke re-run),
+  `tests/orch-state.test.mjs` (placement cases, shadow, the 1.0 fixture, gate-launch refusals),
+  `tests/accounts-migrate.test.mjs` (the state rewrite). The rig puts stub `claude` and `codex` executables first on
+  PATH, so no orch test probes a real harness.
+
+### Changed
+
+- Placement now reads `features.accounts` (the account list, `softLimitPct`, `usageStaleMinutes`, `placement`,
+  `overloadRetries`) instead of the 1.0 `seats` / `limits` keys; `legacyView()` serves only the credit lane's headless
+  runner and the golden fixture. `orch usage <run> <account> <pct | $usd>` and `usage-read <run> [<account>|all]` take
+  account names; `creditContext()` carries `fallbackAccounts`, the api-key fallback chain in registry order.
 
 ### Added — M2a readiness assessment (2.0.0 line)
 
@@ -493,6 +518,32 @@ versions independently of any project it is pasted into.
 - **Golden placement fixture (`tests/fixtures/orch-placements-1.0.json`, REQ-106).** 36 placement decisions of the
   1.0 seat rule, captured before the account registry replaces it; `tests/orch-placements-golden.test.mjs` holds the
   1.0 rule to them and `accounts migrate` is proven against the same file.
+### EXPERIMENTS measurement sections (REQ-801, REQ-901, REQ-1211, REQ-1401)
+
+- **EXPERIMENTS.md §16 to §20 and a decision row in every section.** §16 `familyReview`, §17 `boardLoop` and §18
+  `remoteLanes` state what the 2.0 build adds, how to opt in, the exact measurement and the keep or drop rule. §19 is
+  a reserved skeleton; §20 holds the kit's own measurements (time to first value, false-positive rates of the
+  default-on checks) with empty tables. Every section §1 to §20 ends with a dated
+  `**Decision (<date>).** keep | drop | not yet measured — <number or "no measurement">` row; today no section says
+  keep, because no measured criterion holds yet. Test: `tests/experiments.test.mjs` (sections 1 to 20 present, a
+  non-blank decision row in each, a keep row never on "no measurement").
+
+### Time to first value (REQ-1404)
+
+- **`first-value` script and test.** `npx builder run first-value [--json] [--keep]` creates an empty git repository in
+  a temporary folder, packs the checkout with `npm pack`, installs the tarball there, then runs `npx builder inventory`
+  and `npx builder run claims-check --files README.md` in that project. It prints the wall time and the time of each
+  step. `--json` prints the numbers; `--keep` leaves the folder. Test: `tests/first-value.test.mjs` fails above 300 s
+  and on an accepted unknown flag. The first measurement is in EXPERIMENTS.md §20.
+
+### False-positive rates of the default-on checks (REQ-1405)
+
+- **EXPERIMENTS.md §20 false-positive table filled.** `check-ledgers`, `claims-check`, `output-check`, `fix-rate` and
+  `inventory` ran on four public repositories (`expressjs/express`, `fastify/fastify`, `pallets/flask`,
+  `ruvnet/claude-flow`, shas in the table). Every finding was classified by hand. Rates: 0% for `check-ledgers` and
+  `output-check`, 1.1% for `inventory` (two items on `claude-flow`: a skill folder without `SKILL.md`, a note listed
+  as an agent); `claims-check` and `fix-rate` produced no finding on repositories without a pipeline run. No check is
+  above 20%. Doc-only change; `tests/experiments.test.mjs` keeps §20's decision row checked.
 
 ## [1.1.0] — 2026-11-16
 

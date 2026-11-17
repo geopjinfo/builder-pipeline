@@ -129,6 +129,10 @@ const accountPaths = require('./lib/account-paths.cjs');
 const remote = require('./lib/orch-remote.cjs');
 const orchLoop = require('./lib/orch-loop.cjs');
 const boardLoop = require('./lib/board-loop.cjs');
+const orchLoop = require('./lib/orch-loop.cjs');
+const boardLoop = require('./lib/board-loop.cjs');
+const acct = require('./lib/orch-accounts.cjs');
+const accountPaths = require('./lib/account-paths.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
 const PLACING_CMDS = new Set(['status', 'next', 'claim', 'gate-launch']);

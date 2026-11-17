@@ -29,7 +29,8 @@ test('an off feature says "not configured" and does not run', () => {
 test('a feature the profile never mentions takes its default, and the default is stated', () => {
   const { settings } = profile.parse(sample);
   assert.equal(profile.feature(settings, 'claims').enabled, true);
-  assert.match(profile.feature(settings, 'builderBatch').line, /unmeasured/);
+  assert.equal(profile.feature(settings, 'builderBatch').line, 'builderBatch: not configured'); // off by default since 2.0.0 (REQ-1403)
+  assert.match(profile.feature({ features: { builderBatch: { state: 'unmeasured' } } }, 'builderBatch').line, /unmeasured/);
   assert.match(profile.feature(settings, 'livePage').line, /experimental — not enabled/);
 });
 
