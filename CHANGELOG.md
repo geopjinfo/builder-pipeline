@@ -5,6 +5,17 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M0 accounts spec and decisions (2.0.0 line)
+
+- **Accounts spec (`specs/accounts.spec.md`).** The requirements oracle for the 2.0.0 "accounts" release: REQ-101 to
+  REQ-1406 in EARS phrasing with an INVARIANTS block and an Amendments table (plan decision D45), 151 Given/When/Then
+  criteria, ratified by the owner on 16 November 2026. Checked with the kit's own spec stage: the kit now carries a
+  maintainer-only `PIPELINE_PROFILE.md` with `features.specAuthoring` on, a `DECISIONS.md` (D1 to D60) and a
+  `DEFERRED_TASKS.md`; none of them ships (`tests/package.test.mjs` skip list, `tests/pack-prose.test.mjs` scan).
+- **Golden placement fixture (`tests/fixtures/orch-placements-1.0.json`, REQ-106).** 36 placement decisions of the
+  1.0 seat rule, captured before the account registry replaces it; `tests/orch-placements-golden.test.mjs` holds the
+  1.0 rule to them and `accounts migrate` is proven against the same file.
+
 ## [1.1.0] — 2026-11-16
 
 ### Added
