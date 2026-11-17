@@ -3,6 +3,11 @@
  * scripts/lib/instruction-lint.cjs.
  *
  *   npx builder run instruction-lint                  the gate over every file in `files`
+ *   npx builder run instruction-lint a.md b.md       exactly these files in place of `files`. With the feature off they
+ *                                                     are linted with the default settings and no baseline, and the
+ *                                                     first line says `instructionLint: not configured — checking
+ *                                                     <files> with defaults` (REQ-701); a named file that does not
+ *                                                     exist, or an unknown flag, is exit 2 (REQ-703)
  *   npx builder run instruction-lint --files a b     only these files (the edit hook). No figure command runs in this
  *                                                     mode (see below); sets naming other files are skipped; the
  *                                                     ratchet still applies
@@ -16,7 +21,7 @@
  * label? }: the pattern's one capture group is the claimed value and the command, run from the project root, prints
  * the true one. `sets` are { name, members | membersFrom: { dir, pattern }, files }. `baseline` is a JSON file
  * { counts: {path: n}, history: {path: n} }; null = the ratchet is reported, never enforced.
- * Off → "instructionLint: not configured", exit 0.
+ * Off → "instructionLint: not configured", exit 0 — also with `--files`, so the edit hook is unchanged (REQ-702).
  *
  * Exit 0 PASS, or the feature is off · 1 FAIL · 2 an invalid profile or bad arguments.
  */
@@ -32,8 +37,25 @@ const profile = require('./lib/profile.cjs');
 
 const args = process.argv.slice(2);
 const flag = (f) => args.includes(f);
-const onlyIdx = args.indexOf('--files');
-const only = onlyIdx >= 0 ? args.slice(onlyIdx + 1).filter((a) => !a.startsWith('--')).map((p) => p.replace(/\\/g, '/').replace(/^\.\//, '')) : null;
+const USAGE = `usage: ${runHint('instruction-lint')} [<file.md> …] [--files <path> …] [--list] [--refresh]`;
+const die = (message) => {
+  console.error(`instruction-lint: ${message} — ${USAGE}`);
+  process.exit(2);
+};
+// `--files a b` (the edit hook) filters the feature's `files`; a bare path names the files to lint in place of `files`
+// (REQ-701, DL-6 of the spec). An unknown flag is refused, never read as a file (REQ-703).
+const clean = (p) => p.replace(/\\/g, '/').replace(/^\.\//, '');
+let only = null;
+const named = [];
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === '--files') {
+    only = [];
+    while (i + 1 < args.length && !args[i + 1].startsWith('--')) only.push(clean(args[++i]));
+  } else if (a === '--list' || a === '--refresh') continue;
+  else if (a.startsWith('--')) die(`unknown flag "${a}"`);
+  else named.push(clean(a));
+}
 
 const root = process.cwd();
 const loaded = profile.load(root);
@@ -43,11 +65,16 @@ if (loaded.errors.length > 0) {
   process.exit(2);
 }
 const feature = profile.feature(loaded.settings, 'instructionLint');
-if (!feature.enabled) {
+if (!feature.enabled && named.length === 0) {
+  // No named file: the gate and the edit hook record "not configured" as before (REQ-702).
   console.log(feature.line);
   process.exit(0);
 }
-const cfg = feature.config;
+for (const p of named) if (!existsSync(p) || !statSync(p).isFile()) die(`${p} not found (a named file must exist)`);
+// Named files need nothing from the profile: the lint runs with the default settings and no baseline, and says so, so
+// an instruction file can be checked in a project that never adopted the pipeline (REQ-701).
+if (!feature.enabled) console.log(`${feature.line} — checking ${named.join(', ')} with defaults`);
+const cfg = named.length ? { ...feature.config, files: named } : feature.config;
 
 const SKIP = new Set(['node_modules', '.git', 'dist', 'coverage', 'worktrees']);
 // Tokens first, so the `*` of one expansion is never rewritten by the next.
