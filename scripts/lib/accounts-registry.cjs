@@ -8,7 +8,7 @@
  * paths and command templates only — never a key (D2).
  *
  * SHAPE. `features.accounts.accounts.<name>`:
- *   worker          claude-code | codex | session (the orchestrating session itself, never spawned; at most one)
+ *   worker          claude-code | codex | antigravity | session (the orchestrating session itself, never spawned; at most one)
  *   pays            subscription | gateway | free | api-key (one way of paying per account, never two)
  *   content         public | scratch | any | [path roots]            (M4 enforces it at launch)
  *   roles           subset of ROLES; [] or absent = every role
@@ -34,7 +34,8 @@
  */
 const { NAME_RULE, RESERVED, nameProblem } = require('./account-paths.cjs');
 
-const WORKERS = Object.freeze(['claude-code', 'codex', 'session']);
+/** The workers an account may name. Antigravity signs in through its own app, has no key mode and takes no 1.0 seat (D26, D53). */
+const WORKERS = Object.freeze(['claude-code', 'codex', 'session', 'antigravity']);
 const PAYS = Object.freeze(['subscription', 'gateway', 'free', 'api-key']);
 const CONTENT = Object.freeze(['public', 'scratch', 'any']);
 const FAMILIES = Object.freeze(['anthropic', 'openai', 'google', 'other']);
@@ -157,6 +158,7 @@ function validateAccounts(settings, opts = {}) {
     if (a.baseUrl && a.pays === 'subscription') errors.push(`${atA('baseUrl')}: E_BASEURL_SUB — a subscription account never goes through a gateway (drop baseUrl, or set pays to "gateway")`);
     if (a.baseUrl && !/^https?:\/\/\S+$/i.test(a.baseUrl)) errors.push(`${atA('baseUrl')}: an http(s) URL`);
     if (a.pays === 'api-key' && a.worker === 'session') errors.push(`${atA('pays')}: the orchestrating session is a plan account; an api-key account needs a headless worker`);
+    if (a.pays === 'api-key' && a.worker === 'antigravity') errors.push(`${atA('pays')}: Antigravity has no key mode (it signs in through its own app); pays subscription or free`);
     if (a.command && !a.command.includes('{brief}')) errors.push(`${atA('command')}: must contain {brief}`);
     if (a.maxTurns !== null && !positive(a.maxTurns, true)) errors.push(`${atA('maxTurns')}: null, or a positive integer`);
     if (a.timeoutMinutes !== null && !positive(a.timeoutMinutes)) errors.push(`${atA('timeoutMinutes')}: null, or a number > 0`);
@@ -241,6 +243,8 @@ function legacyView(settings) {
   let launchCommand = null;
   let credit = legacy.credit;
   for (const a of accounts) {
+    // An Antigravity account runs as a wrapper only in 2.0.0 (D26): it is never a 1.0 seat or the credit lane.
+    if (a.worker === 'antigravity') continue;
     if (a.worker === 'session' && !map.primary) {
       seats.push('primary');
       map.primary = a.name;

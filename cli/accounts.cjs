@@ -1,7 +1,11 @@
 'use strict';
 /*
- * `builder accounts <subcommand>` — the accounts command (plan M1 and M10; REQ-108, REQ-1001 to REQ-1006, REQ-106).
+ * `builder accounts [<subcommand>]` — the accounts command (plan M1, M10 and M2b; REQ-108, REQ-1001 to REQ-1006,
+ * REQ-106, REQ-204, REQ-205).
  *
+ *   (none) [--json]              the readiness report, modelled on `gh auth status`: one block per account from the
+ *                                probes and the assessment; exit 1 when any account is not ready, 0 with --json;
+ *                                `accounts: not configured` (exit 0) with the feature off or no account (REQ-204, REQ-205)
  *   migrate [--dry-run]          rewrite the 1.0 seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into
  *                                `features.accounts` (REQ-103, REQ-104, REQ-106; D33)
  *   add <name> --worker --pays … write one account into §16 and create its dir (REQ-1001)
@@ -34,6 +38,8 @@ const accountPaths = () => require('../scripts/lib/account-paths.cjs');
 const leases = () => require('../scripts/lib/account-lease.cjs');
 const secrets = () => require('../scripts/lib/account-secrets.cjs');
 const profileLib = () => require('../scripts/lib/profile.cjs');
+const assessment = () => require('../scripts/lib/accounts.cjs');
+const probes = () => require('../scripts/lib/account-probes.cjs');
 
 /** Run ids whose state file holds a live lane. Reads only the state.json of each run under .pipeline/orchestrator/runs. */
 function liveRuns(cwd, env = process.env) {
@@ -492,18 +498,103 @@ function cmdList(ctx, argv) {
   for (const c of cells) console.log(c.map((v, i) => (i === c.length - 1 ? v : v.padEnd(widths[i]))).join('  '));
 }
 
-const USAGE = 'accounts add <name> --worker <w> --pays <p> [options] | note <name> <text…> | key <name> [--remove] | remove <name> | list [--json] | migrate [--dry-run]';
+// --------------------------- the report (REQ-204, REQ-205) ----------------------------
+
+/** The key file's presence and mode and the lease state for one account — never the key's value. */
+function keyAndLease(name, account, env = process.env, platform = process.platform) {
+  const home = accountPaths().home(env);
+  const p = accountPaths().paths(home, name, account);
+  const keyFile = account.worker === 'codex' ? p.codexAuthFile : p.keyFile;
+  const key = secrets().assessKey(keyFile, { platform });
+  const lease = leases().state(home, name);
+  return {
+    key: { present: key.present, mode: key.mode, acl: key.acl, file: path.basename(keyFile) },
+    lease: lease.state === 'none' ? { state: 'none' } : { state: lease.state, pid: lease.lease ? lease.lease.pid : null, lane: lease.lease ? lease.lease.lane : null },
+  };
+}
+
+/**
+ * Gather the facts of every account (probes, smoke, version, usage readers) and assess them. Impure: runs the
+ * probes under their timeout in the scrubbed env. Returns the assessments in assessAll's order, each with its key
+ * and lease facts and the readers' notes.
+ */
+function reportRows(settings, env = process.env) {
+  const home = accountPaths().home(env);
+  const readings = {};
+  const extra = {};
+  for (const a of registry().list(settings)) {
+    const p = accountPaths().paths(home, a.name, a);
+    const got = probes().collect(a, p, { env });
+    readings[a.name] = { probes: got.probes, usage: got.usage };
+    extra[a.name] = { content: a.content, ...keyAndLease(a.name, a, env), notes: got.notes || [] };
+  }
+  return assessment().assessAll(settings, readings).map((a) => ({ ...a, ...extra[a.name] }));
+}
+
+/** One `gh auth status`-style block per account. Every string is already redacted by the assessment. */
+function renderBlock(a) {
+  const used = a.budget && a.budget.used;
+  const usage = assessment().renderUsage(used) + (used && used.reader ? ` via ${used.reader}` : '');
+  const content = Array.isArray(a.content) ? a.content.join(',') : a.content;
+  const lines = [
+    `${a.name}  (${a.worker}, pays ${a.pays})`,
+    `  ${assessment().renderState(a)}`,
+    `  - content: ${content}`,
+    `  - roles: ${a.roles && a.roles.length ? a.roles.join(', ') : 'all'}`,
+    `  - usage: ${usage}`,
+    `  - version: ${a.version}`,
+    `  - key: ${a.key.present ? `present (${a.key.file}${a.key.mode ? `, mode ${a.key.mode}` : a.key.acl ? `, ${a.key.acl}` : ''})` : 'absent'}`,
+    `  - lease: ${a.lease.state === 'none' ? 'none' : `${a.lease.state} (pid ${a.lease.pid}${a.lease.lane ? `, lane ${a.lease.lane}` : ''})`}`,
+  ];
+  if (a.until) lines.push(`  - until: ${a.until}`);
+  if (a.note) lines.push(`  - note: ${a.note}`);
+  for (const n of a.notes || []) lines.push(`  - note: ${n}`);
+  return lines.join('\n');
+}
+
+/**
+ * `accounts [--json]`: the report. The feature off, no profile or no account prints `accounts: not configured` and
+ * exits 0 — that line is never a pass (REQ-205). It reads nothing of features.orchestrator (REQ-204).
+ */
+function cmdReport(ctx, argv) {
+  const json = argv.includes('--json');
+  const unknown = argv.filter((a) => a !== '--json');
+  if (unknown.length) ctx.die(`accounts: unknown option(s): ${unknown.join(' ')} — usage: ${USAGE}`);
+  const loaded = profileLib().load(ctx.CWD);
+  const f = profileLib().feature(loaded.settings, 'accounts');
+  const names = registry().list(loaded.settings).map((a) => a.name);
+  if (!f.enabled || !names.length) {
+    console.log('accounts: not configured');
+    return;
+  }
+  if (loaded.errors.length) ctx.die(`accounts: ${PROFILE} does not validate:\n  ${loaded.errors.join('\n  ')}`);
+  const rows = reportRows(loaded.settings);
+  if (json) {
+    console.log(JSON.stringify(rows, null, 2));
+    return;
+  }
+  for (const a of rows) console.log(`${renderBlock(a)}\n`);
+  const notReady = rows.filter((a) => a.state !== 'ready');
+  if (notReady.length) {
+    console.log(`accounts: ${notReady.length} of ${rows.length} not ready (${notReady.map((a) => `${a.name}: ${a.state}`).join('; ')})`);
+    process.exit(1);
+  }
+  console.log(`accounts: ${rows.length} ready`);
+}
+
+const USAGE = 'accounts [--json] | add <name> --worker <w> --pays <p> [options] | note <name> <text…> | key <name> [--remove] | remove <name> | list [--json] | migrate [--dry-run]';
 
 function cmdAccounts(ctx, argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
+  if (!sub || sub.startsWith('--')) return cmdReport(ctx, argv);
   if (sub === 'migrate') return cmdMigrate(ctx, rest);
   if (sub === 'add') return cmdAdd(ctx, rest);
   if (sub === 'note') return cmdNote(ctx, rest);
   if (sub === 'key') return cmdKey(ctx, rest).catch((e) => ctx.die(`accounts key: ${e && e.message ? e.message : e}`));
   if (sub === 'remove') return cmdRemove(ctx, rest);
   if (sub === 'list') return cmdList(ctx, rest);
-  return ctx.die(`accounts: ${sub ? `unknown subcommand "${sub}"` : 'a subcommand is needed'} — usage: ${USAGE}`);
+  return ctx.die(`accounts: unknown subcommand "${sub}" — usage: ${USAGE}`);
 }
 
-module.exports = { cmdAccounts, migrateText, liveRuns, parseArgs, accountFromFlags, listRow, PROFILE, USAGE };
+module.exports = { cmdAccounts, migrateText, liveRuns, parseArgs, accountFromFlags, listRow, reportRows, renderBlock, PROFILE, USAGE };

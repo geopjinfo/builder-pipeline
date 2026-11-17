@@ -167,7 +167,9 @@ function assess(account, probes = {}, usage = null, now = Date.now(), settings =
   const p = isObject(probes) ? probes : {};
   const cfg = { ...registry.FEATURE_DEFAULTS, ...(isObject(settings) ? settings : {}) };
   const nowMs = ms(now);
-  const signIn = (p.auth && typeof p.auth.signIn === 'string' && p.auth.signIn) || SIGN_IN[a.worker] || null;
+  // A probe that names its sign-in wins; one that says `signIn: null` has no command to run (a gateway closed by
+  // policy, an app sign-in); a probe with no opinion falls back to the worker's own command.
+  const signIn = isObject(p.auth) && 'signIn' in p.auth ? (typeof p.auth.signIn === 'string' && p.auth.signIn ? p.auth.signIn : null) : SIGN_IN[a.worker] || null;
 
   let state;
   let reason = null;

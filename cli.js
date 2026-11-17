@@ -1642,6 +1642,7 @@ function main() {
                                         the core files come with any group; upgrade repeats what builder.lock.json recorded)
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
+    accounts [--json]                   the readiness report (one block per account, as gh auth status): state with its reason, usage with its source, version, key present or absent, lease; exit 1 when any account is not ready, 0 with --json; "accounts: not configured" with the feature off
     accounts add <name> --worker <w> --pays <p> [--content ...] [--roles a,b] [--family ...] [--note "..."] [--config-dir ...] [--command "..."] [--base-url ...] [--budget-hard N --budget-kind percent|usd]
                                         write one account into features.accounts (§16) and make its folder under the accounts home
     accounts note <name> <text>         replace the account's note

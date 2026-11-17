@@ -194,6 +194,36 @@ versions independently of any project it is pasted into.
   `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
 - **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
   token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
+### Added — M2b accounts report and foreign probes (2.0.0 line)
+
+- **`npx builder accounts [--json]` — the readiness report (REQ-204, REQ-205; D7, D25).** With no subcommand the
+  command runs every account's probes and readers and prints one block per account in the shape of `gh auth status`:
+  the name, worker and way of paying; the state line from the assessment (`ready`, `ready (read-only: smoke stale)`,
+  `not ready (<reason>, run <sign-in>)`, `unmeasured (<reason>)`); content, roles, usage with its source, time and
+  reader, version, key present or absent (the file and its mode, never the value), lease state, `until` for an AUTH
+  reason, the note and the readers' notes. Blocks follow `assessAll`'s order (ready first, not ready last). The exit
+  code is 1 when any account is not ready or unmeasured, 0 with `--json` (the assessment objects plus `content`, `key`,
+  `lease`, `notes`). With `features.accounts` off, no profile or no account it prints `accounts: not configured` and
+  exits 0, never a pass. It reads nothing of `features.orchestrator`, so it works with the orchestrator off. `list`
+  stays the registry view and runs no probe.
+- **Antigravity and gateway probes (`scripts/lib/account-probes.cjs`, REQ-208; D53).** Worker `antigravity` joins the
+  registry (`WORKERS`): no key mode (`pays: api-key` is refused), never a 1.0 seat (D26). Its probe runs the models
+  listing (`agy models`, the one `ANTIGRAVITY_BIN` constant, or the account's `readyCommand`) under the timeout: exit 0
+  with a model listed is ready, the words "sign in" in the output are not ready with a reason that names the sign-in,
+  a timeout or a missing binary is unmeasured. A gateway account (`pays: gateway`, any worker) is ready when its
+  wrapper (`bin/<name>` or `bin/<name>.ps1`) exists, carries no `CLOSED_MARKER` line (`# builder-pipeline: closed`,
+  the refusal wrapper M11 writes) and its gateway key is present (the key file, or `auth.json` for Codex) — presence
+  only, never read.
+- **Snapshot reader (REQ-203 remainder).** `collect()` reads `budget.file` (absolute, or relative to the accounts
+  home) through `parseGatewaySnapshot`, `budget.key` selecting `keys.<key>`, as a measured reading dated by the file's
+  mtime; a missing or unreadable file, or a key with no spend, gives no reading and one note in `collect().notes`,
+  never a throw.
+- **Tests.** `accounts-report` (cli.js in a temp project with `BUILDER_ACCOUNTS_HOME` inside it and stubs as the whole
+  PATH: not configured exit 0, orchestrator off, a not-ready account exit 1, `--json` exit 0 with the shape, no key or
+  env value in the output, `list` runs no probe), `accounts-probes` (Antigravity ready / sign in / timeout / missing /
+  `readyCommand`; gateway wrapper, closed marker, key presence, ps1 and Codex branches; the snapshot wiring), and the
+  registry rule in `orch-state`. Usage text and the README command row name the report.
+
 ### Added — M10 accounts command (2.0.0 line)
 
 - **`npx builder accounts add | note | key | key --remove | remove | list` (REQ-108, REQ-1001 to REQ-1007; D2, D9, D19,
@@ -254,6 +284,35 @@ versions independently of any project it is pasted into.
 - Tests: `tests/orch-worker-codex.test.mjs` (stub `codex` on `BUILDER_CODEX_WORKER_BIN`,
   `tests/fixtures/orch/stub-codex.cjs`) and `tests/orch-worker-claude-code.test.mjs` (the stub worker). The credit
   lane's own exports are unchanged.
+
+### Added — M2a readiness assessment (2.0.0 line)
+
+- **`scripts/lib/accounts.cjs`: a pure readiness assessment (REQ-201, REQ-202, REQ-206, REQ-207, REQ-209, REQ-211,
+  REQ-212; plan decisions D3, D46, D51).** `assess(account, probes, usage, now)` gives one verdict per account: name,
+  state (`ready`, `not ready` with a reason, or `unmeasured`), note, roles, version, budget with its `used` reading,
+  and `until` for an AUTH reason. A credential that expires inside `authMinMinutes` (default 120) or has expired reads
+  `not ready (AUTH until <time>, run claude auth login)`; no expiry leaves the state unchanged. An account with
+  `smokeCommand` whose last pass is older than `smokeMaxAgeHours` reads `ready (read-only: smoke stale)`. A key
+  account whose spend nobody can read reads `ready (balance unmeasured)` and `assessAll(settings, readings, now)`
+  sorts it last, ready accounts first. Every string the assessment carries passes the outbound guard's secret shapes
+  and a match becomes `<redacted: <kind>>`, never the text.
+- **Usage sources (REQ-203, REQ-210, REQ-212).** Each reading carries `source` (`measured`, `estimate`,
+  `unmeasured`) and `at`; measured beats estimate; `renderLine` prints `42 % (measured 09:14)`, `~40 % (estimate
+  09:30)`, `unpriced (estimate …)` for a model with no pinned rate, and `unmeasured` for no reading, never `0 %`.
+  Readers: `usageCommand` text (`$X of $Y`), the gateway snapshot JSON (`spend`, `maxBudget`, `budgetResetAt`), and
+  the Codex session `rate_limits` (`scripts/lib/codex-ratelimits.cjs`: the last `token_count` record of the newest
+  rollout under `<CODEX_HOME>/sessions/**`; the window closest to its limit binds). A Claude plan account has no
+  reader and stays unmeasured.
+- **Built-in probes (`scripts/lib/account-probes.cjs`, REQ-208, REQ-211, REQ-202).** Claude Code: `claude auth
+  status` JSON (`authMethod`, `configDirectory`; exit 1 = signed out) or the account's key file plus `apiKeyHelper` in
+  its settings.json (the key file is tested for presence only). Codex: `codex login status` read from stderr and the
+  exit code (ChatGPT login, API key, not logged in; no plan tier), with the expiry read from `auth.json`. Probes run
+  with `spawnSync` under a timeout in an allowlisted env (`PATH`, `HOME`, locale, plus `CLAUDE_CONFIG_DIR` or
+  `CODEX_HOME` = the account's config dir; never the parent's `ANTHROPIC_*`, `OPENAI_*`, `CLAUDE*` or `CODEX*`).
+  `collect(account, paths, io)` gathers the probe, the smoke record, `versionCommand` and every usage reader for
+  `assess`. The `PROBES` map is keyed by worker; Antigravity and gateway probes (M2b) are its named extension points.
+  Tests: `tests/accounts.test.mjs`, `tests/accounts-probes.test.mjs` (stub executables in a temp dir, no real
+  harness runs), `tests/codex-ratelimits.test.mjs`.
 
 ### Added — M1 account registry (2.0.0 line)
 
