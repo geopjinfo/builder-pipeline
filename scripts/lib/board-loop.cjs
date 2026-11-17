@@ -237,7 +237,12 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     const allow = ['Read', 'Grep', 'Glob', 'Edit(./**)', 'Write(./**)', `Bash(${gateCmd})`, 'Bash(git status)', 'Bash(git diff)'];
     const denyEntries = deny.flatMap((d) => [`Edit(${d}${d.endsWith('/') ? '**' : ''})`, `Write(${d}${d.endsWith('/') ? '**' : ''})`]);
     fs.mkdirSync(path.dirname(pin), { recursive: true });
-    fs.writeFileSync(pin, JSON.stringify({ ...claude.settings({ allow, deny: denyEntries }), hooks: claude.gateHookEntries({ gateCommand: gateCmd, hookScript: path.join(__dirname, '..', '..', 'hooks', 'claude-code', 'lane-gate.cjs') }) }, null, 2));
+    // D69: the gate command is also accepted with a `cd <own worktree> &&` prefix or one `| head/tail -n N`, through the
+    // PreToolUse hook; everything else stays with the exact allow list.
+    const shellAllow = path.join(__dirname, '..', '..', 'hooks', 'claude-code', 'lane-shell-allow.cjs');
+    const q = (x) => (/^[\w@%+=:,./-]+$/.test(x) ? x : `'${String(x).replace(/'/g, `'\\''`)}'`);
+    const preToolUse = [{ matcher: 'Bash', hooks: [{ type: 'command', command: `node ${q(shellAllow)} --gate ${q(gateCmd)} --worktree ${q(cwd)} --marker ${claude.KIT_HOOK_MARKER}`, timeout: 20 }] }];
+    fs.writeFileSync(pin, JSON.stringify({ ...claude.settings({ allow, deny: denyEntries }), hooks: { PreToolUse: preToolUse, ...claude.gateHookEntries({ gateCommand: gateCmd, hookScript: path.join(__dirname, '..', '..', 'hooks', 'claude-code', 'lane-gate.cjs') }) } }, null, 2));
     const childEnvironment = childEnv(env, { worker: 'claude-code', configDir: p.configDir });
     if (env.BUILDER_LOOP_WORKER_BIN) for (const k of Object.keys(env)) if (k.startsWith('BUILDER_LOOP_STUB_')) childEnvironment[k] = env[k];
     const args = claude.launchArgs({ model: account.model || null, maxTurns: cfg.maxTurnsPerPass, settingsFile: pin, schema: VERDICT_SCHEMA });
