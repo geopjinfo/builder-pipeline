@@ -151,13 +151,57 @@ describe('builder accounts migrate', () => {
     assert.equal(run(proj, ['migrate']).status, 0);
   });
 
-  test('REQ-311: a finished 1.0 run state is read unchanged after the migration (state keeps its seats and limits)', () => {
+  test('red: REQ-311 migrate rewrites a finished 1.0 run state to name accounts (seat kept beside account) and archives the old file as state.json.bak (AC-311b)', () => {
     const proj = project();
-    const runs = join(proj, '.pipeline', 'orchestrator', 'runs', 'old');
-    mkdirSync(runs, { recursive: true });
-    const old = { runId: 'old', seats: ['secondary', 'primary'], limits: { secondary: 70, primary: 50 }, lanes: { a: { status: 'MERGED', seat: 'secondary' } } };
-    writeFileSync(join(runs, 'state.json'), JSON.stringify(old));
+    const runs = join(proj, '.pipeline', 'orchestrator', 'runs');
+    mkdirSync(join(runs, 'old'), { recursive: true });
+    const old = { runId: 'old', seats: ['secondary', 'primary'], limits: { secondary: 70, primary: 50 }, usage: { secondary: { pct: 40, at: '2026-10-01T11:55:00.000Z' } }, lanes: { a: { status: 'MERGED', seat: 'secondary' }, b: { status: 'FAILED', seat: null } } };
+    const text = JSON.stringify(old);
+    writeFileSync(join(runs, 'old', 'state.json'), text);
+    mkdirSync(join(runs, 'new'), { recursive: true });
+    const already = { runId: 'new', seats: ['alpha'], accounts: [{ name: 'alpha', worker: 'claude-code', pays: 'subscription' }], lanes: { a: { status: 'MERGED', seat: 'alpha', account: 'alpha' } } };
+    writeFileSync(join(runs, 'new', 'state.json'), JSON.stringify(already));
+    const dry = run(proj, ['migrate', '--dry-run']);
+    assert.equal(dry.status, 0, dry.out);
+    assert.match(dry.out, /run old: state\.json would name accounts/);
+    assert.equal(readFileSync(join(runs, 'old', 'state.json'), 'utf8'), text, 'a dry run writes nothing');
+    assert.equal(existsSync(join(runs, 'old', 'state.json.bak')), false);
+    const r = run(proj, ['migrate']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /run old: state\.json names accounts \(backup state\.json\.bak\)/);
+    assert.match(r.out, /run new: state\.json left alone \(already names accounts\)/);
+    assert.equal(readFileSync(join(runs, 'old', 'state.json.bak'), 'utf8'), text, 'the 1.0 file is archived byte for byte');
+    const migrated = JSON.parse(readFileSync(join(runs, 'old', 'state.json'), 'utf8'));
+    assert.deepEqual(migrated.seats, ['secondary', 'primary'], 'seat names stay');
+    assert.equal(migrated.limits, undefined, 'never the old shape');
+    assert.deepEqual(migrated.accounts.map((a) => [a.name, a.worker, a.pays, a.budget.hard]), [['secondary', 'claude-code', 'subscription', 70], ['primary', 'session', 'subscription', 50]]);
+    assert.equal(migrated.accounts[0].configDir, '/home/me/.claude-second', 'the registry row of the migrated profile');
+    assert.deepEqual([migrated.lanes.a.seat, migrated.lanes.a.account, migrated.lanes.b.account], ['secondary', 'secondary', null]);
+    assert.equal(migrated.placement, 'on');
+    assert.deepEqual(migrated.usage, old.usage);
+    assert.deepEqual(JSON.parse(readFileSync(join(runs, 'new', 'state.json'), 'utf8')), already);
+    // the orchestrator reads the rewritten state as a 2.0 state
+    const state = require(join(PACK, 'scripts/lib/orch-state.cjs'));
+    assert.equal(state.isLegacyState(migrated), false);
+    assert.equal(state.accountOf(migrated, 'primary').worker, 'session');
+    // a second migrate (profile already 2.0) finds nothing left to rewrite
+    const again = run(proj, ['migrate']);
+    assert.equal(again.status, 0, again.out);
+    assert.match(again.out, /nothing to migrate/);
+    assert.doesNotMatch(again.out, /would name|state\.json names accounts/);
+    assert.equal(readFileSync(join(runs, 'old', 'state.json.bak'), 'utf8'), text, 'the archive is not overwritten');
+  });
+
+  test('red: REQ-311 a migrated profile with a finished 1.0 state left behind still gets the state rewritten on the next migrate', () => {
+    const proj = project();
     assert.equal(run(proj, ['migrate']).status, 0);
-    assert.deepEqual(JSON.parse(readFileSync(join(runs, 'state.json'), 'utf8')), old);
+    const runs = join(proj, '.pipeline', 'orchestrator', 'runs', 'later');
+    mkdirSync(runs, { recursive: true });
+    writeFileSync(join(runs, 'state.json'), JSON.stringify({ runId: 'later', seats: ['primary'], lanes: { a: { status: 'MERGED', seat: 'primary' } } }));
+    const r = run(proj, ['migrate']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /1 finished run state\(s\)  ?rewritten/);
+    assert.equal(JSON.parse(readFileSync(join(runs, 'state.json'), 'utf8')).accounts[0].name, 'primary');
+    assert.ok(existsSync(join(runs, 'state.json.bak')));
   });
 });

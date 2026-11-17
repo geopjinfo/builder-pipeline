@@ -18,6 +18,9 @@
  *              lane runs in a clean guard config dir; a plan account gets its own config dir (secondary) or the
  *              default (primary), and never the API key or an auth token. Values are never read or printed.
  *
+ *   errors     `classifyError(response)` is the shared rule of scripts/lib/account-errors.cjs (REQ-306): LIMIT, BUDGET,
+ *              OVERLOAD or AUTH with an until time; `errorResponse(result, stderr)` shapes a failed run's texts for it.
+ *
  * Tests drive a stub binary through BUILDER_CREDIT_WORKER_BIN (tests/fixtures/orch/stub-worker.cjs).
  */
 const fs = require('fs');
@@ -132,6 +135,11 @@ const runSucceeded = (result, exitCode) => !!result && !result.is_error && resul
 /** The API error texts of a failed run (for classification). */
 const errorTexts = (result) => (result && result.is_error ? [String(result.result ?? ''), JSON.stringify(result.errors ?? '')] : []);
 
+/** The shared exhaustion rule (REQ-306, D46): one of LIMIT, BUDGET, OVERLOAD, AUTH with `until`, or null. */
+const classifyError = (response, opts) => require('./account-errors.cjs').classifyError(response, opts);
+/** A failed run's texts as the response `classifyError` reads: the status code is read from "API Error: NNN" in them. */
+const errorResponse = (result, stderrText = '') => ({ text: [...errorTexts(result), String(stderrText || '')].join('\n') });
+
 const describeInput = (i = {}) => String(i.command ?? i.file_path ?? i.path ?? i.pattern ?? JSON.stringify(i)).slice(0, 160);
 
 /** Every denied action in the stream, de-duplicated by tool_use_id. */
@@ -203,6 +211,6 @@ function readLaunchLog(file) {
 
 module.exports = {
   NAME, API_KEY_VAR, KEY_SOURCE, CONFIG_GLOBS, DEFAULT_GUARD_DIR,
-  settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, denials, resolveBin,
+  settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, errorResponse, classifyError, denials, resolveBin,
   launchSessionId, readLaunchLog,
 };

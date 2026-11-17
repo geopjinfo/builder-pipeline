@@ -105,16 +105,33 @@ const matches = (file, globs) => globs.find((g) => globRe(norm(g)).test(norm(fil
  * tests pass a partial object.
  */
 function creditContext(settings = {}) {
-  // The api-key account's caps and guards, in the 1.0 credit shape (accounts-registry.cjs legacyView) until M3.
+  // The api-key account's caps and guards, in the 1.0 credit shape (accounts-registry.cjs legacyView): the headless
+  // runner still speaks credit/secondary/primary. The fallback ORDER is the account order of features.accounts (M3).
   const view = require('./accounts-registry.cjs').legacyView(settings);
   const credit = view.credit;
   return {
     credit,
+    fallbackAccounts: fallbackOrder(settings),
     models: { strong: null, mid: null, ...(settings.models || {}) },
     paths: { boards: 'tasks', registry: 'DEFERRED_TASKS.md', decisions: 'DECISIONS.md', logs: 'logs', ...(settings.paths || {}) },
     protected: settings.protected || [],
     secondaryConfigDir: view.secondaryConfigDir || null,
   };
+}
+
+/**
+ * The accounts a refused api-key job may fall back to, by name, in registry order (REQ-303, D46): the api-key account's
+ * `guards.fallback` when set, else every plan account that is not the orchestrating session. [] without an api-key
+ * account. `credit.fallback` (seat names) is this order mapped through the 1.0 view.
+ */
+function fallbackOrder(settings = {}) {
+  const registry = require('./accounts-registry.cjs');
+  if (!registry.accountsOn(settings)) return [];
+  const list = registry.list(settings);
+  const key = list.find((a) => a.pays === 'api-key');
+  if (!key) return [];
+  const names = key.guards && Array.isArray(key.guards.fallback) ? key.guards.fallback : list.filter((a) => a.pays !== 'api-key').map((a) => a.name);
+  return names.filter((n) => list.some((a) => a.name === n));
 }
 
 /** The records a job always may write: its board, its run folder, the registry and the decision log. */
@@ -1384,7 +1401,7 @@ const reviewLine = (pending) =>
 
 module.exports = {
   CREDIT_KINDS, MAX_SEATS, LIGHT_JOBS, SEAT_KINDS, FILL_KINDS, EXECUTED, ACCOUNT_LABEL, JOB_FAULTS, EXIT, BILLING_STOP_EXIT, BILLING_PATTERNS, MAX_RATE_LIMIT_RETRIES, WORKER_MODES,
-  creditContext, recordGlobs, forbiddenGlobs, commandsFor, validateTask, writeGlobs, allowList, prompt, isJobFault, workerOf,
+  creditContext, fallbackOrder, recordGlobs, forbiddenGlobs, commandsFor, validateTask, writeGlobs, allowList, prompt, isJobFault, workerOf,
   creditRoot, creditDirOf, taskDir, checkoutOf, queueRootOf, launcherCommand, briefCitedFiles, briefMissingFiles, prepare, whichAbs, ignoredSnapshot, changedFiles, scopeFaults, statusOf, classifyFailure,
   workersMode, workersIsDefault, setWorkers, runTask, dirtLeftBy, targetLockFile, takeTargetLock,
   periodBounds, periodLabel, dayBounds, creditConfig, creditCost, verdictFiles, moveVerdictAside, requeue, reservedUsd, taskDirs, allCreditRoots, periodSpend, spendDown, creditStatus, statusLine, pressureLine,
