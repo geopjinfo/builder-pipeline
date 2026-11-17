@@ -79,3 +79,15 @@ describe('REQ-1401 — the decision beside each experimental flag', () => {
     for (const l of lines) assert.match(l, / · decision: (keep|drop|not yet measured) \(\d{4}-\d{2}-\d{2}\)/, l);
   });
 });
+
+describe('features — repo hygiene (M18)', () => {
+  test('red: AC-1801 branchSweep and runSweep are listed, off by default; a bad remote is refused with the allowed set', () => {
+    const r = run(project());
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^branchSweep: not configured$/m);
+    assert.match(r.stdout, /^runSweep: not configured$/m);
+    const bad = run(project(block({ schema: 2, features: { branchSweep: { state: 'off', remote: 'delete' } } })));
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stdout + bad.stderr, /branchSweep\.remote.*list, off/);
+  });
+});

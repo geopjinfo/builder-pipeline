@@ -7,6 +7,19 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **M18 git hygiene: `branch-sweep` and `run-sweep` (`specs/repo-hygiene.spec.md` REQ-1801 to REQ-1807, D86).** Two
+  opt-in §16 features, both `off` by default. `features.branchSweep` (`target` required; `staleDays`, `keep`, `remote`
+  `list`|`off`): `npx builder-pipeline run branch-sweep` gives every local branch one verdict — MERGED, STALE or KEEP
+  with the reason, a branch an orchestrator lane holds in LAUNCHED or STALLED always KEEP — and with `--apply` writes
+  `refs/builder/branches/<name>` at the tip before `git branch -d` (never `-D`); remote branches contained in the
+  target are listed with the push command and the kit never pushes; `--apply` prunes only remote-tracking refs whose
+  remote branch is gone. `features.runSweep` (`keepDays`, `roots`): `npx builder-pipeline run run-sweep` lists old run
+  folders, worktree and upgrade backups and `PIPELINE_PROFILE.md.bak` with size and age, keeps a run with a live lane,
+  and with `--apply` moves each SWEEP item by rename into `<logs>/trash/<date>/`; no recursive delete exists in either
+  module (a test reads the sources). With the feature off, `branch-sweep --target <branch>` and `run-sweep --keep-days
+  <n>` run with the defaults and say so on the first line. New tool group `hygiene` (`unpack --tools hygiene`); the
+  shared `scripts/lib/worktree-sweep.cjs` moves to the core set. Tests: `tests/branch-sweep.test.mjs`,
+  `tests/run-sweep.test.mjs`, rows in profile, features, cli-commands and unpack-groups.
 - **Repo hygiene spec (`specs/repo-hygiene.spec.md`, REQ-1801 to REQ-1840; decisions D86 to D98).** The ratified spec
   for the 2.1.0 repo-hygiene modules M18 to M22: eight opt-in checks (`branch-sweep`, `run-sweep`, `ignore-check`,
   `size-check`, `secret-scan`, `deps-check`, `docs-check`, `dead-code`), the `hygiene` runner, two secret hooks, the
