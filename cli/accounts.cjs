@@ -34,6 +34,9 @@ const accountPaths = () => require('../scripts/lib/account-paths.cjs');
 const leases = () => require('../scripts/lib/account-lease.cjs');
 const secrets = () => require('../scripts/lib/account-secrets.cjs');
 const profileLib = () => require('../scripts/lib/profile.cjs');
+const wrappers = () => require('../scripts/lib/account-wrappers.cjs');
+const accountsLock = () => require('../scripts/lib/accounts-lock.cjs');
+const gatewayPolicy = () => require('../scripts/lib/gateway-policy.cjs');
 
 /** Run ids whose state file holds a live lane. Reads only the state.json of each run under .pipeline/orchestrator/runs. */
 function liveRuns(cwd, env = process.env) {
@@ -422,7 +425,74 @@ function cmdList(ctx, argv) {
   for (const c of cells) console.log(c.map((v, i) => (i === c.length - 1 ? v : v.padEnd(widths[i]))).join('  '));
 }
 
-const USAGE = 'accounts add <name> --worker <w> --pays <p> [options] | note <name> <text…> | key <name> [--remove] | remove <name> | list [--json] | migrate [--dry-run]';
+
+// --------------------------- M11: install, policy, usage-snapshot ------------------------------------------
+
+/** The gateway settings of the profile (features.accounts.gateway), with the defaults the policy module fills. */
+const gatewayCfg = (settings, flags = {}) => {
+  const g = (settings.features && settings.features.accounts && settings.features.accounts.gateway) || {};
+  const pick = (k, f) => (flags[f] && flags[f][0]) || g[k];
+  return { kind: pick('kind', 'gateway'), version: pick('version', 'version'), baseUrl: pick('baseUrl', 'base-url'), tokenFile: pick('tokenFile', 'token-file'), policyFile: pick('policyFile', 'policy') };
+};
+
+/** `accounts install [--dry-run] [--force] [--policy <file>]` (REQ-1101, REQ-1102, REQ-1103, REQ-1109). */
+function cmdInstall(ctx, argv) {
+  const { positional, flags, bare } = parseArgs(argv, { bare: ['dry-run', 'force'] });
+  if (positional.length) ctx.die(`accounts install: unexpected argument(s): ${positional.join(' ')}`);
+  for (const k of Object.keys(flags)) if (!['policy'].includes(k)) ctx.die(`accounts install: unknown option --${k}`);
+  const loaded = loadProfile(ctx, 'install');
+  const parsed = profileLib().parse(loaded.text);
+  if (parsed.errors.length) ctx.die(`accounts install: ${PROFILE} does not validate:\n  ${parsed.errors.join('\n  ')}`);
+  const home = accountPaths().home(process.env);
+  const cfg = gatewayPolicy().defaults(home, gatewayCfg(parsed.settings, flags));
+  let policyText = null;
+  try {
+    policyText = fs.readFileSync(cfg.policyFile, 'utf8');
+  } catch (_) {
+    policyText = null;
+  }
+  const osHome = require('os').homedir();
+  const planned = wrappers().plan({ settings: parsed.settings, home, kitRoot: ctx.KIT, policyText, osHome, accountPaths: accountPaths() });
+  if (!planned.files.length) {
+    console.log(`accounts install: no claude-code or codex account in ${PROFILE} §16 — nothing to write`);
+    return;
+  }
+  for (const f of planned.files) fs.mkdirSync(path.dirname(f.file), { recursive: true, mode: 0o700 });
+  const r = accountsLock().apply(home, planned.files, { force: bare.has('force'), dry: bare.has('dry-run'), kitVersion: ctx.VERSION });
+  for (const l of r.lines) console.log(`${bare.has('dry-run') ? '[dry-run] ' : ''}${l}`);
+  for (const n of planned.notes) console.log(n);
+  console.log(`accounts install: ${r.written.length} written, ${r.unchanged.length} unchanged, ${r.kept.length} kept, ${r.backedUp.length} backed up — lock ${path.relative(process.cwd(), accountPaths().lockFile(home))}`);
+}
+
+/** `accounts policy show | dry-run | apply [--gateway g] [--version v] [--base-url u] [--token-file f] [--policy f]` (REQ-1104). */
+async function cmdPolicy(ctx, argv) {
+  const action = argv[0];
+  if (!['show', 'dry-run', 'apply'].includes(action)) ctx.die('accounts policy: show | dry-run | apply');
+  const { positional, flags } = parseArgs(argv.slice(1));
+  if (positional.length) ctx.die(`accounts policy ${action}: unexpected argument(s): ${positional.join(' ')}`);
+  for (const k of Object.keys(flags)) if (!['gateway', 'version', 'base-url', 'token-file', 'policy'].includes(k)) ctx.die(`accounts policy: unknown option --${k}`);
+  const loaded = loadProfile(ctx, 'policy');
+  const parsed = profileLib().parse(loaded.text);
+  const home = accountPaths().home(process.env);
+  const r = await gatewayPolicy().run(action, gatewayCfg(parsed.settings, flags), { home });
+  console.log(JSON.stringify(r, null, 2));
+  if (action === 'dry-run' && r.plan.length) console.log(`accounts policy dry-run: ${r.plan.length} request(s) would be sent — apply with: npx builder accounts policy apply`);
+  if (action === 'dry-run' && !r.plan.length) console.log('accounts policy dry-run: the gateway matches the policy');
+}
+
+/** `accounts usage-snapshot [--out <file>]` (REQ-1105). */
+async function cmdUsageSnapshot(ctx, argv) {
+  const { positional, flags } = parseArgs(argv);
+  if (positional.length) ctx.die(`accounts usage-snapshot: unexpected argument(s): ${positional.join(' ')}`);
+  for (const k of Object.keys(flags)) if (!['out', 'gateway', 'version', 'base-url', 'token-file'].includes(k)) ctx.die(`accounts usage-snapshot: unknown option --${k}`);
+  const loaded = loadProfile(ctx, 'usage-snapshot');
+  const parsed = profileLib().parse(loaded.text);
+  const home = accountPaths().home(process.env);
+  const r = await gatewayPolicy().usageSnapshot(gatewayCfg(parsed.settings, flags), { home, out: flags.out ? flags.out[0] : undefined });
+  console.log(`accounts usage-snapshot: ${r.keys} key row(s) written to ${r.file} (numbers only, never a token or a key)`);
+}
+
+const USAGE = 'accounts add <name> --worker <w> --pays <p> [options] | note <name> <text…> | key <name> [--remove] | remove <name> | list [--json] | migrate [--dry-run] | install [--dry-run] [--force] [--policy <file>] | policy show|dry-run|apply [--gateway <g>] | usage-snapshot [--out <file>]';
 
 function cmdAccounts(ctx, argv) {
   const sub = argv[0];
@@ -433,6 +503,9 @@ function cmdAccounts(ctx, argv) {
   if (sub === 'key') return cmdKey(ctx, rest).catch((e) => ctx.die(`accounts key: ${e && e.message ? e.message : e}`));
   if (sub === 'remove') return cmdRemove(ctx, rest);
   if (sub === 'list') return cmdList(ctx, rest);
+  if (sub === 'install') return cmdInstall(ctx, rest);
+  if (sub === 'policy') return cmdPolicy(ctx, rest).catch((e) => ctx.die(`accounts policy: ${e && e.message ? e.message : e}`));
+  if (sub === 'usage-snapshot') return cmdUsageSnapshot(ctx, rest).catch((e) => ctx.die(`accounts usage-snapshot: ${e && e.message ? e.message : e}`));
   return ctx.die(`accounts: ${sub ? `unknown subcommand "${sub}"` : 'a subcommand is needed'} — usage: ${USAGE}`);
 }
 

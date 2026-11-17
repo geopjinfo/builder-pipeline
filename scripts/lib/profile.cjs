@@ -126,6 +126,9 @@ const FEATURES = {
     defaults: { state: 'experimental-off', cap: 4, trigger: 3, ledgers: ['(^|/)CHANGELOG\\.md$'], docsOnly: ['(^|/)README\\.md$'] },
     requires: [],
   },
+  /* The free-model MCP server (tooling/experimental/free-model-mcp.cjs): one tool, one fixed route on the local gateway,
+   * loopback only, the outbound guard over every prompt. `promptMaxBytes` is a number or { default, <account> }. */
+  freeModelMcp: { defaults: { state: 'experimental-off', baseUrl: 'http://127.0.0.1:20128', route: null, promptMaxBytes: 200000, maxTokens: 2048, timeoutMs: 120000 }, requires: ['route'], experiment: '§20' },
   /* Removes finished git worktrees after their branch merged — scripts/worktree-sweep.mjs. `holdCommand` is the
    * project's own "something still needs this worktree" check (null = none). */
   worktreeSweep: {

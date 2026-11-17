@@ -233,6 +233,40 @@ flowchart LR
 - **Auditors on credit:** a lane parked at `WAIT-P4` gets its four auditors via `orch credit-audit`; if the credit
   lane is busy, the lane self-audits instead of waiting.
 
+## 🔑 Accounts and wrappers (`features.accounts`)
+
+One person, several accounts. §16 `features.accounts` lists them: who the worker is (`claude-code`, `codex` or the
+session itself), who pays (`subscription`, `gateway`, `free`, `api-key`), what content the account may see, which roles
+it may hold, and a budget. Keys never live in the profile: `npx builder accounts key <name>` stores one with echo off
+in the account's own folder under the accounts home (`~/.builder-pipeline`, or `BUILDER_ACCOUNTS_HOME`).
+
+`npx builder accounts install` writes one wrapper pair per account, `bin/<name>` and `bin/<name>.ps1`, and the
+account's composed settings. A wrapper does four things: it unsets the denylist (nothing of a parent session's
+Anthropic, Claude, OpenAI, Codex or Gemini setup, no Node preload, no proxy or CA override, no XDG config), it checks
+the account's sandbox-runtime settings, it points the tool at the account's own config dir, and it starts the tool. No
+wrapper exports a key: a Claude Code account reads its token through `apiKeyHelper`; a Codex gateway account binds one
+provider entry to one budget-capped key. A subscription account's settings never name a base URL.
+
+Every file the install writes is recorded in `accounts.lock.json` under the accounts home. A file changed since the kit
+wrote it is kept and named; `--force` backs it up first and replaces it. Nothing is armed in a live tool configuration:
+the files sit in kit-created folders only, and the free-model MCP registration is printed, never written.
+
+**Gateway and free accounts.** A gateway fronts API keys, never a subscription. The gateway policy
+(`<accounts home>/gateway/policy.json`, no secrets) says the budget, the model pool, the pricing rows and one profile.
+`npx builder accounts policy show | dry-run | apply` drives the gateway through a pinned adapter (OmniRoute pinned per
+version with a golden request plan; Bifrost declared, not yet pinned): the management token comes from a 0600 file, the
+client never follows a redirect, plain http reaches loopback only, and every error is reduced to the method, the path
+and the status. `apply` records a marker with the policy's sha256 and the gateway version; `builder verify` reads that
+marker and shows drift as an advisory row, without touching the network. A policy that closes the free lane makes
+`accounts install` write a refusal wrapper that only explains why (its marker line is `# builder-pipeline: closed`); an
+unreadable policy leaves a working wrapper alone. `npx builder accounts usage-snapshot` writes per-key spend and budget
+as numbers the readiness assessment reads, never a token or a key.
+
+**Sandbox-runtime settings.** Each Claude Code account gets `srt-settings.json`: `denyRead` lists every other account
+dir and your own `~/.claude` and `~/.codex`, `allowWrite` lists the lane worktree, and the credentials block masks the
+account key and injects it toward the account's API host only. The wrapper passes the file to `srt` when that tool is
+present, and refuses the launch naming the file when it is invalid.
+
 ## 📚 Where the truth lives
 
 ```mermaid

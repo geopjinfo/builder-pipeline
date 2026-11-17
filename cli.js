@@ -1164,6 +1164,18 @@ function cmdVerify() {
   check(missing.length === 0, `checkers installed (${sh}/{${checkers.map(posixPath).join(',')}})${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
   const gi = path.join(CWD, '.gitignore');
   check(fs.existsSync(gi) && /^\.pipeline\/?$/m.test(fs.readFileSync(gi, 'utf8')), '.pipeline/ gitignored');
+  // REQ-1108: gateway policy drift, advisory only (the diff `accounts policy dry-run` would print, read from the applied
+  // marker, no network, nothing written). The exit code is unchanged by it.
+  try {
+    const ap = require('./scripts/lib/account-paths.cjs');
+    const gp = require('./scripts/lib/gateway-policy.cjs');
+    const loadedP = require('./scripts/lib/profile.cjs').load(CWD);
+    const g = (loadedP.settings.features && loadedP.settings.features.accounts && loadedP.settings.features.accounts.gateway) || {};
+    const row = gp.driftRow(ap.home(process.env), g);
+    if (row) console.log(`  ADVISORY  ${row}`);
+  } catch (_) {
+    /* no accounts home or no policy: nothing to advise */
+  }
 
   const personaAt = ['.claude/agents/module-planner.md', '.codex/agents/module-planner.toml', '.agents/agents/module-planner.md', '.builder/personas/module-planner.md'];
   check(personaAt.some((p) => fs.existsSync(path.join(CWD, p))), 'personas installed (.claude/agents/, .codex/agents/, .agents/agents/ or .builder/personas/)');
@@ -1552,6 +1564,12 @@ function main() {
     accounts remove <name>              delete the wrappers, the key and the §16 entry; the folder stays; refused while a worker holds the account's lease
     accounts list [--json]              one line per account: worker, pays, content, roles, key present or absent (never the value), lease state, key file mode
     accounts migrate [--dry-run]        rewrite the 1.0 seat keys (seats, limits, secondaryConfigDir, credit) into features.accounts (backup first)
+    accounts install [--dry-run] [--force] [--policy <file>]
+                                        write one wrapper pair (sh, ps1) and the composed settings per account under the accounts home, recorded in accounts.lock.json; a policy-closed lane gets a refusal wrapper
+    accounts policy show|dry-run|apply [--gateway <g>]
+                                        the gateway policy through its adapter (omniroute pinned; bifrost declared): read, plan, or apply and record the applied marker
+    accounts usage-snapshot [--out <file>]
+                                        per-key spend and budget as the assessment reads them (numbers only)
   check
     verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check
   other
