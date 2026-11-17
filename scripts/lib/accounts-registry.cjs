@@ -26,9 +26,9 @@
  *
  * LEGACY. `seats`, `limits`, `secondaryConfigDir` and `credit` left `features.orchestrator` in 2.0.0. A profile that
  * still carries them is refused while the orchestrator is active (the message names `npx builder accounts migrate`)
- * and loads with one warning otherwise (D33). `migrate()` rewrites them into accounts once. Until the placement code
- * reads accounts directly (M3), `legacyView()` derives the 1.0 shape from the registry, so every 1.0 placement
- * decision is reproduced exactly (the golden fixture, REQ-106).
+ * and loads with one warning otherwise (D33). `migrate()` rewrites them into accounts once. Placement reads the
+ * account list itself (M3, orch-state.cjs); `legacyView()` still derives the 1.0 shape for the credit lane's headless
+ * runner and the golden fixture, so every 1.0 placement decision is reproduced exactly (REQ-106).
  *
  * Pure over settings objects. No filesystem.
  */
