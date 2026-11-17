@@ -6,10 +6,11 @@
  *   --json                                        machine-readable totals
  * (folder layout: node scripts/fix-rate.mjs in place of npx builder run fix-rate)
  *
- * Settings: paths.boards · features.fixLane.state. The lane ships unmeasured, and this report says so on its first
- * line; off → "fixLane: not configured", exit 0.
+ * Settings: paths.boards · features.fixLane.state. The lane ships off (2.0.0, REQ-1403); switched to `unmeasured` it is on
+ * and this report says so on its first line; off → "fixLane: not configured", exit 0.
  *
- * Exit 0 report printed · 2 no boards directory, or an invalid profile.
+ * Exit 0 report printed · 3 the lane is on but no board has a FIX row (unmeasured, never a pass; REQ-1403) · 2 no boards
+ * directory, or an invalid profile.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -54,6 +55,13 @@ for (const board of boards) {
   total += r.total;
   loops += r.fixOfFix;
   rows.push({ board: board.replace(/\\/g, '/'), ...r });
+}
+// REQ-1403: no FIX row is no measurement. The rate is not printed (a 0.0% would read as a pass) and the exit code is the
+// not-configured code, 3: the lane was on, nothing was measured.
+if (total === 0) {
+  const line = `fixLane: unmeasured — no FIX row in ${boards.length} board(s); the fix-of-fix rate was not measured`;
+  console.log(process.argv.includes('--json') ? JSON.stringify({ feature: feature.line, total: 0, fixOfFix: 0, rate: null, unmeasured: line, rows: [] }, null, 2) : line);
+  process.exit(3);
 }
 if (process.argv.includes('--json')) {
   console.log(JSON.stringify({ feature: feature.line, total, fixOfFix: loops, rate: total ? loops / total : 0, rows }, null, 2));

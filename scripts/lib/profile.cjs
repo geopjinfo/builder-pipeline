@@ -83,8 +83,10 @@ const FEATURES = {
   },
   decisionIndex: { defaults: { state: 'off', roots: [], idPattern: 'D-\\d+', out: null }, requires: ['roots', 'idPattern', 'out'] },
   ratchets: { defaults: { state: 'off', lists: [] }, requires: ['lists'] },
-  builderBatch: { defaults: { state: 'unmeasured', rows: 5 }, requires: ['rows'] },
-  fixLane: { defaults: { state: 'unmeasured' }, requires: [] },
+  /* Both ship OFF since 2.0.0 (REQ-1403, D57): the §19 recorded run did not measure them. Set `unmeasured` to switch one
+   * on; its report then says the benefit is unmeasured (EXPERIMENTS.md §6, §7). */
+  builderBatch: { defaults: { state: 'off', rows: 5 }, requires: ['rows'], experiment: '§6' },
+  fixLane: { defaults: { state: 'off' }, requires: [], experiment: '§7' },
   livePage: { defaults: { state: 'experimental-off' }, requires: [] },
   graphTrial: {
     defaults: { state: 'experimental-off', seats: ['orchestrator', 'module-planner', 'standards-auditor', 'invariant-auditor'], callPattern: null },
