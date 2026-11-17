@@ -192,7 +192,9 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
   const bin = env.BUILDER_LOOP_WORKER_BIN || claude.resolveBin(env);
   // REQ-602: a subscription account must start on its login ('none'); any other account on a key — the API key variable,
   // an auth token (a gateway) or the apiKeyHelper of its settings. Anything else stops the worker before a model call.
-  const acceptableKeySources = account.pays === 'subscription' ? ['none'] : [claude.API_KEY_VAR, 'ANTHROPIC_AUTH_TOKEN', 'apiKeyHelper'];
+  // A gateway account reached through its base URL may hold an auth token the CLI reports as 'none' (no API key in play):
+  // the request goes to the gateway, never to a plan account, so 'none' is acceptable there too.
+  const acceptableKeySources = account.pays === 'subscription' ? ['none'] : account.pays === 'gateway' ? [claude.API_KEY_VAR, 'ANTHROPIC_AUTH_TOKEN', 'apiKeyHelper', 'none'] : [claude.API_KEY_VAR, 'ANTHROPIC_AUTH_TOKEN', 'apiKeyHelper'];
   const keySourceVerdict = (events) => {
     for (const ev of events) {
       if (ev && ev.type === 'system' && ev.subtype === 'init') return acceptableKeySources.includes(ev.apiKeySource) ? 'ok' : `apiKeySource is ${JSON.stringify(ev.apiKeySource)}, not one of ${acceptableKeySources.join(' | ')} — worker stopped before any model call`;
@@ -262,7 +264,7 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
     const gateDigest = capOutput(gate.text, limit);
     const head = git(cwd, ['rev-parse', 'HEAD']).out;
     const verdict = readVerdict(claude.structuredVerdict(res.events), { head, claimed: ids, exitCode: res.exitCode, denials: claude.denials(res.events) });
-    const why = scopeFaults.length ? `FAILED-SCOPE: ${scopeFaults.join('; ')}` : res.outcome !== 'EXITED' ? res.outcome : gate.status !== 0 ? `gate exit ${gate.status}` : verdict.job !== 'VERDICT' ? `${verdict.job}: ${verdict.reason}` : verdict.verdict.verdict !== 'PASS' ? `verdict ${verdict.verdict.verdict}` : null;
+    const why = scopeFaults.length ? `FAILED-SCOPE: ${scopeFaults.join('; ')}` : res.outcome !== 'EXITED' ? `${res.outcome}${res.keyFault ? `: ${res.keyFault}` : ''}` : gate.status !== 0 ? `gate exit ${gate.status}` : verdict.job !== 'VERDICT' ? `${verdict.job}: ${verdict.reason}` : verdict.verdict.verdict !== 'PASS' ? `verdict ${verdict.verdict.verdict}` : null;
     const passed = why === null;
     const turns = res.events.filter((e) => e && e.type === 'assistant').length;
     const result = claude.resultOf(res.events);
