@@ -205,6 +205,32 @@ versions independently of any project it is pasted into.
 - **Golden placement fixture (`tests/fixtures/orch-placements-1.0.json`, REQ-106).** 36 placement decisions of the
   1.0 seat rule, captured before the account registry replaces it; `tests/orch-placements-golden.test.mjs` holds the
   1.0 rule to them and `accounts migrate` is proven against the same file.
+### EXPERIMENTS measurement sections (REQ-801, REQ-901, REQ-1211, REQ-1401)
+
+- **EXPERIMENTS.md §16 to §20 and a decision row in every section.** §16 `familyReview`, §17 `boardLoop` and §18
+  `remoteLanes` state what the 2.0 build adds, how to opt in, the exact measurement and the keep or drop rule. §19 is
+  a reserved skeleton; §20 holds the kit's own measurements (time to first value, false-positive rates of the
+  default-on checks) with empty tables. Every section §1 to §20 ends with a dated
+  `**Decision (<date>).** keep | drop | not yet measured — <number or "no measurement">` row; today no section says
+  keep, because no measured criterion holds yet. Test: `tests/experiments.test.mjs` (sections 1 to 20 present, a
+  non-blank decision row in each, a keep row never on "no measurement").
+
+### Time to first value (REQ-1404)
+
+- **`first-value` script and test.** `npx builder run first-value [--json] [--keep]` creates an empty git repository in
+  a temporary folder, packs the checkout with `npm pack`, installs the tarball there, then runs `npx builder inventory`
+  and `npx builder run claims-check --files README.md` in that project. It prints the wall time and the time of each
+  step. `--json` prints the numbers; `--keep` leaves the folder. Test: `tests/first-value.test.mjs` fails above 300 s
+  and on an accepted unknown flag. The first measurement is in EXPERIMENTS.md §20.
+
+### False-positive rates of the default-on checks (REQ-1405)
+
+- **EXPERIMENTS.md §20 false-positive table filled.** `check-ledgers`, `claims-check`, `output-check`, `fix-rate` and
+  `inventory` ran on four public repositories (`expressjs/express`, `fastify/fastify`, `pallets/flask`,
+  `ruvnet/claude-flow`, shas in the table). Every finding was classified by hand. Rates: 0% for `check-ledgers` and
+  `output-check`, 1.1% for `inventory` (two items on `claude-flow`: a skill folder without `SKILL.md`, a note listed
+  as an agent); `claims-check` and `fix-rate` produced no finding on repositories without a pipeline run. No check is
+  above 20%. Doc-only change; `tests/experiments.test.mjs` keeps §20's decision row checked.
 
 ## [1.1.0] — 2026-11-16
 

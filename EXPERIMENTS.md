@@ -50,6 +50,8 @@ back. Per-seat cost on a shared page is sensitive: show it only on an organisati
 labelled as derived at a named rate version. A script-driven run hides the orchestrator's judgement
 between phases, which is exactly where loop-back decisions are made.
 
+**Decision (2026-11-17).** not yet measured — no measurement: no ADDITIVE run has been made with the page on.
+
 ## 2. Graph seat trial — `graphTrial` (experimental)
 
 **What ships.** `skills/references/graph-query.md` (the one query block) and an experimental pointer
@@ -83,6 +85,8 @@ re-sync, which costs nothing.
 **Risk.** A derived index cited as the authority — the block forbids it, and a reviewer must still
 catch it. Self-reported counts — hence the cross-check against the harness records.
 
+**Decision (2026-11-17).** not yet measured — no measurement: no run with the trial on and a control group.
+
 ## 3. Builder on a mid-tier model with a strong advisor — `advisorBuilder` (experimental)
 
 **What ships.** Nothing but this protocol. The builder seat and its tier are unchanged.
@@ -103,6 +107,8 @@ seats over both results and compare: `FIX-n` rows raised, defects caught, and bu
 
 **Risk.** Quality lost in P2 surfaces as extra loop-backs in P3–P6, where it costs more than it
 saved. A replay of one run is a small sample; say so in the decision.
+
+**Decision (2026-11-17).** not yet measured — no measurement: no replay A/B has been run.
 
 ## 4. Role persona profiles from a permission catalogue — `personas` (experimental)
 
@@ -141,6 +147,8 @@ otherwise.
 role with nothing measuring their effect ships unreviewed summaries into the seats that most need
 primary sources.
 
+**Decision (2026-11-17).** not yet measured — no measurement: no run with generated profiles attached.
+
 ## 5. Blocking mutation threshold — `mutationGate` (experimental)
 
 **What ships.** The mutation **step** (`features.mutation`, P3, non-blocking — its score is a `gate`
@@ -176,6 +184,8 @@ project most surviving mutants were error-payload assertions, so a naive thresho
 runs over one assertion type rather than over weak logic tests. The sample run above reproduced that
 shape exactly.
 
+**Decision (2026-11-17).** not yet measured — kit-internal samples only: logic-only scores 84.7% to 91.9% over five modules, two adopting-project runs still owed; the step stays non-blocking.
+
 ## 6. Builder batches — `builderBatch` (unmeasured, on by default)
 
 **What ships.** P2 dispatches the builder in batches of at most `features.builderBatch.rows` board
@@ -194,6 +204,8 @@ both fall. Otherwise raise `rows` and say why, or set the feature `off`.
 
 **Risk.** A batch boundary drops context the next batch must re-read. Rows that share a file split
 across batches can conflict. Keep coupled rows in one batch.
+
+**Decision (2026-11-17).** not yet measured — no measurement: no before/after window of `seat-peaks` and `cost-window` recorded.
 
 ## 7. Narrow FIX lane — `fixLane` (unmeasured, on by default)
 
@@ -229,6 +241,8 @@ you let it decide.
 **Risk.** A fixer without the plan can fix the cited line and break an invariant the plan stated —
 which shows up exactly as a rising fix-of-fix rate. A lane judged on zero loop-backs is not judged.
 
+**Decision (2026-11-17).** not yet measured — no measurement: no baseline `fix-rate` recorded and no two loop-back runs.
+
 ## 8. Split module pipeline — `liteSplit` (experimental)
 
 **What ships.** Two skills and one script: `build-module-lite` (the playbook's steps 0–3 at full strength,
@@ -252,6 +266,8 @@ of the flawed one more than once per batch. One real module has been through bot
 built after it; the cap bounds that blast radius. The queue's staleness rule is only as good as its path
 rules: a bookkeeping path the profile does not declare re-opens proven phases (safe, slow), and a code path
 wrongly declared as bookkeeping would keep a stale proof (unsafe) — declare `ledgers` narrowly.
+
+**Decision (2026-11-17).** not yet measured — one module through both halves, not a batch; no wall-clock or fix-row comparison.
 
 **Known gaps (deferred on purpose, each with a trigger).**
 - *No live page for lite runs or batches.* A full run can project its board to a live page; a lite run and a
@@ -285,6 +301,8 @@ need. **Remove** otherwise.
 **Risk.** A pruned tool a seat needs shows up as a seat that cannot finish, not as an error; the plugin's
 one-command restore undoes it. A harness upgrade past the supported range leaves the plugin inert without saying
 so, so pin the harness version for the trial.
+
+**Decision (2026-11-17).** not yet measured — no measurement: the meter check and the two-lane baseline have not run.
 
 ## 10. Fresh-context plan review — `planReview` (experimental)
 
@@ -329,6 +347,8 @@ match the list against the findings).
 **Risk.** A reviewer graded against a feature-spec standard over-corrects: on a rationale document, about half of
 one trial's findings were dropped as the wrong standard. Give it the implementation-readiness standard only.
 
+**Decision (2026-11-17).** not yet measured — kit-internal sample only: 22 of 28 silent decisions named and 4 unrecorded contract drifts over three plans, 0 FIX rows to prevent; three adopting-project plans owed.
+
 ## 11. Primary-seat lanes started by the orchestrator — `orchestrator.primaryLaunch` (unmeasured, off by default)
 
 **What ships.** `features.orchestrator.primaryLaunch: "app-session"` lets the orchestrator start a primary-seat
@@ -341,6 +361,8 @@ were started by hand: human interventions per lane (starts, unblocks), stalls, a
 
 **Risk.** A session that silently lacks a plugin or hook runs the pipeline without its guards. The first-step
 check exists for that; a lane that fails it is a stall, never a degraded run.
+
+**Decision (2026-11-17).** not yet measured — no measurement: no batch with an orchestrator-started primary lane.
 
 ---
 
@@ -366,6 +388,8 @@ third with no question missed. **Remove** otherwise.
 **Risk.** A confident rank can hide the right file below the fold. The seat reads at least the top five before
 concluding "not found".
 
+**Decision (2026-11-17).** not yet measured — no measurement: no replay of the five locate questions.
+
 ## 13. Raise-only review-level hint — `riskHint` (experimental)
 
 **What ships.** Nothing but this protocol. Before review dispatch, a cheap model reads the diff summary (paths and
@@ -377,6 +401,8 @@ would have caught that the chosen level missed, against raises that found nothin
 least one finding for every three false raises. **Remove** otherwise.
 
 **Risk.** Over-raising turns into cost. The ratio above is the stopping rule.
+
+**Decision (2026-11-17).** not yet measured — no measurement: no replay of the last ten lanes.
 
 ## 14. Model-chosen order for the seeded walk — `walkPriority` (experimental)
 
@@ -392,6 +418,8 @@ otherwise.
 **Risk.** The model may steer toward routes that already fail and away from new ones. Count distinct failures, not
 total failures.
 
+**Decision (2026-11-17).** not yet measured — no measurement: no three-seed comparison.
+
 ## 15. Advisory notes on prose rules — `ruleNotes` (experimental)
 
 **What ships.** Nothing but this protocol. After an edit, a cheap model checks the changed hunk against the
@@ -405,3 +433,118 @@ exists. **Remove** otherwise.
 
 **Risk.** A note that reads like a ruling may be acted on as one. The note says "advisory" in its text, and the
 reviewer weighs it like any other unverified claim.
+
+
+**Decision (2026-11-17).** not yet measured — no measurement: no two lanes with marked notes.
+
+## 16. Review by auditor family — `familyReview` (planned, experimental)
+
+**What ships.** Nothing yet. The 2.0 build adds it. The reviewer groups the auditor findings by family (standards,
+invariants, security, tests) and reads each family as one list before it writes its verdict. The pipeline, the
+seats and the FIX loop are unchanged.
+
+**Opt in.** Set the feature to `experimental-on` in `PIPELINE_PROFILE.md` §16 when the 2.0 build has shipped it.
+Off, the reviewer reads the findings in dispatch order, as today.
+
+**Measurement.** Three modules with the feature on and three comparable modules with it off. For each module
+record: accepted findings per auditor family, reviewer loop-backs (`FIX-n` rows raised by the review pass), and cost
+per task (`npx builder run cost-window` over the review window). **Keep** if accepted findings rise, loop-backs do
+not rise, and cost per task stays inside the module budget. **Drop** otherwise.
+
+**Risk.** A family view can hide a cross-family defect: a security finding that is also an invariant break is read
+once, in one list. The reviewer still reads every finding.
+
+**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+
+## 17. Board loop on a throwaway project — `boardLoop` (planned, experimental)
+
+**What ships.** Nothing yet. The 2.0 build adds it. The orchestrator loops one brief through Stage 0 to Stage 5 on a
+throwaway project without a person between the stages. The board stays the one progress surface.
+
+**Opt in.** Set the feature to `experimental-on` when the 2.0 build has shipped it, on a throwaway project only.
+The test bed is a small project of four to six aider polyglot exercises, each with its unit tests as the gate.
+
+**Measurement.** Over one loop of every exercise, record: pass rate (exercises whose unit tests pass), cost per
+exercise (`npx builder run cost-window`, or `unmeasured` when the harness keeps no record), turns per stage,
+timeouts, and silent failures (a stage that ended without a verdict and without an error). Write the numbers in
+this section with the project commit sha. Promotion is the maintainer's call, made on these numbers.
+
+**Risk.** A loop with no person between the stages can run on past a wrong plan. The timeout and the silent-failure
+counts exist to show that.
+
+**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+
+## 18. Remote lanes — `remoteLanes` (planned, experimental)
+
+**What ships.** Nothing yet. The 2.0 build adds it. A lane runs on another machine over ssh, with the same brief,
+board and worker adapter as a local lane.
+
+**Opt in.** Set the feature to `experimental-on` when the 2.0 build has shipped it, with one remote host configured.
+
+**Measurement.** One local lane and one remote lane on the same project and the same exercises. For each lane
+record: pass rate, wall time from `LAUNCH` to the verdict, ssh failures (a connection that dropped or was refused),
+orphaned workers (a worker process alive after the lane ended), and cost (or `unmeasured`). **Keep** if the remote
+lane's pass rate is equal and it left no orphaned worker. **Drop** if ssh failures or orphans appear in more than
+one run in three.
+
+**Risk.** A worker that outlives its lane spends an account with nobody reading the result. The orphan count is the
+stopping rule.
+
+**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+
+## 19. Reserved — next 2.0 measurement (skeleton)
+
+**What ships.** Nothing. This section holds the next 2.0 feature that needs a measurement before promotion. Fill in
+the four blocks below when the feature is named.
+
+**Opt in.** —
+
+**Measurement.** —
+
+**Risk.** —
+
+**Decision (2026-11-17).** not yet measured — no measurement: no feature assigned.
+
+## 20. Kit measurements — time to first value and false-positive rates (skeleton)
+
+**What ships.** The default-on checks and the install path. These are not features to promote. This section records
+how fast a new project gets its first result from the kit, and how often the default-on checks are wrong.
+
+**Time to first value.** `scripts/first-value.mjs` creates an empty git repository in a temporary folder, installs
+the kit from an npm pack of the checkout, runs `npx builder inventory` and `npx builder run claims-check --files`
+there, and prints the wall time. The test fails above 300 s.
+
+| Date | Commit | Node | Wall time (s) |
+|---|---|---|---|
+| 2026-11-17 | bf64f70 (branch of 36bfdc0, release 1.1.0) | v22.23.4 | 1.1 (pack 0.4, install 0.3, inventory 0.2, claims-check 0.2) on a Linux developer machine, npm cache warm |
+
+**False-positive rates.** Each default-on check (`check-ledgers`, `claims-check`, `output-check`, `fix-rate`,
+`inventory`) runs on three public repositories. A person classifies every finding as true or false. A check above
+20% false positives is reported as a defect.
+
+Run of 2026-11-17, kit at 36bfdc0 (release 1.1.0), Node v22.23.4, no `PIPELINE_PROFILE.md` in the repositories (default
+settings). Repositories, shallow clones: `expressjs/express` 43fca52d, `fastify/fastify` 46797238, `pallets/flask`
+49943b5a (three well-known, active projects in two languages, with no agent harness folders) and `ruvnet/claude-flow`
+8cb2fbc7 (added because it has `.claude/agents`, `.claude/skills` and `.agents/skills`, so `inventory` has input).
+Each check ran from the repository root with the kit's scripts. A finding is one printed violation, problem, item,
+overlap or clash. One person classified every finding by hand against the file it names.
+
+| Check | Input | Findings | False | Rate |
+|---|---|---|---|---|
+| `check-ledgers` | the 4 repository roots | 8 (LG-0 ×2 per repository: no registry file, no boards directory) | 0 | 0% |
+| `claims-check --files --no-run-counts` | every `*.md` outside `node_modules`, 97 documents | 0 (no citation, retracted-phrase or owed-note problem; count claims come from a claims file, and none was given) | 0 | no finding to rate |
+| `output-check plan` and `review` | each repository's README as the document | 68 (17 per repository: missing sections, missing tables, wrong title) | 0 | 0%, negative control only |
+| `fix-rate <files>` | the same 97 documents | 0 (no `FIX-n` row) | 0 | no finding to rate |
+| `inventory` | the 4 repository roots | 187 (4 mode calls, 181 items, 1 overlap, 1 clash) | 2 | 1.1% |
+
+The two false `inventory` findings are both on `claude-flow`: `.claude/skills/dual-mode/README.md` listed as a skill
+(the folder has no `SKILL.md`), and `.claude/agents/MIGRATION_SUMMARY.md` listed as an agent named "Migration
+Summary" (the file is a note, not a persona). The one overlap (`security-auditor`, same name, wording score 0.079) and
+the clash it raises are true. No check is above 20%. `claims-check` and `fix-rate` found nothing on these
+repositories: their inputs are seat outputs and boards, which a project without a pipeline run does not have. A rate
+for them needs a run on an adopting project's boards and claims file.
+
+**Risk.** A rate taken on three repositories is a small sample. Name the repositories and the shas so the run can
+be repeated.
+
+**Decision (2026-11-17).** not yet measured — time to first value 1.1 s on one machine (limit 300 s); false-positive rates 0% to 1.1% over four public repositories (no check above 20%).
