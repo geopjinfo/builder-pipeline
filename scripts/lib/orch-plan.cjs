@@ -377,7 +377,35 @@ function laneOverlaps(lanes) {
   return out;
 }
 
+/**
+ * The worker brief from the template (templates/orchestrator-worker-brief.md, installed as
+ * specs/orchestrator-worker-brief.template.md): the fenced markdown body with the lane facts filled in — the run and
+ * lane, level/track and dispatch, the rows table, the owned and hot files, worktree, branch, target, result and the
+ * `Account:` line from the placement (REQ-502). A placeholder the lane cannot fill (the done-test, the tiers, the
+ * records) stays as written for the orchestrator. No account → the `Account:` line keeps its placeholder, never an
+ * empty name. Pure.
+ */
+function renderBrief(template, { run, lane, rows = [], target = null, account = null }) {
+  const fence = /```markdown\r?\n([\s\S]*?)\r?\n```/.exec(String(template));
+  let body = fence ? fence[1] : String(template);
+  const byId = new Map((rows || []).map((r) => [r.id, r]));
+  const rowLines = (lane.rows || []).map((id) => {
+    const r = byId.get(id) || { id };
+    return `| ${id} | ${r.title || '<title>'} | ${r.level || lane.level || '<level>'}/${r.track || lane.track || '<track>'} | ${r.reason || '<reason from lanes.json>'} |`;
+  });
+  if (rowLines.length) body = body.replace(/^\| <id> \| <title> \| <level>\/<track> \| <reason from lanes\.json> \|$/m, rowLines.join('\n'));
+  const list = (a) => (Array.isArray(a) && a.length ? a.join(', ') : 'none');
+  const subs = {
+    '<run>': run, '<lane>': lane.name, '<level>': lane.level, '<track>': lane.track, '<full|lite|solo>': lane.dispatch,
+    '<ownedFiles>': list(lane.ownedFiles), '<hotFiles>': list(lane.hotFiles),
+    '<worktree>': lane.worktree, '<branch>': lane.branch, '<target>': target, '<result>': lane.result,
+    ...(account && account.name ? { '<account>': account.name, '<worker>': account.worker || 'unknown', '<pays>': account.pays || 'unknown' } : {}),
+  };
+  for (const [k, v] of Object.entries(subs)) if (v !== null && v !== undefined && v !== '') body = body.split(k).join(String(v));
+  return body.endsWith('\n') ? body : `${body}\n`;
+}
+
 module.exports = {
-  split, parsePlan, levelFor, riskFor, derivedFlags, openConfirms, overlaps, isHot, isUnder, laneOverlaps, globRe, norm,
+  split, parsePlan, renderBrief, levelFor, riskFor, derivedFlags, openConfirms, overlaps, isHot, isUnder, laneOverlaps, globRe, norm,
   DEFAULTS, FULL_FLAGS, KNOWN_FLAGS, KINDS, LEVEL_RANK, LEVEL_OF_RISK, TRACK_RANK,
 };

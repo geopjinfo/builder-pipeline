@@ -19,7 +19,8 @@
  *   usageCommand  {seat}     prints lines containing "N% used"; the highest N is recorded
  *   stateCommand  {session}  prints one word: working | done | idle | blocked | failed | stopped
  *   stopCommand   {session}  stops a live worker session
- *   launchCommand {run} {lane} {brief} {worktree} {result} {branch} {settings}  starts a secondary-seat terminal worker
+ *   launchCommand {run} {lane} {brief} {worktree} {result} {branch} {account} {maxTurns} {timeoutMinutes} {settings}
+ *                            starts a terminal worker on the placed account (an account's own `command` wins)
  *
  * LANE WORKTREES (plan M4, REQ-402, REQ-405, D50). `createLaneWorktree` makes a lane's worktree on a FRESH branch
  * named from the lane id — never a branch another worktree holds (`git worktree list --porcelain` is read first) —
@@ -32,8 +33,6 @@
  * account (never spawned), a worker with no launcher here, and an account dir that is missing. The dir check runs
  * while the accounts home exists (the kit's account layout is in use); without it the 1.0 worker reads its own
  * default config and nothing is judged.
- *   launchCommand {run} {lane} {brief} {worktree} {result} {branch} {account} {maxTurns} {timeoutMinutes}
- *                            starts a terminal worker on the placed account (an account's own `command` wins)
  */
 const fs = require('fs');
 const path = require('path');
@@ -239,6 +238,28 @@ function reinstallAt(t, linkDirs = ['node_modules']) {
  */
 const briefAsksReinstall = (text, linkDirs) => reinstallAt(String(text).replace(/[‘’ʼ]/g, "'"), linkDirs).length > 0;
 
+// ------------------------------------------------------------------------------------------------ smoke
+/**
+ * SMOKE (REQ-308, D31). An account with `smokeCommand` proves it can write before its first launch in a run: when the
+ * last pass on record is older than the stale window (`usageStaleMinutes`), the command runs again, under the
+ * account's own config dir, and the result is written to the account's `smoke.json` (`{ ok, at, exit }`). A failed
+ * smoke makes the account not ready and the launch is refused naming it.
+ */
+const smokeDue = (record, now = Date.now(), staleMinutes = 30) => !record || record.ok === false || !Number.isFinite(Date.parse(record.at)) || now - Date.parse(record.at) > staleMinutes * 60000;
+
+function runSmoke(account, paths, { cwd = process.cwd(), env = process.env, now = Date.now(), timeoutMs = 120000 } = {}) {
+  if (!account || typeof account.smokeCommand !== 'string' || !account.smokeCommand.trim()) throw new Error(`refused: account ${account && account.name} has no smokeCommand`);
+  const probes = require('./account-probes.cjs');
+  const scrubbed = probes.probeEnv(env, account.worker, paths && paths.configDir);
+  const r = probes.runCommand(account.smokeCommand, { env: scrubbed, cwd, timeoutMs });
+  const record = { ok: !r.error && r.status === 0, at: new Date(Number(new Date(now))).toISOString(), exit: r.status, ...(r.error ? { error: r.error } : {}) };
+  if (paths && paths.smokeFile) {
+    fs.mkdirSync(path.dirname(paths.smokeFile), { recursive: true });
+    fs.writeFileSync(paths.smokeFile, JSON.stringify(record, null, 2) + '\n');
+  }
+  return record;
+}
+
 // ------------------------------------------------------------------------------------- lane worktrees
 const gitq = (cwd, args) => {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
@@ -334,28 +355,6 @@ function launchChecks({ account, paths: ap, homeExists }) {
   return out;
 }
 
-// ------------------------------------------------------------------------------------------------ smoke
-/**
- * SMOKE (REQ-308, D31). An account with `smokeCommand` proves it can write before its first launch in a run: when the
- * last pass on record is older than the stale window (`usageStaleMinutes`), the command runs again, under the
- * account's own config dir, and the result is written to the account's `smoke.json` (`{ ok, at, exit }`). A failed
- * smoke makes the account not ready and the launch is refused naming it.
- */
-const smokeDue = (record, now = Date.now(), staleMinutes = 30) => !record || record.ok === false || !Number.isFinite(Date.parse(record.at)) || now - Date.parse(record.at) > staleMinutes * 60000;
-
-function runSmoke(account, paths, { cwd = process.cwd(), env = process.env, now = Date.now(), timeoutMs = 120000 } = {}) {
-  if (!account || typeof account.smokeCommand !== 'string' || !account.smokeCommand.trim()) throw new Error(`refused: account ${account && account.name} has no smokeCommand`);
-  const probes = require('./account-probes.cjs');
-  const scrubbed = probes.probeEnv(env, account.worker, paths && paths.configDir);
-  const r = probes.runCommand(account.smokeCommand, { env: scrubbed, cwd, timeoutMs });
-  const record = { ok: !r.error && r.status === 0, at: new Date(Number(new Date(now))).toISOString(), exit: r.status, ...(r.error ? { error: r.error } : {}) };
-  if (paths && paths.smokeFile) {
-    fs.mkdirSync(path.dirname(paths.smokeFile), { recursive: true });
-    fs.writeFileSync(paths.smokeFile, JSON.stringify(record, null, 2) + '\n');
-  }
-  return record;
-}
-
 const SESSION_STATES = ['working', 'done', 'idle', 'blocked', 'failed', 'stopped', 'missing'];
 
 /** Run stateCommand for a session: the first word of its output, or 'unknown'. */
@@ -368,6 +367,6 @@ function sessionState(session, stateCommand, { cwd = process.cwd() } = {}) {
 
 module.exports = {
   TEST_MODES, testsFile, testsMode, testsIsDefault, setTests, testsCommand, testsLine, preflight, readUsage, sessionState, fill, run, SESSION_STATES,
-  linkGuard, unlinkCommand, reinstallAt, briefAsksReinstall,
-  listWorktrees, trackedFiles, sparseRoots, createLaneWorktree, launchChecks, LAUNCHERS, smokeDue, runSmoke,
+  linkGuard, unlinkCommand, reinstallAt, briefAsksReinstall, smokeDue, runSmoke,
+  listWorktrees, trackedFiles, sparseRoots, createLaneWorktree, launchChecks, LAUNCHERS,
 };

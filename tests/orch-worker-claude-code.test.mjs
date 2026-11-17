@@ -12,6 +12,7 @@ import { PACK, lanes, orch, profileText, scratchRepo, tmp } from './fixtures/orc
 const require = createRequire(import.meta.url);
 const cc = require(join(PACK, 'scripts', 'lib', 'orch-worker-claude-code.cjs'));
 const state = require(join(PACK, 'scripts', 'lib', 'orch-state.cjs'));
+const profile = require(join(PACK, 'scripts', 'lib', 'profile.cjs'));
 
 const temps = [];
 after(() => temps.forEach((d) => rmSync(d, { recursive: true, force: true })));
@@ -35,7 +36,9 @@ function home(settings = { env: { ALPHA_MARK: '1' } }) {
 }
 
 function claimedRun(repo, root, run, extra = {}) {
-  state.init(root, run, lanes(1, extra), { repo, target: 'dev', worktreeBase: join(repo, '..'), worktreePrefix: 'wt-', preflightMode: 'parallel', seats: ['secondary'] });
+  // the run records the profile's registry accounts (M3): placement puts the lane on alpha, the only account
+  const accounts = profile.accounts.list(profile.parse(readFileSync(join(repo, 'PIPELINE_PROFILE.md'), 'utf8')).settings);
+  state.init(root, run, lanes(1, extra), { repo, target: 'dev', worktreeBase: join(repo, '..'), worktreePrefix: 'wt-', preflightMode: 'parallel', accounts });
   state.approve(root, run, 'human');
   state.setLane(root, run, 'l1', { status: 'CLAIMED' });
   return state.load(root, run).lanes.l1;
@@ -77,7 +80,7 @@ describe('gate-launch: the settings scan and the pin (REQ-404)', () => {
     const r = orch(repo, root, ['gate-launch', 'ok', 'l1'], { BUILDER_ACCOUNTS_HOME: h });
     assert.equal(r.status, 0, r.out);
     const j = JSON.parse(r.stdout);
-    assert.match(j.launch, /^start-worker --brief ".*l1\.md" --lane l1 --settings ".*l1\.settings\.json"$/);
+    assert.match(j.launch, /^start-worker --brief ".*l1\.md" --settings ".*l1\.settings\.json"$/); // the account's own command wins over launchCommand (M3), the pin follows it
     assert.ok(existsSync(j.settings), 'pin file');
     const pin = JSON.parse(readFileSync(j.settings, 'utf8'));
     assert.equal(pin.env.ALPHA_MARK, '1');

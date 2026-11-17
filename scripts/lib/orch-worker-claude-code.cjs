@@ -18,11 +18,11 @@
  *              lane runs in a clean guard config dir; a plan account gets its own config dir (secondary) or the
  *              default (primary), and never the API key or an auth token. Values are never read or printed.
  *
+ *   errors     `classifyError(response)` is the shared rule of scripts/lib/account-errors.cjs (REQ-306): LIMIT, BUDGET,
+ *              OVERLOAD or AUTH with an until time; `errorResponse(result, stderr)` shapes a failed run's texts for it.
  *   pin        the `--settings` file every lane launch passes (REQ-404, D40): the account's own env block, its
  *              config dir and its baseUrl, plus `permissions.deny` for everything outside a path-root account's
  *              roots (REQ-402). Written into the run dir at 0600; it never carries a key or a key helper.
- *   errors     `classifyError(response)` is the shared rule of scripts/lib/account-errors.cjs (REQ-306): LIMIT, BUDGET,
- *              OVERLOAD or AUTH with an until time; `errorResponse(result, stderr)` shapes a failed run's texts for it.
  *
  * Tests drive a stub binary through BUILDER_CREDIT_WORKER_BIN (tests/fixtures/orch/stub-worker.cjs).
  */

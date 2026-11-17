@@ -108,3 +108,50 @@ describe('risk reaches the run state and the status page', () => {
     assert.match(st.stdout, /R1 \| l\d+ \| high \(high: money\) \| Full\/FULL \| full \| Full: money/);
   });
 });
+
+describe('the worker brief carries the account the lane is placed on (REQ-502)', () => {
+  const TEMPLATE = readFileSync(join(FIX, '..', '..', '..', 'templates', 'orchestrator-worker-brief.md'), 'utf8');
+
+  test('red: REQ-502 renderBrief fills the Account: line, the lane facts and the rows; unknown placeholders stay for the orchestrator (AC-502a)', () => {
+    const res = plan.split(SAMPLE, PATHS);
+    const lane = { ...res.lanes[0], worktree: '/w/wt-l1', branch: 'orch/l1', result: '/r/l1.md', brief: '/b/l1.md' };
+    const text = plan.renderBrief(TEMPLATE, { run: 'ar', lane, rows: res.rows, target: 'dev', account: { name: 'alpha', worker: 'claude-code', pays: 'subscription' } });
+    assert.match(text, /^# Brief — ar\/l1 {2}\(Full\/FULL · dispatch full\)$/m);
+    assert.match(text, /^- Account: alpha \(worker claude-code, pays subscription\)/m);
+    assert.match(text, /^\| R1 \| Payments: refund verb \| Full\/FULL \| Full: money \|$/m);
+    assert.match(text, /- Owned \(claimed for you; edit freely\): src\/modules\/payments\/\*\*, src\/modules\/payments\/reports\/refunds\.ts$/m);
+    assert.match(text, /- Hot \(shared; .*\): CHANGELOG\.md, contracts\/openapi\.json$/m);
+    assert.match(text, /- Worktree: \/w\/wt-l1 {3}Branch: orch\/l1 \(cut from dev\)$/m);
+    assert.match(text, /^## Result — write it to \/r\/l1\.md$/m);
+    assert.ok(!text.includes('```markdown'), 'the fence around the template body is not part of the brief');
+    assert.ok(!text.includes('<account>') && !text.includes('<ownedFiles>') && !text.includes('<run>'), 'a filled placeholder stays');
+    assert.ok(text.includes('<the exact command(s) and expected digest'), 'the done-test stays for the orchestrator to fill');
+    const noAccount = plan.renderBrief(TEMPLATE, { run: 'ar', lane, rows: res.rows, target: 'dev', account: null });
+    assert.match(noAccount, /^- Account: <account>/m, 'with no placement the Account: line stays a placeholder, never an empty account');
+  });
+
+  test('red: REQ-502 `orch brief <run> <lane>` prints the brief with the placed account; --write writes it once at the lane brief path', () => {
+    const dir = tmp('brief');
+    const root = join(dir, 'orch');
+    const plan1 = { worker: 'claude-code', pays: 'subscription', content: 'any', roles: [], budget: { kind: 'percent', soft: null, hard: 85 }, maxTurns: 40, timeoutMinutes: 90, command: 'go {brief}' };
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { launchCommand: 'go {brief}' }, accounts: { bravo: plan1 } }));
+    const lanesFile = join(dir, 'lanes.json');
+    writeFileSync(lanesFile, JSON.stringify(plan.split(SAMPLE, PATHS)));
+    const init = orch(dir, root, ['init', 'br', '--lanes', lanesFile, '--mode', 'parallel', '--repo', dir]);
+    assert.equal(init.status, 0, init.out);
+    state.approve(root, 'br', 'lead');
+    state.recordUsage(root, 'br', 'primary', 70); // the session account is full: placement goes to bravo
+    state.recordUsage(root, 'br', 'bravo', 20);
+    const r = orch(dir, root, ['brief', 'br', 'l1']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.stdout, /^- Account: bravo \(worker claude-code, pays subscription\)/m);
+    assert.match(r.stdout, /^# Brief — br\/l1 /m);
+    const w = orch(dir, root, ['brief', 'br', 'l1', '--write']);
+    assert.equal(w.status, 0, w.out);
+    const briefPath = state.load(root, 'br').lanes.l1.brief;
+    assert.match(readFileSync(briefPath, 'utf8'), /^- Account: bravo /m);
+    const again = orch(dir, root, ['brief', 'br', 'l1', '--write']);
+    assert.equal(again.status, 3, 'a second --write never overwrites the brief the orchestrator may have edited');
+    assert.match(again.out, /exists/);
+  });
+});

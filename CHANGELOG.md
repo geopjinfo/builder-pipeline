@@ -81,6 +81,29 @@ versions independently of any project it is pasted into.
   RELEASING.md checks the badges in step 2 and publishes to the npm registry after the tag (`npm pack --dry-run`, `npm
   publish --access public`; the tag and the registry version match; the first registry release is 2.0.0). Tests:
   `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
+### Added — M5 delegation rulebook (2.0.0 line)
+
+- **`skills/references/account-selection.md` — the rulebook for choosing an account (REQ-501; plan M5, D8, D29).**
+  Kit-neutral, in Simplified Technical English: ready only and the `note` as a rule; the content class against the
+  project's visibility; the role against the account's `roles` and the headless roles; the task-to-account table;
+  parallel lanes spread over accounts; the soft limit, `NEEDS-IT-ONLY` and the needs-account mark; the pays order
+  with `api-key` last and announced; `LIMIT`, `BUDGET`, `AUTH` holds with the one retry and never a retry loop;
+  `OVERLOAD` in place; never a resume across accounts; a worker's answer is a draft; say which account did what;
+  shadow mode; never a bypass flag or a worker without the repo hooks. It names only `features.<x>` keys the loader
+  knows. `skills/orchestrator.md` §3 points at it.
+- **The brief's `Account:` line (REQ-502).** `templates/orchestrator-worker-brief.md` carries
+  `- Account: <account> (worker <worker>, pays <pays>)`; `scripts/lib/orch-plan.cjs` `renderBrief()` fills it from the
+  placement with the lane facts (rows, files, worktree, branch, target, result) and leaves the judgement placeholders;
+  `orch brief <run> <lane> [--write]` prints the skeleton or writes it once at the lane's brief path (never over an
+  existing brief, exit 3).
+- **The account side of a launch in the prose.** The playbook's P4 dispatch names the account each auditor runs on;
+  `adapters/claude-code.md`, `adapters/codex.md` and `adapters/antigravity.md` each carry a "Worker recipe"
+  subsection: how a lane on an account of that worker starts, its flags and environment, and what the kit cannot
+  enforce there.
+- Tests: `tests/account-selection.test.mjs` (the rulebook ships and is pointed at, its feature and registry keys,
+  the instruction-lint rules over it, the vocabulary, the template line, the P4 sentence, the adapter recipes),
+  `tests/orch-plan.test.mjs` (`renderBrief` and `orch brief`), `tests/pack-prose.test.mjs` (the features names).
+
 ### Added — M3 placement over accounts (2.0.0 line)
 
 - **`placement()` walks the account list (REQ-301 to REQ-304; plan decisions D1, D3, D24).** A run records its
@@ -133,6 +156,39 @@ versions independently of any project it is pasted into.
   `overloadRetries`) instead of the 1.0 `seats` / `limits` keys; `legacyView()` serves only the credit lane's headless
   runner and the golden fixture. `orch usage <run> <account> <pct | $usd>` and `usage-read <run> [<account>|all]` take
   account names; `creditContext()` carries `fallbackAccounts`, the api-key fallback chain in registry order.
+
+### Added — M4 content policy and settings scan (2.0.0 line)
+
+- **Profile `visibility` (REQ-401, D23).** The pipeline-settings block gets a top-level `"visibility"`: `private`
+  (the default) or `public`; the template §1 names it and §16 carries it. The loader refuses any other value.
+- **`scripts/lib/account-policy.cjs` (REQ-401 to REQ-404, D5, D40).** A pure `check(account, project, claimedFiles,
+  decisions, settingsFiles)` that returns ordered faults: `E_CONTENT_PUBLIC` (a `public` or `scratch` account on a
+  private project), `E_PATH_ROOTS` (a claimed file outside the account's path roots, or a worker with no deny-rule
+  adapter — the path is named, never its content), `E_DATA_RECIPIENT` (a free or gateway account, or one with a
+  `baseUrl`, with no decision-log row that names it or its host — the refusal names the entry it expects) and
+  `E_SETTINGS` (the project's and the worktree's `.claude/settings.json` and `settings.local.json` and the account's
+  own settings carry `apiKeyHelper`, `env.ANTHROPIC_*`, `env.CLAUDE_CODE_*`, a proxy or CA variable, or a hook not
+  recorded in `builder.lock.json` — the key and the file are named, never a value). `denyPathsFor()` lists the
+  deny rules a path-root account needs. Tests: `tests/account-policy.test.mjs`.
+- **gate-launch runs the policy gate (REQ-401 to REQ-404, REQ-703, D37).** With a registry account on the lane
+  (the 1.0 secondary seat through `legacyView()`), `orch gate-launch` first runs the pre-launch checks (the session
+  account, a worker with no launcher, a missing account dir — each prints one `CHECK <name>:` line and exits 3), then
+  the policy check over the lane's owned and hot files, the decision log and the settings files, and refuses with
+  exit 3 and the fault list (a `launch.refused` event carries the codes, never a value). A passing launch writes the
+  account's `--settings` pin into `<run>/pins/<lane>.settings.json` at 0600 — the account's env block, its config
+  dir, its baseUrl and the deny rules of a path-root account — and the launch command carries it (`{settings}` in
+  `launchCommand`, or `--settings "<file>"` appended). No registry account: the 1.0 launch, unchanged.
+- **Lane worktree hygiene (REQ-402, REQ-405, D50).** `orch worktree <run> <lane>` — and `gate-launch` when the
+  worktree is absent — creates the lane worktree on a fresh branch named from the lane id, never on a branch another
+  worktree holds (`git worktree list --porcelain` is read first), copies the files `features.accounts.worktree.include`
+  lists (a copy, never a link) and, for a path-root account, checks out only the roots (`git sparse-checkout
+  --no-cone`); an existing worktree that is not sparse on the roots, or a worker without a deny-rule adapter, is
+  refused naming the path. `npx builder run worktree-sweep --keep <lane,...>` leaves the named worktrees in place and
+  reports each as `kept (--keep <lane>)`. GUIDE says what a worktree does not do: it does not sandbox processes and
+  it does not prevent merge conflicts. Tests: `tests/orch-preflight.test.mjs`, `tests/orch-worker-claude-code.test.mjs`,
+  `tests/worktree-sweep.test.mjs`, `tests/pack-prose.test.mjs`.
+- **Outbound guard: gateway token shape.** `PATTERNS` gains `gateway token` (a prefixed gateway key or a long bearer
+  token); the profile's secret-shape refusal (REQ-105) and every redaction use it.
 
 ### Added — M2a readiness assessment (2.0.0 line)
 

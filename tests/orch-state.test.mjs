@@ -620,7 +620,7 @@ describe('the orch command places over accounts (REQ-303, REQ-305, REQ-307, REQ-
     const j = JSON.parse(r.stdout);
     assert.equal(j.account, 'charlie');
     assert.equal(j.pays, 'api-key');
-    assert.equal(j.launch, `go ${s.lanes.l1.brief}`);
+    assert.ok(j.launch.startsWith(`go ${s.lanes.l1.brief} --settings "`) && j.launch.endsWith('l1.settings.json"'), j.launch); // M4: every launch on a registry account carries the --settings pin (REQ-404)
     const paid = events(root).filter((e) => e.type === 'account.paid');
     assert.equal(paid.length, 1);
     assert.deepEqual([paid[0].lane, paid[0].account], ['l1', 'charlie']);
@@ -651,7 +651,7 @@ describe('the orch command places over accounts (REQ-303, REQ-305, REQ-307, REQ-
     const j = JSON.parse(ok.stdout);
     assert.deepEqual([j.account, j.maxTurns, j.timeoutMinutes, j.model, j.price, j.maxBudgetUsd], ['secondary', 25, 60, 'strong-model', 'unpriced', 3]);
     assert.match(j.maxBudgetUsdRole, /backstop only — never a cap/);
-    assert.match(j.launch, / --turns 25 --minutes 60 --account secondary$/);
+    assert.match(j.launch, / --turns 25 --minutes 60 --account secondary --settings ".*l1\.settings\.json"$/); // the pin follows the filled command (REQ-404)
   });
 
   test('red: REQ-307 the command runs the readiness assessment before placing: an account whose probe says signed out is skipped and the line says why (AC-307a)', () => {
