@@ -20,11 +20,13 @@ versions independently of any project it is pasted into.
   <n>` run with the defaults and say so on the first line. New tool group `hygiene` (`unpack --tools hygiene`); the
   shared `scripts/lib/worktree-sweep.cjs` moves to the core set. Tests: `tests/branch-sweep.test.mjs`,
   `tests/run-sweep.test.mjs`, rows in profile, features, cli-commands and unpack-groups.
-- **Repo hygiene spec (`specs/repo-hygiene.spec.md`, REQ-1801 to REQ-1840; decisions D86 to D98).** The ratified spec
+- **Repo hygiene spec (`specs/repo-hygiene.spec.md`, REQ-1801 to REQ-1848; decisions D86 to D103).** The ratified spec
   for the 2.1.0 repo-hygiene modules M18 to M22: eight opt-in checks (`branch-sweep`, `run-sweep`, `ignore-check`,
   `size-check`, `secret-scan`, `deps-check`, `docs-check`, `dead-code`), the `hygiene` runner, two secret hooks, the
-  `repo-steward` persona, the `hygiene` tool group and EXPERIMENTS §23. Spec only; no shipped file changes. Check:
-  `npx builder-pipeline run spec-check specs/repo-hygiene.spec.md --ratified`.
+  `repo-steward` persona, the `hygiene` tool group and EXPERIMENTS §23. REQ-1841 to REQ-1848 (D99 to D103) add the
+  completion gate: `attribution-check`, `artifact-check` with a `--staged` pre-commit mode, `hygiene --gate` with the
+  seven gate rows, and Done waiting on it at Phase 7, in the readiness check and as an opt-in merge gate. Spec only;
+  no shipped file changes. Check: `npx builder-pipeline run spec-check specs/repo-hygiene.spec.md --ratified`.
 
 ## [2.0.0] — 2026-11-17
 
