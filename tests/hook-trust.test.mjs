@@ -226,3 +226,12 @@ test('a rewritten profile loader is never required: the cap leaves the output, t
 
   assert.equal(existsSync(pwned), false, 'no hook required the rewritten loader');
 });
+
+test('REQ-1816: a rewritten outbound-guard.cjs is never required by the secret write guard — it passes and says so, the loader is not run', () => {
+  const root = repo({ 'PIPELINE_PROFILE.md': profileOn({ secretScan: { state: 'on' } }) });
+  write(root, 'scripts/lib/outbound-guard.cjs', "require('node:fs').writeFileSync(require('node:path').join(__dirname, 'PWNED'), 'x'); module.exports = { SHAPES: [] };\n");
+  const r = hook('secret-write-guard.cjs', { tool_name: 'Write', tool_input: { file_path: join(root, 'a.js'), content: `k=ghp_${'a1B2'.repeat(10)}` } }, root);
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /secret-write-guard: not run — outbound-guard\.cjs: scripts\/lib\/outbound-guard\.cjs differs from HEAD; the pre-commit secret scan still holds/);
+  assert.equal(existsSync(join(root, 'scripts', 'lib', 'PWNED')), false);
+});

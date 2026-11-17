@@ -19,7 +19,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-/** Secret shapes. Each is specific enough that a hit is worth refusing the payload over. */
+/**
+ * Secret shapes. Each is specific enough that a hit is worth refusing the payload over. THE ONE LIST (D88, REQ-1817):
+ * the outbound guard, the secret scan, the pre-commit hook and the write guard all import `SHAPES` from here. A copy
+ * elsewhere fails tests/secret-scan.test.mjs.
+ */
 const PATTERNS = [
   ['private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   ['AWS access key', /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/],
@@ -140,4 +144,6 @@ async function send(payload, call, opts = {}) {
   }
 }
 
-module.exports = { PATTERNS, DEFAULTS, scan, knownSecrets, check, send, globToRegex };
+const SHAPES = PATTERNS;
+
+module.exports = { SHAPES, PATTERNS, DEFAULTS, scan, knownSecrets, check, send, globToRegex };

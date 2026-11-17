@@ -79,6 +79,30 @@ versions independently of any project it is pasted into.
 - Tests: `tests/report.test.mjs`, `tests/notify.test.mjs` (a loopback `node:http` server, a stub command),
   `tests/report-cli.test.mjs`; rows in `profile`, `features`, `doctor`, `orch-gaps`, `pack-prose` and `experiments`.
   Docs: FEATURES rows, GUIDE section, USAGE runbook, llms.txt.
+- **`features.ignoreCheck`, `features.sizeCheck`, `features.secretScan` (REQ-1811 to REQ-1817; D87 to D89, D96, D97),
+  default off.** `npx builder-pipeline run ignore-check | size-check | secret-scan` (`scripts/*.mjs` over
+  `scripts/lib/*.cjs`, with `scripts/lib/hygiene-cli.cjs` as the shared shell). Off prints `<feature>: not configured`
+  and exits 3; `--defaults` runs the kit's defaults and says so on the first line.
+- **ignore-check** (soft, exit 0): TRACKED-JUNK and UNIGNORED-JUNK from a built-in catalogue plus `extra`; `allow` by
+  path; prints the `.gitignore` lines to add and never writes the file.
+- **size-check** (hard, exit 1 on LARGE in the tree): sizes from the object store; an LFS pointer is never large; with
+  `history` on, LARGE-HISTORY with the first commit that added the blob, reported, never failed.
+- **secret-scan** (hard, exit 1): every tracked text file under `roots` with the outbound guard's shapes; every tracked
+  `.env` file; a binary file and a file over 1 MB skipped and counted; with `history` on, the added lines of
+  `target..HEAD` within `maxCommits`, each hit naming the commit and the kind and the sentence "Rotate the key. The
+  history rewrite is a decision for a person." No finding ever prints the matched text.
+- **`SHAPES` exported from `scripts/lib/outbound-guard.cjs`** and imported by the scan and the two hooks
+  (REQ-1817); `tests/secret-scan.test.mjs` fails on a second copy.
+- **`hooks/secret-scan-precommit.sh`** (REQ-1815): copied by `unpack`, never armed; `git-hooks --secret-scan` arms it as
+  `pre-commit` (never over a hook already there) and fills `KIT_LIB`; the staged added lines are scanned through
+  `scripts/lib/secret-scan.cjs` as data; no unlock variable, `allow` is the only exception. `doctor` prints the row
+  (armed, missing, foreign) in text and in `--json` under a `git-hooks` section beside the commit-msg row.
+- **`hooks/claude-code/secret-write-guard.cjs`** (REQ-1816): a PreToolUse hook over the content of Write and the new
+  text of Edit and MultiEdit; a hit denies the write naming the kind; a path in `allow` passes; hook trust applies and
+  an untrusted library makes it pass and say so. Settings block in `adapters/claude-code.md`; the scan lib is vendored
+  for the package layout.
+- Tool groups: the new scripts and libs are in the `hygiene` group (REQ-1839); the two libs the hooks load are in
+  `HOOK_LOADS`. FEATURES rows, template §16 lines, hooks README rows.
 
 ## [2.0.0] — 2026-11-17
 
