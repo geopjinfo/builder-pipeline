@@ -34,7 +34,8 @@ versions independently of any project it is pasted into.
   stub `codex` on PATH; the key file is never in `builder.lock.json` or an upgrade backup), `account-secrets` (flags,
   symlink refusal, modes, the Windows branch through an injected platform, the Codex stub), `account-lease`, and
   `secret-shapes` (REQ-1007: the shipped files, `tests/fixtures`, a temp HOME and the captured stdio of a real run
-  hold no key shape; fakes are built at runtime). The Antigravity adapter note says `accounts key` refuses an
+  hold no key shape; fakes are built at runtime). On Windows the codex binary is resolved on PATH (PATHEXT) and run
+  through the shell, and the tests assert the documented Windows behaviour (mode check skipped) instead of POSIX modes. The Antigravity adapter note says `accounts key` refuses an
   Antigravity account. Usage text and the README command row cover the new subcommands.
 
 ### Added — M1 account registry (2.0.0 line)
