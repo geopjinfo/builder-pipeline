@@ -16,6 +16,9 @@
   or "evolving — planner may propose shape changes as BLOCKERS for human ruling">`
 - **Unit of work:** `<what one pipeline run builds — a bounded-context module, a feature slice,
   a service, a screen…>` referred to below as a **module**, keyed by `<moduleKey convention>`.
+- **Visibility:** `private` (default) or `public`. Machine-read as `"visibility"` in §16. An account whose
+  `content` is `public` or `scratch` launches only on a `public` project; an account with path roots sees only
+  those roots. The kit never guesses: an unset value is `private`.
 
 ## 2. Commands (the agent runs these verbatim)
 
@@ -289,7 +292,8 @@ The one block the pack's scripts read — exactly one. It holds the tier runner 
 ≤25-line digest), the ledger paths (keep them equal to §11), the model ids (§12), the protected globs
 (mirror §4; the protected-paths hook reads them and only ADDS them to its own list — while any is set, this
 file is protected too, so a person edits it) and the optional features. Replace every `<…>`: an unfilled placeholder fails validation.
-Check it with `npx builder features` (folder layout: `node scripts/features.mjs`). **States:** `on` runs, and its required keys must be filled
+Check it with `npx builder features` (folder layout: `node scripts/features.mjs`). `visibility` is the §1 fact
+(`private` or `public`) that the account content policy reads before a launch. **States:** `on` runs, and its required keys must be filled
 or the profile is invalid — never a silent skip · `off` prints `<feature>: not configured` and does
 nothing (it means *not told*, never *unimportant*) · `unmeasured` runs and every report says its
 benefit is unmeasured · `experimental-off` / `experimental-on` are opt-in; the second needs
@@ -299,6 +303,7 @@ error, because a typo would otherwise switch a check off in silence.
 ```json pipeline-settings
 {
   "schema": 2,
+  "visibility": "private",
   "commands": {
     "tier": "<command with {tier}, e.g. make test-{tier}>",
     "tiers": ["unit", "integration", "gates"],

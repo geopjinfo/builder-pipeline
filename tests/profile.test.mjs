@@ -96,3 +96,19 @@ test('red: an unknown orchestrator primaryLaunch mode is refused; both known mod
 test('feature() refuses a name the pack does not know', () => {
   assert.throws(() => profile.feature(profile.DEFAULTS, 'nope'), /unknown feature/);
 });
+
+test('red: REQ-401 the top-level visibility fact is private by default and a closed set', () => {
+  assert.equal(profile.parse(block({ schema: 2 })).settings.visibility, 'private');
+  assert.equal(profile.parse(block({ schema: 2, visibility: 'public' })).settings.visibility, 'public');
+  assert.deepEqual(profile.parse(block({ schema: 2, visibility: 'public' })).errors, []);
+  const { errors } = profile.parse(block({ schema: 2, visibility: 'internal' }));
+  assert.ok(errors.some((e) => e.startsWith('visibility: "public" or "private"')), errors.join('\n'));
+  assert.equal(profile.DEFAULTS.visibility, 'private');
+});
+
+test('REQ-401 the template §16 block carries visibility private', () => {
+  const tpl = readFileSync(join(here, '..', 'PIPELINE_PROFILE.template.md'), 'utf8');
+  const raw = JSON.parse(/```json pipeline-settings\r?\n([\s\S]*?)\r?\n```/.exec(tpl)[1]);
+  assert.equal(raw.visibility, 'private');
+  assert.match(tpl, /\*\*Visibility:\*\*/);
+});
