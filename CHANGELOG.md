@@ -5,6 +5,16 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### EXPERIMENTS measurement sections (REQ-801, REQ-901, REQ-1211, REQ-1401)
+
+- **EXPERIMENTS.md §16 to §20 and a decision row in every section.** §16 `familyReview`, §17 `boardLoop` and §18
+  `remoteLanes` state what the 2.0 build adds, how to opt in, the exact measurement and the keep or drop rule. §19 is
+  a reserved skeleton; §20 holds the kit's own measurements (time to first value, false-positive rates of the
+  default-on checks) with empty tables. Every section §1 to §20 ends with a dated
+  `**Decision (<date>).** keep | drop | not yet measured — <number or "no measurement">` row; today no section says
+  keep, because no measured criterion holds yet. Test: `tests/experiments.test.mjs` (sections 1 to 20 present, a
+  non-blank decision row in each, a keep row never on "no measurement").
+
 ## [1.1.0] — 2026-11-16
 
 ### Added
