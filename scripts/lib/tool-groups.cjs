@@ -77,10 +77,10 @@ const SKILLS = {
 const SCRIPTS = {
   'spec-check': 'spec',
   'spec-trace-check': 'spec',
-  // M20 repo hygiene (deps-check, docs-check, dead-code): in `audit` until M21 adds the `hygiene` group (REQ-1839, D93)
-  'deps-check': 'audit',
-  'docs-check': 'audit',
-  'dead-code': 'audit',
+  // M20 repo hygiene, code and docs (REQ-1839, D93)
+  'deps-check': 'hygiene',
+  'docs-check': 'hygiene',
+  'dead-code': 'hygiene',
   'claims-check': 'audit',
   'output-check': 'audit',
   'fix-rate': 'audit',
@@ -135,10 +135,10 @@ const SCRIPTS = {
 const LIBS = {
   'spec-check': 'spec',
   'spec-trace': 'spec',
-  // M20 repo hygiene libs: `audit` until M21 adds the `hygiene` group (REQ-1839, D93); dead-code requires deps-check and ratchet
-  'deps-check': 'audit',
-  'docs-check': 'audit',
-  'dead-code': 'audit',
+  // M20 repo hygiene libs (REQ-1839, D93); dead-code requires deps-check and ratchet
+  'deps-check': 'hygiene',
+  'docs-check': 'hygiene',
+  'dead-code': 'hygiene',
   'claims-check': 'audit',
   'fix-rate': 'audit',
   inventory: 'audit',
@@ -154,7 +154,7 @@ const LIBS = {
   wiring: 'audit',
   'rules-module': 'audit',
   'mutation-summary': 'audit',
-  ratchet: 'audit',
+  ratchet: CORE, // ratchet-refresh (audit) and dead-code (hygiene) both read the bank (M20)
   'decision-index': 'audit',
   personas: 'audit',
   // every scripts/lib/orch-*.cjs is the orchestrator's (groupOf matches the prefix)
@@ -171,7 +171,7 @@ const LIBS = {
   'run-log': CORE,
   'table-row': 'pipeline',
   'instruction-budget': 'pipeline',
-  'instruction-lint': 'pipeline',
+  'instruction-lint': CORE, // the lint (pipeline) and docs-check (hygiene) both require its resolver (M20, D92)
   // shared by two or more groups, or by cli.js
   profile: CORE,
   'run-hint': CORE,
