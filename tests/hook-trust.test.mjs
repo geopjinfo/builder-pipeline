@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -30,8 +30,12 @@ const profileOn = (features) => `\`\`\`json pipeline-settings\n${JSON.stringify(
 function repo(files = {}) {
   const root = tmp();
   git(root, 'init', '-q');
-  mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
-  copyFileSync(join(here, '..', 'scripts', 'lib', 'profile.cjs'), join(root, 'scripts', 'lib', 'profile.cjs'));
+  // The profile loader and every module it requires (the hook checks the whole closure against HEAD).
+  for (const f of trust.closure(join(here, '..', 'scripts', 'lib', 'profile.cjs'))) {
+    const rel = relative(join(here, '..'), f);
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    copyFileSync(f, join(root, rel));
+  }
   for (const [rel, text] of Object.entries(files)) write(root, rel, text);
   git(root, 'add', '-A');
   git(root, 'commit', '-q', '-m', 'base');
