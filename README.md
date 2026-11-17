@@ -131,8 +131,9 @@ records, how to resume, and the troubleshooting table.
 | &nbsp;&nbsp;`[--dry-run] [--no-extras] [--experimental] [--models strong=x,mid=y \| codex.<tier>=x \| antigravity.<tier>=x]` | options for `unpack` / `upgrade` |
 | `verify` | the install and `PIPELINE_PROFILE.md`, including its §16 settings block |
 | `features` | which optional checks are on, off, unmeasured or experimental |
-| `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why |
+| `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why; then one advisory `accounts` row per account with its readiness (or `profile: legacy seats, run npx builder accounts migrate`); the exit code is unchanged |
 | `accounts migrate [--dry-run]` | rewrite the 1.0 orchestrator seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into `features.accounts`; only the settings block changes, with a `PIPELINE_PROFILE.md.bak` backup |
+| `accounts` · `accounts add\|note\|key\|remove\|list` | the readiness report (one block per account, exit 1 when one is not ready) and the registry commands; they land with the accounts-commands change of the 2.0.0 release — [GUIDE § Accounts](GUIDE.md) |
 | `check-ledgers` | the mechanical board / registry gates — wire into CI |
 | `check-targets` | qa-audit environment safety — wire into CI |
 | `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
