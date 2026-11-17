@@ -243,7 +243,7 @@ describe('kinds, the model floor and the allow list', () => {
   });
 
   test('the allow list names whole commands only; a read-only kind may write its records and nothing else', () => {
-    const c2 = credit.creditContext({ models: { mid: 'mid-model' }, features: { orchestrator: { credit: { seatCommands: { 'module-tester': ['make test-unit'] } } } } });
+    const c2 = credit.creditContext({ models: { mid: 'mid-model' }, features: { accounts: { state: 'on', accounts: { credit: { worker: 'claude-code', pays: 'api-key', guards: { seatCommands: { 'module-tester': ['make test-unit'] } } } } } } });
     const auditor = credit.allowList({ kind: 'vuln-auditor', key: 'k1', scope: ['src/**'] }, c2);
     assert.equal(auditor.filter((x) => x.startsWith('Bash(')).some((x) => x.includes('*')), false);
     assert.deepEqual(auditor.filter((x) => x.startsWith('Edit(src')), []);

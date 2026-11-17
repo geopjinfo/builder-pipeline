@@ -87,7 +87,7 @@ function testerBrief(m, code, runs, boards) {
  */
 function plan(worktree, key, { tester = false, seats = SEATS.map((s) => s.kind), settings = {} } = {}) {
   const models = settings.models || {};
-  const credit = (settings.features && settings.features.orchestrator && settings.features.orchestrator.credit) || {};
+  const credit = require('./accounts-registry.cjs').legacyView(settings).credit;
   const testRoots = credit.testRoots || ['test/', 'tests/'];
   const runs = (settings.paths && settings.paths.runs) || '.pipeline';
   const boards = (settings.paths && settings.paths.boards) || 'tasks';

@@ -41,26 +41,56 @@ describe('the feature gate', () => {
   test('the features line is printed and its absence never reads as on', () => {
     assert.equal(profile.feature(profile.DEFAULTS, 'orchestrator').line, 'orchestrator: not configured');
     assert.equal(profile.feature(profile.DEFAULTS, 'orchestrator').enabled, false);
-    assert.equal(profile.FEATURES.orchestrator.defaults.credit.enabled, false);
+    assert.equal(profile.accounts.legacyView(profile.DEFAULTS).credit.enabled, false); // no api-key account: no credit lane
   });
 
-  test('red: an active orchestrator validates its shapes — target, seats, lite without liteSplit, secondary without a launcher, credit without a cap', () => {
-    const errs = (o, extra = {}) => profile.parse(profileText({ orchestrator: o, ...extra })).errors.join('\n');
+  test('red: an active orchestrator validates its shapes — target, lite without liteSplit; accounts replace seats (REQ-101 to REQ-103)', () => {
+    const errs = (o, extra = {}) => profile.parse(profileText({ orchestrator: o, ...extra, legacy: true })).errors.join('\n');
+    const acc = (accounts, o = {}) => errs(o, { extraFeatures: { accounts: { state: 'on', accounts } } });
     assert.equal(errs({}), '');
     assert.match(errs({ target: null }), /features\.orchestrator\.target: required/);
-    assert.match(errs({ seats: ['tertiary'] }), /features\.orchestrator\.seats/);
-    assert.match(errs({ seats: [] }), /features\.orchestrator\.seats/);
     assert.match(errs({ standardPipeline: 'lite' }), /needs features\.liteSplit enabled/);
-    assert.match(errs({ seats: ['secondary', 'primary'] }), /launchCommand: required while "secondary" is a seat/);
     assert.match(errs({ launchCommand: 'start-worker' }), /launchCommand: must contain \{brief\}/);
-    assert.match(errs({ credit: { enabled: true } }), /credit\.dailyCapUsd: required/);
-    assert.match(errs({ credit: { enabled: true, dailyCapUsd: 0, fallback: [] } }), /dailyCapUsd: must be > 0/);
-    assert.match(errs({ credit: { enabled: true, dailyCapUsd: 5 } }), /secondaryConfigDir: required while the credit fallback names "secondary"/);
-    assert.match(errs({ credit: { enabled: true, dailyCapUsd: 5, fallback: [], commands: ['npm run *'] } }), /no wildcards/);
     assert.match(errs({ tests: { mode: 'remote', local: null, remote: null } }), /tests\.remote: required/);
     assert.match(errs({ preflight: [{ name: 'x' }] }), /preflight\[0\]/);
     assert.match(errs({ modulePattern: '^src/modules/' }), /needs one capture group/);
-    assert.equal(errs({ credit: { enabled: true, dailyCapUsd: 5, fallback: [] } }), '');
+    // REQ-103: the 1.0 seat keys are refused while the orchestrator is on, naming the keys and the migrate command.
+    for (const legacy of [{ seats: ['secondary', 'primary'] }, { limits: { primary: 50 } }, { secondaryConfigDir: '.x' }, { credit: { enabled: true, dailyCapUsd: 5 } }]) {
+      const e = errs(legacy);
+      assert.match(e, new RegExp(`features\\.orchestrator\\.${Object.keys(legacy)[0]}: 1\\.0 seat keys`), e);
+      assert.match(e, /npx builder accounts migrate/);
+    }
+    assert.match(errs({ seats: ['secondary'], credit: { enabled: false } }), /features\.orchestrator\.seats, credit: 1\.0 seat keys/);
+    // With the orchestrator off the same profile loads with one warning and no error.
+    const off = profile.parse(profileText({ orchestrator: { state: 'off', seats: ['secondary', 'primary'] }, legacy: true }));
+    assert.deepEqual(off.errors, []);
+    assert.equal(off.warnings.length, 1);
+    assert.match(off.warnings[0], /features\.orchestrator\.seats: 1\.0 seat keys.*accounts migrate/);
+    // REQ-101, REQ-102: the registry validates each account.
+    assert.match(acc({ alpha: { pays: 'subscription' } }), /accounts\.alpha\.worker: one of claude-code \| codex \| session/);
+    assert.match(acc({ alpha: { worker: 'claude-code' } }), /accounts\.alpha\.pays: one of subscription \| gateway \| free \| api-key/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'coins' } }), /accounts\.alpha\.pays: one of/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'free', content: 'secret' } }), /accounts\.alpha\.content: public \| scratch \| any, or a non-empty list of path roots/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'free', roles: ['janitor'] } }), /unknown role "janitor"/);
+    assert.match(acc({ alpha: { worker: 'session', pays: 'subscription' }, beta: { worker: 'session', pays: 'subscription' } }), /at most one account has worker "session"/);
+    assert.match(acc({ Alpha: { worker: 'session', pays: 'subscription' } }), /an account name matches/);
+    assert.match(acc({ key: { worker: 'session', pays: 'subscription' } }), /"key" is a reserved name/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'subscription', baseUrl: 'http://localhost:1/' , command: 'x {brief}' } }), /E_BASEURL_SUB/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'free', command: 'x {brief}', budget: { kind: 'tokens' } } }), /budget\.kind: one of percent \| usd/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'free', command: 'x {brief}', budget: { kind: 'percent', soft: 90, hard: 80 } } }), /soft: must not exceed hard/);
+    assert.match(acc({ alpha: { worker: 'claude-code', pays: 'subscription' } }), /accounts\.alpha\.command: required for a terminal worker account/);
+    const noModels = profile.parse(profileText({ models: { strong: null, mid: null, orchestrator: null }, extraFeatures: { accounts: { state: 'on', accounts: { alpha: { worker: 'claude-code', pays: 'api-key' } } } }, legacy: true })).errors.join('\n');
+    assert.match(noModels, /models\.strong \/ models\.mid: at least one is required while an api-key account exists/);
+    assert.equal(acc({ alpha: { worker: 'session', pays: 'subscription', budget: { kind: 'percent', hard: 60 } }, beta: { worker: 'claude-code', pays: 'subscription', command: 'go {brief}', configDir: '.claude-beta' }, gamma: { worker: 'claude-code', pays: 'api-key', budget: { kind: 'usd', hard: 5 } } }), '');
+  });
+
+  test('red: §16 account settings never hold a secret (REQ-105) — the kind of match is named, never the text', () => {
+    const fake = ['sk-ant', 'api03', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'].join('-');
+    const text = profileText({ extraFeatures: { accounts: { state: 'on', accounts: { alpha: { worker: 'session', pays: 'subscription', note: `use ${fake}` } } } } });
+    const r = profile.parse(text);
+    assert.equal(r.errors.length, 1);
+    assert.match(r.errors[0], /features\.accounts\.accounts\.alpha\.note: holds a secret-shaped value \(Anthropic key\)/);
+    assert.ok(!r.errors[0].includes(fake));
   });
 });
 

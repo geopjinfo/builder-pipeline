@@ -81,6 +81,25 @@ versions independently of any project it is pasted into.
   RELEASING.md checks the badges in step 2 and publishes to the npm registry after the tag (`npm pack --dry-run`, `npm
   publish --access public`; the tag and the registry version match; the first registry release is 2.0.0). Tests:
   `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
+### Added — M1 account registry (2.0.0 line)
+
+- **`features.accounts` (REQ-101 to REQ-106, plan decision D33).** The registry of the accounts the orchestrator may
+  place lanes on: per account a worker (`session`, `claude-code`, `codex`, `api-key`, ...), who pays, a content
+  policy, roles, a family, a config dir, a start command and a budget (`percent` or `usd`, soft and hard, with a
+  renewal period). Names follow one rule (lowercase, 16 characters, a reserved list) and the loader refuses a value
+  shaped like a secret, naming the kind and never the text (REQ-105). `scripts/lib/account-paths.cjs` names every
+  per-account path under `~/.builder-pipeline/accounts/<name>/` (or `BUILDER_ACCOUNTS_HOME`).
+- **The 1.0 seat keys are refused or warned about.** `features.orchestrator.seats`, `limits`, `secondaryConfigDir`
+  and `credit` are an error while the orchestrator is on and a one-line stderr warning while it is off, both naming
+  `npx builder accounts migrate`.
+- **`npx builder accounts migrate [--dry-run]`.** Rewrites the seat keys into accounts (`primary` as the session,
+  `secondary` as a Claude Code account with its config dir and start command, `credit` as an api-key account with a
+  USD budget and the credit guards), in the `pipeline-settings` block only, with a `PIPELINE_PROFILE.md.bak` backup;
+  a second run changes nothing, and a run holding a LAUNCHED or STALLED lane refuses. The golden fixture proves the
+  migrated registry places every 1.0 case as before (REQ-106); finished run states are read unchanged (REQ-311).
+- The 1.0 placement and credit code reads the registry through `legacyView()` until M3 replaces it; the template §16
+  carries an `accounts` line instead of the seat keys, and FEATURES.md names the Accounts row.
+
 ### Added — M0 accounts spec and decisions (2.0.0 line)
 
 - **Accounts spec (`specs/accounts.spec.md`).** The requirements oracle for the 2.0.0 "accounts" release: REQ-101 to
