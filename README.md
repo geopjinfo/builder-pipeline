@@ -173,6 +173,9 @@ npx builder check-ledgers --boards work/boards --registry work/REGISTRY.md
 npx builder run board-import --format ralph prd.json --out tasks/imported.md
 npx builder run spec-check specs/orders.spec.md
 npx builder run spec-trace-check docs/requirements.md --tests tests --packs packs
+npx builder run instruction-lint AGENTS.md CLAUDE.md
+npx builder run instruction-budget AGENTS.md --max-lines 200
+npx builder run worktree-sweep --target main --idle-hours 6
 ```
 
 `board-import` writes another tool's task file (ralph `prd.json`, Spec Kit `tasks.md`) as a kit build board: what the
@@ -180,6 +183,11 @@ source states is kept, what the importer infers is marked `⚠ CONFIRM`, every u
 source names no test keeps an empty evidence cell so `check-ledgers` reports it (LG-5). `spec-check` on a `.md` path and
 `spec-trace-check` on named files with `--tests` / `--packs` run with the default settings while their feature is off,
 and say so on their first line. The spec for this is `specs/toolkit-standalone.spec.md` in the repository.
+The three hygiene checks do the same on named targets: `instruction-lint <file>…` and `instruction-budget <file>…
+[--max-lines <n>]` check the named files with the default settings (no baseline: the lint's ratchet is reported, not
+enforced). `worktree-sweep --target <branch> [--idle-hours <n>]` judges every worktree against that branch as a dry run;
+`--apply` removes, and no hold command runs from defaults. Each says so on its first line, and a flag without its value, an
+unknown flag or a named file that does not exist is a usage error. The spec is `specs/toolkit-hygiene-standalone.spec.md`.
 
 ## 📚 Documentation
 
