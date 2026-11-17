@@ -26,7 +26,6 @@
 const fs = require('fs');
 const path = require('path');
 const { childEnv } = require('./worker-env.cjs');
-const { classifyError } = require('./worker-errors.cjs');
 
 const NAME = 'claude-code';
 const API_KEY_VAR = 'ANTHROPIC_API_KEY';
@@ -290,5 +289,5 @@ module.exports = {
   NAME, API_KEY_VAR, KEY_SOURCE, CONFIG_GLOBS, DEFAULT_GUARD_DIR,
   settings, args, allowEntries, denyEntries, env, guardDirFaults, keySourceVerdict, streamCost, resultOf, resultLine, runSucceeded, errorTexts, errorResponse, classifyError, denials, resolveBin,
   launchSessionId, readLaunchLog,
-  KIT_HOOK_MARKER, PERMISSION_MODES, launchArgs, accountEnv, structuredVerdict, gateHookEntries, isKitHook, removeKitHooks, classifyError,
+  KIT_HOOK_MARKER, PERMISSION_MODES, launchArgs, accountEnv, structuredVerdict, gateHookEntries, isKitHook, removeKitHooks,
 };
