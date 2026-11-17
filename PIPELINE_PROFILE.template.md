@@ -362,6 +362,7 @@ error, because a typo would otherwise switch a check off in silence.
     "mutationGate":     { "state": "experimental-off" },
     "liteSplit":        { "state": "experimental-off", "cap": 4, "trigger": 3, "ledgers": ["(^|/)CHANGELOG\\.md$"], "docsOnly": ["(^|/)README\\.md$"] },
     "remoteLanes":      { "state": "experimental-off", "remotePollSeconds": 30 },
+    "boardLoop":        { "state": "experimental-off", "promptFile": "LOOP_PROMPT.md", "gate": null, "maxPasses": null, "passTimeoutMinutes": 60, "maxTurnsPerPass": 20, "stallMinutes": 5, "maxRetriesPerRow": 2, "maxConsecutiveFailures": 3, "maxConsecutiveNoProgress": 3, "testRoots": ["test/", "tests/"] },
     "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
     "orchestrator":     { "state": "off", "target": null, "primaryLaunch": "manual", "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null },
     "accounts":         { "state": "off", "softLimitPct": 80, "usageStaleMinutes": 30, "accounts": {} }

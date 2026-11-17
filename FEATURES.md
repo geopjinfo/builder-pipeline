@@ -104,6 +104,7 @@ until you opt in ([`EXPERIMENTS.md`](EXPERIMENTS.md)). `npx builder features` pr
 | `mutationGate` | a blocking mutation threshold, set from measured runs | any | [§5](EXPERIMENTS.md) |
 | `liteSplit` | the lite split above | any | [§8](EXPERIMENTS.md) |
 | `remoteLanes` | a lane on another machine over plain ssh; git through a shared origin is the only data path (`orch remote …`) | Claude Code workers; ssh and git on both hosts | [§18](EXPERIMENTS.md) |
+| `boardLoop` | the loop runner above a board: a fresh worker per pass, runner-owned row choice, gate plus verdict, one commit per passing pass, named stops (`npx builder run board-loop`, `orch loop`) | Claude Code workers | [§17](EXPERIMENTS.md) |
 | `tokenEconomizer` · `planReview` | third-party cost plugin on trial lanes · fresh-context plan review | protocol only | [§9–10](EXPERIMENTS.md) |
 | `rankedSearch` · `riskHint` · `walkPriority` · `ruleNotes` | cheap-model advice, each through the outbound guard, never a gate | protocol only | [§12–15](EXPERIMENTS.md) |
 
