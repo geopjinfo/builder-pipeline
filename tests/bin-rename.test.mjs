@@ -47,6 +47,26 @@ function unreleasedLines(text) {
   }).filter(Boolean);
 }
 
+/**
+ * The newest CHANGELOG section: [Unreleased] while it holds any entry, else the first released section. The release
+ * commit renames [Unreleased] to the version and leaves an empty [Unreleased] above it, so the bullet this test
+ * looks for moves into the released section on release day and stays there.
+ */
+function newestSectionLines(text) {
+  const unreleased = unreleasedLines(text);
+  if (unreleased.some(([, l]) => /^### /.test(l))) return unreleased;
+  const lines = text.split(/\r?\n/);
+  let on = false, seen = false;
+  return lines.map((l, i) => {
+    if (/^## \[/.test(l)) {
+      if (seen) { on = false; return null; }
+      if (!/^## \[Unreleased\]/.test(l)) { on = true; seen = true; }
+      return null;
+    }
+    return on ? [i + 1, l] : null;
+  }).filter(Boolean);
+}
+
 /** The old-bin lines of one shipped file as `<rel>:<line>: <text>`. */
 export function oldBinLines(rel, text) {
   const scan = rel === 'CHANGELOG.md' ? unreleasedLines(text) : text.split(/\r?\n/).map((l, i) => [i + 1, l]);
@@ -98,10 +118,10 @@ describe('2.0.0 — one bin, builder-pipeline', () => {
     assert.deepEqual(hits, [], `say npx builder-pipeline:\n${hits.join('\n')}`);
   });
 
-  test('red: CHANGELOG [Unreleased] has a Breaking bullet that names the dropped bin', () => {
-    const lines = unreleasedLines(readFileSync(join(PACK, 'CHANGELOG.md'), 'utf8')).map(([, l]) => l);
+  test('red: the newest CHANGELOG section ([Unreleased], or the release it became) has a Breaking bullet that names the dropped bin', () => {
+    const lines = newestSectionLines(readFileSync(join(PACK, 'CHANGELOG.md'), 'utf8')).map(([, l]) => l);
     const at = lines.findIndex((l) => /^### Breaking\b/.test(l));
-    assert.notEqual(at, -1, 'no `### Breaking` heading under [Unreleased]');
+    assert.notEqual(at, -1, 'no `### Breaking` heading in the newest CHANGELOG section');
     let end = lines.findIndex((l, i) => i > at && /^### /.test(l));
     if (end === -1) end = lines.length;
     const section = lines.slice(at + 1, end).join('\n');
