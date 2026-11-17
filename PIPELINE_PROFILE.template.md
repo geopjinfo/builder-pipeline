@@ -370,6 +370,8 @@ into each pass row); the kit's own figure is 347 MB per lane (`EXPERIMENTS.md` Â
     "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
     "branchSweep":      { "state": "off", "target": null, "staleDays": 30, "keep": ["main", "release/*"], "remote": "list" },
     "runSweep":         { "state": "off", "keepDays": 30, "roots": [".pipeline", "logs/backups"] },
+    "attributionCheck": { "state": "off", "target": null, "patterns": [], "authors": [], "allow": [] },
+    "artifactCheck":    { "state": "off", "extra": [], "allow": [] },
     "capacity":         { "state": "off", "perLaneMb": null, "reserveCores": 2, "maxLoadPerCore": 1.0, "minFreeMb": 1024, "minDiskMb": 2048, "intervalSeconds": 60, "ttlSeconds": 180, "riseAfterTicks": 3, "holdMaxMinutes": 60, "explainAfterTicks": 10 },
     "depsCheck":        { "state": "off", "manifest": "package.json", "lockfile": true, "listCommand": "npm ls --json --all", "auditCommand": "npm audit --json", "format": "npm", "maxSeverity": "high", "unused": { "roots": [], "extensions": [] } },
     "docsCheck":        { "state": "off", "roots": ["README.md", "docs"], "ignorePaths": [] },

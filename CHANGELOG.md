@@ -7,6 +7,24 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **M21 completion gate, part 1: `attribution-check` and `artifact-check` (`specs/repo-hygiene.spec.md` REQ-1841 to
+  REQ-1843, D99 to D104).** Two opt-in §16 features, both `off` by default, both hard: a finding exits 1.
+  `features.attributionCheck` (`target`, `patterns`, `authors`, `allow`): `npx builder-pipeline run attribution-check
+  --since <ref>` reports TRAILER (a `Co-Authored-By` line naming an assistant, a session line, a `Generated with|by`
+  footer, a robot-emoji footer), AUTHOR (an assistant author or committer identity) and BRANCH (the current branch, or
+  a local branch not contained in the target, whose name carries an assistant or tool name) with the short SHA or the
+  branch name and the kind, never the message text; it prints the amend or `git branch -m OLD feature/NEW` command
+  and runs none, and a commit contained in the target is reported with "a history rewrite is a decision for a person".
+  `features.artifactCheck` (`extra`, `allow`): `npx builder-pipeline run artifact-check [--since <ref> | --staged]`
+  reports ASSISTANT-FILE, SCRATCH-FILE, ARCHIVE (the D103 separation catalogue), ASSISTANT-IGNORE (an assistant path
+  in `.gitignore`) and AI-LABEL (a generated-content label line in a tracked text file), each with the `git rm
+  --cached` or `.gitignore` line a person would apply; `--staged` reads the index, and `hooks/artifact-check-precommit.sh`
+  runs it before a commit (copied, never armed; no unlock variable, `allow` is the only way past). With the feature
+  off, `--defaults` runs the built-in lists and says so on the first line. New read-only persona `agents/repo-steward.md`
+  (keep, fix or allow per soft finding; the separation and terminology judgements; never edits, never `--apply`).
+  Tests: `tests/attribution-check.test.mjs`, `tests/artifact-check.test.mjs`, rows in profile, features and
+  cli-commands. The runner, `hygiene --gate`, the hook arming in `git-hooks` and `doctor`, and the Phase 7, readiness,
+  orchestrator and builder-init wiring follow in part 2 once the M19 and M20 checks are on main.
 - **M18 git hygiene: `branch-sweep` and `run-sweep` (`specs/repo-hygiene.spec.md` REQ-1801 to REQ-1807, D86).** Two
   opt-in §16 features, both `off` by default. `features.branchSweep` (`target` required; `staleDays`, `keep`, `remote`
   `list`|`off`): `npx builder-pipeline run branch-sweep` gives every local branch one verdict — MERGED, STALE or KEEP

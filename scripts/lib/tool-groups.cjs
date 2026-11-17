@@ -45,6 +45,8 @@ const PERSONAS = {
   'capacity-steward': 'orchestrator',
   // 2.1.0: the progress reporter persona (experimental) goes with the orchestrator, whose skill starts the watcher
   'progress-reporter': 'orchestrator',
+  // 2.1.0 (M21): the read-only judge of a hygiene report goes with the hygiene checks it reads
+  'repo-steward': 'hygiene',
 };
 
 /** Skills (skills/*.md, skills-extra/<name>/), by name. `references` is the pipeline skill's own folder. */
@@ -102,6 +104,8 @@ const SCRIPTS = {
   'worktree-sweep': 'orchestrator',
   'branch-sweep': 'hygiene',
   'run-sweep': 'hygiene',
+  'attribution-check': 'hygiene',
+  'artifact-check': 'hygiene',
   'cost-window': 'evals',
   'seat-peaks': 'evals',
   features: CORE,
@@ -166,6 +170,9 @@ const LIBS = {
   'worktree-sweep': CORE, // the orchestrator's sweep and run-sweep (hygiene) share its tree helpers
   'branch-sweep': 'hygiene',
   'run-sweep': 'hygiene',
+  'attribution-check': 'hygiene',
+  'artifact-check': 'hygiene',
+  'hygiene-match': 'hygiene', // the glob rules the gate checks share
   capacity: 'orchestrator', // 2.1.0 (M15): read by orch-state, orch, board-loop and the capacity command
   'bash-cap': 'hooks',
   reanchor: 'hooks',
