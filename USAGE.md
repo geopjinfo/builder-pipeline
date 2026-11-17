@@ -230,5 +230,6 @@ One module is a dozen or more agent dispatches: the planner, the builder in batc
 loop-backs. Strong-model phases dominate cost; profile §12 is where you trade cost vs. rigor. Where
 the harness keeps transcripts and `features.costAccounting` is on, the board shows measured spend
 per seat. `npx builder run cost-window` and `npx builder run seat-peaks` compare runs before and
-after a change. Judge any setting change over several runs, never one. Scaling guidance — what may
+after a change. `cost-window` reads Claude Code transcripts (`reader: "claude-code"`) or Codex CLI
+rollout files (`reader: "codex"`; tokens are shown, cost only with a `--rates` table). Judge any setting change over several runs, never one. Scaling guidance — what may
 be merged or skipped and what never — is in `DESIGN.md` §"Tuning".

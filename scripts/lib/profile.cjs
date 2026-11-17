@@ -34,6 +34,9 @@ const { basename, dirname, isAbsolute, join, relative, resolve } = require('node
 const SCHEMA = 2;
 const STATES = ['on', 'off', 'unmeasured', 'experimental-off', 'experimental-on'];
 const ACTIVE = new Set(['on', 'unmeasured', 'experimental-on']);
+/* features.costAccounting.reader: which harness's transcripts the cost scripts read (scripts/lib/transcript-usage.cjs +
+ * session-usage.cjs for Claude Code; scripts/lib/codex-usage.cjs for the Codex CLI). */
+const COST_READERS = ['claude-code', 'codex'];
 
 /**
  * Every feature the pack knows, its default, and the keys that must be non-null when it is active. A default of
@@ -467,6 +470,11 @@ function validate(settings) {
       errors.push('features.worktreeSweep.holdCommand: null, or a command containing {path}');
     }
   }
+  /* The cost readers the kit ships. A third value would make cost-window print "unmeasurable" for a typo. */
+  const reader = settings.features?.costAccounting?.reader;
+  if (reader !== undefined && reader !== null && !COST_READERS.includes(reader)) {
+    errors.push(`features.costAccounting.reader: one of ${COST_READERS.map((r) => `"${r}"`).join(' | ')}, got ${JSON.stringify(reader)}`);
+  }
   errors.push(...validateOrchestrator(settings, badRegex));
   const budget = settings.features?.instructionBudget?.maxLines;
   if (budget !== undefined && budget !== null && !(Number.isInteger(budget) && budget > 0)) errors.push('features.instructionBudget.maxLines: a positive integer');
@@ -729,4 +737,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, CONFIG_FILE, parse, parseJson, load, configPath, validate, logsProblem, feature, merge, rootOf };
+module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, CONFIG_FILE, COST_READERS, parse, parseJson, load, configPath, validate, logsProblem, feature, merge, rootOf };

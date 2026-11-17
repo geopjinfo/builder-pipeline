@@ -20,6 +20,20 @@ versions independently of any project it is pasted into.
   § "Install one tool group" (the group table), README § "One tool, without the pipeline", FEATURES.md row, llms.txt,
   the CLI usage text. Tests: `tests/toolkit-unpack-groups.test.mjs` (one test per acceptance criterion, including a
   guard that walks the real install list in both layouts and fails on any unmapped file).
+- **Codex transcript cost reader (`specs/toolkit-cost-codex.spec.md`, REQ-601 to REQ-614).**
+  `features.costAccounting.reader` accepts `"codex"` beside `"claude-code"`; any other value is a validation error
+  that names both. `scripts/lib/codex-usage.cjs` reads the Codex CLI rollout files
+  (`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`, format verified from the `openai/codex` source and cited in the
+  spec) in two layers: a record layer (`parseLine`, `records`) that types `session_meta`, `turn_context`,
+  `token_count` (with `rate_limits` passed through raw) and `token_usage_record` lines and reports every other shape
+  as `unrecognised` with its line number; and a cost layer (`sessionUsage`, `collect`) that sums the differences
+  between cumulative `token_count` totals per model inside a window, and marks a session whose total decreases as
+  unmeasurable. `cost-window` branches on the reader, takes `--transcripts <dir>`, lists unmeasurable files, and
+  reports Codex models as unpriced (never `$0`) unless `--rates <file>` prices them; no OpenAI rates ship (the pricing
+  page could not be cited with model names on the day, see the spec's decision log). `seat-peaks` and
+  `orchestrator-check` print "unmeasurable" with the reader and a reason for `codex`. FEATURES.md, adapters/codex.md
+  and USAGE.md say what is measured on Codex. Tests: `tests/toolkit-cost-codex.test.mjs` (one test per acceptance
+  criterion) over `tests/fixtures/codex-sessions/`.
 
 - **One tool, without the pipeline (`specs/toolkit-standalone.spec.md`, REQ-101 to REQ-405).** Each kit tool runs in a
   project that never adopted the pipeline. *Settings without a profile:* with no `PIPELINE_PROFILE.md`, the settings
