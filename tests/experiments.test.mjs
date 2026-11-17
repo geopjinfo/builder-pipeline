@@ -126,6 +126,40 @@ describe('M14 — the evidence programme (REQ-1402, REQ-1405, REQ-1401)', () => 
   });
 });
 
+describe('REQ-1701 — §21 holds the capacity evidence and the template note repeats its figure', () => {
+  const s21 = sections(text).find((s) => s.n === 21);
+  const perLane = (md) => (md.match(/(\d+) MB per lane/) || [])[1];
+  test('red: §21 names capacity, carries a measurement row with the per-lane peak RSS, a recorded tick log and the keep-or-drop criterion (AC-1701a)', () => {
+    assert.ok(s21, '§21 exists');
+    assert.match(s21.title, /`capacity`/);
+    assert.doesNotMatch(s21.title, /planned/);
+    assert.match(s21.body, /^\| 2026-\d{2}-\d{2} \| [0-9a-f]{7} .*\| 347 \|/m, 'a measurement row carries the per-lane peak of 347 MB');
+    assert.match(s21.body, /\*\*Recorded tick log\.\*\*/);
+    assert.match(s21.body, /capacity\.hold/);
+    assert.match(s21.body, /false bind/i);
+    assert.match(s21.body, /\*\*Keep\*\*/);
+    assert.match(s21.body, /\*\*Drop\*\*/);
+    const d = s21.body.match(DECISION);
+    assert.ok(d && d[2] === 'keep' && /\d+ MB per lane/.test(d[3]), 'the decision is a keep with the per-lane figure');
+  });
+  test('red: the template note on perLaneMb carries the §21 figure (AC-1701b)', () => {
+    const tpl = readFileSync(join(here, '..', 'PIPELINE_PROFILE.template.md'), 'utf8');
+    assert.ok(perLane(s21.body), '§21 states "<n> MB per lane"');
+    assert.match(tpl, /perLaneMb[^\n]*\n?[^\n]*\d+ MB per lane/, 'the template explains perLaneMb with a figure');
+    assert.equal(perLane(tpl), perLane(s21.body));
+  });
+});
+
+describe('REQ-1702 — §22 holds the reporter\'s recorded run', () => {
+  test('red: §22 carries the bytes per report, the only-on-change suppression ratio and the summary criterion (AC-1702a)', () => {
+    const s22 = sections(text).find((s) => s.n === 22);
+    assert.match(s22.body, /\| Bytes per report \|/);
+    assert.match(s22.body, /\| Suppression ratio \|/);
+    assert.match(s22.body, /^\| \d+ \| \d+ \| \d+ \| \d+ \| \d+ \| \d+ \| \d+ \| \d+ \| \d+ \| \d+ of \d+ ticks silent \(\d+%\) \|$/m, 'one recorded-run row');
+    assert.match(s22.body, /summary criterion/i);
+  });
+});
+
 describe('REQ-1614 — reporterSummary is experimental-off with a §22 entry', () => {
   test('red: §22 names reporterSummary, carries the bytes row, the suppression ratio row and the summary criterion, and a decision row', () => {
     const s22 = sections(text).find((s) => s.n === 22);

@@ -153,6 +153,8 @@ records, how to resume, and the troubleshooting table.
 | `check-ledgers` | the mechanical board / registry gates — wire into CI |
 | `check-targets` | qa-audit environment safety — wire into CI |
 | `personas-check` | the persona roster check (`scripts/personas-check.mjs`) |
+| `run capacity --once \| --watch` | the capacity governor (`features.capacity`, §16): one tick writes `<orch root>/capacity.json`, and the lane cap reads it as one more min() term — [GUIDE § Capacity governor](GUIDE.md) |
+| `run report --once \| --watch` | the progress reporter (`features.reporter`, §16): one report per interval to stdout, a file, a webhook or a command, only on change — [GUIDE § Progress reporter](GUIDE.md) |
 | `run [<script> [args]] [--config <path>]` | a kit script, run in the project folder; no name lists them; `--config` names a settings file for a project with no profile (below) |
 | `targets` | the `--tool` values |
 | `--version` | the kit version |
@@ -173,6 +175,10 @@ you installed; *partial* = the kit relies on instructions or a by-hand step ther
 | protected-paths hook | supported — copied, never armed | partial — Bash only (`apply_patch` not judged); copied, never armed | unsupported — not written | unsupported — the pre-commit hook in `hooks/` works with any tool |
 | reviewer-write / registry-read guards | supported — copied, never armed | unsupported — no agent name in hook input | unsupported | unsupported |
 | bash output cap | supported — copied, never armed | unsupported | unsupported | unsupported |
+
+Below the matrix, `doctor` adds advisory rows that never change the exit code: one `accounts` row per account, one
+`capacity` row (`features.capacity`; load is unmeasured on Windows) and one `reporter` row (`features.reporter`, the
+`orch status` line, never a URL).
 
 The native targets are `claude-code`, `codex` and `antigravity`. The other `--tool` targets — `generic`, `opencode`, `gemini`, `cursor`, `copilot`, `windsurf`, `cline`, `aider` — install as prompt files under `.builder/`, each with its pointer in its own instruction or rules file (`npx builder-pipeline targets` lists them).
 

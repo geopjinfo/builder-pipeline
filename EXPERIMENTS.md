@@ -671,18 +671,60 @@ be repeated.
 
 **Decision (2026-11-17).** not yet measured — time to first value 1.1 s on one machine (limit 300 s); false-positive rates 0% to 1.1% over four public repositories (no check above 20%).
 
-## 21. Capacity governor — `capacity` (planned, 2.1.0)
+## 21. Capacity governor — `capacity` (opt-in, 2.1.0)
 
-**What ships.** Nothing yet. M15 adds the capacity governor (its own `features` key), which lowers the effective lane
-count by host capacity (D70 to D73). M15 fills this section with its measurement; this entry only keeps the numbering whole.
+**What ships.** `features.capacity` (M15, spec `specs/capacity-reporter.spec.md` REQ-1501 to REQ-1516, D70 to D74,
+D83): `npx builder-pipeline run capacity --once | --watch` writes `<orch root>/capacity.json`; `orch next`,
+`gate-launch --resume` and the loop runner read it as one more min() term in the lane cap. It lowers only, never
+stops a lane, and an unmeasured signal never binds. While the feature is off, nothing of it runs and the script
+prints `capacity: not configured`.
 
-**Opt in.** —
+**Opt in.** Set `features.capacity.state` to `on` and `perLaneMb` to this project's measured per-lane peak RSS. To
+measure it, run one board loop with the feature on: the runner writes `passPeakRssMb` into each pass row of
+`.pipeline/loop/<board>.jsonl`.
 
-**Measurement.** M15 states it: the planned lane count against the effective one over a batch, with the host readings.
+**Measurement.** Three figures from the loop runner's test project (the polyglot test bed: six aider exercises,
+pytest gate, one gateway lane on an 8-core, 15 GB Linux host): the per-lane peak RSS, a recorded tick log where the
+governor bound, and the count of false binds. A false bind is a tick where the record lowers the lane count while
+every signal is inside its limit. **Keep** if the recorded run has no false bind and the bind releases when the
+signal clears. **Drop** if a false bind appears or a hold does not release.
 
-**Risk.** An unmeasured reading that binds. The governor never binds on a missing reading (D72).
+**Per-lane peak RSS.** 347 MB per lane. The template's `perLaneMb` note carries the same figure.
 
-**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+| Date | Kit commit | Sampler | Passes | `passPeakRssMb` per pass (MB) | Peak (MB) | Cost (USD) |
+|---|---|---|---|---|---|---|
+| 2026-11-17 | 9424344 (#31) | `ps -o rss= -p <pid>`, one process | 6 | 44, 44, 44, 44, 44, 44 | 44 — the gateway wrapper, not the worker (before-evidence) | 0.458 |
+| 2026-11-17 | ec7ee78 (#39) | the pid's process tree, `ps -eo pid=,ppid=,rss=` | 6 | 276, 347, 303, 346, 347, 345 | 347 | 0.462 |
+
+The first row is the wrapper caveat. A lane started through a gateway wrapper exposes the wrapper's pid, so a
+single-process sample reads the wrapper (44 MB) and not the model worker. The tree sampler sums the pid and every
+descendant. In each run, four of the six passes completed. Two passes exited because the lane-shell hook (D69)
+refused a gate command with a pipe (`cd … && gate | tail`) or a second `cd`, and the retry passed. These exits are
+the hook's correct refusals; the governor took no part in them. A narrower rule for a pipe to `tail` after the gate
+is a follow-up candidate (D87), not a change in this release.
+
+**Recorded tick log.** Trial T2, 2026-11-17: `capacity --watch` at `intervalSeconds` 15, `minFreeMb` 20000 on the
+15 GB host (a limit the host cannot meet, set to force one bind), `maxLanes` 2, one board loop running.
+
+| Tick | Time (UTC) | Record | Binding signal |
+|---|---|---|---|
+| 1 to 2 | before 16:35:33 | 1 of 2 lanes | accounts (one account ready) |
+| 3 | 16:35:33 | 0 of 2 lanes | memory (free memory under `minFreeMb`) |
+| 4 to 64 | 16:35:48 to 16:50:48 | 0 of 2 lanes, held | memory; the rise waits for `riseAfterTicks` |
+
+The loop runner held before pass 3 (`capacity: 0 lanes (memory) — holding up to 60 min, reading again every 15 s`),
+read the record 63 times over 931 s, and ran the pass when the record rose to one lane (`1 lane(s) — the pass runs
+after 63 read(s)`). Its run log carries one row:
+`{"kind":"capacity.hold","reads":63,"seconds":931,"binding":"rise-damping","ended":"pass"}`. The row named
+`rise-damping` and not the signal that held. The fix in this release carries `heldBinding` through the damped ticks,
+so the row now reads `"binding":"memory"`. False binds: 0. The bind at tick 3 followed a limit the host could not
+meet, and ticks 1 and 2 bound on a true account count.
+
+**Risk.** A reading that binds on a signal the host does not measure. The governor never binds on an unmeasured
+signal (D72), and every line names the signal with its figure and unit. A dead watcher: a record older than
+`ttlSeconds` is ignored, and the reader says so.
+
+**Decision (2026-11-17).** keep — 347 MB per lane on the 8-core, 15 GB host; one forced bind at tick 3, held 62 ticks and released; 0 false binds in the recorded run.
 
 ## 22. Model summary of the progress report — `reporterSummary` (experimental)
 
@@ -702,10 +744,20 @@ sections it summarises (the bytes row), the share of reports where the reader op
 | Date | Kit commit | Reports | Summary bytes / summarised bytes | Suppression ratio | True summaries | Note |
 |---|---|---|---|---|---|---|
 
+**Recorded run, the reporter without a summary (REQ-1702).** Trial T3, 2026-11-17: `features.reporter` on,
+`intervalMinutes` 1, `heartbeatEvery` 4, a loopback webhook, one board loop running, 47 minutes. The figures below
+are the reporter's own bytes per report and its only-on-change suppression ratio. The summary criterion stays
+unmeasured until a report carries a summary.
+
+| Ticks | Sent | Full reports | Heartbeats | Alerts | Silent ticks | Bytes sent | Bytes per report | Bytes per heartbeat | Suppression ratio |
+|---|---|---|---|---|---|---|---|---|---|
+| 48 | 14 | 4 | 10 | 0 | 34 | 6089 | 435 | 150 | 34 of 48 ticks silent (71%) |
+
+
 **Risk.** A summary read as the report. The section is labelled as a model's words, it is dropped when stale, and it
 never carries a figure the report does not.
 
-**Decision (2026-11-17).** not yet measured — no measurement: no report has carried a summary yet.
+**Decision (2026-11-17).** not yet measured — 435 bytes per report and 34 of 48 ticks silent (71%) in one recorded run without a summary; no report has carried a summary yet, so the summary criterion has no measurement.
 
 ## 23. Dead code — `deadCode` (planned, experimental)
 
