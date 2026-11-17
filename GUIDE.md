@@ -304,7 +304,8 @@ unmeasured signal never binds, and the record says so. A drop applies at once; a
 `riseAfterTicks` ticks that allow it. Every line names the figure and its unit, never only a ratio.
 
 Set it up: turn `features.capacity` on in §16 and fill `perLaneMb` with this project's measured per-lane peak RSS.
-The loop runner writes `passPeakRssMb` into each pass row of `.pipeline/loop/<board>.jsonl` while the feature is on,
+The loop runner writes `passPeakRssMb` into each pass row of `.pipeline/loop/<board>.jsonl` while the feature is on
+(the worker's whole process tree, so a lane started through a gateway wrapper is measured at the worker, not the wrapper),
 so run a board loop once and read the figure from there (the kit's own figure is in [EXPERIMENTS §21](EXPERIMENTS.md)).
 Then start the watcher at run start beside the board watcher:
 

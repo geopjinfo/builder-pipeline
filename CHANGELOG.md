@@ -21,7 +21,8 @@ versions independently of any project it is pasted into.
   an unmeasured signal never binds (load on win32, disk when `statfs` fails); a drop applies at once and a rise by one
   lane after `riseAfterTicks` ticks; a record older than `ttlSeconds` is ignored and said. The loop runner holds at
   0 lanes (new stop reason `capacity`, one `capacity.hold` run-log row) and, while the feature is on, samples its
-  worker's peak RSS (`ps -o rss=`, unmeasured on win32) into the pass row as `passPeakRssMb` — the evidence for
+  worker's peak RSS (the pid's whole process tree from `ps -eo pid=,ppid=,rss=`, so a wrapper-launched lane counts
+  the worker and not only the wrapper; unmeasured on win32) into the pass row as `passPeakRssMb` — the evidence for
   `perLaneMb`, which is a §16 project fact (null in the template). `orch status` prints one `capacity:` line;
   `doctor` adds one advisory row; `worker-runner` takes an `onSpawn` hook. New read-only persona
   `agents/capacity-steward.md` (tier mid) explains a bind; `skills/orchestrator.md` says when it is dispatched.
