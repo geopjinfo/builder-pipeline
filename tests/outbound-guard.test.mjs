@@ -120,3 +120,16 @@ test('CLI: off refuses, on sends a clean payload and refuses a secret with exit 
   assert.equal(cli('', ['--files', 'a.ts']).status, 0);
   assert.equal(cli('not json').status, 2);
 });
+
+test('red: a gateway token (a prefixed gateway key or a long bearer token) is refused as "gateway token"', () => {
+  const prefixed = 'omr_' + 'k'.repeat(40);
+  const bearer = 'Authorization: Bearer ' + 'Qx9'.repeat(16);
+  for (const value of [prefixed, bearer]) {
+    const hits = guard.scan(`line one\n${value}\n`);
+    assert.ok(hits.some((h) => h.kind === 'gateway token' && h.line === 2), JSON.stringify(hits));
+  }
+  // short bearer values, a placeholder and an ordinary word with an underscore stay clean
+  for (const clean of ['Authorization: Bearer <token>', 'Bearer abc123', 'omr_config_path = x', 'the gateway forwards or_not']) {
+    assert.ok(!guard.scan(clean).some((h) => h.kind === 'gateway token'), clean);
+  }
+});

@@ -158,7 +158,8 @@ flowchart LR
     Q2 -- no --> STD["🟡 Standard<br/>full or lite pipeline<br/>(standardPipeline)"]
 ```
 
-Lanes never share a file (`orch claim` refuses overlap); each lane gets its own git worktree and branch. The lane
+Lanes never share a file (`orch claim` refuses overlap); each lane gets its own git worktree and branch. A worktree
+separates working files; it does not sandbox processes and it does not prevent merge conflicts. The lane
 count starts at `maxLanes` and rises only with measured evidence that the machine and accounts carried the load.
 Controls: `orch status` · `next` · `preflight` · `pause` · `stop` · `resume`.
 

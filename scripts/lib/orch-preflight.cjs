@@ -19,8 +19,20 @@
  *   usageCommand  {seat}     prints lines containing "N% used"; the highest N is recorded
  *   stateCommand  {session}  prints one word: working | done | idle | blocked | failed | stopped
  *   stopCommand   {session}  stops a live worker session
- *   launchCommand {run} {lane} {brief} {worktree} {result} {branch} {account} {maxTurns} {timeoutMinutes}
+ *   launchCommand {run} {lane} {brief} {worktree} {result} {branch} {account} {maxTurns} {timeoutMinutes} {settings}
  *                            starts a terminal worker on the placed account (an account's own `command` wins)
+ *
+ * LANE WORKTREES (plan M4, REQ-402, REQ-405, D50). `createLaneWorktree` makes a lane's worktree on a FRESH branch
+ * named from the lane id — never a branch another worktree holds (`git worktree list --porcelain` is read first) —
+ * copies the files `features.accounts.worktree.include` lists (ignored files such as .env; a copy, never a link, so
+ * no two lanes share one file), and for a path-root account checks out only the roots (`git sparse-checkout
+ * --no-cone`). A worktree separates working files; it does not sandbox the process and it does not prevent merge
+ * conflicts.
+ *
+ * PRE-LAUNCH CHECKS (REQ-703). `launchChecks` names what blocks a launch before anything starts: the session
+ * account (never spawned), a worker with no launcher here, and an account dir that is missing. The dir check runs
+ * while the accounts home exists (the kit's account layout is in use); without it the 1.0 worker reads its own
+ * default config and nothing is judged.
  */
 const fs = require('fs');
 const path = require('path');
@@ -248,6 +260,101 @@ function runSmoke(account, paths, { cwd = process.cwd(), env = process.env, now 
   return record;
 }
 
+// ------------------------------------------------------------------------------------- lane worktrees
+const gitq = (cwd, args) => {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
+  return { code: r.status, out: (r.stdout || '').trim(), err: (r.stderr || (r.error && r.error.message) || '').trim() };
+};
+const relNorm = (p) => String(p).replace(/\\/g, '/').replace(/^(\.\/)+/, '').replace(/\/+$/, '');
+
+/** `git worktree list --porcelain` of `repo`: [{ path, head, branch }] (branch without refs/heads/, null when detached). */
+function listWorktrees(repo) {
+  const out = [];
+  let cur = null;
+  for (const l of gitq(repo, ['worktree', 'list', '--porcelain']).out.split(/\r?\n/)) {
+    if (l.startsWith('worktree ')) {
+      cur = { path: path.resolve(l.slice(9)), head: null, branch: null };
+      out.push(cur);
+    } else if (!cur) continue;
+    else if (l.startsWith('HEAD ')) cur.head = l.slice(5);
+    else if (l.startsWith('branch ')) cur.branch = l.slice(7).replace(/^refs\/heads\//, '');
+  }
+  return out;
+}
+
+/** The tracked files of `ref` in `repo` (project-relative, forward slashes). */
+function trackedFiles(repo, ref = 'HEAD') {
+  const r = gitq(repo, ['ls-tree', '-r', '--name-only', ref]);
+  if (r.code !== 0) throw new Error(`refused: cannot list the files of ${ref} in ${repo}: ${r.err}`);
+  return r.out.split(/\r?\n/).filter(Boolean);
+}
+
+/** The roots a sparse worktree is checked out on (normalised), or null when it is not a sparse checkout. */
+function sparseRoots(worktree) {
+  const on = gitq(worktree, ['config', '--get', 'core.sparseCheckout']);
+  if (on.code !== 0 || on.out !== 'true') return null;
+  const r = gitq(worktree, ['sparse-checkout', 'list']);
+  if (r.code !== 0) return null;
+  return r.out.split(/\r?\n/).filter(Boolean).map((l) => relNorm(l.replace(/^\//, '')));
+}
+
+/**
+ * Create a lane worktree (REQ-405, REQ-402).
+ * @param {{ repo: string, worktree: string, branch: string, base?: string, roots?: string[]|null, include?: string[] }} o
+ * @returns {{ worktree, branch, fresh, sparse, copied, missing }}  throws a `refused:` error on any fault
+ */
+function createLaneWorktree({ repo, worktree, branch, base = 'HEAD', roots = null, include = [] }) {
+  if (!repo || !worktree || !branch) throw new Error('refused: createLaneWorktree needs repo, worktree and branch');
+  const holder = listWorktrees(repo).find((w) => w.branch === branch);
+  if (holder) throw new Error(`refused: branch ${branch} is held by worktree ${holder.path} — a lane worktree starts on a fresh branch of its own`);
+  if (fs.existsSync(worktree)) throw new Error(`refused: ${worktree} already exists — a lane worktree is created once, in an empty place`);
+  const exists = gitq(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]).code === 0;
+  const rs = Array.isArray(roots) && roots.length ? roots.map(relNorm).filter(Boolean) : null;
+  const add = gitq(repo, ['worktree', 'add', '-q', ...(rs ? ['--no-checkout'] : []), ...(exists ? [worktree, branch] : ['-b', branch, worktree, base])]);
+  if (add.code !== 0) throw new Error(`refused: git worktree add failed for ${worktree}: ${add.err || add.out}`);
+  if (rs) {
+    const sp = gitq(worktree, ['sparse-checkout', 'set', '--no-cone', ...rs.map((r) => `/${r}`)]);
+    if (sp.code !== 0) throw new Error(`refused: sparse checkout of ${rs.join(', ')} failed in ${worktree}: ${sp.err || sp.out}`);
+    const co = gitq(worktree, ['checkout', '-q', branch]);
+    if (co.code !== 0) throw new Error(`refused: checkout of ${branch} failed in ${worktree}: ${co.err || co.out}`);
+  }
+  const copied = [];
+  const missing = [];
+  for (const rel of include || []) {
+    const src = path.join(repo, rel);
+    let st = null;
+    try {
+      st = fs.statSync(src);
+    } catch (_) {
+      /* absent */
+    }
+    if (!st || !st.isFile()) {
+      missing.push(rel);
+      continue;
+    }
+    const dst = path.join(worktree, rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst); // a copy, never a link: two lanes never share one file
+    copied.push(rel);
+  }
+  return { worktree, branch, fresh: !exists, sparse: rs, copied, missing };
+}
+
+// --------------------------------------------------------------------------------- pre-launch checks
+const LAUNCHERS = ['claude-code'];
+/**
+ * REQ-703: what blocks a launch before anything starts. [{ check, message }]; [] = go on.
+ * @param {{ account: object, paths: { configDir: string }, homeExists: boolean }} o
+ */
+function launchChecks({ account, paths: ap, homeExists }) {
+  const out = [];
+  const name = account.name || '(unnamed)';
+  if (account.worker === 'session') out.push({ check: 'worker', message: `account ${name} is the orchestrating session (worker session) — it is never launched; place the lane on a headless or terminal worker account` });
+  else if (!LAUNCHERS.includes(account.worker) && !account.command) out.push({ check: 'worker', message: `account ${name}: worker ${JSON.stringify(account.worker)} has no launcher here (no adapter and no command) — nothing launched` });
+  if (homeExists && ap && ap.configDir && !fs.existsSync(ap.configDir)) out.push({ check: 'account-dir', message: `account ${name}: dir ${ap.configDir} is missing — nothing launched (create it and sign in there first)` });
+  return out;
+}
+
 const SESSION_STATES = ['working', 'done', 'idle', 'blocked', 'failed', 'stopped', 'missing'];
 
 /** Run stateCommand for a session: the first word of its output, or 'unknown'. */
@@ -261,4 +368,5 @@ function sessionState(session, stateCommand, { cwd = process.cwd() } = {}) {
 module.exports = {
   TEST_MODES, testsFile, testsMode, testsIsDefault, setTests, testsCommand, testsLine, preflight, readUsage, sessionState, fill, run, SESSION_STATES,
   linkGuard, unlinkCommand, reinstallAt, briefAsksReinstall, smokeDue, runSmoke,
+  listWorktrees, trackedFiles, sparseRoots, createLaneWorktree, launchChecks, LAUNCHERS,
 };

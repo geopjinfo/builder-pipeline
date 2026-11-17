@@ -264,7 +264,7 @@ describe('lane placement: the secondary seat first, then the primary under its l
     const r = orch(dir, root, ['gate-launch', 'pl', 'l1']);
     assert.equal(r.status, 0, r.out);
     const j = JSON.parse(r.stdout);
-    assert.match(j.launch, /^start-worker --brief ".*l1\.md" --lane l1$/);
+    assert.match(j.launch, /^start-worker --brief ".*l1\.md" --lane l1 --settings ".*l1\.settings\.json"$/); // M4: every launch carries the --settings pin (REQ-404)
     assert.equal(orch(dir, root, ['gate-launch', 'pl', 'l1']).status, 0); // still CLAIMED: idempotent
     state.setLane(root, 'pl', 'l1', { status: 'DONE' });
     assert.equal(orch(dir, root, ['gate-launch', 'pl', 'l1']).status, 3); // red: a lane next does not say to launch
@@ -609,7 +609,7 @@ describe('the orch command places over accounts (REQ-303, REQ-305, REQ-307, REQ-
     const j = JSON.parse(r.stdout);
     assert.equal(j.account, 'charlie');
     assert.equal(j.pays, 'api-key');
-    assert.equal(j.launch, `go ${s.lanes.l1.brief}`);
+    assert.ok(j.launch.startsWith(`go ${s.lanes.l1.brief} --settings "`) && j.launch.endsWith('l1.settings.json"'), j.launch); // M4: every launch on a registry account carries the --settings pin (REQ-404)
     const paid = events(root).filter((e) => e.type === 'account.paid');
     assert.equal(paid.length, 1);
     assert.deepEqual([paid[0].lane, paid[0].account], ['l1', 'charlie']);
@@ -640,7 +640,7 @@ describe('the orch command places over accounts (REQ-303, REQ-305, REQ-307, REQ-
     const j = JSON.parse(ok.stdout);
     assert.deepEqual([j.account, j.maxTurns, j.timeoutMinutes, j.model, j.price, j.maxBudgetUsd], ['secondary', 25, 60, 'strong-model', 'unpriced', 3]);
     assert.match(j.maxBudgetUsdRole, /backstop only — never a cap/);
-    assert.match(j.launch, / --turns 25 --minutes 60 --account secondary$/);
+    assert.match(j.launch, / --turns 25 --minutes 60 --account secondary --settings ".*l1\.settings\.json"$/); // the pin follows the filled command (REQ-404)
   });
 
   test('red: REQ-307 the command runs the readiness assessment before placing: an account whose probe says signed out is skipped and the line says why (AC-307a)', () => {

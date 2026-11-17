@@ -175,3 +175,8 @@ test('every features.<name> the prose names is a feature the settings loader kno
   }
   assert.deepEqual([...new Set(unknown)], []);
 });
+
+test('REQ-405 GUIDE states what a worktree does not do: no process sandbox, no merge-conflict prevention (D50)', () => {
+  const guide = flat(read('GUIDE.md'));
+  assert.match(guide, /worktree separates working files; it does not sandbox processes and it does not prevent merge conflicts/i);
+});
