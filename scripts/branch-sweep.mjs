@@ -12,8 +12,8 @@
  * --apply, remote-tracking refs whose remote branch is gone are pruned.
  *
  * Settings (PIPELINE_PROFILE.md §16): features.branchSweep.{state, target, staleDays, keep, remote}.
- * Off → "branchSweep: not configured", exit 0. Off with --target → runs with the defaults and says so (REQ-1807).
- * Exit 0 ok, or the feature is off · 1 a delete failed · 2 usage, no git repository, or an invalid profile.
+ * Off → "branchSweep: not configured", exit 3 (spec INVARIANTS). Off with --target → runs with the defaults and says so (REQ-1807).
+ * Exit 0 ok · 1 a delete failed · 2 usage, no git repository, or an invalid profile · 3 the feature is off.
  */
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -54,8 +54,8 @@ if (loaded.errors.length > 0) {
 const feature = profile.feature(loaded.settings, 'branchSweep');
 const standalone = !feature.enabled && val('--target') !== undefined;
 if (!feature.enabled && !standalone) {
-  console.log(feature.line); // no --target: the sweep never guesses an integration branch
-  process.exit(0);
+  console.log(feature.line); // no --target: the sweep never guesses an integration branch; off is exit 3, never a pass
+  process.exit(3);
 }
 const cfg = standalone ? { ...profile.FEATURES.branchSweep.defaults } : feature.config;
 const staleDays = val('--stale-days') !== undefined ? Number(val('--stale-days')) : cfg.staleDays;

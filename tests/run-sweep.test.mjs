@@ -102,8 +102,11 @@ describe('run-sweep — CLI', () => {
     assert.match(res.stdout, /dry run/);
   });
 
-  test('red: AC-1807 feature off: run-sweep runs with the defaults and says so; --keep-days overrides; off with no profile is a dry run', () => {
+  test('red: AC-1807 feature off: run-sweep runs with the defaults and says so; --keep-days overrides; off with no flag is exit 3', () => {
     const proj = rig();
+    const off = run(proj, []);
+    assert.equal(off.status, 3, off.out);
+    assert.match(off.stdout, /^runSweep: not configured$/m);
     const res = run(proj, ['--keep-days', '30']);
     assert.equal(res.status, 0, res.out);
     assert.match(res.stdout.split('\n')[0], /^runSweep: not configured — checking .* with defaults \(.*dry run/);
