@@ -65,7 +65,13 @@ the kit's checker scripts there (`npx builder-pipeline run <name>`). Every proje
     `package.json` `version` outside a release (`tests/version.test.mjs` ties it to the newest released heading).
 14. **Shipped files are listed.** A new top-level file or folder is either added to `package.json` `"files"` or to the
     skip list in `tests/package.test.mjs`; the test fails on anything in neither.
-15. **Commits.** Small, each green. No AI attribution or co-author trailers.
+15. **Commits.** Small, each green. Stage files by name (`git add <file>`), never `git add .` or `git add -A`, and
+    read `git diff --cached --name-status` before the commit. Plain commit messages and plain PR titles and bodies:
+    no AI attribution, co-author trailers or generated-content footers. Arm the commit-msg hook once per clone with
+    `node cli.js git-hooks`; it strips a trailer that slips through. Before a push, check `git status --ignored` and
+    `git show --stat` for files that do not belong.
+16. **Branches.** `feature/<topic>` for a change, `release/<version>` for a release. A branch name never carries an
+    assistant or tool name.
 
 ## Where to look
 

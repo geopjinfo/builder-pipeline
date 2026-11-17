@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
-import { orch, profileText, scratchRepo, tmp } from './fixtures/orch/rig.mjs';
+import { lanes, orch, profileText, scratchRepo, tmp } from './fixtures/orch/rig.mjs';
 
 const require = createRequire(import.meta.url);
 const audit = require('../scripts/lib/orch-credit-audit.cjs');
@@ -218,5 +218,49 @@ describe('launch ids and seat names', () => {
     const ok = orch(repo, root, ['usage-read', 'u1', 'SECONDARY']);
     assert.equal(ok.status, 0, ok.out);
     assert.equal(state.load(root, 'u1').usage.secondary.pct, 7);
+  });
+});
+
+/* ------------------------------------------------------------------ 2.1.0: the capacity governor (M15) ---- */
+
+describe('REQ-1508, REQ-1511 — the governor in the orch command', () => {
+  const record = (root, lanes, binding = 'memory') => writeFileSync(join(root, 'capacity.json'), JSON.stringify({ lanes, plannedMax: 2, binding, caps: {}, reasons: [], at: new Date().toISOString(), ttlSeconds: 180, tick: 7 }));
+
+  test('red: no ADD-LANES while the record binds under laneCap, although the seat is fresh under its percentage (AC-1508b)', () => {
+    const CAP = { laneCap: 4, seat: 'secondary', underPct: 50, defaultLanes: 2 };
+    const mk = () => {
+      const dir = tmp('gov');
+      writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { capacity: CAP } }));
+      const root = join(dir, 'orch');
+      state.init(root, 'cp', { ...lanes(1), plan: { title: 'p', file: '/plans/p.plan.md' } }, { preflightMode: 'parallel', seats: ['secondary', 'primary'], capacity: CAP });
+      state.approve(root, 'cp', 'lead');
+      state.recordUsage(root, 'cp', 'secondary', 20);
+      return root;
+    };
+    const control = mk();
+    assert.ok(state.nextActions(control, state.load(control, 'cp')).some((a) => a.startsWith('ADD-LANES')), 'positive control: ADD-LANES without a record');
+    const bound = mk();
+    record(bound, 1);
+    const acts = state.nextActions(bound, state.load(bound, 'cp'));
+    assert.equal(acts.some((a) => a.startsWith('ADD-LANES')), false, acts.join('\n'));
+    assert.ok(acts.includes('CAPACITY: lanes capped at 1 of 2 — memory'), acts.join('\n'));
+  });
+
+  test('red: orch status prints one capacity line, with and without runs (AC-1511a)', () => {
+    const dir = tmp('gov-status');
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText());
+    const root = join(dir, 'orch');
+    mkdirSync(root, { recursive: true });
+    const none = orch(dir, root, ['status']);
+    assert.equal(none.status, 0, none.out);
+    assert.equal(none.stdout.split('\n').filter((l) => l.startsWith('capacity:')).length, 1, none.out);
+    assert.match(none.stdout, /^capacity: no record \(run capacity --watch writes one\)$/m);
+    record(root, 1);
+    state.init(root, 'st', lanes(1), { preflightMode: 'parallel', seats: ['secondary', 'primary'] });
+    const one = orch(dir, root, ['status']);
+    assert.equal(one.status, 0, one.out);
+    const lines = one.stdout.split('\n').filter((l) => l.startsWith('capacity:'));
+    assert.equal(lines.length, 1, one.out);
+    assert.match(lines[0], /^capacity: 1 of 2 lane\(s\) · binding memory · tick 7 at /);
   });
 });

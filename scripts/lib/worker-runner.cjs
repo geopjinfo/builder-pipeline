@@ -21,7 +21,7 @@ const readline = require('readline');
 const OUTCOME = Object.freeze({ exited: 'EXITED', timeout: 'FAILED-TIMEOUT', stall: 'FAILED-STALL', key: 'STOPPED-KEY-SOURCE' });
 const KILL_GRACE_MS = 2000;
 
-function runWorker({ bin, args, env, cwd, prompt = '', passTimeoutMs, stallTimeoutMs, keySourceVerdict = null, onLine = null }) {
+function runWorker({ bin, args, env, cwd, prompt = '', passTimeoutMs, stallTimeoutMs, keySourceVerdict = null, onLine = null, onSpawn = null }) {
   if (!(Number.isFinite(passTimeoutMs) && passTimeoutMs > 0)) throw new Error('worker-runner: passTimeoutMs must be a number > 0 (REQ-603)');
   if (!(Number.isFinite(stallTimeoutMs) && stallTimeoutMs > 0)) throw new Error('worker-runner: stallTimeoutMs must be a number > 0 (REQ-603)');
   const [cmd, argv] = /\.(c|m)?js$/.test(bin) ? [process.execPath, [bin, ...args]] : [bin, args];
@@ -36,6 +36,14 @@ function runWorker({ bin, args, env, cwd, prompt = '', passTimeoutMs, stallTimeo
     let startError = null;
     let killTimer = null;
     const child = spawn(cmd, argv, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    // REQ-1516: the loop runner samples the worker's RSS by pid; the hook never throws into the runner
+    if (onSpawn) {
+      try {
+        onSpawn(child);
+      } catch (_) {
+        /* a sampler fault never stops a worker */
+      }
+    }
 
     const stop = (why) => {
       if (outcome === null) outcome = why;

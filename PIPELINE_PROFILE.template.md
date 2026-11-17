@@ -368,6 +368,7 @@ error, because a typo would otherwise switch a check off in silence.
     "worktreeSweep":    { "state": "off", "target": null, "idleHours": 6, "prefix": null, "reserved": [], "backupDirs": ["logs", ".pipeline"], "holdCommand": null },
     "branchSweep":      { "state": "off", "target": null, "staleDays": 30, "keep": ["main", "release/*"], "remote": "list" },
     "runSweep":         { "state": "off", "keepDays": 30, "roots": [".pipeline", "logs/backups"] },
+    "capacity":         { "state": "off", "perLaneMb": null, "reserveCores": 2, "maxLoadPerCore": 1.0, "minFreeMb": 1024, "minDiskMb": 2048, "intervalSeconds": 60, "ttlSeconds": 180, "riseAfterTicks": 3, "holdMaxMinutes": 60, "explainAfterTicks": 10 },
     "orchestrator":     { "state": "off", "target": null, "primaryLaunch": "manual", "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null },
     "accounts":         { "state": "off", "softLimitPct": 80, "usageStaleMinutes": 30, "accounts": {} }
   }

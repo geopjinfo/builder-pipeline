@@ -39,6 +39,7 @@ const path = require('path');
 const { runDir, readJson, writeJsonAtomic, withLock } = require('./orch-store.cjs');
 const snapshots = require('./orch-snapshot.cjs');
 const ratelimit = require('./orch-ratelimit.cjs');
+const capacityLib = require('./capacity.cjs');
 const { integritySnapshot, integrityDiff } = require('./orch-integrity.cjs');
 const accountsLib = require('./orch-accounts.cjs');
 
@@ -378,6 +379,20 @@ function placementNow(root, s, at = Date.now(), job = {}) {
   return placement(s, at, running, job, { readiness: accountsLib.load(root).accounts, plain: s.placement === 'shadow' });
 }
 
+/**
+ * The slot count a `gate-launch --resume` of a WAIT-P4 lane is judged against (REQ-1508): min(maxLanes, 429 cap,
+ * capacity record), the lanes that hold a slot, and the governor reading. `opts.capacity` injects the reading (tests).
+ */
+function resumeSlot(root, s, at = Date.now(), opts = {}) {
+  const rl = ratelimit.laneCap(ratelimit.load(root), at);
+  const governor = opts.capacity === undefined ? capacityLib.laneCap(root, at) : opts.capacity;
+  const govLanes = governor && governor.lanes !== null && governor.lanes !== undefined ? governor.lanes : null;
+  const capLanes = Math.min(rl ? Math.min(s.maxLanes, rl.lanes) : s.maxLanes, govLanes === null ? Infinity : govLanes);
+  const live = Object.values(s.lanes).filter((x) => ['LAUNCHED', 'STALLED', 'PAUSED', 'PLANNED', 'CLAIMED'].includes(x.status)).length;
+  const why = `${live} of ${capLanes} live${govLanes !== null && govLanes < s.maxLanes ? `; capacity: ${govLanes} of ${s.maxLanes} — ${governor.binding}` : ''}`;
+  return { capLanes, live, free: live < capLanes, hold: rl && rl.holdUntil ? rl.holdUntil : null, governor, why };
+}
+
 /** `BUILDER_ORCH_LANE_CAP`: a whole number 1–16 overrides the capacity lane cap; unset or invalid → null (no override). */
 function envLaneCap(v) {
   const n = Number(v);
@@ -465,12 +480,20 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
 
   const running = lanes.filter(([, l]) => ACTIVE.includes(l.status)).length;
   const cap = ratelimit.laneCap(ratelimit.load(root), at);
-  const maxLanes = cap ? Math.min(s.maxLanes, cap.lanes) : s.maxLanes;
+  let maxLanes = cap ? Math.min(s.maxLanes, cap.lanes) : s.maxLanes;
+  if (cap && cap.holdUntil) acts.push(`RATE-LIMIT-HOLD: global back-off after a 429 until ${cap.holdUntil} — no new lanes`);
+  else if (maxLanes < s.maxLanes) acts.push(`RATE-LIMIT: lanes capped at ${maxLanes} of ${s.maxLanes} after a 429 — one more per clean finish`);
+  // CAPACITY GOVERNOR (REQ-1508, D71, D74): the record is one more min() term; a stale record is ignored and said;
+  // BUILDER_ORCH_LANE_CAP still bounds it. opts.capacity injects the reading (tests); undefined reads the record.
+  const governor = opts.capacity === undefined ? capacityLib.laneCap(root, at) : opts.capacity;
+  const envCap = envLaneCap((opts.env || process.env).BUILDER_ORCH_LANE_CAP);
+  const governed = governor && governor.lanes !== null && governor.lanes !== undefined ? Math.min(governor.lanes, envCap || Infinity) : null;
+  if (governed !== null && governed < maxLanes) acts.push(`CAPACITY: lanes capped at ${governed} of ${s.maxLanes} — ${envCap && envCap < governor.lanes ? 'BUILDER_ORCH_LANE_CAP' : governor.binding || 'capacity'}`);
+  else if (governor && governor.line) acts.push(governor.line);
+  if (governed !== null && governed < maxLanes) maxLanes = governed;
+  const governorBinds = governed !== null && governed < s.maxLanes;
   let free = Math.max(0, maxLanes - running);
-  if (cap && cap.holdUntil) {
-    acts.push(`RATE-LIMIT-HOLD: global back-off after a 429 until ${cap.holdUntil} — no new lanes`);
-    free = 0;
-  } else if (maxLanes < s.maxLanes) acts.push(`RATE-LIMIT: lanes capped at ${maxLanes} of ${s.maxLanes} after a 429 — one more per clean finish`);
+  if (cap && cap.holdUntil) free = 0;
   const readiness = opts.readiness || accountsLib.load(root).accounts;
   const waiting = lanes.some(([, l]) => l.status === 'PLANNED' || l.status === 'CLAIMED');
   let place = free > 0 && waiting ? placement(s, at, running, {}, { readiness }) : null;
@@ -504,7 +527,7 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
     const live = running + lanes.filter(([, l]) => l.status === 'PAUSED').length;
     const waiting = lanes.filter(([, l]) => l.status === 'PLANNED' || l.status === 'CLAIMED').length;
     const pull = c.laneCap - live - waiting;
-    const capped = (cap && cap.holdUntil) || maxLanes < s.maxLanes || s.preflightMode === 'single';
+    const capped = (cap && cap.holdUntil) || maxLanes < s.maxLanes || governorBinds || s.preflightMode === 'single';
     if (fresh && u.pct < c.underPct && pull > 0 && !capped) {
       const from = (s.plan && (s.plan.file || s.plan.title)) || 'the next plan (orch digest <artifact>)';
       acts.push(`ADD-LANES: ${c.seat} at ${u.pct}% — pull ${pull} row(s) from ${from} (${live} of cap ${c.laneCap} lanes live)`);
@@ -516,6 +539,6 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
 
 module.exports = {
   init, load, update, setLane, notice, snapshotLane, integrityBaseline, recordUsage, recordUsageUnknown, approve, setPaused, nextActions, placement, placementNow, event, pauseFile,
-  envLaneCap, capacityOf, measuredLanes, isWaitP4, accountsOf, accountOf, isLegacyState, runnerOf, readingFor, seatNames, slimAccount,
+  envLaneCap, capacityOf, measuredLanes, resumeSlot, isWaitP4, accountsOf, accountOf, isLegacyState, runnerOf, readingFor, seatNames, slimAccount,
   STATUSES, ACTIVE, SEATS, DEFAULTS, RUNNER_OF, SESSION_RUNNER, ACCOUNT_FIELDS, PLACEMENTS,
 };
