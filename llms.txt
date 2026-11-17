@@ -8,7 +8,7 @@
 - [FEATURES.md](FEATURES.md): every feature on one page: what it does, how to start it, Claude Code / Codex / Antigravity support, status
 - [SETUP_PROMPT.md](SETUP_PROMPT.md): the one setup prompt (bootstrap, then the builder-init skill)
 - [USAGE.md](USAGE.md): the operator's runbook: stop points, record points, resuming, troubleshooting
-- [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files)
+- [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files, instruction-lint and instruction-budget on named files, worktree-sweep --target <branch>)
 
 ## How it works
 

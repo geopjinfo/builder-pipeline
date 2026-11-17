@@ -23,6 +23,18 @@ versions independently of any project it is pasted into.
   README § "One tool, without the pipeline", FEATURES.md rows, llms.txt, and a no-profile paragraph in
   `skills/spec-author.md`. `specs/` is maintainer-only (package skip list). Tests: `tests/toolkit-standalone.test.mjs`
   (one test per acceptance criterion).
+- **The hygiene checks without the pipeline (`specs/toolkit-hygiene-standalone.spec.md`, REQ-701 to REQ-711).**
+  With its feature off, `instruction-lint <file>…` lints the named files with the default settings and no baseline
+  (the ratchet is reported, not enforced); `instruction-budget <file>… [--max-lines <n>]` judges them against `n` or
+  the default of 200 lines; `worktree-sweep --target <branch> [--idle-hours <n>]` judges every worktree against that
+  branch with the default settings as a dry run, `--apply` removes, and no `holdCommand` ever runs from defaults. Each
+  prints `<feature>: not configured — checking … with defaults` on its first line and keeps its normal exit codes. With
+  no named file, with `--files` (the edit hook) or with no `--target`, each still prints `not configured` and exits 0,
+  so the gates and the hook are unchanged. A flag without its value, an unknown flag, a named file that does not exist
+  and a sweep outside a git repository exit 2 with a usage line. FEATURES.md rows, README § "One tool, without the
+  pipeline", llms.txt, and a "Without a profile" paragraph in `skills-extra/status-and-next/SKILL.md` and
+  `skills-extra/repo-audit/SKILL.md`. Tests: `tests/toolkit-hygiene-standalone.test.mjs` (one test per acceptance
+  criterion; the spec's decisions are in its Decision log).
 
 ### Changed
 
