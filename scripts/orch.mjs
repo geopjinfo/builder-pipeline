@@ -138,6 +138,8 @@ if (!feature.enabled) {
 }
 const cfg = feature.config;
 const settings = loaded.settings;
+// The 1.0 seat view of features.accounts (seats, limits, secondaryConfigDir, credit) until M3 reads accounts directly.
+const legacy = profile.accounts.legacyView(settings);
 const tierCmd = settings.commands && settings.commands.tier;
 
 let rootCache = null;
@@ -158,7 +160,7 @@ const runIds = () => {
 const testsModeNow = () => pre.testsMode(root(), cfg.tests.mode);
 const testsLine = () => pre.testsLine(testsModeNow(), cfg.tests, tierCmd);
 const creditCtx = () => credit.creditContext(settings);
-const creditOn = () => cfg.credit && cfg.credit.enabled === true;
+const creditOn = () => legacy.credit && legacy.credit.enabled === true;
 const creditOff = () => {
   console.log('orchestrator credit lane: not configured (features.orchestrator.credit.enabled is false)');
   process.exit(0);
@@ -184,7 +186,7 @@ function creditLines() {
   const lines = [];
   try {
     const croot = credit.creditRoot();
-    const st = credit.creditStatus({ root: croot, credit: cfg.credit });
+    const st = credit.creditStatus({ root: croot, credit: legacy.credit });
     lines.push(credit.pressureLine(st));
     lines.push(credit.reviewLine(credit.pendingReviewsAll({ root: croot })));
   } catch (e) {
@@ -383,7 +385,7 @@ try {
       const repo = repoOf();
       const s = state.init(root(), run, res, {
         repo, target: cfg.target, worktreeBase: path.dirname(repo), worktreePrefix: cfg.worktreePrefix || `${path.basename(repo)}-wt-`, branchPrefix: cfg.branchPrefix,
-        preflightMode: flags.mode === 'parallel' ? 'parallel' : 'single', seats: cfg.seats, limits: cfg.limits, stallMinutes: cfg.stallMinutes, usageStaleMinutes: cfg.usageStaleMinutes,
+        preflightMode: flags.mode === 'parallel' ? 'parallel' : 'single', seats: legacy.seats, limits: legacy.limits, stallMinutes: cfg.stallMinutes, usageStaleMinutes: cfg.usageStaleMinutes,
         capacity: cfg.capacity, credit: creditOn(),
       });
       console.log(`run ${run}: ${Object.keys(s.lanes).length} lanes, state ${path.join(store.runDir(root(), run), 'state.json')}`);
@@ -710,11 +712,11 @@ try {
     case 'credit': {
       if (!creditOn()) creditOff();
       const croot = credit.creditRoot();
-      const st = credit.creditStatus({ root: croot, credit: cfg.credit });
+      const st = credit.creditStatus({ root: croot, credit: legacy.credit });
       console.log(credit.statusLine(st));
       if (st.reserve) console.log(`  reserve held back: $${st.reserve.toFixed(2)} — released in the final 7 days`);
       for (const f of st.unreported) console.log(`  unreported cost (counted $0): ${f}`);
-      console.log(`  fallback: ${credit.accountChain(cfg.credit).map((a) => credit.ACCOUNT_LABEL[a]).join(' → ')}`);
+      console.log(`  fallback: ${credit.accountChain(legacy.credit).map((a) => credit.ACCOUNT_LABEL[a]).join(' → ')}`);
       const p = credit.pressureLine(st);
       if (p) console.log(p);
       const rv = credit.reviewLine(credit.pendingReviewsAll({ root: croot }));
@@ -740,7 +742,7 @@ try {
     case 'credit-run': {
       if (!creditOn()) creditOff();
       const croot = creditQueueRoot();
-      const common = { root: croot, cwd: process.cwd(), env: process.env, rateRoot: root(), credit: cfg.credit, secondaryConfigDir: cfg.secondaryConfigDir, ctx: creditCtx() };
+      const common = { root: croot, cwd: process.cwd(), env: process.env, rateRoot: root(), credit: legacy.credit, secondaryConfigDir: legacy.secondaryConfigDir, ctx: creditCtx() };
       if (flags['all-queued']) {
         const noneHere = credit.queuedTasks(croot).length === 0;
         const q = await credit.runQueue({ ...common, report: (line) => console.log(line) });

@@ -36,3 +36,20 @@ describe('golden placement fixture (REQ-106)', () => {
     }
   });
 });
+
+describe('accounts migrate reproduces every golden decision through the registry (REQ-106)', () => {
+  const registry = require(join(PACK, 'scripts', 'lib', 'accounts-registry.cjs'));
+  test('red: 1.0 seats and limits → accounts → the 1.0 view → the same placement', () => {
+    const at = Date.parse(golden.at);
+    for (const c of golden.cases) {
+      const legacy = { schema: 2, features: { orchestrator: { state: 'on', target: 'dev', seats: c.state.seats, ...(c.state.limits ? { limits: c.state.limits } : {}), launchCommand: 'go {brief}' } } };
+      const migrated = registry.migrate(legacy);
+      assert.equal(migrated.changed, true, c.name);
+      assert.equal(registry.legacyKeys(migrated.settings.features.orchestrator).length, 0, `${c.name}: legacy keys left`);
+      assert.equal(registry.migrate(migrated.settings).changed, false, `${c.name}: a second migrate must change nothing`);
+      const view = registry.legacyView(migrated.settings);
+      const got = state.placement({ ...c.state, seats: view.seats, limits: view.limits }, at, c.running);
+      assert.deepEqual(got, c.expected, c.name);
+    }
+  });
+});
