@@ -7,6 +7,13 @@
  * a guard Antigravity never runs, reads as protection unless something says otherwise; the orchestrator then trusts a
  * limit nobody enforces. The rows below are the known limits; each native adapter's own `unconfirmed` list
  * (adapters/lib/<tool>.cjs, checked against the harness docs) is printed with them, word for word. A report: exit 0.
+ *
+ * ACCOUNTS (REQ-701, REQ-107; D22, D37). After the tool blocks, one `[accounts]` section: one advisory row per account
+ * in `features.accounts` with its readiness line (the same assessment `npx builder accounts` prints — the built-in
+ * probes run here, so a stub on PATH is what a test gives it), or one row `accounts: not configured`, or, while the
+ * profile still carries the 1.0 seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`), exactly one row
+ * `profile: legacy seats, run npx builder accounts migrate`. Advisory means the exit code never changes. `--json`
+ * carries the same rows as a last element `{ section: 'accounts', advisory: true, rows }`.
  */
 
 const fs = require('fs');
@@ -80,6 +87,40 @@ function installedTools(ctx) {
   return out;
 }
 
+const LEGACY_ROW = 'profile: legacy seats, run npx builder accounts migrate';
+const advisory = (note, extra = {}) => ({ feature: 'accounts', status: 'advisory', account: null, worker: null, state: null, ...extra, note });
+
+/**
+ * The advisory accounts rows for the project at `cwd`: the legacy row, the not-configured row, or one row per account
+ * with its readiness line. Never throws: a profile that does not load gives the not-configured row.
+ */
+function accountsRows(cwd, env = process.env) {
+  const profile = require('../scripts/lib/profile.cjs');
+  const registry = require('../scripts/lib/accounts-registry.cjs');
+  let settings;
+  try {
+    settings = profile.load(cwd).settings;
+  } catch {
+    return [advisory('accounts: not configured', { state: 'off' })];
+  }
+  if (registry.legacyKeys(settings.features && settings.features.orchestrator).length) return [advisory(LEGACY_ROW, { state: 'legacy' })];
+  if (!registry.accountsOn(settings)) return [advisory('accounts: not configured', { state: 'off' })];
+  const accounts = require('../scripts/lib/accounts.cjs');
+  const probes = require('../scripts/lib/account-probes.cjs');
+  const { paths, home } = require('../scripts/lib/account-paths.cjs');
+  const base = home(env);
+  const now = Date.now();
+  const readings = {};
+  for (const a of registry.list(settings)) {
+    try {
+      readings[a.name] = probes.collect(a, paths(base, a.name, a), { env, now });
+    } catch (e) {
+      readings[a.name] = { probes: { auth: { ok: null, reason: `probe failed: ${e.message}` } }, usage: null };
+    }
+  }
+  return accounts.assessAll(settings, readings, now).map((a) => advisory(`${a.name} (${a.worker}): ${accounts.renderLine(a).slice(a.name.length + 2)}`, { account: a.name, worker: a.worker, state: a.state }));
+}
+
 function cmdDoctor(ctx, argv) {
   const i = argv.indexOf('--tool');
   let tools;
@@ -98,7 +139,8 @@ function cmdDoctor(ctx, argv) {
     features: NATIVE[tool] || DOT_BUILDER(ctx.TOOLS[tool].pointer),
     unconfirmed: (ctx.ADAPTERS[tool] && ctx.ADAPTERS[tool].unconfirmed) || [],
   }));
-  if (argv.includes('--json')) return console.log(JSON.stringify(report, null, 2));
+  const rows = accountsRows(ctx.CWD);
+  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }], null, 2));
   console.log(`builder kit ${ctx.VERSION} — doctor${none ? ' (no kit install detected — showing the native tools; pass --tool to pick)' : ''}`);
   for (const t of report) {
     console.log(`\n[${t.tool}] ${t.label}`);
@@ -108,9 +150,11 @@ function cmdDoctor(ctx, argv) {
       for (const u of t.unconfirmed) console.log(`    - ${u}`);
     }
   }
+  console.log('\n[accounts] features.accounts — advisory, the exit code is unchanged');
+  for (const r of rows) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
   const hygiene = require('./git-hooks.cjs').status(ctx.CWD, ctx.KIT);
   console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 
-module.exports = { cmdDoctor, installedTools, NATIVE };
+module.exports = { cmdDoctor, installedTools, accountsRows, LEGACY_ROW, NATIVE };
