@@ -27,6 +27,9 @@ function prose() {
     for (const name of readdirSync(dir)) {
       // `.claude/` holds only local state (settings, nested worktrees of this repo); none of it is pack prose.
       if (['.git', '.claude', 'node_modules', 'tests', 'examples'].includes(name)) continue;
+      // Maintainer-only files the package never ships (tests/package.test.mjs skip list): the kit's own profile,
+      // decision log, deferred registry and module specs name features before the loader knows them.
+      if (dir === PACK && ['specs', 'PIPELINE_PROFILE.md', 'DECISIONS.md', 'DEFERRED_TASKS.md'].includes(name)) continue;
       const p = join(dir, name);
       if (statSync(p).isDirectory()) walk(p);
       else if (name.endsWith('.md') && name !== 'CHANGELOG.md') out.push(posix(relative(PACK, p)));
