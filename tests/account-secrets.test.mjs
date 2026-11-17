@@ -138,7 +138,9 @@ describe('writeKeyFile and the helper (REQ-1002)', () => {
       assert.equal(first.mode, '0600');
     }
     assert.ok(secrets.KEY_FLAGS & (fsConstants().O_EXCL), 'O_EXCL in the flags');
-    assert.ok(secrets.KEY_FLAGS & (fsConstants().O_NOFOLLOW || 0x20000), 'O_NOFOLLOW in the flags');
+    // Windows has no O_NOFOLLOW: the flag set then carries O_EXCL alone and the lstat check refuses a planted link.
+    if (fsConstants().O_NOFOLLOW) assert.ok(secrets.KEY_FLAGS & fsConstants().O_NOFOLLOW, 'O_NOFOLLOW in the flags');
+    else assert.equal(process.platform, 'win32', 'only Windows lacks O_NOFOLLOW');
     const next = fakeKey('charlie');
     const second = secrets.writeKeyFile(p.keyFile, next);
     assert.equal(second.rotated, true);
@@ -320,7 +322,9 @@ describe('codex login through the stub (REQ-1003)', () => {
     walk(h);
     assert.deepEqual(holders, [p.codexAuthFile]);
     // A bare name is found on PATH too (a .cmd shim on Windows), and a missing name resolves to nothing.
-    assert.equal(secrets.resolveBin('codex', { PATH: join(h, 'bin') + delimiter + '/nowhere', PATHEXT: '.COM;.EXE;.BAT;.CMD' }), codex);
+    // PATHEXT spells the extension as the user set it (.CMD); Windows paths compare without case.
+    const found = secrets.resolveBin('codex', { PATH: join(h, 'bin') + delimiter + '/nowhere', PATHEXT: '.COM;.EXE;.BAT;.CMD' });
+    assert.equal(process.platform === 'win32' ? String(found).toLowerCase() : found, process.platform === 'win32' ? codex.toLowerCase() : codex);
     assert.equal(secrets.resolveBin('codex-zz', { PATH: join(h, 'bin'), PATHEXT: '.COM;.EXE;.BAT;.CMD' }), null);
     assertNoValue(r.stdout + r.stderr + JSON.stringify(r.auth), value);
     const out = secrets.codexLogout({ configDir: p.configDir, env, codexBin: codex });
