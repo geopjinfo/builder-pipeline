@@ -112,6 +112,18 @@ describe('REQ-1506 — a drop applies at once, a rise by one lane after riseAfte
     assert.deepEqual(seen, [1, 1, 2]);
     assert.match(cap.govern(roomy, policy, 3, { lanes: 1, riseTicks: 0 }).reasons.join('\n'), /rise: held at 1 lane\(s\), tick 1 of 3 that allow 3/);
   });
+  test('red: while damping holds at 0, heldBinding names the signal that held (memory), not rise-damping', () => {
+    // the T2 trial: memory took the record to 0; when memory freed, the record said rise-damping for three ticks and the
+    // loop's hold row recorded that word instead of memory
+    const dropped = cap.govern(host({ memory: { totalMb: 16 * GB, freeMb: 500, source: 'os' } }), policy, 2, { lanes: 2, riseTicks: 0 });
+    assert.deepEqual([dropped.lanes, dropped.binding, dropped.heldBinding], [0, 'memory', 'memory']);
+    const damped = cap.govern(roomy, policy, 2, { lanes: dropped.lanes, riseTicks: dropped.riseTicks, binding: dropped.binding, heldBinding: dropped.heldBinding });
+    assert.deepEqual([damped.lanes, damped.binding, damped.heldBinding], [0, 'rise-damping', 'memory']);
+    const again = cap.govern(roomy, policy, 2, { lanes: damped.lanes, riseTicks: damped.riseTicks, binding: damped.binding, heldBinding: damped.heldBinding });
+    assert.equal(again.heldBinding, 'memory');
+    const free = cap.govern(roomy, policy, 2, null);
+    assert.deepEqual([free.binding, free.heldBinding], ['none', 'none']);
+  });
   test('red: previous 2 lanes and a tick that computes 0 → 0 at once (AC-1506b)', () => {
     const g = cap.govern(host({ memory: { totalMb: 16 * GB, freeMb: 500, source: 'os' } }), policy, 3, { lanes: 2, riseTicks: 2 });
     assert.equal(g.lanes, 0);

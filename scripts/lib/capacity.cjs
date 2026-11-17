@@ -181,7 +181,11 @@ function govern(r, policy, plannedMax, prev = null, extra = {}) {
   }
   if (lanes < planned) reasons.unshift(`CAPACITY: lanes capped at ${lanes} of ${planned} — ${lanes < computed ? 'rise damping' : binding}`);
   else reasons.unshift(`CAPACITY: ${planned} lane(s) as planned — no signal binds`);
-  return { lanes, computed, binding: lanes < planned ? (lanes < computed ? 'rise-damping' : binding) : 'none', caps, reasons, riseTicks };
+  // While rise damping holds the lane count below what the signals now allow, `heldBinding` keeps the signal that set
+  // the held level, so a hold row or a steward can name memory, not the damping that merely delays the rise.
+  const damped = lanes < planned && lanes < computed;
+  const heldBinding = damped ? (prev && (prev.heldBinding || (prev.binding !== 'rise-damping' ? prev.binding : null))) || binding : lanes < planned ? binding : 'none';
+  return { lanes, computed, binding: lanes < planned ? (damped ? 'rise-damping' : binding) : 'none', heldBinding, caps, reasons, riseTicks };
 }
 
 const DEFAULTS = Object.freeze({ perLaneMb: null, reserveCores: 2, maxLoadPerCore: 1.0, minFreeMb: 1024, minDiskMb: 2048, intervalSeconds: 60, ttlSeconds: 180, riseAfterTicks: 3, holdMaxMinutes: 60, explainAfterTicks: 10 });
@@ -230,7 +234,7 @@ function tick(root, settings, io = {}) {
   return withLock(path.join(root, LOCK), () => {
     const prev = readJson(file(root), null);
     const g = govern(readings(io), policy, planned, prev, extra);
-    const record = { lanes: g.lanes, plannedMax: planned, binding: g.binding, caps: g.caps, reasons: g.reasons, at: new Date(at).toISOString(), ttlSeconds: policy.ttlSeconds, tick: ((prev && prev.tick) || 0) + 1, riseTicks: g.riseTicks };
+    const record = { lanes: g.lanes, plannedMax: planned, binding: g.binding, heldBinding: g.heldBinding, caps: g.caps, reasons: g.reasons, at: new Date(at).toISOString(), ttlSeconds: policy.ttlSeconds, tick: ((prev && prev.tick) || 0) + 1, riseTicks: g.riseTicks };
     writeJsonAtomic(file(root), record);
     return record;
   });
@@ -254,7 +258,7 @@ function laneCap(root, at = Date.now()) {
   const r = read(root, at);
   if (!r) return { lanes: null, line: null };
   if (r.stale) return { lanes: null, line: r.line };
-  return { lanes: r.record.lanes, line: r.line, binding: r.record.binding };
+  return { lanes: r.record.lanes, line: r.line, binding: r.record.binding, heldBinding: r.record.heldBinding || r.record.binding };
 }
 
 /** `orch status` line (REQ-1511). */
