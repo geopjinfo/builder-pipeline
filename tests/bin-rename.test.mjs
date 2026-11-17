@@ -119,8 +119,16 @@ describe('2.0.0 — one bin, builder-pipeline', () => {
     assert.deepEqual(hits, [], `say npx builder-pipeline:\n${hits.join('\n')}`);
   });
 
-  test('red: the newest CHANGELOG section ([Unreleased], or the release it became) has a Breaking bullet that names the dropped bin', () => {
-    const lines = newestSectionLines(readFileSync(join(PACK, 'CHANGELOG.md'), 'utf8')).map(([, l]) => l);
+  test('red: the 2.0.0 CHANGELOG section (or [Unreleased] before the release) has a Breaking bullet that names the dropped bin', () => {
+    const text = readFileSync(join(PACK, 'CHANGELOG.md'), 'utf8');
+    const released = text.split(/\r?\n/);
+    const start = released.findIndex((l) => /^## \[2\.0\.0\]/.test(l));
+    let lines;
+    if (start !== -1) {
+      let end = released.findIndex((l, i) => i > start && /^## \[/.test(l));
+      if (end === -1) end = released.length;
+      lines = released.slice(start + 1, end);
+    } else lines = newestSectionLines(text).map(([, l]) => l);
     const at = lines.findIndex((l) => /^### Breaking\b/.test(l));
     assert.notEqual(at, -1, 'no `### Breaking` heading in the newest CHANGELOG section');
     let end = lines.findIndex((l, i) => i > at && /^### /.test(l));

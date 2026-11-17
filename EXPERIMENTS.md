@@ -670,3 +670,39 @@ for them needs a run on an adopting project's boards and claims file.
 be repeated.
 
 **Decision (2026-11-17).** not yet measured — time to first value 1.1 s on one machine (limit 300 s); false-positive rates 0% to 1.1% over four public repositories (no check above 20%).
+
+## 21. Capacity governor — `capacity` (planned, 2.1.0)
+
+**What ships.** Nothing yet. M15 adds the capacity governor (its own `features` key), which lowers the effective lane
+count by host capacity (D70 to D73). M15 fills this section with its measurement; this entry only keeps the numbering whole.
+
+**Opt in.** —
+
+**Measurement.** M15 states it: the planned lane count against the effective one over a batch, with the host readings.
+
+**Risk.** An unmeasured reading that binds. The governor never binds on a missing reading (D72).
+
+**Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
+
+## 22. Model summary of the progress report — `reporterSummary` (experimental)
+
+**What ships.** `features.reporterSummary` (M16, D79) and `agents/experimental/progress-reporter.md`, installed with
+`--experimental` only. While the flag is `experimental-on`, the orchestrator dispatches the persona once per report
+interval; the reporter includes `summary.md` under `## SUMMARY (model)` only while the file is younger than one interval.
+The report itself is built by code and is sent with or without the summary.
+
+**Opt in.** `unpack --experimental`, then set `features.reporterSummary.state` to `experimental-on` with
+`features.reporter` on.
+
+**Measurement.** Over two weeks of reports on one project: the bytes of the SUMMARY section against the bytes of the
+sections it summarises (the bytes row), the share of reports where the reader opened nothing else after the summary
+(the suppression ratio row), and a person marks each summary true or false against the report (the summary criterion).
+**Keep** if at least nine in ten summaries are true and the suppression ratio is above one half. **Drop** otherwise.
+
+| Date | Kit commit | Reports | Summary bytes / summarised bytes | Suppression ratio | True summaries | Note |
+|---|---|---|---|---|---|---|
+
+**Risk.** A summary read as the report. The section is labelled as a model's words, it is dropped when stale, and it
+never carries a figure the report does not.
+
+**Decision (2026-11-17).** not yet measured — no measurement: no report has carried a summary yet.
