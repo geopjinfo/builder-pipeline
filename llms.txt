@@ -14,7 +14,7 @@
 
 ## How it works
 
-- [GUIDE.md](GUIDE.md): the pipeline, mental model, personas, tracks, lite split, batch orchestrator, extending, what is in the box
+- [GUIDE.md](GUIDE.md): the pipeline, mental model, personas, tracks, lite split, batch orchestrator, accounts (the registry, the report, placement, the policy gate, migrating from 1.0 seats), extending, what is in the box
 - [DESIGN.md](DESIGN.md): why it works: the principles and the failure lessons behind each rule
 - [EXPERIMENTS.md](EXPERIMENTS.md): unproven features, how to switch each on, and the measurement that decides it
 - [PIPELINE_PROFILE.template.md](PIPELINE_PROFILE.template.md): the one per-project file; section 16 is the machine-readable settings block
@@ -26,6 +26,7 @@
 - [skills/builder-init.md](skills/builder-init.md): setup from inside the AI tool (greenfield or brownfield)
 - [skills/spec-author.md](skills/spec-author.md): the opt-in spec authoring stage before Phase 1 (intent to requirement rows, acceptance criteria and an API contract; a person ratifies; templates/spec.md is its shape)
 - [skills/orchestrator.md](skills/orchestrator.md): the opt-in batch orchestrator above the pipeline
+- [skills/references/account-selection.md](skills/references/account-selection.md): the rulebook for choosing an account (`features.accounts`: ready only, content class, roles, budget, pays order, holds); `npx builder accounts` reports readiness, `npx builder accounts migrate` rewrites the 1.0 seat keys once
 - [skills/build-module-lite.md](skills/build-module-lite.md): the experimental lite split (build now, gate later)
 - [agents/](agents/): the nine neutral persona sources
 - [skills-extra/README.md](skills-extra/README.md): the optional utility skills and how they wire in

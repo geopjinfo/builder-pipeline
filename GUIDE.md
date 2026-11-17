@@ -190,32 +190,107 @@ flowchart LR
 A restarted session re-arms a watcher for each lane still `LAUNCHED` and carries on. It never rebuilds a run from
 scrollback, and it never reads state from a published page: the page can be stale, the files cannot.
 
-### 👥 Multi-account seats
+### 👥 Accounts
 
-Work runs on **seats**: the primary account (where the orchestrator session lives), an optional secondary account
-(terminal workers), and an optional API-credit lane. Usage is read fresh before every launch.
+Work runs on **accounts**. The registry is `features.accounts` in §16 of `PIPELINE_PROFILE.md`. One entry is one
+account. Each account names its worker (`session`, `claude-code`, `codex`, `api-key`), who pays (`subscription`,
+`gateway`, `free`, `api-key`), a content class (`public`, `scratch`, `any`, or a list of path roots), its roles, a
+family, a config dir, a start command and a budget (`percent` or `usd`, with a soft and a hard value). Account names
+are lowercase, at most 16 characters, and never a reserved word. A value shaped like a secret is refused at load; the
+refusal names the kind and never the text.
+
+> **Commands.** Written for the npm-package install: the CLI is `npx builder <command>` and a kit script runs as
+> `npx builder run <name>`. With the kit copied in as a `builder/` folder ([`UNPACK.md`](UNPACK.md)), the CLI is
+> `node builder/cli.js <command>` and a script runs from the project's `scripts/` copy with Node (folder layout).
+
+**The report.** `npx builder accounts` prints one block per account: the state (`ready`, `not ready` with its
+reason, or `unmeasured`), the usage reading with its source and time, the version and the note. It exits 1 when one
+account is not ready. `--json` prints the same facts and exits 0. While the feature is off, it prints
+`accounts: not configured`. A reading is `measured`, `estimate` or `unmeasured`; the report never prints `0 %` for a
+reading nobody took. `npx builder doctor` prints the same lines as advisory rows; its exit code does not change.
+
+**The commands.** Each command changes the registry in §16 only, and nothing else in the profile.
+
+| Command | What it does |
+|---|---|
+| `npx builder accounts` | the readiness report, one block per account |
+| `npx builder accounts add <name> --worker <w> --pays <p> [--roles ...] [--content ...]` | add one account to the registry and create its account dir |
+| `npx builder accounts note <name> "<text>"` | set the account's `note`; the orchestrator obeys the note as a rule |
+| `npx builder accounts key <name>` | store the key of an `api-key` account in its key file, read from a prompt; the key never enters the profile |
+| `npx builder accounts remove <name>` | remove the account from the registry; its key file is deleted, its config dir is kept |
+| `npx builder accounts list` | the registry in order, one line per account |
+| `npx builder accounts migrate [--dry-run]` | rewrite the 1.0 seat keys into accounts (see below) |
+
+**Placement.** The orchestrator places a lane with one rule, inside `orch next`, `orch claim` and
+`orch gate-launch`:
 
 ```mermaid
 flowchart TD
-    J["lane or job to place"] --> CR{"credit-eligible job<br/>and credit.enabled?"}
-    CR -- yes --> CL["💳 credit lane<br/>headless, API key"]
-    CR -- no --> SEC{"secondary under<br/>its limit (80%)?"}
-    SEC -- yes --> SW["🖥️ secondary seat<br/>terminal worker"]
-    SEC -- no --> PRI{"primary under<br/>its limit (60%)?"}
-    PRI -- yes --> PW["🏠 primary seat<br/>sub-agent or own session"]
-    PRI -- no --> HOLD["⛔ USAGE-HOLD<br/>launch nothing, tell the human"]
+    J["lane or job to place"] --> F["filter: ready · role allowed<br/>· content class allowed"]
+    F --> O["order: registry order<br/>api-key accounts last"]
+    O --> B{"usage under<br/>the soft limit?"}
+    B -- yes --> GO["🚀 launch on the first account"]
+    B -- "no, job marked needs-account" --> GO
+    B -- "no, plain job" --> NEXT["NEEDS-IT-ONLY<br/>try the next account"]
+    NEXT --> HOLD["⛔ no account left<br/>launch nothing, tell the human"]
 ```
 
-| Seat | Runs | Never runs |
-|---|---|---|
-| **Primary** (orchestrator account) | the orchestrator; SOLO lanes as sub-agents; pipeline lanes in their own session; the test slot and every merge | — |
-| **Secondary** | lane workers in their own worktree (plan → build → test) | merges |
-| **Credit lane** | bounded jobs: `code-reading`, `record-fixes`, `docs`, `sweeps`, the tester and the four auditor seats | building, planning, reviewing, orchestrating |
+- A lane needs the module-builder role. A headless job (a tester, an auditor, a credit job) needs only its own role.
+- At or above `budget.hard` the account is not ready. At or above the soft limit (`budget.soft`, else
+  `softLimitPct`) the account takes only a job marked needs-account.
+- A reading older than `usageStaleMinutes` is unmeasured. Only the first account in order may launch unmeasured.
+- `orch next` prints one `SKIP <account>: <why>` line per account it passes over. `orch status` prints one line
+  per account with its state and reading.
+- A `LIMIT`, `BUDGET` or `AUTH` fault marks the account not ready until its `until` time. The job runs once more on
+  the next ready account. An `OVERLOAD` fault retries the same account with a backoff; it never changes the account.
+- `features.accounts.placement: shadow` computes the account the rule would pick, records it as a
+  `placement.shadow` event, and places the 1.0 way (the first ready account in order).
 
-The primary limit sits below the secondary's because the orchestrator session itself runs there. Limits are
-`features.orchestrator.limits`. The plan accounts never receive the API key.
+**The policy gate and the pin.** Before a launch, `orch gate-launch` checks the account against the project. It
+refuses with exit 3 when: the account's content class does not fit the project's `visibility` (§1 of the profile);
+a claimed file lies outside the account's path roots; a `free` or `gateway` account, or an account with a
+`baseUrl`, has no decision-log row that names it; or a settings file carries `apiKeyHelper`, an `env.ANTHROPIC_*`
+variable, a proxy variable or a hook not recorded in `builder.lock.json`. The refusal names the key and the file,
+never a value. A passing launch writes the account's `--settings` pin to `<run>/pins/<lane>.settings.json`: the
+account's env block, its config dir, its `baseUrl` and the deny rules of a path-root account. The pin never holds a
+key. Each lane runs in its own git worktree on a fresh branch. A worktree separates working files; it does not
+sandbox processes and it does not prevent merge conflicts.
 
-### 💳 Credit lane (only with `credit.enabled`)
+**The rulebook.** The judgement parts of placement are in `skills/references/account-selection.md`. `unpack`
+installs it beside the pipeline skill. The orchestrator skill (§3) points at it. It covers: ready only, the content
+class, the roles, the budget, the pays order with `api-key` last, holds, resume, drafts, shadow mode, and the list
+of things an orchestrator never does. The `note` of an account is a rule in that book, not a comment.
+
+#### Migrating from 1.0 seats
+
+The 1.0 keys `features.orchestrator.seats`, `limits`, `secondaryConfigDir` and `credit` are gone in 2.0. While the
+orchestrator is on, the loader refuses them. While it is off, the loader prints one warning. Both name the fix:
+
+1. Run `npx builder accounts migrate --dry-run`. Read the notes.
+2. Run `npx builder accounts migrate`. It rewrites the `pipeline-settings` block of `PIPELINE_PROFILE.md` once.
+   `primary` becomes the `session` account. `secondary` becomes a `claude-code` account with its config dir and start
+   command. `credit` becomes an `api-key` account with a USD budget and the credit guards. Every byte outside the
+   block stays.
+3. The command writes `PIPELINE_PROFILE.md.bak` first. Keep it until the first run is green.
+4. A second run changes nothing. The command is idempotent.
+5. The command refuses while a run holds a `LAUNCHED` or `STALLED` lane. Finish or stop the run (`orch status`),
+   then migrate.
+6. Finished run states keep their `seats`; `migrate` adds the `accounts` list beside them and archives each original
+   as `state.json.bak`. The placement decisions of 1.0 are kept; the golden fixture proves it.
+
+`npx builder doctor` shows the state before and after: one row reads `profile: legacy seats, run npx builder
+accounts migrate` until the rewrite is done.
+
+#### Looping a board
+
+The `boardLoop` key of the settings block (experimental, off by default) lets the orchestrator run one module board
+to its end without a person between the steps: `npx builder run board-loop <account> <board>`, or `orch loop <board>` from the
+orchestrator skill. The loop places each step on the named account with the rule above and stops at every stop point
+the board declares. No measurements exist yet for this feature. It stays `experimental-off` until a measured run
+shows that the loop keeps the same gates as a person-driven board ([EXPERIMENTS.md](EXPERIMENTS.md)). It lands in
+its own change; a kit without the key prints `boardLoop: not configured`.
+
+### 💳 Credit lane (only with an `api-key` account)
 
 ```mermaid
 flowchart LR
@@ -223,7 +298,7 @@ flowchart LR
     RUN --> OK{"result"}
     OK -- "PASS, no file changes" --> DONE["✅ done"]
     OK -- "PASS, files changed" --> REV["⏸ REVIEW PENDING<br/>orch credit-review"] --> DONE
-    OK -- "account fault<br/>cap · credit out · API error · 429" --> FB["↪ fallback<br/>secondary → primary"]
+    OK -- "account fault<br/>cap · credit out · API error · 429" --> FB["↪ fallback<br/>the next ready account in order"]
     OK -- "job fault<br/>scope · denied · no PASS" --> FIXB["✋ no fallback<br/>fix the brief"]
 ```
 
