@@ -5,6 +5,29 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M14 evidence programme (2.0.0 line)
+
+- **`npx builder run experiments` (REQ-1401, REQ-1402, REQ-1405; D57).** `scripts/experiments.mjs` over
+  `scripts/lib/experiments.cjs`: one line per EXPERIMENTS.md section with its flag, default state and decision; `--check`
+  exits 1 on a section without a decision row or a keep without a number; `--matrix` prints the trial matrix (feature,
+  section, test bed, command, keep rule, decision); `--record <n> --row "| … |"` appends one measurement row to a
+  section's table, the recording path a scheduled run uses. `features` prints the decision beside every experimental or
+  unmeasured flag.
+- **EXPERIMENTS §19: the recorded runs.** Run 1 is the loop runner's dry run on the polyglot test bed (stub worker,
+  3 passes, 0 of 6 rows, stop no-progress, cost unmeasured, fix-rate unmeasured), with its files in the project Library;
+  Run 2 records how the 2.0.0 build itself ran (device and cloud lanes, not the orchestrator) and lists every module PR.
+  Tests: `tests/experiments.test.mjs` (the parser, the check, the matrix, the record path, §19 and §20 shape, a check
+  above 20% false positives must be off by default), `tests/release-check.test.mjs` (§19 names every module PR and the
+  evidence files).
+
+### Changed — M14 (REQ-1403)
+
+- **`builderBatch` and `fixLane` ship off by default.** The §19 run did not measure them, so 2.0.0 sets both to `off`;
+  set a feature to `unmeasured` to switch it on, and its report says the benefit is unmeasured. The template, FEATURES
+  and EXPERIMENTS §6 and §7 say so.
+- **`fix-rate` with no FIX row is unmeasured, never a pass.** It prints `fixLane: unmeasured — no FIX row in N board(s)`
+  and exits 3 (the not-configured code); no `0.0%` is printed. Test: `tests/fix-rate.test.mjs`.
+
 ### Added — M9 board loop (experimental-off)
 
 - **`features.boardLoop` (REQ-901 to REQ-915; D17, D44, D48, D52), `experimental-off`.** A loop runner above a task

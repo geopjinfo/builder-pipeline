@@ -68,6 +68,24 @@ describe('fix-rate — CLI on a fixture project', () => {
     assert.match(data.feature, /unmeasured/);
   });
 
+  test('red: REQ-1403 a board with no FIX rows prints "fixLane: unmeasured" and exits with the not-configured code, never a pass', () => {
+    const dir = project();
+    writeFileSync(join(dir, 'tasks', 'stock-levels.md'), '# s\n\n## P2 — Code\n\n| # | Task | Cites | Status | Test-seed / evidence | Notes |\n|---|---|---|---|---|---|\n| T1 | a | R1 | DONE | t | |\n');
+    writeFileSync(join(dir, 'tasks', 'restock.md'), '# r\n\n## P2 — Code\n\n| # | Task | Cites | Status | Test-seed / evidence | Notes |\n|---|---|---|---|---|---|\n| T1 | b | R2 | DONE | t | |\n');
+    const r = run(dir);
+    assert.equal(r.status, 3, r.stdout + r.stderr);
+    assert.match(r.stdout, /^fixLane: unmeasured — no FIX row in 2 board\(s\)/m);
+    assert.ok(!/TOTAL .*0\.0%/.test(r.stdout), 'no rate is printed when nothing was measured');
+  });
+
+  test('red: REQ-1403 the lane is off by default in 2.0.0: the fixture profile switches it on', () => {
+    const dir = project();
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), '```json pipeline-settings\n{ "schema": 2 }\n```\n');
+    const r = run(dir);
+    assert.equal(r.status, 0);
+    assert.equal(r.stdout.trim(), 'fixLane: not configured');
+  });
+
   test('the feature off prints "fixLane: not configured"', () => {
     const dir = project();
     writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), '```json pipeline-settings\n{ "schema": 2, "features": { "fixLane": { "state": "off" } } }\n```\n');

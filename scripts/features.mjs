@@ -8,7 +8,9 @@
  *
  * Exit 0 the profile is valid (or absent — defaults in use) · 1 the profile is invalid.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -19,7 +21,19 @@ if (!existsSync(loaded.path)) console.log('no PIPELINE_PROFILE.md — defaults i
 else if (!loaded.found) console.log('PIPELINE_PROFILE.md has no pipeline-settings block — defaults in use');
 else console.log('PIPELINE_PROFILE.md — pipeline-settings loaded');
 
-for (const name of Object.keys(profile.FEATURES)) console.log(profile.feature(loaded.settings, name).line);
+// REQ-1401: the decision row of EXPERIMENTS.md beside every experimental or unmeasured flag, read from the kit's own copy.
+let experiments = '';
+try {
+  experiments = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'EXPERIMENTS.md'), 'utf8');
+} catch {
+  experiments = '';
+}
+const { decisionFor } = require('./lib/experiments.cjs');
+for (const name of Object.keys(profile.FEATURES)) {
+  const f = profile.feature(loaded.settings, name);
+  const d = /^(experimental-off|experimental-on|unmeasured)$/.test(f.state) && experiments ? decisionFor(experiments, name) : null;
+  console.log(d ? `${f.line} · decision: ${d.verdict} (${d.date})` : f.line);
+}
 
 if (loaded.errors.length > 0) {
   console.log(`\n${loaded.errors.length} validation error(s):`);

@@ -12,15 +12,17 @@ how to switch it on, the **exact measurement** that promotes or removes it, and 
 - **Experimental** (`experimental-off` by default). Off until you opt in. Any experimental *files*
   (persona, tooling) are installed only by `unpack --experimental` (see `UNPACK.md`); then set the
   feature to `experimental-on` in `PIPELINE_PROFILE.md` §16. While it is on, its measurement is owed.
-- **Unmeasured** (`unmeasured` by default). On, because the mechanism is cheap and the reasoning
-  sound, but every report says the benefit is unmeasured. Set the feature to `off` to get the
-  previous behaviour back.
+- **Unmeasured** (`off` by default since 2.0.0, REQ-1403). The mechanism is cheap and the reasoning
+  sound, but the §19 recorded run did not measure it. Set the feature to `unmeasured` to switch it on;
+  every report then says the benefit is unmeasured.
 
 **The rule for every entry.** A keep/stop call made on zero runs is the impression the entry exists
 to replace. Record the call — keep, stop, or change a parameter — as a decision in `paths.decisions`,
 with the numbers and the runs they came from, and update this file.
 
-`npx builder run features` prints the current state of each.
+`npx builder run features` prints the current state of each, with its decision beside it. `npx builder run experiments`
+prints every section's decision, `--check` refuses a blank or an unsupported keep, `--matrix` prints the trial matrix,
+and `--record <n> --row "| … |"` is how a scheduled run appends its measurement.
 
 ---
 
@@ -186,7 +188,7 @@ shape exactly.
 
 **Decision (2026-11-17).** not yet measured — kit-internal samples only: logic-only scores 84.7% to 91.9% over five modules, two adopting-project runs still owed; the step stays non-blocking.
 
-## 6. Builder batches — `builderBatch` (unmeasured, on by default)
+## 6. Builder batches — `builderBatch` (unmeasured, off by default since 2.0.0)
 
 **What ships.** P2 dispatches the builder in batches of at most `features.builderBatch.rows` board
 rows (default 5), a fresh dispatch each, the builder reading its rows through
@@ -205,9 +207,9 @@ both fall. Otherwise raise `rows` and say why, or set the feature `off`.
 **Risk.** A batch boundary drops context the next batch must re-read. Rows that share a file split
 across batches can conflict. Keep coupled rows in one batch.
 
-**Decision (2026-11-17).** not yet measured — no measurement: no before/after window of `seat-peaks` and `cost-window` recorded.
+**Decision (2026-11-17).** not yet measured — no measurement: no before/after window of `seat-peaks` and `cost-window` recorded; the §19 dry run did not exercise batches, so the feature is off by default (REQ-1403).
 
-## 7. Narrow FIX lane — `fixLane` (unmeasured, on by default)
+## 7. Narrow FIX lane — `fixLane` (unmeasured, off by default since 2.0.0)
 
 **What ships.** In the loop-back, `FIX-n` rows are grouped by file area. Each group goes to its own
 builder dispatch carrying only the `file:line` list, cites, minimal fixes and the tests to run — no
@@ -241,7 +243,7 @@ you let it decide.
 **Risk.** A fixer without the plan can fix the cited line and break an invariant the plan stated —
 which shows up exactly as a rising fix-of-fix rate. A lane judged on zero loop-backs is not judged.
 
-**Decision (2026-11-17).** not yet measured — no measurement: no baseline `fix-rate` recorded and no two loop-back runs.
+**Decision (2026-11-17).** not yet measured — no measurement: no baseline `fix-rate` recorded and no two loop-back runs; the §19 dry run had no FIX row (`fixLane: unmeasured`), so the feature is off by default (REQ-1403).
 
 ## 8. Split module pipeline — `liteSplit` (experimental)
 
@@ -492,18 +494,55 @@ stopping rule.
 
 **Decision (2026-11-17).** not yet measured — no measurement: the feature is not built.
 
-## 19. Reserved — next 2.0 measurement (skeleton)
+## 19. Recorded runs — the loop runner dry run and the 2.0.0 build (REQ-1402, REQ-1406)
 
-**What ships.** Nothing. This section holds the next 2.0 feature that needs a measurement before promotion. Fill in
-the four blocks below when the feature is named.
+**What this section is.** The record of every end-to-end run the kit made on a throwaway project, and of the build of
+the kit itself. Each run names its id, its files, its cost (or `unmeasured`), its fix-rate line and its silent failures.
+A number here comes from a file in the project Library, never from memory.
 
-**Opt in.** —
+### Run 1 — the loop runner on the polyglot test bed (2026-11-17, dry run)
 
-**Measurement.** —
+- Run id: `polyglot-testbed` (the board key; run log `.pipeline/loop/polyglot-testbed.jsonl`).
+- Project: the throwaway polyglot test bed (six aider Python exercises, pytest gate), commit `3e97890` before the run,
+  `606d88f` after it (one commit by the runner: `loop: T1 blocked after 2 failed passes`). Kit commit `24ae3cd`.
+- Worker: the stub worker of the kit's own tests (`tests/fixtures/loop/stub-loop-worker.cjs`), so no model ran. This is
+  a dry run of the machinery, not a measurement of a model. A run with a model on a ready account is owed and is a
+  follow-up.
+- Result: 3 passes, 0 of 6 rows done, stop `no-progress` (an identical diff hash three times: the stub wrote nothing).
+  Row T1 was marked BLOCKED after its 2 failed passes; pass 3 moved to T2.
+- Cost: `unmeasured` (the stub reports no `total_cost_usd`). Turns: 1 per pass, 3 in all. Timeouts: 0. Silent
+  failures: 0 (every pass ended with a verdict and one run-log row).
+- Fix-rate: `fixLane: unmeasured — no FIX row in 1 board(s); the fix-of-fix rate was not measured` (exit 3).
+  `builderBatch` was not exercised.
+- Library files (uploaded flat; the evidence set `evidence/polyglot-loop-dryrun-2026-11-17/` names them): `board.md`
+  (the board after the run), `run.jsonl` (three pass rows), `progress.md` (the notes fed forward), `state.json`.
 
-**Risk.** —
+### Run 2 — the 2.0.0 build itself (November 2026)
 
-**Decision (2026-11-17).** not yet measured — no measurement: no feature assigned.
+The 2.0.0 modules were built as device and cloud lanes of the project (one Claude session per module, on George's
+accounts through the project threads), not through the kit's orchestrator. So there is no orchestrator run log and no
+`events.jsonl` for the build; REQ-1406 is met honestly by this record, and an orchestrator-driven build run is a
+follow-up once an account is ready on the device. The module pull requests, all drafts against the stacked bases at the
+time of writing:
+
+| Module | PR | What it adds |
+|---|---|---|
+| M0 | #6 | the accounts spec and decisions |
+| M1 | #14 | the account registry |
+| M2a | #15 | the readiness assessment |
+| M3 | #22 | account placement |
+| M6 | #16 | worker adapters |
+| M9 | #23 | the loop runner above a board |
+| M10 | #18 | the accounts command |
+| M11 | #21 | wrappers, gateway and free accounts |
+| M12 | #19 | remote lanes |
+| A | #7 | EXPERIMENTS §16 to §20 and the decision rows |
+| B | #8 | time to first value |
+| C | #9 | false-positive rates |
+| M14 | this PR | the evidence programme |
+
+**Decision (2026-11-17).** not yet measured — one stub dry run (3 passes, 0/6 rows, stop no-progress, cost unmeasured);
+the run with a model and the orchestrator-driven build run are owed.
 
 ## 20. Kit measurements — time to first value and false-positive rates (skeleton)
 

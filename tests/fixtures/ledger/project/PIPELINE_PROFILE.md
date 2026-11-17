@@ -5,6 +5,14 @@
 ```json pipeline-settings
 {
   "schema": 2,
-  "paths": { "boards": "tasks", "registry": "DEFERRED_TASKS.md" }
+  "paths": {
+    "boards": "tasks",
+    "registry": "DEFERRED_TASKS.md"
+  },
+  "features": {
+    "fixLane": {
+      "state": "unmeasured"
+    }
+  }
 }
 ```
