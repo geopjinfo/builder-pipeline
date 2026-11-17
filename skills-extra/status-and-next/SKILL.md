@@ -16,10 +16,10 @@ trackers), §2 the gate commands, §5 the protected/fenced paths.
 
 **Without a profile.** The project has not adopted the pipeline. Read its state with the kit tools on named
 targets, each of which runs with the default settings and says so on its first line:
-`npx builder check-ledgers --boards <dir> --registry <file>` · `npx builder run spec-check <file>.md` ·
-`npx builder run claims-check --files <file>…` · `npx builder inventory` ·
-`npx builder run instruction-lint <file>…` · `npx builder run instruction-budget <file>… [--max-lines <n>]` ·
-`npx builder run worktree-sweep --target <branch>` (a dry run; `--apply` removes). A line that says
+`npx builder-pipeline check-ledgers --boards <dir> --registry <file>` · `npx builder-pipeline run spec-check <file>.md` ·
+`npx builder-pipeline run claims-check --files <file>…` · `npx builder-pipeline inventory` ·
+`npx builder-pipeline run instruction-lint <file>…` · `npx builder-pipeline run instruction-budget <file>… [--max-lines <n>]` ·
+`npx builder-pipeline run worktree-sweep --target <branch>` (a dry run; `--apply` removes). A line that says
 `not configured` is not a pass: name it in the report as a check that did not run.
 
 ## 1. Re-verify state from scratch

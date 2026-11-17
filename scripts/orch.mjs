@@ -3,8 +3,8 @@
  * orch — the batch orchestrator's fixed steps (feature `orchestrator`). Judgement lives in skills/orchestrator.md;
  * everything mechanical is here, so a killed orchestrating session resumes from the state file, not from memory.
  *
- *   npx builder run orch <command> …       (not through npm run: some shells' npm drops --flags)
- * (folder layout: node scripts/orch.mjs in place of npx builder run orch)
+ *   npx builder-pipeline run orch <command> …       (not through npm run: some shells' npm drops --flags)
+ * (folder layout: node scripts/orch.mjs in place of npx builder-pipeline run orch)
  *
  * Plan → lanes
  *   digest <artifact.md|.html> [--out plan.md] [--run R] [--title T]
@@ -98,6 +98,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { runHint } = require('./lib/run-hint.cjs');
@@ -732,7 +733,7 @@ try {
       const l = s.lanes[lane];
       if (!l) die(2, `no lane ${lane}`);
       const installed = path.join(s.repo || process.cwd(), 'specs', 'orchestrator-worker-brief.template.md');
-      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'templates', 'orchestrator-worker-brief.md');
+      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'orchestrator-worker-brief.md');
       const placed = l.seat || state.placementNow(root(), s).seat || null;
       const account = placed ? laneRegistryAccount(s, l) || state.accountOf(s, placed) : null;
       const text = planLib.renderBrief(fs.readFileSync(templateFile, 'utf8'), { run, lane: { ...l, name: lane }, rows: s.rows || [], target: s.target, account });

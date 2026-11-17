@@ -5,7 +5,7 @@ Status: ratified
 Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build thread; see Decision log)
 
 > The kit's own spec for lane M13 (distribution) of release 2.0.0. It follows the installed spec template. Check it with
-> `npx builder run spec-check specs/toolkit-distribution.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-distribution.spec.md`).
+> `npx builder-pipeline run spec-check specs/toolkit-distribution.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-distribution.spec.md`).
 > It is maintainer-only and does not ship in the package.
 
 ## Intent
@@ -19,7 +19,7 @@ Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build 
 - In: an MIT licence file and the matching `license` field · the package name `builder-pipeline` with a second bin of
   the same name · README badges computed from source, with a check that stops drift · a proof statement a reader can
   verify · the npm publish steps in `RELEASING.md`.
-- Out: the removal of the `builder` bin and of every `npx builder` line (the 2.0.0 release-prep PR; see DL-2) · the
+- Out: the removal of the `builder` bin and the rename of every old `npx` line (done in the 2.0.0 release-prep lane; see DL-2) · the
   version bump to 2.0.0 (the release PR) · the first `npm publish` itself (the maintainer's act, with the maintainer's
   npm login) · measurements for `EXPERIMENTS.md` (lane M12).
 
@@ -37,12 +37,12 @@ Decision log (the plan's rule: each decision taken without George is logged with
 | Id | Decision | Reasoning | Date |
 |---|---|---|---|
 | DL-1 | This spec is ratified by the build thread, not by George in person. | George's mandate of 16 November 2026: fill open decisions with the recommended option and complete the work. The spec is the recommended option written down; each acceptance criterion has a passing test. | 2026-11-16 |
-| DL-2 | The `builder` bin stays, and the `npx builder …` prose is not renamed in this lane. The 2.0.0 release-prep PR drops the bin and renames the prose. | Four lanes edit prose in parallel. A rename now conflicts with all of them. The end state of decision S3 (bin `builder-pipeline` only) is unchanged. | 2026-11-16 |
+| DL-2 | The `builder` bin stays, and the old `npx` prose is not renamed in this lane. The 2.0.0 release-prep PR drops the bin and renames the prose. **Done:** the release-prep lane removed the bin and renamed every shipped line to `npx builder-pipeline` (REQ-503 updated; `tests/bin-rename.test.mjs` guards it). | Four lanes edit prose in parallel. A rename now conflicts with all of them. The end state of decision S3 (bin `builder-pipeline` only) is unchanged. | 2026-11-16 |
 | DL-3 | The licence holder is written as `geopjinfo`, the GitHub login. | No legal name is on record in the repository. George can change the holder line in `LICENSE` at any time; the test checks only the heading and the field. | 2026-11-16 |
 | DL-4 | The licence is MIT. | Decision S3 names a permissive licence. MIT is the most common choice for a CLI kit and needs no notice file. | 2026-11-16 |
 | DL-5 | The phases badge counts the numbered rows of the phase table in `skills/build-module-pipeline.md`, including the half-step rows (0.5, 0.7, 3b, 6.5). The orchestration row (`—`) is not a phase. | The table is the one source of the phase list. The old badge said 10 while the table had 13 numbered rows. A count from the source cannot drift. | 2026-11-16 |
 | DL-6 | The personas badge counts `agents/*.md` and excludes `agents/experimental/`. | An experimental persona is installed only with `--experimental`; the badge describes the default install. | 2026-11-16 |
-| DL-7 | The tool-targets badge counts the keys of `TOOLS` in `cli.js`. | `npx builder targets` prints that table; the badge and the command then agree. | 2026-11-16 |
+| DL-7 | The tool-targets badge counts the keys of `TOOLS` in `cli.js`. | `npx builder-pipeline targets` prints that table; the badge and the command then agree. | 2026-11-16 |
 | DL-8 | The badge script ships in `scripts/` because that folder is in `files`. It is a maintainer tool and is not a `run` target (`.cjs`, not `.mjs`). | Putting it in `tests/` would hide a tool the release routine runs. The shipped copy is inert. | 2026-11-16 |
 | DL-9 | The proof statement names no project and no module count. | The source project's data cannot ship (AGENTS.md rule 7). A count nobody can check is not evidence. Published measurements start with 2.0.0. | 2026-11-16 |
 | DL-10 | The tests that build a fixture install at `node_modules/@geopjinfo/builder-pipeline` now build it at `node_modules/builder-pipeline`. | The tests describe the package shape. The shape changed with the name. `cli.js` detects a package install by the `node_modules` segment alone, so no code path changed. | 2026-11-16 |
@@ -56,7 +56,7 @@ Kind: `behaviour` (what succeeds) · `refusal` (what is refused, and why) · `ef
 |---|---|---|---|---|
 | REQ-501 | The repository root holds a `LICENSE` file whose first line is `MIT License` and whose copyright line names a year and a holder | a project that installs the kit | constraint | strategy study S3 |
 | REQ-502 | `package.json` declares `license` as `MIT`, the same licence the `LICENSE` heading names, and lists `LICENSE` in `files` | a project that installs the kit | constraint | strategy study S3 |
-| REQ-503 | `package.json` names the package `builder-pipeline` and declares two bins, `builder-pipeline` and `builder`, both running `cli.js` | a project that installs the kit | constraint | strategy study S3, DL-2 |
+| REQ-503 | `package.json` names the package `builder-pipeline` and declares one bin, `builder-pipeline`, running `cli.js`; the `builder` bin of 1.x is gone | a project that installs the kit | constraint | strategy study S3, DL-2 |
 | REQ-504 | No shipped document or shipped script names the old scoped package; the README gives both install forms, the git tag and the registry, and says the registry listing starts with 2.0.0 | a reader of the README | constraint | strategy study S3 |
 | REQ-505 | `scripts/readme-badges.cjs` exports `badges()`, which returns the README badge block computed from source: phases from the phase table, personas from `agents/`, tool targets from `cli.js`, the Node floor from `engines`, zero dependencies from `package.json`, and install `npm` | a maintainer of the kit | behaviour | strategy study S4, DL-5 to DL-7 |
 | REQ-506 | `check(TEXT)` returns one mismatch per badge whose line in TEXT differs from the generated one, and an empty list when the block matches | the kit's test suite | behaviour | strategy study S4 |

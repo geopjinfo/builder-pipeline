@@ -6,7 +6,7 @@ Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build 
 
 > The kit's own spec for the standalone form of the three hygiene checks, part of release 2.0.0. It follows the installed
 > spec template and the shape of `specs/toolkit-standalone.spec.md`. Check it with
-> `npx builder run spec-check specs/toolkit-hygiene-standalone.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-hygiene-standalone.spec.md`).
+> `npx builder-pipeline run spec-check specs/toolkit-hygiene-standalone.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-hygiene-standalone.spec.md`).
 > It is maintainer-only and does not ship in the package.
 
 ## Intent

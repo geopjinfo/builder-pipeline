@@ -31,7 +31,7 @@ reaches them until a tag exists and they bump to it. The first registry release 
    `tests/toolkit-distribution.test.mjs` fails while the README and the generated badges differ.
 3. **CHANGELOG release heading.** Rename `## [Unreleased]` to the release — `## [X.Y.Z] — YYYY-MM-DD` — and open a
    fresh empty `## [Unreleased]` above it. Every change since the last release is described there, with its tests.
-4. **Version bump** in `package.json` to the same `X.Y.Z`. It is the version's one home: `npx builder --version`
+4. **Version bump** in `package.json` to the same `X.Y.Z`. It is the version's one home: `npx builder-pipeline --version`
    prints it, and `tests/version.test.mjs` fails when it differs from the newest released CHANGELOG heading. Run the
    suite again.
 5. **The maintainer fast-forwards `main`** to the release commit and creates an **annotated tag** on it:
@@ -59,9 +59,9 @@ reaches them until a tag exists and they bump to it. The first registry release 
 
    ```
    npm i -D builder-pipeline@X.Y.Z          # or: npm i -D github:geopjinfo/builder-pipeline#vX.Y.Z
-   npx builder upgrade --dry-run
-   npx builder upgrade   # the install's tools and flags come from builder.lock.json; add --prune to remove what the release dropped
-   npx builder verify
+   npx builder-pipeline upgrade --dry-run
+   npx builder-pipeline upgrade   # the install's tools and flags come from builder.lock.json; add --prune to remove what the release dropped
+   npx builder-pipeline verify
    ```
 
    It reads the CHANGELOG entries between its old tag and the new one first; `upgrade` keeps its local edits and its

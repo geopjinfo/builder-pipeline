@@ -168,7 +168,7 @@ function claudeKeyProbe(paths, fsLike = fs) {
   try { settings = fsLike.existsSync(paths.settingsFile) ? JSON.parse(fsLike.readFileSync(paths.settingsFile, 'utf8')) : null; } catch { settings = null; }
   const helper = isObject(settings) && typeof settings.apiKeyHelper === 'string' && settings.apiKeyHelper.trim();
   if (hasKey && helper) return { ...base, ok: true, reason: null };
-  if (hasKey && !helper) return { ...base, ok: false, reason: 'key file present but settings.json has no apiKeyHelper (run `npx builder accounts key <name>` again)' };
+  if (hasKey && !helper) return { ...base, ok: false, reason: 'key file present but settings.json has no apiKeyHelper (run `npx builder-pipeline accounts key <name>` again)' };
   return { ...base, ok: false, reason: 'signed out' };
 }
 
@@ -279,14 +279,14 @@ function gatewayProbe(account, paths, io) {
   const fsLike = (io && io.fs) || fs;
   const base = { worker: account.worker, signIn: null, method: 'gateway', configDir: paths.configDir, expiresAt: null };
   const wrappers = [paths.wrapperSh, paths.wrapperPs1].filter((f) => fsLike.existsSync(f));
-  if (!wrappers.length) return { ...base, ok: false, signIn: 'npx builder accounts install', reason: `no wrapper at ${paths.wrapperSh}` };
+  if (!wrappers.length) return { ...base, ok: false, signIn: 'npx builder-pipeline accounts install', reason: `no wrapper at ${paths.wrapperSh}` };
   for (const w of wrappers) {
     let text = '';
     try { text = fsLike.readFileSync(w, 'utf8'); } catch { text = ''; }
     if (text.split(/\r?\n/).some((l) => l.trim() === CLOSED_MARKER)) return { ...base, ok: false, reason: `closed by policy (${path.basename(w)} is a refusal wrapper)` };
   }
   const keyFile = account.worker === 'codex' ? paths.codexAuthFile : paths.keyFile;
-  if (!fsLike.existsSync(keyFile)) return { ...base, ok: false, signIn: `npx builder accounts key ${account.name}`, reason: `gateway key absent (${path.basename(keyFile)})` };
+  if (!fsLike.existsSync(keyFile)) return { ...base, ok: false, signIn: `npx builder-pipeline accounts key ${account.name}`, reason: `gateway key absent (${path.basename(keyFile)})` };
   return { ...base, ok: true, reason: null };
 }
 

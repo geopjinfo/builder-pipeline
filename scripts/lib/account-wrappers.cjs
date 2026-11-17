@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The wrappers and composed settings of an account — `npx builder accounts install` (plan M11, REQ-1101, REQ-1103,
+ * The wrappers and composed settings of an account — `npx builder-pipeline accounts install` (plan M11, REQ-1101, REQ-1103,
  * REQ-1106, REQ-1109; D19, D38, D41, D52). Pure composition: the install step (accounts-lock.cjs) writes the plan.
  *
  * WHY. A person switches account by running `<accounts home>/bin/<name>` instead of `claude` or `codex`. The wrapper
@@ -49,11 +49,11 @@ function resolvePolicy(policyText, account) {
   const aliases = { opus: pick(/opus/i), sonnet: pick(/sonnet/i), haiku: pick(/haiku/i) };
   const kind = kindOf(account);
   if (kind === 'free') {
-    if (prof.freeAllowed !== true) return { closed: `profile "${p}" has freeAllowed false — edit the gateway policy, run npx builder accounts policy apply, then npx builder accounts install` };
+    if (prof.freeAllowed !== true) return { closed: `profile "${p}" has freeAllowed false — edit the gateway policy, run npx builder-pipeline accounts policy apply, then npx builder-pipeline accounts install` };
     return { combo: `claude-auto-cheap-${p}`, aliases: null };
   }
   if (kind === 'gateway') {
-    if (prof.claudeApiAllowed !== true) return { closed: `profile "${p}" has claudeApiAllowed false — edit the gateway policy, run npx builder accounts policy apply, then npx builder accounts install` };
+    if (prof.claudeApiAllowed !== true) return { closed: `profile "${p}" has claudeApiAllowed false — edit the gateway policy, run npx builder-pipeline accounts policy apply, then npx builder-pipeline accounts install` };
     const combo = `claude-${prof.default || 'auto-balanced'}-${p}`;
     return { combo, aliases: aliases.sonnet ? aliases : null };
   }
@@ -93,7 +93,7 @@ function composeCodexConfig({ name, account, resolved = {} }) {
   if (!account.baseUrl) throw new Error(`refused: account "${name}" pays by ${kind} and names no baseUrl`);
   const model = resolved.combo || 'gateway-default';
   return [
-    `# builder-pipeline: wrapper v1 ${name} — written by npx builder accounts install; Codex reads it only under this account's CODEX_HOME.`,
+    `# builder-pipeline: wrapper v1 ${name} — written by npx builder-pipeline accounts install; Codex reads it only under this account's CODEX_HOME.`,
     'model_provider = "gateway"',
     `model = "${model}"`,
     '',
@@ -155,7 +155,7 @@ function wrapperSh({ name, account, paths: p, kitRoot, resolved = {}, nodeBin = 
     DIR_VAR: CONFIG_DIR_VAR[account.worker],
     DIR: p.configDir,
     SRT_CHECK: claude ? `srt=${q1(p.srtSettingsFile)}\nif [ -f "$srt" ]; then\n  ${q1(nodeBin)} ${q1(check)} "$srt" || { echo "$name: refusing the launch: $srt is not a valid sandbox-runtime settings file" >&2; exit 1; }\nfi` : '',
-    KEY_CHECK: needsKey ? `[ -s ${q1(p.keyFile)} ] || { echo "$name: no key yet: run npx builder accounts key ${name}" >&2; exit 1; }` : '',
+    KEY_CHECK: needsKey ? `[ -s ${q1(p.keyFile)} ] || { echo "$name: no key yet: run npx builder-pipeline accounts key ${name}" >&2; exit 1; }` : '',
     KEY_EXPORT: !claude && needsKey ? `${GATEWAY_KEY_VAR}="$(cat ${q1(p.keyFile)})"; export ${GATEWAY_KEY_VAR}` : '',
     LAUNCH: claude ? `if [ -f "$srt" ] && command -v srt >/dev/null 2>&1; then exec srt --settings "$srt" claude "$@"; fi\nexec claude "$@"` : 'exec codex "$@"',
   };
@@ -176,7 +176,7 @@ function wrapperPs1({ name, account, paths: p, kitRoot, nodeBin = process.execPa
     DIR_VAR: CONFIG_DIR_VAR[account.worker],
     DIR: p.configDir.replace(/'/g, "''"),
     SRT_CHECK: claude ? `$srt = ${ps(p.srtSettingsFile)}\nif (Test-Path $srt) { & ${ps(nodeBin)} ${ps(check)} $srt; if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("$name: refusing the launch: $srt is not a valid sandbox-runtime settings file"); exit 1 } }` : '',
-    KEY_CHECK: needsKey ? `if (-not (Test-Path ${ps(p.keyFile)})) { [Console]::Error.WriteLine("$name: no key yet: run npx builder accounts key ${name}"); exit 1 }` : '',
+    KEY_CHECK: needsKey ? `if (-not (Test-Path ${ps(p.keyFile)})) { [Console]::Error.WriteLine("$name: no key yet: run npx builder-pipeline accounts key ${name}"); exit 1 }` : '',
     KEY_EXPORT: !claude && needsKey ? `$env:${GATEWAY_KEY_VAR} = (Get-Content -Raw ${ps(p.keyFile)}).Trim()` : '',
     LAUNCH: claude ? `if ((Test-Path $srt) -and (Get-Command srt -ErrorAction SilentlyContinue)) { & srt --settings $srt claude @args } else { & claude @args }` : '& codex @args',
   };

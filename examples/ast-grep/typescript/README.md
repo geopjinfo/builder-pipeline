@@ -65,7 +65,7 @@ Wire the scan into the profile:
 }
 ```
 
-then `npx builder run rules-module src/items` (folder layout: `node scripts/rules-module.mjs src/items`).
+then `npx builder-pipeline run rules-module src/items` (folder layout: `node scripts/rules-module.mjs src/items`).
 
 `ratcheted` lists the rule ids whose hits count; leave a census rule (an inventory, not a defect) out of it.
 An empty list counts every rule. The baseline is a JSON array of `{ "ruleId", "file", "snippet", "why" }` —

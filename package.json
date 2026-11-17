@@ -5,8 +5,7 @@
   "//": "type commonjs: the kit runs its own .js files as CommonJS whatever the host package.json declares. A \"type\": \"module\" host otherwise loads cli.js and the hooks as ES modules and they fail on require().",
   "type": "commonjs",
   "bin": {
-    "builder-pipeline": "cli.js",
-    "builder": "cli.js"
+    "builder-pipeline": "cli.js"
   },
   "files": [
     "cli.js",

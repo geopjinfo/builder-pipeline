@@ -90,6 +90,11 @@ node builder/cli.js upgrade --dry-run
 node builder/cli.js upgrade   # tools and flags from builder.lock.json; --tool overrides, --prune removes files a release dropped
 ```
 
+**From 1.x (package install):** 2.0.0 has one command, `builder-pipeline`; the `builder` command of 1.x is gone. In
+your own scripts, CI and instruction files, change the command name after `npx` from `builder` to `builder-pipeline`.
+`upgrade` does not rewrite project-owned files, so the project makes this edit itself. The command of this
+folder layout, `node builder/cli.js <cmd>`, does not change.
+
 Pass the same `--tool`, `--tools`, `--models`, `--no-extras` and `--experimental` you gave the original
 `unpack` — `upgrade` walks unpack's own source→destination mapping, so it refreshes exactly the
 files those flags install, and a different `--models` rewrites every persona's `model:` line.

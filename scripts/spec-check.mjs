@@ -1,8 +1,8 @@
 /**
  * Check a module's spec before Phase 1, and write what it feeds forward. Rules: scripts/lib/spec-check.cjs.
  *
- *   npx builder run spec-check <module-key | path/to.spec.md> [--ratified] [--pack] [--rows] [--contract <out.json>]
- * (folder layout: node scripts/spec-check.mjs in place of npx builder run spec-check)
+ *   npx builder-pipeline run spec-check <module-key | path/to.spec.md> [--ratified] [--pack] [--rows] [--contract <out.json>]
+ * (folder layout: node scripts/spec-check.mjs in place of npx builder-pipeline run spec-check)
  *
  *   --ratified   refuse a draft (the pipeline's gate before Phase 1)
  *   --pack       print the requirement-pack skeleton (templates/requirement-pack.md shape)

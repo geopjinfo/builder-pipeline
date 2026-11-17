@@ -1,10 +1,10 @@
 /**
  * FIX rows and the fix-of-fix rate, per board and in total. Rule: scripts/lib/fix-rate.cjs.
  *
- *   npx builder run fix-rate                      every board in paths.boards (files named _*.md and README.md skipped)
- *   npx builder run fix-rate <board.md> …        exactly these boards
+ *   npx builder-pipeline run fix-rate                      every board in paths.boards (files named _*.md and README.md skipped)
+ *   npx builder-pipeline run fix-rate <board.md> …        exactly these boards
  *   --json                                        machine-readable totals
- * (folder layout: node scripts/fix-rate.mjs in place of npx builder run fix-rate)
+ * (folder layout: node scripts/fix-rate.mjs in place of npx builder-pipeline run fix-rate)
  *
  * Settings: paths.boards · features.fixLane.state. The lane ships off (2.0.0, REQ-1403); switched to `unmeasured` it is on
  * and this report says so on its first line; off → "fixLane: not configured", exit 0.

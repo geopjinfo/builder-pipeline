@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `npx builder run board-import --format <ralph|spec-kit> <source> --out <board.md> [--force]`
- * (folder layout: node scripts/board-import.mjs in place of npx builder run board-import)
+ * `npx builder-pipeline run board-import --format <ralph|spec-kit> <source> --out <board.md> [--force]`
+ * (folder layout: node scripts/board-import.mjs in place of npx builder-pipeline run board-import)
  *
  * Writes another tool's task file as a kit build board, so `check-ledgers`, `board-progress` and the ledger audit
  * run over that tool's work in a project that never adopted the pipeline. Rule and formats: scripts/lib/board-import.cjs

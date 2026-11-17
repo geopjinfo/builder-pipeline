@@ -122,12 +122,12 @@ describe('builder bootstrap', () => {
     assert.ok(!existsSync(join(proj, '.codex', 'agents')));
   });
 
-  test('--tool picks the tools; installed as a package the skill names npx builder', () => {
+  test('--tool picks the tools; installed as a package the skill names npx builder-pipeline', () => {
     const { proj, cli } = project('node_modules/builder-pipeline');
     const r = run(cli, proj, ['bootstrap', '--tool', 'antigravity']);
     assert.equal(r.status, 0, r.out);
     assert.deepEqual(files(proj), ['.agents/skills/builder-init/SKILL.md', 'builder.lock.json']);
-    assert.match(readFileSync(join(proj, '.agents/skills/builder-init/SKILL.md'), 'utf8'), /npx builder inventory/);
+    assert.match(readFileSync(join(proj, '.agents/skills/builder-init/SKILL.md'), 'utf8'), /npx builder-pipeline inventory/);
     assert.equal(run(cli, proj, ['bootstrap', '--tool', 'nope']).status, 1);
   });
 });

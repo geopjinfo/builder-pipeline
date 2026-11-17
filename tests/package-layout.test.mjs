@@ -66,7 +66,7 @@ describe('D2 — board-check-all runs from the package', () => {
     writeFileSync(board, readFileSync(board, 'utf8').replace(/\*\*TOTAL\*\* \| `[^`]*` \*\*\d+%\*\*/, '**TOTAL** | `░░░░░░░░░░░░░░░░░░░░` **0%**'));
     const r = run(cli, proj, ['run', 'board-check-all']);
     assert.equal(r.status, 1, out(r));
-    assert.match(r.stderr, /npx builder run board-check-all --fix/);
+    assert.match(r.stderr, /npx builder-pipeline run board-check-all --fix/);
     assert.doesNotMatch(r.stderr, /node scripts\//);
     const fixed = run(cli, proj, ['run', 'board-check-all', '--fix']);
     assert.equal(fixed.status, 0, out(fixed));
