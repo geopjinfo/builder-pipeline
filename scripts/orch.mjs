@@ -70,6 +70,9 @@
  *   remote add <run> <machine> --host H [--user U] --root <remoteRoot> | remote preflight <run> <machine>
  *   remote place <run> <lane> <machine> | remote launch <run> <lane> --settings <pin> --base <branch> [--model M]
  *   remote poll <run> <lane> | remote cancel <run> <lane>      the flag off prints "remoteLanes: not configured"
+ * Board loop (features.boardLoop, experimental-off — EXPERIMENTS.md §17)
+ *   loop <board.md> [--more-passes N]   place the loop runner on a ready account (M3 placement seam), record the job
+ *                                     (kind loop, account, cap) and run it; status shows passes and the stop reason
  * Credit lane (only with features.orchestrator.credit.enabled)
  *   credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget 0.50] [--allow-missing]
  *               [--queue <worktree>]  the queue the job goes into (default: the job worktree's own)
@@ -114,6 +117,8 @@ const policy = require('./lib/account-policy.cjs');
 const acct = require('./lib/orch-accounts.cjs');
 const accountPaths = require('./lib/account-paths.cjs');
 const remote = require('./lib/orch-remote.cjs');
+const orchLoop = require('./lib/orch-loop.cjs');
+const boardLoop = require('./lib/board-loop.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
 const PLACING_CMDS = new Set(['status', 'next', 'claim', 'gate-launch']);
@@ -869,6 +874,7 @@ try {
       const ids = pos[0] ? [pos[0]] : runIds();
       if (!ids.length) {
         console.log(`no runs under ${root()}`);
+        for (const l of orchLoop.statusLines(root())) console.log(l);
         const c = creditLines();
         if (c) console.log(c);
         break;
@@ -881,6 +887,7 @@ try {
         printStatus(id, { split: !!flags.split });
         console.log('');
       }
+      for (const l of orchLoop.statusLines(root())) console.log(l);
       const c = creditLines();
       if (c) console.log(c);
       break;
@@ -996,6 +1003,30 @@ try {
         console.log(`next poll in ${rf.remotePollSeconds}s`);
       } else if (sub === 'cancel') out(remote.cancel(root(), run, a, { env }));
       else die(2, 'usage: remote add|preflight|place|launch|poll|cancel …');
+    case 'loop': {
+      const bl = profile.feature(settings, 'boardLoop');
+      if (!bl.enabled) {
+        console.log(bl.line);
+        process.exit(0);
+      }
+      const [boardFile] = pos;
+      if (!boardFile) die(2, 'usage: loop <board.md> [--more-passes N]');
+      const key = path.basename(boardFile).replace(/\.md$/, '');
+      const placed = orchLoop.placeLoop(settings, boardFile, { env: process.env });
+      if (!placed.account) die(3, `REFUSED loop ${boardFile}: no account reads ready — ${placed.reason}`);
+      const more = flags['more-passes'] && flags['more-passes'] !== true ? Number(flags['more-passes']) : 0;
+      orchLoop.recordLoop(root(), key, { account: placed.account, cap: bl.config.maxPasses + more, board: boardFile, status: 'running', passes: 0, stopReason: null });
+      console.log(`loop ${key} placed on ${placed.account} (cap ${bl.config.maxPasses + more})`);
+      boardLoop
+        .runLoop({ cwd: process.cwd(), settings, accountName: placed.account, board: boardFile, morePasses: more, io: { env: process.env, log: (l) => console.log(l) } })
+        .then((r) => {
+          orchLoop.recordLoop(root(), key, { status: 'stopped', passes: r.passes, stopReason: r.reason, rowsDone: r.rowsDone, rowsTotal: r.rowsTotal });
+          process.exit(r.exitCode);
+        })
+        .catch((e) => {
+          orchLoop.recordLoop(root(), key, { status: 'error', error: e.message });
+          die(2, `loop ${key}: ${e.message}`);
+        });
       break;
     }
     case 'credit': {
