@@ -14,7 +14,12 @@
  *                (an api-key account). The key file is tested for presence only; its text is never read here.
  *   codex        `codex login status` prints to STDERR and exits 0 (logged in) or 1 (not logged in): "ChatGPT" or
  *                "API key" names the method. It never prints a plan tier (D43).
- *   antigravity, gateway  M2b: `PROBES` has no entry yet, so `probe()` reports unmeasured with "no built-in probe".
+ *   antigravity  a models listing (`agy models`, or the account's `readyCommand`) under the timeout: exit 0 with at
+ *                least one model listed is ready; the words "sign in" anywhere in the output mean not ready; a timeout
+ *                or a missing binary is unmeasured (D53). Antigravity has no key mode and no config dir variable.
+ *   gateway      picked by `pays` (the worker is Claude Code or Codex): ready when a wrapper (`bin/<name>` or
+ *                `bin/<name>.ps1`) exists, does not carry the CLOSED_MARKER line a closed policy writes (M11), and the
+ *                gateway key is present (the key file, or auth.json for Codex) — presence only, never read (D53).
  *
  * EXPIRY (REQ-211). `claude auth status` may expose an expiry field; the Codex `auth.json` holds an access token whose
  * `exp` claim is the expiry. Only the time comes back (`expiresAt`), never a token. The assessment turns an expiry
@@ -24,14 +29,19 @@
  * (`CLAUDE_CONFIG_DIR` or `CODEX_HOME`). The parent's ANTHROPIC_*, OPENAI_*, CLAUDE* and CODEX* variables never pass:
  * an inherited key would make the probe answer for the wrong account, and an inherited config dir would nest sessions.
  *
- * Commands from §16 (`usageCommand`, `versionCommand`) are the owner's own templates; they run through the shell in
+ * SNAPSHOT (REQ-203). `budget.file` names a usage snapshot JSON (absolute, or relative to the accounts home); it is
+ * parsed by `accounts.parseGatewaySnapshot`, `budget.key` selecting `keys.<key>`. A missing or unreadable file gives
+ * no reading and one note; it never throws.
+ *
+ * Commands from §16 (`usageCommand`, `versionCommand`, `readyCommand`) are the owner's own templates; they run through the shell in
  * the same env, under the same timeout. Anything that fails, times out or prints nothing readable is `null` to the
  * assessment: unmeasured, never a pass.
  */
 const fs = require('node:fs');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { CONFIG_DIR_VAR } = require('./account-paths.cjs');
-const { parseUsageText, SIGN_IN } = require('./accounts.cjs');
+const { parseUsageText, parseGatewaySnapshot, SIGN_IN } = require('./accounts.cjs');
 const codexRateLimits = require('./codex-ratelimits.cjs');
 
 const DEFAULT_TIMEOUT_MS = 12000;
@@ -39,8 +49,13 @@ const MAX_OUTPUT = 64 * 1024;
 /** Env names a probe may inherit (exact) and prefixes it may inherit. Nothing else passes. */
 const ENV_ALLOW = Object.freeze(['PATH', 'Path', 'HOME', 'USERPROFILE', 'TMPDIR', 'TEMP', 'TMP', 'LANG', 'LANGUAGE', 'SHELL', 'TERM', 'SystemRoot', 'ComSpec', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'NO_COLOR']);
 const ENV_ALLOW_PREFIX = Object.freeze(['LC_', 'XDG_']);
-/** Workers whose probes land in M2b; `probe()` names the gap instead of guessing. */
+/** The probes added in M2b beside the two harness probes: the Antigravity worker and the gateway way of paying (D53). */
 const FOREIGN_PROBES = Object.freeze(['antigravity', 'gateway']);
+/** The Antigravity CLI and its models listing — the one place the binary name lives. */
+const ANTIGRAVITY_BIN = 'agy';
+const ANTIGRAVITY_MODELS_ARGS = Object.freeze(['models']);
+/** The line a refusal wrapper carries when the policy closes a gateway account (written by `accounts install`, M11). */
+const CLOSED_MARKER = '# builder-pipeline: closed';
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const clip = (s) => String(s ?? '').slice(0, MAX_OUTPUT);
@@ -229,10 +244,56 @@ function codexProbe(account, paths, io) {
   return r;
 }
 
+/* --------------------------------------------------------------- Antigravity ---- */
+
+/**
+ * Parse a models listing (pure). The words "sign in" anywhere mean not ready; exit 0 with at least one non-empty line
+ * on stdout is ready; anything else is no answer. The listing itself never comes back.
+ */
+function parseAntigravityModels({ stdout = '', stderr = '', status = null, error = null, timedOut = false } = {}, command = `${ANTIGRAVITY_BIN} ${ANTIGRAVITY_MODELS_ARGS.join(' ')}`) {
+  const base = { worker: 'antigravity', signIn: null, method: null, configDir: null, expiresAt: null };
+  if (/sign[ -]?in/i.test(`${stdout}\n${stderr}`)) return { ...base, ok: false, reason: `sign in needed: the models call says "sign in" (sign in through the Antigravity app, then retry)` };
+  if (timedOut) return { ...base, ok: null, reason: `${command}: timed out` };
+  if (error) return { ...base, ok: null, reason: `${command}: ${error}` };
+  const models = String(stdout).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (status === 0 && models.length) return { ...base, ok: true, method: 'app', reason: null, models: models.length };
+  if (status === 0) return { ...base, ok: null, reason: `${command}: exit 0 but no model listed` };
+  return { ...base, ok: null, reason: `${command}: exit ${status}` };
+}
+
+/** The Antigravity probe: the account's `readyCommand` when set, else the built-in models listing, under the timeout. */
+function antigravityProbe(account, paths, io) {
+  const env = probeEnv(io.env, 'antigravity', paths.configDir);
+  const own = typeof account.readyCommand === 'string' && account.readyCommand.trim() ? account.readyCommand.trim() : null;
+  const r = own ? runCommand(own, { env, timeoutMs: io.timeoutMs }) : runBinary(ANTIGRAVITY_BIN, [...ANTIGRAVITY_MODELS_ARGS], { env, timeoutMs: io.timeoutMs });
+  return { ...parseAntigravityModels(r, own || undefined), configDir: paths.configDir };
+}
+
+/* ------------------------------------------------------------------- gateway ---- */
+
+/**
+ * The gateway probe (picked by `pays`, not by worker): the wrapper exists, is not a refusal wrapper, and the gateway
+ * key is present. The key file is tested for presence only; the wrapper is read for the marker line only.
+ */
+function gatewayProbe(account, paths, io) {
+  const fsLike = (io && io.fs) || fs;
+  const base = { worker: account.worker, signIn: null, method: 'gateway', configDir: paths.configDir, expiresAt: null };
+  const wrappers = [paths.wrapperSh, paths.wrapperPs1].filter((f) => fsLike.existsSync(f));
+  if (!wrappers.length) return { ...base, ok: false, signIn: 'npx builder accounts install', reason: `no wrapper at ${paths.wrapperSh}` };
+  for (const w of wrappers) {
+    let text = '';
+    try { text = fsLike.readFileSync(w, 'utf8'); } catch { text = ''; }
+    if (text.split(/\r?\n/).some((l) => l.trim() === CLOSED_MARKER)) return { ...base, ok: false, reason: `closed by policy (${path.basename(w)} is a refusal wrapper)` };
+  }
+  const keyFile = account.worker === 'codex' ? paths.codexAuthFile : paths.keyFile;
+  if (!fsLike.existsSync(keyFile)) return { ...base, ok: false, signIn: `npx builder accounts key ${account.name}`, reason: `gateway key absent (${path.basename(keyFile)})` };
+  return { ...base, ok: true, reason: null };
+}
+
 /* ---------------------------------------------------------------------- map ---- */
 
-/** Built-in probes by worker. Antigravity and gateway (FOREIGN_PROBES) are added by M2b with the same signature. */
-const PROBES = Object.freeze({ 'claude-code': claudeProbe, codex: codexProbe });
+/** Built-in probes by worker. The gateway probe is picked by `pays` in `probe()`, whatever the worker. */
+const PROBES = Object.freeze({ 'claude-code': claudeProbe, codex: codexProbe, antigravity: antigravityProbe });
 
 /**
  * Run the auth probe for one account.
@@ -244,8 +305,9 @@ function probe(account, paths, io = {}) {
   const worker = account && account.worker;
   const io2 = { env: io.env || process.env, now: io.now ?? Date.now(), timeoutMs: io.timeoutMs ?? DEFAULT_TIMEOUT_MS, fs: io.fs || fs };
   if (worker === 'session') return { worker, ok: true, method: 'session', reason: null, signIn: null, expiresAt: null };
+  if (account && account.pays === 'gateway') return gatewayProbe(account, paths, io2);
   const fn = PROBES[worker];
-  if (!fn) return { worker, ok: null, method: null, expiresAt: null, signIn: SIGN_IN[worker] || null, reason: `no built-in probe for worker "${worker}"${FOREIGN_PROBES.includes(worker) ? ' yet (M2b); set readyCommand' : ''}` };
+  if (!fn) return { worker, ok: null, method: null, expiresAt: null, signIn: SIGN_IN[worker] || null, reason: `no built-in probe for worker "${worker}"` };
   return fn(account, paths, io2);
 }
 
@@ -271,7 +333,32 @@ function versionOf(account, env, timeoutMs) {
   return line ? { version: line.slice(0, 80) } : null;
 }
 
-/** Every usage reader the account has, run (REQ-210). The snapshot reader (`budget.file`) is M2b's. */
+/**
+ * The `budget.file` snapshot reading (REQ-203): `{ reading, note }`. A relative file is resolved against the
+ * accounts home (the grandparent of the account dir, as `configDir` is). Nothing here throws.
+ */
+function snapshotReading(account, paths, io) {
+  const b = isObject(account.budget) ? account.budget : {};
+  if (typeof b.file !== 'string' || !b.file.trim()) return { reading: null, note: null };
+  const fsLike = (io && io.fs) || fs;
+  const home = path.dirname(path.dirname(paths.dir));
+  const file = path.isAbsolute(b.file) ? b.file : path.resolve(home, b.file);
+  const key = typeof b.key === 'string' && b.key.trim() ? b.key.trim() : null;
+  let json;
+  try {
+    if (!fsLike.existsSync(file)) return { reading: null, note: `usage snapshot ${b.file}: not found (budget.file) — usage unmeasured` };
+    json = JSON.parse(fsLike.readFileSync(file, 'utf8'));
+  } catch (e) {
+    return { reading: null, note: `usage snapshot ${b.file}: unreadable (${e && e.message ? e.message.split('\n')[0].slice(0, 80) : 'error'}) — usage unmeasured` };
+  }
+  let at = null;
+  try { at = fsLike.statSync(file).mtime.toISOString(); } catch { at = null; }
+  const reading = parseGatewaySnapshot(json, at || io.now, key);
+  if (!reading) return { reading: null, note: `usage snapshot ${b.file}: no ${key ? `keys.${key} with a ` : ''}spend number (budget.key) — usage unmeasured` };
+  return { reading, note: null };
+}
+
+/** Every usage reader the account has, run (REQ-210): usageCommand, the budget.file snapshot, Codex rate_limits. */
 function usageReadings(account, paths, io) {
   const out = [];
   const at = new Date(Number(new Date(io.now))).toISOString();
@@ -280,6 +367,8 @@ function usageReadings(account, paths, io) {
     const reading = !r.error && r.status === 0 ? parseUsageText(`${r.stdout}\n${r.stderr}`, at) : null;
     if (reading) out.push(reading);
   }
+  const snap = snapshotReading(account, paths, io);
+  if (snap.reading) out.push(snap.reading);
   if (account.worker === 'codex') {
     const reading = codexRateLimits.read(paths.configDir);
     if (reading) out.push(reading);
@@ -289,7 +378,8 @@ function usageReadings(account, paths, io) {
 
 /**
  * Gather every fact `assess` reads for one account: the auth probe, the smoke record, the version and the usage
- * readings. Impure by design; the result is plain data for `accounts.assess(account, probes, usage, now)`.
+ * readings, plus `notes` (a reader that could not read, named; never a throw). Impure by design; the result is plain
+ * data for `accounts.assess(account, probes, usage, now)`.
  */
 function collect(account, paths, io = {}) {
   const io2 = { env: io.env || process.env, now: io.now ?? Date.now(), timeoutMs: io.timeoutMs ?? DEFAULT_TIMEOUT_MS, fs: io.fs || fs };
@@ -301,11 +391,13 @@ function collect(account, paths, io = {}) {
       version: versionOf(account, env, io2.timeoutMs),
     },
     usage: usageReadings(account, paths, { ...io2, env }),
+    notes: [snapshotReading(account, paths, io2).note].filter(Boolean),
   };
 }
 
 module.exports = {
-  DEFAULT_TIMEOUT_MS, ENV_ALLOW, ENV_ALLOW_PREFIX, FOREIGN_PROBES, PROBES,
+  DEFAULT_TIMEOUT_MS, ENV_ALLOW, ENV_ALLOW_PREFIX, FOREIGN_PROBES, PROBES, ANTIGRAVITY_BIN, ANTIGRAVITY_MODELS_ARGS, CLOSED_MARKER,
   probeEnv, runBinary, runCommand, probe, collect,
   parseClaudeAuthStatus, claudeKeyProbe, claudeExpiry, parseCodexLoginStatus, codexAuthExpiry, jwtExpiry, smokeRecord,
+  parseAntigravityModels, antigravityProbe, gatewayProbe, snapshotReading,
 };

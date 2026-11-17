@@ -181,13 +181,117 @@ describe('Codex probe (REQ-208, REQ-211)', () => {
   });
 });
 
+describe('Antigravity probe (REQ-208, D53)', () => {
+  const agy = (over = {}) => account({ name: 'charlie', worker: 'antigravity', pays: 'subscription', ...over });
+  const agyStub = (out, status = 0, slow = false) => `if (args[0] !== 'models') process.exit(2); ${slow ? 'setTimeout(() => {}, 5000);' : `process.stdout.write(${JSON.stringify(out)}); process.exit(${status});`}`;
+
+  test('red: REQ-208 the models call under a timeout: exit 0 with models is ready; "sign in" in the output is not ready and the reason names the sign-in', () => {
+    assert.equal(probes.ANTIGRAVITY_BIN, 'agy');
+    const p = paths(tmp('acc-home-'), 'charlie', agy());
+    const up = probes.probe(agy(), p, { env: envWith(stubs({ agy: agyStub('gemini-3-pro\ngemini-3-flash\n') })), now: NOW });
+    assert.equal(up.ok, true);
+    assert.equal(up.worker, 'antigravity');
+    assert.equal(up.method, 'app');
+    assert.equal(assess(agy(), { auth: up }, null, NOW).state, 'ready');
+    const down = probes.probe(agy(), p, { env: envWith(stubs({ agy: agyStub('Please sign in to continue\n', 0) })), now: NOW });
+    assert.equal(down.ok, false);
+    assert.match(down.reason, /sign in/i);
+    const a = assess(agy(), { auth: down }, null, NOW);
+    assert.equal(a.state, 'not ready');
+    assert.match(a.reason, /sign in/i);
+    // exit 0 with no model listed is no answer; a non-zero exit without "sign in" is no answer either.
+    assert.equal(probes.probe(agy(), p, { env: envWith(stubs({ agy: agyStub('') })), now: NOW }).ok, null);
+    assert.equal(probes.parseAntigravityModels({ stdout: '', stderr: 'boom', status: 3 }).ok, null);
+  });
+
+  test('red: REQ-208 a timeout or a missing binary is unmeasured, never ready; readyCommand replaces the built-in call', () => {
+    const p = paths(tmp('acc-home-'), 'charlie', agy());
+    const slow = probes.probe(agy(), p, { env: envWith(stubs({ agy: agyStub('', 0, true) })), now: NOW, timeoutMs: 300 });
+    assert.equal(slow.ok, null);
+    assert.match(slow.reason, /timed out/);
+    const missing = probes.probe(agy(), p, { env: envWith(stubs({})), now: NOW });
+    assert.equal(missing.ok, null);
+    assert.match(missing.reason, /not found/);
+    const own = probes.probe(agy({ readyCommand: 'my-models' }), p, { env: envWith(stubs({ 'my-models': `process.stdout.write('model-a\\n');` })), now: NOW });
+    assert.equal(own.ok, true);
+    const ownDown = probes.probe(agy({ readyCommand: 'my-models' }), p, { env: envWith(stubs({ 'my-models': `process.stdout.write('sign in first\\n'); process.exit(1);` })), now: NOW });
+    assert.equal(ownDown.ok, false);
+  });
+});
+
+describe('gateway probe (REQ-208, D53)', () => {
+  const gw = (over = {}) => account({ name: 'delta', pays: 'gateway', baseUrl: 'https://gateway.example', ...over });
+
+  test('red: REQ-208 ready when the wrapper exists, is not a refusal wrapper, and the gateway key file is present (presence only, never read)', () => {
+    const home = tmp('acc-home-');
+    const p = paths(home, 'delta', gw());
+    const none = probes.probe(gw(), p, { env: envWith(stubs({})), now: NOW });
+    assert.equal(none.ok, false);
+    assert.match(none.reason, /wrapper/);
+    mkdirSync(dirname(p.wrapperSh), { recursive: true });
+    writeFileSync(p.wrapperSh, '#!/bin/sh\nexec claude "$@"\n');
+    const noKey = probes.probe(gw(), p, { env: envWith(stubs({})), now: NOW });
+    assert.equal(noKey.ok, false);
+    assert.match(noKey.reason, /key/);
+    assert.match(noKey.signIn, /accounts key delta/);
+    mkdirSync(p.dir, { recursive: true });
+    writeFileSync(p.keyFile, 'gateway-token-never-read\n');
+    const up = probes.probe(gw(), p, { env: envWith(stubs({})), now: NOW });
+    assert.equal(up.ok, true);
+    assert.equal(up.method, 'gateway');
+    assert.ok(!JSON.stringify(up).includes('never-read'));
+    assert.equal(assess(gw(), { auth: up }, null, NOW).state, 'ready');
+    writeFileSync(p.wrapperSh, `#!/bin/sh\n${probes.CLOSED_MARKER}\necho closed; exit 7\n`);
+    const closed = probes.probe(gw(), p, { env: envWith(stubs({})), now: NOW });
+    assert.equal(closed.ok, false);
+    assert.match(closed.reason, /closed/);
+    assert.equal(probes.CLOSED_MARKER, '# builder-pipeline: closed');
+    // The ps1 wrapper alone counts as present too; a Codex gateway account's key is its auth.json.
+    rmSync(p.wrapperSh);
+    writeFileSync(p.wrapperPs1, '# ps1 wrapper\n');
+    assert.equal(probes.probe(gw(), p, { env: envWith(stubs({})), now: NOW }).ok, true);
+    const cx = gw({ worker: 'codex' });
+    const pc = paths(home, 'delta', cx);
+    assert.match(probes.probe(cx, pc, { env: envWith(stubs({})), now: NOW }).reason, /key/);
+    mkdirSync(pc.configDir, { recursive: true });
+    writeFileSync(pc.codexAuthFile, '{}');
+    assert.equal(probes.probe(cx, pc, { env: envWith(stubs({})), now: NOW }).ok, true);
+  });
+});
+
 describe('the probes map and collect (REQ-208, REQ-207, REQ-210)', () => {
-  test('REQ-208 Claude Code and Codex probes are built in; antigravity and gateway are extension points left to M2b', () => {
-    assert.deepEqual(Object.keys(probes.PROBES).sort(), ['claude-code', 'codex']);
+  test('red: REQ-208 Claude Code, Codex and Antigravity probes are built in by worker; the gateway probe is picked by pays', () => {
+    assert.deepEqual(Object.keys(probes.PROBES).sort(), ['antigravity', 'claude-code', 'codex']);
     assert.deepEqual(probes.FOREIGN_PROBES, ['antigravity', 'gateway']);
-    const r = probes.probe(account({ worker: 'antigravity' }), paths(tmp('acc-home-'), 'alpha'), { env: {}, now: NOW });
+    const r = probes.probe(account({ worker: 'nobody' }), paths(tmp('acc-home-'), 'alpha'), { env: {}, now: NOW });
     assert.equal(r.ok, null);
     assert.match(r.reason, /no built-in probe/);
+  });
+
+  test('red: REQ-203 collect reads budget.file through the gateway snapshot parser (budget.key selects keys.<key>); a missing or unreadable file is unmeasured with a note, never a throw', () => {
+    const home = tmp('acc-home-');
+    writeFileSync(join(home, 'snap.json'), JSON.stringify({ keys: { echo: { spend: 3, maxBudget: 12, budgetResetAt: '2026-12-01T00:00:00.000Z' } } }));
+    writeFileSync(join(home, 'bad.json'), '{not json');
+    const acc = account({ name: 'echo', pays: 'gateway', budget: { kind: 'usd', soft: null, hard: 10, file: 'snap.json', key: 'echo' } });
+    const got = probes.collect(acc, paths(home, 'echo', acc), { env: envWith(stubs({})), now: NOW });
+    assert.equal(got.usage.length, 1);
+    assert.equal(got.usage[0].reader, 'snapshot');
+    assert.equal(got.usage[0].percent, 25);
+    assert.equal(got.usage[0].source, 'measured');
+    assert.deepEqual(got.notes, []);
+    const absolute = probes.collect({ ...acc, budget: { ...acc.budget, file: join(home, 'snap.json') } }, paths(home, 'echo', acc), { env: envWith(stubs({})), now: NOW });
+    assert.equal(absolute.usage[0].percent, 25);
+    const missing = probes.collect({ ...acc, budget: { ...acc.budget, file: 'gone.json' } }, paths(home, 'echo', acc), { env: envWith(stubs({})), now: NOW });
+    assert.deepEqual(missing.usage, []);
+    assert.equal(missing.notes.length, 1);
+    assert.match(missing.notes[0], /gone\.json/);
+    const bad = probes.collect({ ...acc, budget: { ...acc.budget, file: 'bad.json' } }, paths(home, 'echo', acc), { env: envWith(stubs({})), now: NOW });
+    assert.deepEqual(bad.usage, []);
+    assert.match(bad.notes[0], /bad\.json/);
+    const wrongKey = probes.collect({ ...acc, budget: { ...acc.budget, key: 'zulu' } }, paths(home, 'echo', acc), { env: envWith(stubs({})), now: NOW });
+    assert.deepEqual(wrongKey.usage, []);
+    assert.match(wrongKey.notes[0], /zulu/);
+    assert.equal(assess(acc, got.probes, missing.usage, NOW).budget.used.source, 'unmeasured');
   });
 
   test('REQ-207 REQ-210 collect runs the probe, the smoke record, versionCommand and every usage reader with a timeout', () => {

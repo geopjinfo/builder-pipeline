@@ -84,6 +84,17 @@ describe('the feature gate', () => {
     assert.equal(acc({ alpha: { worker: 'session', pays: 'subscription', budget: { kind: 'percent', hard: 60 } }, beta: { worker: 'claude-code', pays: 'subscription', command: 'go {brief}', configDir: '.claude-beta' }, gamma: { worker: 'claude-code', pays: 'api-key', budget: { kind: 'usd', hard: 5 } } }), '');
   });
 
+  test('red: REQ-208 an antigravity worker is a known account worker (D53); it has no key mode, so pays api-key is refused; it never takes a 1.0 seat (D26)', () => {
+    const errs = (o, extra = {}) => profile.parse(profileText({ orchestrator: o, ...extra, legacy: true })).errors.join('\n');
+    const acc = (accounts, o = {}) => errs(o, { extraFeatures: { accounts: { state: 'on', accounts } } });
+    const registry = profile.accounts;
+    assert.ok(registry.WORKERS.includes('antigravity'));
+    assert.equal(acc({ alpha: { worker: 'session', pays: 'subscription' }, charlie: { worker: 'antigravity', pays: 'subscription' } }), '');
+    assert.match(acc({ charlie: { worker: 'antigravity', pays: 'api-key' } }), /accounts\.charlie\.pays: .*no key mode/);
+    const view = registry.legacyView({ features: { accounts: { state: 'on', accounts: { charlie: { worker: 'antigravity', pays: 'subscription' }, bravo: { worker: 'claude-code', pays: 'subscription', command: 'go {brief}' } } } } });
+    assert.equal(view.accounts.secondary, 'bravo', 'the antigravity account is never the secondary seat');
+  });
+
   test('red: §16 account settings never hold a secret (REQ-105) — the kind of match is named, never the text', () => {
     const fake = ['sk-ant', 'api03', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'].join('-');
     const text = profileText({ extraFeatures: { accounts: { state: 'on', accounts: { alpha: { worker: 'session', pays: 'subscription', note: `use ${fake}` } } } } });
