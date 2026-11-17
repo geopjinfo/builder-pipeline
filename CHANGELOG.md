@@ -81,6 +81,35 @@ versions independently of any project it is pasted into.
   RELEASING.md checks the badges in step 2 and publishes to the npm registry after the tag (`npm pack --dry-run`, `npm
   publish --access public`; the tag and the registry version match; the first registry release is 2.0.0). Tests:
   `tests/toolkit-distribution.test.mjs` (one test per acceptance criterion), `tests/package.test.mjs` (two bins).
+### Added — M2a readiness assessment (2.0.0 line)
+
+- **`scripts/lib/accounts.cjs`: a pure readiness assessment (REQ-201, REQ-202, REQ-206, REQ-207, REQ-209, REQ-211,
+  REQ-212; plan decisions D3, D46, D51).** `assess(account, probes, usage, now)` gives one verdict per account: name,
+  state (`ready`, `not ready` with a reason, or `unmeasured`), note, roles, version, budget with its `used` reading,
+  and `until` for an AUTH reason. A credential that expires inside `authMinMinutes` (default 120) or has expired reads
+  `not ready (AUTH until <time>, run claude auth login)`; no expiry leaves the state unchanged. An account with
+  `smokeCommand` whose last pass is older than `smokeMaxAgeHours` reads `ready (read-only: smoke stale)`. A key
+  account whose spend nobody can read reads `ready (balance unmeasured)` and `assessAll(settings, readings, now)`
+  sorts it last, ready accounts first. Every string the assessment carries passes the outbound guard's secret shapes
+  and a match becomes `<redacted: <kind>>`, never the text.
+- **Usage sources (REQ-203, REQ-210, REQ-212).** Each reading carries `source` (`measured`, `estimate`,
+  `unmeasured`) and `at`; measured beats estimate; `renderLine` prints `42 % (measured 09:14)`, `~40 % (estimate
+  09:30)`, `unpriced (estimate …)` for a model with no pinned rate, and `unmeasured` for no reading, never `0 %`.
+  Readers: `usageCommand` text (`$X of $Y`), the gateway snapshot JSON (`spend`, `maxBudget`, `budgetResetAt`), and
+  the Codex session `rate_limits` (`scripts/lib/codex-ratelimits.cjs`: the last `token_count` record of the newest
+  rollout under `<CODEX_HOME>/sessions/**`; the window closest to its limit binds). A Claude plan account has no
+  reader and stays unmeasured.
+- **Built-in probes (`scripts/lib/account-probes.cjs`, REQ-208, REQ-211, REQ-202).** Claude Code: `claude auth
+  status` JSON (`authMethod`, `configDirectory`; exit 1 = signed out) or the account's key file plus `apiKeyHelper` in
+  its settings.json (the key file is tested for presence only). Codex: `codex login status` read from stderr and the
+  exit code (ChatGPT login, API key, not logged in; no plan tier), with the expiry read from `auth.json`. Probes run
+  with `spawnSync` under a timeout in an allowlisted env (`PATH`, `HOME`, locale, plus `CLAUDE_CONFIG_DIR` or
+  `CODEX_HOME` = the account's config dir; never the parent's `ANTHROPIC_*`, `OPENAI_*`, `CLAUDE*` or `CODEX*`).
+  `collect(account, paths, io)` gathers the probe, the smoke record, `versionCommand` and every usage reader for
+  `assess`. The `PROBES` map is keyed by worker; Antigravity and gateway probes (M2b) are its named extension points.
+  Tests: `tests/accounts.test.mjs`, `tests/accounts-probes.test.mjs` (stub executables in a temp dir, no real
+  harness runs), `tests/codex-ratelimits.test.mjs`.
+
 ### Added — M1 account registry (2.0.0 line)
 
 - **`features.accounts` (REQ-101 to REQ-106, plan decision D33).** The registry of the accounts the orchestrator may
