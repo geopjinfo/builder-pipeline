@@ -23,6 +23,15 @@ versions independently of any project it is pasted into.
   step. `--json` prints the numbers; `--keep` leaves the folder. Test: `tests/first-value.test.mjs` fails above 300 s
   and on an accepted unknown flag. The first measurement is in EXPERIMENTS.md §20.
 
+### False-positive rates of the default-on checks (REQ-1405)
+
+- **EXPERIMENTS.md §20 false-positive table filled.** `check-ledgers`, `claims-check`, `output-check`, `fix-rate` and
+  `inventory` ran on four public repositories (`expressjs/express`, `fastify/fastify`, `pallets/flask`,
+  `ruvnet/claude-flow`, shas in the table). Every finding was classified by hand. Rates: 0% for `check-ledgers` and
+  `output-check`, 1.1% for `inventory` (two items on `claude-flow`: a skill folder without `SKILL.md`, a note listed
+  as an agent); `claims-check` and `fix-rate` produced no finding on repositories without a pipeline run. No check is
+  above 20%. Doc-only change; `tests/experiments.test.mjs` keeps §20's decision row checked.
+
 ## [1.1.0] — 2026-11-16
 
 ### Added
