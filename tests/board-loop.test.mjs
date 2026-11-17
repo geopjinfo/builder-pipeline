@@ -3,7 +3,7 @@
  * scripted passes and a stub gate in a scratch repo. No model, no key, no push.
  */
 import assert from 'node:assert/strict';
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -35,7 +35,7 @@ _Started: 2026-11-17 · Track: LITE · Brief: solve each row · Plan: .pipeline/
 ${rows.map((r, i) => `| T${i + 1} | solve ${r} | REQ-${i + 1} | PLANNED | ${r}.txt | |`).join('\n')}
 `;
 
-const settingsBlock = (over = {}, accounts = {}) => ({
+const settingsBlock = (over = {}, accounts = {}, extraFeatures = {}) => ({
   schema: 2,
   commands: { tier: null, tiers: [], affected: null, typecheck: null },
   models: { strong: 's', mid: 'm', orchestrator: null },
@@ -43,13 +43,14 @@ const settingsBlock = (over = {}, accounts = {}) => ({
     bashCap: { state: 'off', limitBytes: 4096 },
     accounts: { state: 'on', accounts: { alpha: { worker: 'claude-code', pays: 'subscription' }, ...accounts } },
     boardLoop: { state: 'experimental-on', promptFile: 'LOOP_PROMPT.md', gate: `${q(process.execPath)} gate.cjs {row}`, maxPasses: 8, passTimeoutMinutes: 1, maxTurnsPerPass: 20, stallMinutes: 1, ...over },
+    ...extraFeatures,
   },
 });
 const profileOf = (block) => `# P\n\n\`\`\`json pipeline-settings\n${JSON.stringify(block, null, 2)}\n\`\`\`\n`;
 
 /** A repo with a board of n rows, the gate, the prompt file and the stub worker scripted. */
-function rig({ rows = ['r1', 'r2', 'r3', 'r4', 'r5'], over = {}, script = {}, accounts = {} } = {}) {
-  const { dir, repo } = scratchRepo({ profile: profileOf(settingsBlock(over, accounts)), files: { 'tasks/demo.md': boardText(rows), 'gate.cjs': readFileSync(GATE, 'utf8'), 'rows.txt': rows.map((r, i) => `T${i + 1} ${r}`).join('\n') + '\n', 'LOOP_PROMPT.md': 'You solve one board row. Write `ok` into the row file named in the row.\n', 'tests/keep.txt': 'test root\n' } });
+function rig({ rows = ['r1', 'r2', 'r3', 'r4', 'r5'], over = {}, script = {}, accounts = {}, extraFeatures = {} } = {}) {
+  const { dir, repo } = scratchRepo({ profile: profileOf(settingsBlock(over, accounts, extraFeatures)), files: { 'tasks/demo.md': boardText(rows), 'gate.cjs': readFileSync(GATE, 'utf8'), 'rows.txt': rows.map((r, i) => `T${i + 1} ${r}`).join('\n') + '\n', 'LOOP_PROMPT.md': 'You solve one board row. Write `ok` into the row file named in the row.\n', 'tests/keep.txt': 'test root\n' } });
   const scriptFile = join(dir, 'script.json');
   writeFileSync(scriptFile, JSON.stringify(script));
   const counter = join(dir, 'counter');
@@ -269,5 +270,73 @@ describe('D69 — the gate command in its two extra forms, nothing wider (tests/
     assert.match(cmd, /lane-shell-allow\.cjs/);
     assert.match(cmd, /--marker builder-pipeline-lane-gate/);
     assert.ok(cmd.includes('--worktree'), cmd);
+  });
+});
+
+/* ------------------------------------------------------------------ 2.1.0: the capacity governor (M15) ---- */
+
+describe('REQ-1509, REQ-1516 — the loop runner reads the capacity record and samples the pass RSS', () => {
+  const capacityOn = { capacity: { state: 'on', perLaneMb: 1500, intervalSeconds: 1, holdMaxMinutes: 1 } };
+  const record = (root, lanes, { ttlSeconds = 600, binding = 'memory' } = {}) => {
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'capacity.json'), JSON.stringify({ lanes, plannedMax: 2, binding, caps: {}, reasons: [], at: new Date().toISOString(), ttlSeconds, tick: 1 }));
+  };
+  const withFeatures = (over) => ({ rows: ['r1'], over: { maxPasses: 3 }, script: solveInOrder(), extraFeatures: over });
+
+  test('red: a record at 0 → no worker is spawned, the run log holds capacity.hold, and after holdMaxMinutes the stop is capacity (AC-1509a)', () => {
+    const r = rig(withFeatures(capacityOn));
+    const root = join(r.dir, 'orch');
+    record(root, 0);
+    // the clock: holdMaxMinutes is 1, so the test squeezes the poll to 100 ms and ages the record's hold by writing a
+    // state file that says the hold started a minute ago — the runner reads wall time, so we instead cap the wait by a
+    // poll that counts: 1 minute of real time is too long for a test, hence the stub poll plus the start-time override
+    const out = r.run([], { BUILDER_ORCH_DIR: root, BUILDER_LOOP_STUB_CAPACITY_POLL_MS: '100', BUILDER_LOOP_STUB_HOLD_START_MS: String(Date.now() - 61000) });
+    assert.equal(out.status, 10, out.out);
+    assert.match(out.out, /^capacity: 0 lanes \(memory\) — holding up to 1 min, reading again every 1 s$/m);
+    assert.match(out.out, /^STOP capacity — 0 pass\(es\), 0\/1 rows done · held \d+ read\(s\) at 0 lanes — memory$/m);
+    const log = r.log();
+    assert.deepEqual(log.filter((e) => e.kind === 'pass'), [], 'no worker ran');
+    const holds = log.filter((e) => e.kind === 'capacity.hold');
+    assert.equal(holds.length, 1, 'one run-log row per hold');
+    assert.equal(holds[0].ended, 'stop');
+    assert.equal(holds[0].binding, 'memory');
+    assert.equal(r.status('T1'), 'PLANNED');
+  });
+
+  test('red: a record that rises to 1 on the second read → the pass runs (AC-1509b)', () => {
+    const r = rig(withFeatures(capacityOn));
+    const root = join(r.dir, 'orch');
+    record(root, 0);
+    // a side process raises the record after 400 ms, while the runner holds
+    const raiser = spawn(process.execPath, ['-e', `setTimeout(() => { const f = require('node:fs'); const p = ${JSON.stringify(join(root, 'capacity.json'))}; const j = JSON.parse(f.readFileSync(p, 'utf8')); j.lanes = 1; j.at = new Date().toISOString(); f.writeFileSync(p, JSON.stringify(j)); }, 400)`], { stdio: 'ignore', detached: true });
+    raiser.unref();
+    const out = r.run([], { BUILDER_ORCH_DIR: root, BUILDER_LOOP_STUB_CAPACITY_POLL_MS: '100' });
+    assert.equal(out.status, 0, out.out);
+    assert.match(out.out, /^capacity: 1 lane\(s\) — the pass runs after \d+ read\(s\)$/m);
+    const holds = r.log().filter((e) => e.kind === 'capacity.hold');
+    assert.equal(holds.length, 1);
+    assert.equal(holds[0].ended, 'pass');
+    assert.equal(r.status('T1'), 'DONE');
+  });
+
+  test('red: the pass row carries passPeakRssMb from ps (1572864 kB → 1536 MB); win32 → null, unmeasured (AC-1516a, AC-1516b)', () => {
+    const r = rig(withFeatures(capacityOn));
+    const root = join(r.dir, 'orch');
+    record(root, 2);
+    const out = r.run([], { BUILDER_ORCH_DIR: root, BUILDER_LOOP_STUB_PS_KB: ' 1572864\n' });
+    assert.equal(out.status, 0, out.out);
+    const pass = r.log().find((e) => e.kind === 'pass');
+    assert.equal(pass.passPeakRssMb, 1536);
+    assert.equal(pass.passPeakRssSource, 'ps');
+    const w = rig(withFeatures(capacityOn));
+    record(join(w.dir, 'orch'), 2);
+    const win = w.run([], { BUILDER_ORCH_DIR: join(w.dir, 'orch'), BUILDER_LOOP_STUB_PLATFORM: 'win32', BUILDER_LOOP_STUB_PS_KB: '1572864' });
+    assert.equal(win.status, 0, win.out);
+    const row = w.log().find((e) => e.kind === 'pass');
+    assert.equal(row.passPeakRssMb, null);
+    assert.equal(row.passPeakRssSource, 'unmeasured');
+    const off = rig({ rows: ['r1'], over: { maxPasses: 3 }, script: solveInOrder() });
+    assert.equal(off.run([]).status, 0);
+    assert.equal('passPeakRssMb' in off.log().find((e) => e.kind === 'pass'), false, 'with the feature off the field is absent');
   });
 });

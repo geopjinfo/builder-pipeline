@@ -156,3 +156,23 @@ describe('builder doctor accounts rows (REQ-701, REQ-107)', () => {
     assert.deepEqual(rows.map((r) => r.note), ['accounts: not configured']);
   });
 });
+
+describe('REQ-1511 — the capacity advisory row', () => {
+  test('red: doctor prints one advisory capacity row; --json carries it; the exit code stays 0 (AC-1511b)', () => {
+    const { text, json } = doctorWith({}, {});
+    assert.equal(text.status, 0, text.out);
+    assert.match(text.out, /^\[capacity\] features\.capacity — advisory, the exit code is unchanged$/m, text.out);
+    const rows = text.out.split('\n').filter((l) => /^ {2}advisory {4}capacity — /.test(l));
+    assert.equal(rows.length, 1, text.out);
+    assert.match(rows[0], /capacity: not configured — signals: memory, cores, (load, )?disk, accounts and the 429 record/);
+    assert.equal(json.status, 0, json.out);
+    const section = JSON.parse(json.stdout).find((t) => t.section === 'capacity');
+    assert.ok(section && section.advisory === true, 'the --json report carries a capacity section');
+    assert.equal(section.rows.length, 1);
+    assert.equal(section.rows[0].feature, 'capacity');
+    assert.equal(section.rows[0].state, 'off');
+    const doctor = require('../cli/doctor.cjs');
+    assert.match(doctor.capacityRows(process.cwd(), 'win32')[0].note, /load is unmeasured on win32/);
+    assert.doesNotMatch(doctor.capacityRows(process.cwd(), 'linux')[0].note, /unmeasured/);
+  });
+});

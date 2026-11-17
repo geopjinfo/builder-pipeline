@@ -54,7 +54,9 @@ function unreleasedLines(text) {
  */
 function newestSectionLines(text) {
   const unreleased = unreleasedLines(text);
-  if (unreleased.some(([, l]) => /^### /.test(l))) return unreleased;
+  // 2.1.0: once the rename shipped, [Unreleased] carries later work; the Breaking bullet is read from the newest
+  // section that has a Breaking heading — [Unreleased] while it has one, else the release it became
+  if (unreleased.some(([, l]) => /^### Breaking\b/.test(l))) return unreleased;
   const lines = text.split(/\r?\n/);
   let on = false, seen = false;
   return lines.map((l, i) => {

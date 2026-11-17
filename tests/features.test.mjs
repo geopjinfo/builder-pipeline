@@ -79,3 +79,11 @@ describe('REQ-1401 — the decision beside each experimental flag', () => {
     for (const l of lines) assert.match(l, / · decision: (keep|drop|not yet measured) \(\d{4}-\d{2}-\d{2}\)/, l);
   });
 });
+
+describe('REQ-1501 — features.capacity is in the table, default off (AC-1501c)', () => {
+  test('red: the loader knows the feature and its line says not configured', () => {
+    const r = run(project(block({ schema: 2 })));
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^capacity: not configured$/m);
+  });
+});

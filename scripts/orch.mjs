@@ -114,6 +114,7 @@ const pre = require('./lib/orch-preflight.cjs');
 const credit = require('./lib/orch-credit.cjs');
 const snapshots = require('./lib/orch-snapshot.cjs');
 const ratelimit = require('./lib/orch-ratelimit.cjs');
+const capacityLib = require('./lib/capacity.cjs');
 const lease = require('./lib/orch-lease.cjs');
 const orchLoop = require('./lib/orch-loop.cjs');
 const boardLoop = require('./lib/board-loop.cjs');
@@ -636,11 +637,10 @@ try {
         // takes a slot — counted the way `next` counts them: no resume under a 429 hold, the cap is the 429-halved one,
         // and a lane waiting to launch already holds a slot
         if (!acts.some((a) => a.startsWith(`SELF-AUDIT ${lane}:`))) die(3, `REFUSED launch ${run}/${lane} (status DONE, WAIT-P4): next offers no SELF-AUDIT for it — ${acts.join(' | ')}`);
-        const rl = ratelimit.laneCap(ratelimit.load(root()), Date.now());
-        if (rl && rl.holdUntil) die(3, `REFUSED launch ${run}/${lane}: 429 back-off until ${rl.holdUntil} — no new sessions`);
-        const capLanes = rl ? Math.min(s.maxLanes, rl.lanes) : s.maxLanes;
-        const live = Object.values(s.lanes).filter((x) => ['LAUNCHED', 'STALLED', 'PAUSED', 'PLANNED', 'CLAIMED'].includes(x.status)).length;
-        if (live >= capLanes) die(3, `REFUSED launch ${run}/${lane}: no free lane slot (${live} of ${capLanes} live)`);
+        // REQ-1508: the capacity governor's record is one more min() term in the slot count (orch-state resumeSlot)
+        const slot = state.resumeSlot(root(), s, Date.now());
+        if (slot.hold) die(3, `REFUSED launch ${run}/${lane}: 429 back-off until ${slot.hold} — no new sessions`);
+        if (!slot.free) die(3, `REFUSED launch ${run}/${lane}: no free lane slot (${slot.why})`);
       }
       // a linked dependency dir in the lane worktree + a brief naming a reinstall: the reinstall would delete THROUGH it
       if (l.worktree && fs.existsSync(l.worktree)) {
@@ -902,6 +902,7 @@ try {
       if (!ids.length) {
         console.log(`no runs under ${root()}`);
         for (const l of orchLoop.statusLines(root())) console.log(l);
+        console.log(capacityLib.statusLine(root()));
         const c = creditLines();
         if (c) console.log(c);
         break;
@@ -915,6 +916,7 @@ try {
         console.log('');
       }
       for (const l of orchLoop.statusLines(root())) console.log(l);
+      console.log(capacityLib.statusLine(root()));
       const c = creditLines();
       if (c) console.log(c);
       break;
