@@ -372,10 +372,10 @@ function placement(s, at = Date.now(), running = 0, job = {}, opts = {}) {
   return result(null, `USAGE-HOLD: no account may take the lane — ${notes.join('; ')}`);
 }
 
-/** The placement `next` would make now, with the readiness record under `root` (what gate-launch checks). */
+/** The placement `next` makes now, with the readiness record under `root` (what gate-launch checks); shadow = the 1.0 way. */
 function placementNow(root, s, at = Date.now(), job = {}) {
   const running = Object.values(s.lanes).filter((l) => ACTIVE.includes(l.status)).length;
-  return placement(s, at, running, job, { readiness: accountsLib.load(root).accounts });
+  return placement(s, at, running, job, { readiness: accountsLib.load(root).accounts, plain: s.placement === 'shadow' });
 }
 
 /** `BUILDER_ORCH_LANE_CAP`: a whole number 1–16 overrides the capacity lane cap; unset or invalid → null (no override). */
