@@ -706,3 +706,42 @@ sections it summarises (the bytes row), the share of reports where the reader op
 never carries a figure the report does not.
 
 **Decision (2026-11-17).** not yet measured — no measurement: no report has carried a summary yet.
+
+## 23. Dead code — `deadCode` (planned, experimental)
+
+**What ships.** `features.deadCode` (M20, spec `specs/repo-hygiene.spec.md` REQ-1823 to REQ-1825, D91):
+`npx builder-pipeline run dead-code`. ORPHAN for a source file under `roots` with an extension in `extensions` that no
+other file imports and that is not an entry (package.json `main`, `bin`, `exports`, the test pattern, the `entries`
+globs). The `baseline` is a ratchet bank (`scripts/lib/ratchet.cjs`): a new ORPHAN is REFUSED (exit 1), a removed one
+shrinks the bank. STALE-TODO for a `TODO`, `FIXME`, `HACK` or `XXX` marker whose line is older than `todoDays` by
+`git blame`, with the age in days and no author; reported, never failed. While the feature is off, nothing of it runs
+and the script prints `deadCode: not configured`.
+
+**Why it is an experiment.** Dynamic imports, framework conventions (a file loaded by a path the framework builds),
+generated files and scripts a package.json `scripts` line runs by path are all imports the reader cannot see. Each one
+is a false ORPHAN. The rate decides whether the check can ever gate.
+
+**Opt in.** Set `features.deadCode.state` to `experimental-on` in `PIPELINE_PROFILE.md` §16 with `roots`,
+`extensions` and `baseline` filled. Run `npx builder-pipeline run dead-code`. The first run with an empty bank REFUSES
+every orphan; a person classifies each one and the true orphans are deleted, the false ones become `entries` globs.
+
+**Measurement (written before the code, REQ-1825).** Run `dead-code` with an empty bank on two repositories:
+
+1. the kit's own repository (`roots: ["scripts", "cli", "hooks"]`, `extensions: [".mjs", ".cjs"]`, the test pattern
+   `\.test\.mjs$`), and
+2. the loop runner's test project (the polyglot test bed of EXPERIMENTS §17, `roots: ["."]`, its own extensions).
+
+A person classifies every ORPHAN as true (the file is dead) or false (something the reader cannot see loads it). The
+ORPHAN false-positive rate is false ÷ findings. Record the kit commit, the project commit, the findings, the false
+count and the rate per repository in the table below. STALE-TODO is reported only and is not rated.
+
+| Date | Kit commit | Repository | Commit | Findings | False | Rate |
+|---|---|---|---|---|---|---|
+
+**Keep rule.** Keep (promote to `off`, a feature a project may switch on) when the rate is under 10 percent on both
+repositories. Drop when it is 10 percent or more on either. A rate on one repository alone is not a decision.
+
+**Risk.** Two repositories are a small sample, and both are JavaScript. A project in another language gets its own
+measurement before `experimental-on`.
+
+**Decision (2026-11-17).** not yet measured — no measurement yet; the ORPHAN false-positive rate on the two repositories is owed (M22).
