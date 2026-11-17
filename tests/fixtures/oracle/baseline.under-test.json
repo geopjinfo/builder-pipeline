@@ -1,0 +1,30 @@
+{
+  "_doc": "contract-oracle baseline — known drift that does not fail the run. Each entry needs a registry row or a written reason; it shrinks by itself and grows only by a named --accept.",
+  "transcript": "transcript.jsonl",
+  "findings": [
+    {
+      "key": "status-drift POST /items 200 declared 201/422",
+      "class": "status-drift",
+      "count": 2,
+      "example": "#4 POST /items"
+    },
+    {
+      "key": "query-drift GET /items 200 accepted undeclared query parameter \"search\"",
+      "class": "query-drift",
+      "count": 1,
+      "example": "#5 GET /items?page=1&search=bolt"
+    },
+    {
+      "key": "code-drift GET /items/{id} 404 404 carried GONE; declared NOT_FOUND",
+      "class": "code-drift",
+      "count": 1,
+      "example": "#6 GET /items/42"
+    },
+    {
+      "key": "undocumented-route GET /suppliers 200 GET /suppliers answered 200",
+      "class": "undocumented-route",
+      "count": 1,
+      "example": "#9 GET /suppliers"
+    }
+  ]
+}

@@ -516,7 +516,7 @@ there, and prints the wall time. The test fails above 300 s.
 
 | Date | Commit | Node | Wall time (s) |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-11-17 | bf64f70 (branch of 36bfdc0, release 1.1.0) | v22.23.4 | 1.1 (pack 0.4, install 0.3, inventory 0.2, claims-check 0.2) on a Linux developer machine, npm cache warm |
 
 **False-positive rates.** Each default-on check (`check-ledgers`, `claims-check`, `output-check`, `fix-rate`,
 `inventory`) runs on three public repositories. A person classifies every finding as true or false. A check above
@@ -529,4 +529,4 @@ there, and prints the wall time. The test fails above 300 s.
 **Risk.** A rate taken on three repositories is a small sample. Name the repositories and the shas so the run can
 be repeated.
 
-**Decision (2026-11-17).** not yet measured — no measurement: the tables are empty.
+**Decision (2026-11-17).** not yet measured — time to first value 1.1 s on one machine (limit 300 s); the false-positive table is still empty.
