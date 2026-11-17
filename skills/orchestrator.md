@@ -94,8 +94,14 @@ For each `LAUNCH <lane>` line, in order:
    lane's own diff and must not touch the primary's. Then run `node scripts/index-check.mjs` in the worktree. An
    `absent` verdict there means the copy failed: fix it before the launch.
 3. Write the brief from the worker-brief template into the lane's `brief` path: its rows, its files, its dispatch,
-   the rules, the done-test, the result path. Pointers, never pasted docs.
-4. **Place it where `next` says** (`on secondary` / `on primary`). Placement follows `features.orchestrator.seats`
+   its `Account:` line (the account `next` places it on), the rules, the done-test, the result path. Pointers, never
+   pasted docs. `orch brief <run> <lane>` prints the skeleton with the lane facts and the account filled in
+   (`--write` writes it once, never over an existing brief); you fill the rest.
+4. **Place it where `next` says** (`on <account>`). Which account a job may go to — ready only, the content class
+   against the project's visibility, the role against the account's `roles`, the soft limit and `needs-account`, the
+   pays order with `api-key` last, holds and the one retry, never a resume across accounts — is the rulebook
+   `build-module-pipeline/references/account-selection.md` (installed beside the pipeline skill). The kit enforces its fixed parts inside
+   `next`, `claim` and `gate-launch`; the judgement parts are yours. In 1.0 terms placement follows `features.orchestrator.seats`
    and each seat's usage `limits`; read usage fresh before every launch (`orch usage-read <run>`, or
    `orch usage <run> <seat> <pct>` by hand). The primary seat's limit sits below the secondary's, because this
    session runs on that account too. `USAGE-HOLD` / `USAGE-UNKNOWN` → launch nothing and say why.

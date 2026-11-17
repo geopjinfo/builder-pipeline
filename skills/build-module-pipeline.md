@@ -247,7 +247,9 @@ line.
 4. **Audit** — three preparations, then the dispatch. → Read `references/gate-checks.md` § *P4 — the three audit
    preparations* first (index re-sync, `rules.txt` for the vuln-auditor, experimental role profiles).
 
-   Then dispatch all four auditors **concurrently** (a single message with four agent dispatches). Collect their
+   Then dispatch all four auditors **concurrently** (a single message with four agent dispatches). Name the account
+   each auditor runs on: the lane's own account (the brief's `Account:` line) or the headless account the orchestrator
+   routed the seat to; `references/account-selection.md` says which accounts may take an auditor. Collect their
    structured `findings[]` + verdicts — pass these forward as-is; do not re-summarize into prose.
 
    **Validate before you pass (seat I/O contract).** Each auditor returns one fenced `json` block in the findings

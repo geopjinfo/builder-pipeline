@@ -35,9 +35,16 @@
  *                                     the lane's paths, the account, its caps and the filled launch command
  *                                     (--max-budget-usd is a backstop, never a cap). An api-key account's launch
  *                                     writes `account.paid` and a decision-log row. --resume also takes the
+ *                                     writes `account.paid` and a decision-log row. Then the pre-launch gate of the
+ *                                     placed account (REQ-401 to REQ-404, REQ-703): content policy, settings scan,
+ *                                     the lane worktree (fresh branch, include files, sparse on path roots) and the
+ *                                     --settings pin the launch command carries. --resume also takes the
  *                                     WAIT-P4 lane `next` offers SELF-AUDIT for, when a lane slot is free. Refused
  *                                     while a linkDirs entry of the lane worktree is a link and the brief names a
  *                                     reinstall step (link-guard)
+ *   worktree <run> <lane>             create the lane worktree (fresh branch, include files copied, sparse on path roots)
+ *   brief <run> <lane> [--write]      the worker brief from the template with the lane facts and its Account: line
+ *                                     filled from the placement (REQ-502); --write writes it once at the lane's brief path
  *   link-guard <folder> [--brief <file>]
  *                                     0 no linked dir · 4 a linkDirs entry is a link (never reinstall there) ·
  *                                     3 a link + a brief naming any reinstall step (unlink it yourself first)
@@ -97,6 +104,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { runHint } = require('./lib/run-hint.cjs');
@@ -115,6 +123,8 @@ const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
 const policy = require('./lib/account-policy.cjs');
 const acct = require('./lib/orch-accounts.cjs');
+const acct = require('./lib/orch-accounts.cjs');
+const policy = require('./lib/account-policy.cjs');
 const accountPaths = require('./lib/account-paths.cjs');
 const remote = require('./lib/orch-remote.cjs');
 const orchLoop = require('./lib/orch-loop.cjs');
@@ -144,7 +154,7 @@ const die = (code, msg) => {
   process.exit(code);
 };
 const out = (v) => console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 2));
-const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|worktree|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
+const USAGE = `usage: ${runHint('orch')} <digest|split|init|approve|preflight|claim|release|claims|gate-launch|worktree|brief|link-guard|launch-id|set|notice|watch|usage|usage-read|status|next|wait|lease|pause|stop|resume|ratelimit|snapshots|enqueue|merge|credit|credit-prep|credit-run|credit-review|credit-audit|release-stale> … (header of scripts/orch.mjs)`;
 if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log(USAGE);
   process.exit(cmd ? 0 : 2);
@@ -362,6 +372,105 @@ function laneWarn(s, name) {
   const a = accountList().find((x) => x.name === name);
   const w = a ? acct.budgetWarn(readingOf(s, name), a.budget, acfg.softLimitPct) : null;
   return w ? ` (${w})` : '';
+}
+
+const cc = () => require('./lib/orch-worker-claude-code.cjs');
+const accountsCfg = () => profile.feature(settings, 'accounts').config;
+/** The live §16 row of the account a lane is placed on (its own seat, else the account `next` would place now), or null. */
+function laneRegistryAccount(s, l) {
+  const name = (l && l.seat) || state.placementNow(root(), s).seat;
+  return (name && accountList().find((a) => a.name === name)) || null;
+}
+const readText = (file) => {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+};
+/** Create the lane worktree when it is absent; an existing one is checked against the roots (REQ-402, REQ-405). */
+function laneWorktree(s, l, roots) {
+  if (fs.existsSync(l.worktree)) {
+    if (roots) {
+      const have = pre.sparseRoots(l.worktree);
+      const same = have && have.length === roots.length && roots.every((r) => have.includes(r));
+      if (!same) die(3, `E_PATH_ROOTS: worktree ${l.worktree} is not a sparse checkout of the roots ${roots.join(', ')} — remove it (or re-create it with orch worktree) before the launch`);
+    }
+    return { worktree: l.worktree, branch: l.branch, created: false, sparse: roots };
+  }
+  const include = (accountsCfg().worktree || {}).include || [];
+  try {
+    return { ...pre.createLaneWorktree({ repo: s.repo, worktree: l.worktree, branch: l.branch, base: s.target || 'HEAD', roots, include }), created: true };
+  } catch (e) {
+    die(3, e.message);
+  }
+  return null;
+}
+/**
+ * The pre-launch gate of a lane (REQ-401 to REQ-404, REQ-703): exits 3 with the check lines on any fault; else creates
+ * the worktree when absent, writes the --settings pin (0600) and returns { pinFile, roots }. No account = no policy.
+ */
+function policyGate(s, run, lane, l, account) {
+  if (!account) return { pinFile: null, roots: null };
+  const home = accountPaths.home();
+  const ap = accountPaths.paths(home, account.name, account);
+  const checks = pre.launchChecks({ account, paths: ap, homeExists: fs.existsSync(home) });
+  if (checks.length) {
+    for (const c of checks) console.log(`CHECK ${c.check}: ${c.message}`);
+    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: checks.map((c) => c.check) });
+    process.exit(3);
+  }
+  const projectDir = s.repo || process.cwd();
+  const roots = policy.pathRoots(account);
+  const lockFiles = (() => {
+    try {
+      return Object.keys(JSON.parse(fs.readFileSync(path.join(projectDir, 'builder.lock.json'), 'utf8')).files || {});
+    } catch {
+      return [];
+    }
+  })();
+  const entries = [
+    { file: path.join(projectDir, '.claude', 'settings.json'), role: 'project' },
+    { file: path.join(projectDir, '.claude', 'settings.local.json'), role: 'project' },
+    ...(l.worktree && fs.existsSync(l.worktree) ? [{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }] : []),
+    { file: ap.settingsFile, role: 'account' },
+  ];
+  const faults = policy.check(
+    account,
+    { visibility: settings.visibility, decisionIdPattern: profile.feature(settings, 'handoffPack').config.decisionIdPattern, decisionsPath: settings.paths.decisions, lockFiles, canDeny: account.worker === 'claude-code' },
+    [...(l.ownedFiles || []), ...(l.hotFiles || [])],
+    readText(path.join(projectDir, settings.paths.decisions)),
+    policy.readSettingsFiles(entries),
+  );
+  if (faults.length) {
+    for (const f of faults) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
+    state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: faults.map((f) => f.code) });
+    process.exit(3);
+  }
+  let denyPaths = [];
+  // the lane worktree is made only beside a git checkout (a run may record a plain folder as its repo: no worktree then)
+  if (l.worktree && s.repo && fs.existsSync(path.join(s.repo, '.git'))) {
+    laneWorktree(s, l, roots);
+    if (roots) denyPaths = policy.denyPathsFor(pre.trackedFiles(s.repo, s.target || 'HEAD'), roots);
+  } else if (roots) die(3, `E_PATH_ROOTS: account ${account.name} has path roots (${roots.join(', ')}) and run ${run} records no repo or worktree for ${lane} — a path-root account launches only in a sparse worktree`);
+  // the worktree's own settings files exist only now: scan them too before the pin is written
+  if (l.worktree && fs.existsSync(l.worktree) && !entries.some((e) => e.role === 'worktree')) {
+    const late = policy.check(account, { lockFiles, canDeny: true, visibility: 'public' }, [], null, policy.readSettingsFiles([{ file: path.join(l.worktree, '.claude', 'settings.json'), role: 'worktree' }, { file: path.join(l.worktree, '.claude', 'settings.local.json'), role: 'worktree' }]));
+    if (late.length) {
+      for (const f of late) console.error(`REFUSED launch ${run}/${lane}: ${f.message}`);
+      state.event(root(), run, 'launch.refused', { lane, account: account.name, checks: late.map((f) => f.code) });
+      process.exit(3);
+    }
+  }
+  let accountSettings = null;
+  try {
+    accountSettings = JSON.parse(fs.readFileSync(ap.settingsFile, 'utf8'));
+  } catch {
+    /* none: the scan above already judged an unreadable one */
+  }
+  const pinFile = path.join(store.runDir(root(), run), 'pins', `${lane}.settings.json`);
+  cc().writePin(pinFile, cc().pin({ account, configDir: ap.configDir, accountSettings, denyPaths }));
+  return { pinFile, roots };
 }
 
 function printStatus(runId, { split = false } = {}) {
@@ -706,6 +815,8 @@ try {
           console.error(`smoke ${placed}: passed at ${sm.at}`);
         }
       }
+      // M4: the placed account's content policy, the settings scan, the lane worktree and the --settings pin (REQ-401 to REQ-404, REQ-703)
+      const gate = reg ? policyGate(s, run, lane, l, reg) : { pinFile: null, roots: null };
       if (!l.integrity) state.integrityBaseline(root(), run, lane); // a resume keeps the first baseline: a change from an earlier attempt is never laundered
       // REQ-303: a launch on a pays-per-use account is written down twice — the run's events and the project's decision log
       if (!resume && acc && acc.pays === 'api-key') {
@@ -717,14 +828,50 @@ try {
       const pricing = require('./lib/pricing.cjs');
       const priced = model ? pricing.cost(model, { input_tokens: 1 }) !== null : false;
       const backstop = flags['max-budget-usd'] && flags['max-budget-usd'] !== true ? Number(flags['max-budget-usd']) : null;
-      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch, account: placed || '', maxTurns: caps ? caps.maxTurns : '', timeoutMinutes: caps ? caps.timeoutMinutes : '' };
-      const template = (reg && reg.command) || (acc && acc.command) || cfg.launchCommand || null;
+      const vars = { run, lane, brief: l.brief, worktree: l.worktree, result: l.result, branch: l.branch, account: placed || '', maxTurns: caps ? caps.maxTurns : '', timeoutMinutes: caps ? caps.timeoutMinutes : '', settings: gate.pinFile || '' };
+      const template = (reg && reg.command) || (acc && acc.command) || cfg.launchCommand || legacy.launchCommand || null;
+      let launch = template ? pre.fill(template, vars) : null;
+      if (launch && gate.pinFile && !String(template).includes('{settings}')) launch = cc().withSettings(launch, gate.pinFile);
       out({
         name: l.name, worktree: l.worktree, branch: l.branch, brief: l.brief, result: l.result,
         account: placed, worker: acc ? acc.worker : null, pays: acc ? acc.pays : null, maxTurns: caps ? caps.maxTurns : null, timeoutMinutes: caps ? caps.timeoutMinutes : null,
         model, price: model ? (priced ? `pinned (pricing ${pricing.VERSION})` : 'unpriced') : 'no model', maxBudgetUsd: backstop, maxBudgetUsdRole: 'backstop only — never a cap',
-        launch: template ? pre.fill(template, vars) : null,
+        settings: gate.pinFile, sparse: gate.roots, launch,
       });
+      break;
+    }
+    case 'worktree': {
+      // create a lane's worktree the hygienic way (REQ-405): a fresh branch, the include files copied, sparse on a path-root account
+      const [run, lane] = pos;
+      const s = state.load(root(), run);
+      const l = s.lanes[lane];
+      if (!l) die(2, `no lane ${lane}`);
+      if (!l.worktree || !s.repo) die(3, `refused: run ${run} records no repo or worktree path for ${lane} — re-init with --repo`);
+      const account = laneRegistryAccount(s, l);
+      const r = laneWorktree(s, l, account ? policy.pathRoots(account) : null);
+      console.log(`${r.created ? 'created' : 'exists'} ${r.worktree} on ${r.branch}${r.fresh === false ? ' (branch existed, no worktree held it)' : ''}${r.sparse ? ` · sparse: ${r.sparse.join(', ')}` : ''}${r.copied && r.copied.length ? ` · copied: ${r.copied.join(', ')}` : ''}${r.missing && r.missing.length ? ` · not found: ${r.missing.join(', ')}` : ''}`);
+      break;
+    }
+    case 'brief': {
+      // the worker brief skeleton: the template with the lane facts and the placed account filled in (REQ-502)
+      const [run, lane] = pos;
+      if (!run || !lane) die(2, 'usage: brief <run> <lane> [--write]');
+      const s = state.load(root(), run);
+      const l = s.lanes[lane];
+      if (!l) die(2, `no lane ${lane}`);
+      const installed = path.join(s.repo || process.cwd(), 'specs', 'orchestrator-worker-brief.template.md');
+      const templateFile = fs.existsSync(installed) ? installed : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'orchestrator-worker-brief.md');
+      const placed = l.seat || state.placementNow(root(), s).seat || null;
+      const account = placed ? laneRegistryAccount(s, l) || state.accountOf(s, placed) : null;
+      const text = planLib.renderBrief(fs.readFileSync(templateFile, 'utf8'), { run, lane: { ...l, name: lane }, rows: s.rows || [], target: s.target, account });
+      if (!flags.write) {
+        process.stdout.write(text);
+        break;
+      }
+      if (fs.existsSync(l.brief)) die(3, `refused: ${l.brief} exists — the brief is yours once written; edit it, or remove it and run brief --write again`);
+      fs.mkdirSync(path.dirname(l.brief), { recursive: true });
+      fs.writeFileSync(l.brief, text);
+      console.log(`wrote ${l.brief}${account ? ` (Account: ${account.name})` : ' (no placement yet: fill the Account: line)'}`);
       break;
     }
     case 'set': {

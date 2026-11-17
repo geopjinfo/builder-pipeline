@@ -146,6 +146,30 @@ If it is not running, the page is only as fresh as the last explicit
 
 Codex keeps no per-dispatch usage records of the shape the board's accounting reader expects, so
 the per-seat model / wall-clock / token / cost columns render as em-dashes. That is the designed
+### Worker recipe (a lane on a Codex account)
+
+How a lane starts on an account whose `worker` is `codex` (`features.accounts`; the rulebook is
+`skills/references/account-selection.md`):
+
+- **Start.** `npx builder run orch gate-launch <run> <lane>` prints the account, its caps and the filled command.
+  The account's `command` is the template; the kit fills `{brief}`, `{worktree}`, `{result}`, `{branch}`,
+  `{account}`, `{maxTurns}` and `{timeoutMinutes}`.
+- **Environment.** `CODEX_HOME` is the account's dir (`accounts/<name>/` under the accounts home, or the account's
+  `configDir`); `auth.json` and `config.toml` live there. No `OPENAI_*` variable is inherited: a key enters the
+  account once through `codex login --with-api-key` and is never stored by the kit.
+- **Flags.** Headless: `codex exec --json -s read-only` for a reading role (an auditor, the reviewer, a tester
+  that only reads) or `-s workspace-write` for a building role, with `--output-schema <schema file>` so the result
+  carries the fields the verdict needs. Codex has no turn-cap flag: the runner owns the timeout (`timeoutMinutes`)
+  and `maxTurns` is recorded on the launch line only. A review job uses the harness's review subcommand on the lane's
+  diff. Resume: `codex exec resume <id>` under the same `CODEX_HOME` only.
+- **What the kit cannot enforce here.** No hook runs: the registry guard, the reviewer write guard and the bash cap
+  are instructions, checked by `git status --porcelain` after the phase. No per-path deny rule exists, so a
+  path-root account (a `content` list) is refused on this worker rather than half-enforced. The sandbox is the
+  harness's own (`-s`), not the kit's. Usage is read from the session's own rate-limit records (unmeasured when
+  none is written).
+
+Codex keeps no per-dispatch usage records of the shape the accounting reader expects, so the
+per-seat model / wall-clock / token / cost columns render as em-dashes. That is the designed
 outcome, not a failure: every other section — rows, steps, gates, files, ceiling — is unaffected,
 and an em-dash says *unmeasured* where a zero would claim a measurement nobody took. Set
 `features.costAccounting` to `off` so the board says so, or to `on` with `reader: "codex"` to

@@ -31,6 +31,9 @@ How to run them:
 - First step, before anything else: confirm that the skill your dispatch names (and every plugin it needs) is
   available in this session. If one is missing, write `RESULT: FAIL missing <what>` as line 1 of the result file
   and stop. A lane without its skills would run the pipeline from memory.
+- Account: <account> (worker <worker>, pays <pays>) — the account the orchestrator placed this lane on (`orch next`; the
+  rules are in the orchestrator skill's `references/account-selection.md`). Run on it only. Never resume this lane on
+  another account; a lane that must move starts again from its branch with a new brief.
 - Worktree: <worktree>   Branch: <branch> (cut from <target>)
 - Never: push, force, reset --hard, delete branches or worktrees, rewrite history, touch the release branch,
   local settings files, unlocks or the allow list.
