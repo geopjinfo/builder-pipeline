@@ -5,6 +5,14 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Repo hygiene spec (`specs/repo-hygiene.spec.md`, REQ-1801 to REQ-1840; decisions D86 to D98).** The ratified spec
+  for the 2.1.0 repo-hygiene modules M18 to M22: eight opt-in checks (`branch-sweep`, `run-sweep`, `ignore-check`,
+  `size-check`, `secret-scan`, `deps-check`, `docs-check`, `dead-code`), the `hygiene` runner, two secret hooks, the
+  `repo-steward` persona, the `hygiene` tool group and EXPERIMENTS §23. Spec only; no shipped file changes. Check:
+  `npx builder-pipeline run spec-check specs/repo-hygiene.spec.md --ratified`.
+
 ## [2.0.0] — 2026-11-17
 
 ### Breaking
