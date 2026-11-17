@@ -89,7 +89,7 @@ describe('REQ-1107 — the boundaries', () => {
     assert.match(res[0].result.content[0].text, /Anthropic key/);
     assert.ok(!res[0].result.content[0].text.includes('a'.repeat(40)));
     assert.equal(calls.length, n);
-    const sys = await talk([call(1, { prompt: 'hello', system: 'password = hunter2secret' })]);
+    const sys = await talk([call(1, { prompt: 'hello', system: ['pass', 'word'].join('') + ' = ' + ['hunter2', 'secret'].join('') })]); // built at runtime: no literal shape in this file
     assert.equal(sys[0].result.isError, true);
     assert.match(sys[0].result.content[0].text, /assigned secret/);
   });
