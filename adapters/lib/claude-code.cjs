@@ -86,6 +86,7 @@ function hooksSettings() {
       PreToolUse: [
         { matcher: 'Read', hooks: [cmd('registry-read-guard.cjs')] },
         { matcher: 'Write|Edit|MultiEdit', hooks: [cmd('reviewer-write-guard.cjs')] },
+        { matcher: 'Write|Edit|MultiEdit', hooks: [cmd('secret-write-guard.cjs')] }, // REQ-1816
       ],
       PostToolUse: [{ matcher: 'Bash', hooks: [cmd('bash-output-cap.cjs')] }],
     },
