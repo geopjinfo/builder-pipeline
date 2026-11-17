@@ -1,0 +1,15 @@
+# Dependencies and tool output. The kit has no runtime dependencies; a local npm install still creates the folder.
+node_modules/
+
+# What the kit writes when it runs in this repository
+.pipeline/
+logs/
+.builder/
+PIPELINE_PROFILE.md.bak
+
+# Editor and OS files
+*.log
+*.swp
+*~
+.DS_Store
+Thumbs.db

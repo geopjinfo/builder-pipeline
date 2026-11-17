@@ -27,6 +27,10 @@ versions independently of any project it is pasted into.
   `agents/capacity-steward.md` (tier mid) explains a bind; `skills/orchestrator.md` says when it is dispatched.
   Tests: `tests/capacity.test.mjs`, `tests/capacity-cli.test.mjs`, and new cases in profile, features, orch-state,
   orch-gaps, doctor and board-loop. Docs: FEATURES row, GUIDE § Capacity governor.
+- **Repository hygiene for this repository.** A generic `.gitignore` (dependencies, the kit's own run output, editor
+  and OS files; no tool folders) and AGENTS.md rule 15 extended: stage by name, plain commit and PR text, branch names
+  `feature/<topic>` with no assistant name, arm the commit-msg hook per clone, check `git status --ignored` before a
+  push. Maintainer files only; nothing shipped changes.
 
 ## [2.0.0] — 2026-11-17
 
