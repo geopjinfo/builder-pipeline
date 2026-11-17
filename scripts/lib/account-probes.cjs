@@ -89,11 +89,13 @@ function runCommand(command, { env, timeoutMs = DEFAULT_TIMEOUT_MS, cwd } = {}) 
  */
 function result(r, name, timeoutMs = DEFAULT_TIMEOUT_MS, elapsedMs = 0) {
   const timedOut = !!(r.error && r.error.code === 'ETIMEDOUT') || r.signal === 'SIGTERM' || elapsedMs >= timeoutMs;
-  const notFound = !!(r.error && r.error.code === 'ENOENT');
+  // Through a shell a missing program is not ENOENT: sh exits 127, cmd.exe exits 9009 and says "is not recognized".
+  const notFound = !!(r.error && r.error.code === 'ENOENT') || r.status === 127 || r.status === 9009
+    || /is not recognized as an internal or external command/i.test(String(r.stderr || ''));
   return {
     stdout: clip(r.stdout),
     stderr: clip(r.stderr),
-    status: typeof r.status === 'number' ? r.status : null,
+    status: notFound ? null : typeof r.status === 'number' ? r.status : null,
     timedOut,
     error: timedOut ? 'timed out' : notFound ? `${name}: not found` : r.error ? String(r.error.code || r.error.message) : null,
   };
