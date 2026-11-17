@@ -408,4 +408,4 @@ function run({
   return out;
 }
 
-module.exports = { DEFAULT_BACKUP_DIRS, listWorktrees, primaryOf, newestMtime, treeBytes, processCommandLines, plan, orphans, removalOutcome, sweepOne, run };
+module.exports = { DEFAULT_BACKUP_DIRS, listWorktrees, primaryOf, newestMtime, treeBytes, human, processCommandLines, plan, orphans, removalOutcome, sweepOne, run };

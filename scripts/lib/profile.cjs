@@ -38,6 +38,7 @@ const ACTIVE = new Set(['on', 'unmeasured', 'experimental-on']);
 /* features.costAccounting.reader: which harness's transcripts the cost scripts read (scripts/lib/transcript-usage.cjs +
  * session-usage.cjs for Claude Code; scripts/lib/codex-usage.cjs for the Codex CLI). */
 const COST_READERS = ['claude-code', 'codex'];
+const BRANCH_REMOTE_MODES = ['list', 'off'];
 
 /**
  * Every feature the pack knows, its default, and the keys that must be non-null when it is active. A default of
@@ -156,6 +157,17 @@ const FEATURES = {
   worktreeSweep: {
     defaults: { state: 'off', target: null, idleHours: 6, prefix: null, reserved: [], backupDirs: ['logs', '.pipeline'], holdCommand: null },
     requires: ['target'],
+  },
+  /* Repo hygiene, git (specs/repo-hygiene.spec.md M18, D86): one verdict per local branch — scripts/branch-sweep.mjs.
+   * `remote` is `list` (print the push command, never push) or `off`. */
+  branchSweep: {
+    defaults: { state: 'off', target: null, staleDays: 30, keep: ['main', 'release/*'], remote: 'list' },
+    requires: ['target'],
+  },
+  /* Old run folders and backups under `roots`, moved by rename into <logs>/trash/<date>/ with --apply — scripts/run-sweep.mjs. */
+  runSweep: {
+    defaults: { state: 'off', keepDays: 30, roots: ['.pipeline', 'logs/backups'] },
+    requires: ['roots'],
   },
   /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
    * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
@@ -521,6 +533,24 @@ function validate(settings) {
     if (hold !== undefined && hold !== null && (typeof hold !== 'string' || !hold.includes('{path}'))) {
       errors.push('features.worktreeSweep.holdCommand: null, or a command containing {path}');
     }
+  }
+  /* Repo hygiene (M18): a typo in `remote` must never read as "delete"; a negative age would sweep everything. */
+  const bsweep = settings.features?.branchSweep;
+  if (isObject(bsweep)) {
+    if (bsweep.remote !== undefined && !BRANCH_REMOTE_MODES.includes(bsweep.remote)) {
+      errors.push(`features.branchSweep.remote: one of ${BRANCH_REMOTE_MODES.join(', ')}, got ${JSON.stringify(bsweep.remote)}`);
+    }
+    if (bsweep.staleDays !== undefined && !(typeof bsweep.staleDays === 'number' && Number.isFinite(bsweep.staleDays) && bsweep.staleDays >= 0)) {
+      errors.push('features.branchSweep.staleDays: a number >= 0');
+    }
+    if (bsweep.keep !== undefined && (!Array.isArray(bsweep.keep) || bsweep.keep.some((s) => typeof s !== 'string' || !s))) errors.push('features.branchSweep.keep: an array of non-empty strings');
+  }
+  const rsweep = settings.features?.runSweep;
+  if (isObject(rsweep)) {
+    if (rsweep.keepDays !== undefined && !(typeof rsweep.keepDays === 'number' && Number.isFinite(rsweep.keepDays) && rsweep.keepDays >= 0)) {
+      errors.push('features.runSweep.keepDays: a number >= 0');
+    }
+    if (rsweep.roots !== undefined && (!Array.isArray(rsweep.roots) || rsweep.roots.some((s) => typeof s !== 'string' || !s))) errors.push('features.runSweep.roots: an array of non-empty strings');
   }
   /* The cost readers the kit ships. A third value would make cost-window print "unmeasurable" for a typo. */
   const reader = settings.features?.costAccounting?.reader;

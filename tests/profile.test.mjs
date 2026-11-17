@@ -114,6 +114,20 @@ test('REQ-401 the template §16 block carries visibility private', () => {
   assert.match(tpl, /\*\*Visibility:\*\*/);
 });
 
+test('red: AC-1801 branchSweep on without target is invalid; remote outside list|off prints the allowed set; negative days refused', () => {
+  const on = profile.parse(block({ schema: 2, features: { branchSweep: { state: 'on' } } })).errors;
+  assert.ok(on.some((e) => e.startsWith('features.branchSweep.target: required')), on.join('\n'));
+  const remote = profile.parse(block({ schema: 2, features: { branchSweep: { state: 'off', remote: 'delete' } } })).errors;
+  assert.ok(remote.some((e) => e.includes('features.branchSweep.remote') && e.includes('list, off')), remote.join('\n'));
+  const neg = profile.parse(block({ schema: 2, features: { branchSweep: { state: 'off', staleDays: -1 }, runSweep: { state: 'off', keepDays: -2 } } })).errors;
+  assert.ok(neg.some((e) => e.startsWith('features.branchSweep.staleDays')), neg.join('\n'));
+  assert.ok(neg.some((e) => e.startsWith('features.runSweep.keepDays')), neg.join('\n'));
+  const ok = profile.parse(block({ schema: 2, features: { branchSweep: { state: 'on', target: 'main', remote: 'off' }, runSweep: { state: 'on', roots: ['.pipeline'] } } })).errors;
+  assert.deepEqual(ok, []);
+  assert.equal(profile.FEATURES.branchSweep.defaults.state, 'off');
+  assert.equal(profile.FEATURES.runSweep.defaults.state, 'off');
+});
+
 /* ------------------------------------------------------------------ 2.1.0: the capacity governor (M15) ---- */
 
 test('REQ-1501 capacity on without perLaneMb is invalid naming the key; a negative reserveCores is invalid (AC-1501a, AC-1501b)', () => {

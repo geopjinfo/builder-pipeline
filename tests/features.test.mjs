@@ -80,6 +80,18 @@ describe('REQ-1401 — the decision beside each experimental flag', () => {
   });
 });
 
+describe('features — repo hygiene (M18)', () => {
+  test('red: AC-1801 branchSweep and runSweep are listed, off by default; a bad remote is refused with the allowed set', () => {
+    const r = run(project());
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^branchSweep: not configured$/m);
+    assert.match(r.stdout, /^runSweep: not configured$/m);
+    const bad = run(project(block({ schema: 2, features: { branchSweep: { state: 'off', remote: 'delete' } } })));
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stdout + bad.stderr, /branchSweep\.remote.*list, off/);
+  });
+});
+
 describe('REQ-1501 — features.capacity is in the table, default off (AC-1501c)', () => {
   test('red: the loader knows the feature and its line says not configured', () => {
     const r = run(project(block({ schema: 2 })));

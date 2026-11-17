@@ -31,7 +31,7 @@
  * graphify, ledger-audit — see skills-extra/README.md) and the personas they ship (skills-extra/<name>/agents/).
  * --experimental also installs the experimental files (agents/experimental/, tooling/experimental/). They are
  * shipped but unproven; EXPERIMENTS.md names the measurement that promotes or removes each one.
- * --tools <group>[,<group>] installs one part of the kit: spec, audit, orchestrator, hooks, evals or pipeline, plus the
+ * --tools <group>[,<group>] installs one part of the kit: spec, audit, orchestrator, hooks, evals, pipeline or hygiene, plus the
  * core set every install carries (the pointer block, the profile, the ledger seeds, the shared libs). Every file place()
  * lands goes through scripts/lib/tool-groups.cjs; the lock records the groups (install.toolGroups) and upgrade repeats them.
  *
@@ -1650,7 +1650,7 @@ function main() {
     upgrade [--tool <list|all>]         refresh kit-owned files (backup first; --force over local edits);
                                         names files this release dropped as stale, --prune deletes them (backup first)
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
-      [--tools <group list|all>]        one tool group or several: spec, audit, orchestrator, hooks, evals, pipeline (default all;
+      [--tools <group list|all>]        one tool group or several: spec, audit, orchestrator, hooks, evals, pipeline, hygiene (default all;
                                         the core files come with any group; upgrade repeats what builder.lock.json recorded)
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)

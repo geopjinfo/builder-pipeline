@@ -7,6 +7,26 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **M18 git hygiene: `branch-sweep` and `run-sweep` (`specs/repo-hygiene.spec.md` REQ-1801 to REQ-1807, D86).** Two
+  opt-in §16 features, both `off` by default. `features.branchSweep` (`target` required; `staleDays`, `keep`, `remote`
+  `list`|`off`): `npx builder-pipeline run branch-sweep` gives every local branch one verdict — MERGED, STALE or KEEP
+  with the reason, a branch an orchestrator lane holds in LAUNCHED or STALLED always KEEP — and with `--apply` writes
+  `refs/builder/branches/<name>` at the tip before `git branch -d` (never `-D`); remote branches contained in the
+  target are listed with the push command and the kit never pushes; `--apply` prunes only remote-tracking refs whose
+  remote branch is gone. `features.runSweep` (`keepDays`, `roots`): `npx builder-pipeline run run-sweep` lists old run
+  folders, worktree and upgrade backups and `PIPELINE_PROFILE.md.bak` with size and age, keeps a run with a live lane,
+  and with `--apply` moves each SWEEP item by rename into `<logs>/trash/<date>/`; no recursive delete exists in either
+  module (a test reads the sources). With the feature off, `branch-sweep --target <branch>` and `run-sweep --keep-days
+  <n>` run with the defaults and say so on the first line. New tool group `hygiene` (`unpack --tools hygiene`); the
+  shared `scripts/lib/worktree-sweep.cjs` moves to the core set. Tests: `tests/branch-sweep.test.mjs`,
+  `tests/run-sweep.test.mjs`, rows in profile, features, cli-commands and unpack-groups.
+- **Repo hygiene spec (`specs/repo-hygiene.spec.md`, REQ-1801 to REQ-1848; decisions D86 to D104).** The ratified spec
+  for the 2.1.0 repo-hygiene modules M18 to M22: eight opt-in checks (`branch-sweep`, `run-sweep`, `ignore-check`,
+  `size-check`, `secret-scan`, `deps-check`, `docs-check`, `dead-code`), the `hygiene` runner, two secret hooks, the
+  `repo-steward` persona, the `hygiene` tool group and EXPERIMENTS §23. REQ-1841 to REQ-1848 (D99 to D104) add the
+  completion gate: `attribution-check`, `artifact-check` with a `--staged` pre-commit mode, `hygiene --gate` with the
+  seven gate rows, and Done waiting on it at Phase 7, in the readiness check and as an opt-in merge gate. Spec only;
+  no shipped file changes. Check: `npx builder-pipeline run spec-check specs/repo-hygiene.spec.md --ratified`.
 - **Spec for the 2.1.0 capacity and reporter agents (`specs/capacity-reporter.spec.md`; plan decisions D70 to
   D85).** REQ-1501 to REQ-1516 (M15 capacity governor: `features.capacity`, one more min() term in the lane-cap
   rule, lowers only), REQ-1601 to REQ-1618 (M16 progress reporter: `features.reporter`, channels stdout, file,
