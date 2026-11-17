@@ -79,7 +79,8 @@ describe('REQ-1813 — the tree scan', () => {
   });
 
   test('scanText names the kind and the line, never the text; the private-key header is a shape', () => {
-    const hits = lib.scanText(`ok\n-----BEGIN RSA PRIVATE KEY-----\n${GH}\n`);
+    const header = ['-----BEGIN RSA', 'PRIVATE', 'KEY-----'].join(' '); // built at run time: no literal shape in this file
+    const hits = lib.scanText(`ok\n${header}\n${GH}\n`);
     assert.deepEqual(hits.map((h) => [h.kind, h.line]), [['private key', 2], ['GitHub token', 3]]);
     assert.equal(JSON.stringify(hits).includes(GH), false);
   });
