@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { delimiter, dirname, join, relative } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -27,6 +27,10 @@ after(() => { for (const d of made) rmSync(d, { recursive: true, force: true });
 
 const fakeKey = (tag = 'alpha') => ['sk', 'ant', 'api03'].join('-') + '-' + `${tag}0`.repeat(8);
 const mode = (f) => (statSync(f).mode & 0o777).toString(8);
+/** Plant a symlink; false when this Windows refuses (no privilege): then nothing can plant one at the key path either. */
+function trySymlink(target, link) {
+  try { symlinkSync(target, link); return true; } catch (e) { if (!POSIX && (e.code === 'EPERM' || e.code === 'ENOSYS')) return false; throw e; }
+}
 const assertNoValue = (text, value) => {
   for (let i = 0; i + 8 <= value.length; i += 4) assert.equal(text.includes(value.slice(i, i + 8)), false, `a slice of the key leaked: ${text.slice(0, 300)}`);
 };
@@ -50,8 +54,13 @@ function project(block = BASE) {
   const bin = join(proj, 'stub-bin');
   mkdirSync(bin, { recursive: true });
   const stub = join(PACK, 'tests', 'fixtures', 'accounts', 'codex-stub.cjs');
-  writeFileSync(join(bin, 'codex'), `#!/bin/sh\nexec "${process.execPath}" "${stub}" "$@"\n`, { mode: 0o755 });
-  const env = { ...process.env, BUILDER_NO_BASH_CAP: '1', BUILDER_ACCOUNTS_HOME: home, BUILDER_ORCH_DIR: join(proj, '.pipeline', 'orchestrator'), PATH: `${bin}:${process.env.PATH}` };
+  if (POSIX) writeFileSync(join(bin, 'codex'), `#!/bin/sh\nexec "${process.execPath}" "${stub}" "$@"\n`, { mode: 0o755 });
+  else {
+    // No shebangs on Windows: a .cmd shim runs this Node on a copy of the stub.
+    writeFileSync(join(bin, 'codex.js'), readFileSync(stub, 'utf8'));
+    writeFileSync(join(bin, 'codex.cmd'), `@"${process.execPath}" "%~dp0codex.js" %*\r\n`);
+  }
+  const env = { ...process.env, BUILDER_NO_BASH_CAP: '1', BUILDER_ACCOUNTS_HOME: home, BUILDER_ORCH_DIR: join(proj, '.pipeline', 'orchestrator'), PATH: `${bin}${delimiter}${process.env.PATH}` };
   const run = (args, opts = {}) => {
     const r = spawnSync(process.execPath, [join(PACK, 'cli.js'), 'accounts', ...args], { cwd: proj, encoding: 'utf8', env: { ...env, ...(opts.env || {}) }, input: opts.input });
     return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
@@ -138,7 +147,7 @@ describe('accounts key (REQ-1002, REQ-1003, REQ-1004)', () => {
     const r = p.run(['key', 'alpha'], { input: value + '\n' });
     assert.equal(r.status, 0, r.out);
     assert.match(r.stderr, /echo may be visible/);
-    assert.match(r.stdout, /accounts key: "alpha" key stored \(mode 0600\); apiKeyHelper set/);
+    assert.match(r.stdout, POSIX ? /accounts key: "alpha" key stored \(mode 0600\); apiKeyHelper set/ : /accounts key: "alpha" key stored \(Windows: mode check skipped.*\); apiKeyHelper set/);
     assertNoValue(r.out, value);
     const at = paths(p.home, 'alpha');
     assert.equal(readFileSync(at.keyFile, 'utf8'), value);
@@ -166,15 +175,16 @@ describe('accounts key (REQ-1002, REQ-1003, REQ-1004)', () => {
     const at = paths(p.home, 'alpha');
     const victim = join(p.proj, 'victim');
     writeFileSync(victim, 'untouched\n');
-    symlinkSync(victim, at.keyFile);
     const value = fakeKey('charlie');
-    const r = p.run(['key', 'alpha'], { input: value });
-    assert.equal(r.status, 1);
-    assert.match(r.stderr, /EEXIST/);
-    assert.equal(readFileSync(victim, 'utf8'), 'untouched\n');
-    assertNoValue(r.out, value);
-    assert.equal(existsSync(at.settingsFile), false, 'the helper setting is written only after the key');
-    rmSync(at.keyFile);
+    if (trySymlink(victim, at.keyFile)) {
+      const r = p.run(['key', 'alpha'], { input: value });
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /EEXIST/);
+      assert.equal(readFileSync(victim, 'utf8'), 'untouched\n');
+      assertNoValue(r.out, value);
+      assert.equal(existsSync(at.settingsFile), false, 'the helper setting is written only after the key');
+      rmSync(at.keyFile);
+    }
     const argvForm = p.run(['key', 'alpha', value], { input: '' });
     assert.equal(argvForm.status, 1);
     assert.match(argvForm.stderr, /never on the command line/);
@@ -193,14 +203,14 @@ describe('accounts key (REQ-1002, REQ-1003, REQ-1004)', () => {
     assert.match(p.run(['key', 'self'], { input: value }).stderr, /E_KEY_WORKER/);
   });
 
-  test('red: REQ-1003 a Codex account: store forced to file, the stub gets the value on stdin under CODEX_HOME, the auth mode is reported, the kit holds no copy; key --remove runs codex logout', { skip: !POSIX && 'sh stub' }, () => {
+  test('red: REQ-1003 a Codex account: store forced to file, the stub gets the value on stdin under CODEX_HOME, the auth mode is reported, the kit holds no copy; key --remove runs codex logout', () => {
     const p = project();
     p.run(['add', 'bravo', '--worker', 'codex', '--pays', 'api-key', '--family', 'openai']);
     const at = paths(p.home, 'bravo');
     const value = fakeKey('delta');
     const r = p.run(['key', 'bravo'], { input: value + '\n' });
     assert.equal(r.status, 0, r.out);
-    assert.match(r.stdout, /codex login --with-api-key.*auth\.json mode 0600/);
+    assert.match(r.stdout, POSIX ? /codex login --with-api-key.*auth\.json mode 0600/ : /codex login --with-api-key.*auth\.json /);
     assertNoValue(r.out, value);
     assert.match(readFileSync(at.codexConfigFile, 'utf8'), /^cli_auth_credentials_store = "file"$/m);
     const calls = JSON.parse(readFileSync(join(at.configDir, 'stub-calls.json'), 'utf8'));
@@ -304,7 +314,7 @@ describe('accounts list (REQ-1005)', () => {
     assertNoValue(r.out, value);
     const lines = r.stdout.trim().split('\n');
     assert.equal(lines.length, 2);
-    assert.match(lines[0], /^alpha\s+claude-code\s+api-key\s+any\s+module-tester\s+key present \(mode 0600\)\s+lease none\s+ready$/);
+    assert.match(lines[0], POSIX ? /^alpha\s+claude-code\s+api-key\s+any\s+module-tester\s+key present \(mode 0600\)\s+lease none\s+ready$/ : /^alpha\s+claude-code\s+api-key\s+any\s+module-tester\s+key present \(.+\)\s+lease none\s+ready$/);
     assert.match(lines[1], /^bravo\s+codex\s+subscription\s+public\s+all\s+key absent\s+lease live \(pid \d+, lane L9\)\s+/);
     const j = p.run(['list', '--json']);
     const rows = JSON.parse(j.stdout);
@@ -355,7 +365,7 @@ describe('the key file is never in a lock or an upgrade backup (REQ-1004)', () =
     const walk = (d) => { if (!existsSync(d)) return; for (const n of readdirSync(d, { withFileTypes: true })) { const f = join(d, n.name); if (n.isDirectory()) walk(f); else listed.push(relative(proj, f)); } };
     walk(backups);
     assert.ok(listed.length > 0, 'an upgrade --force backed something up');
-    assert.deepEqual(listed.filter((f) => f.includes('.accounts-home') || f.endsWith('/key')), [], 'no backup copies a file under the accounts home');
+    assert.deepEqual(listed.filter((f) => f.includes('.accounts-home') || /[\\/]key$/.test(f)), [], 'no backup copies a file under the accounts home');
     for (const f of listed) assertNoValue(readFileSync(join(proj, f), 'utf8'), value);
     const accountsLock = join(home, 'accounts.lock.json');
     if (existsSync(accountsLock)) {
