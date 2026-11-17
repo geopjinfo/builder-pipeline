@@ -1545,6 +1545,12 @@ function main() {
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
     git-hooks [--dry-run]               arm the commit-msg hook in this clone: commits carry human authors only (no AI co-author trailers)
+    accounts add <name> --worker <w> --pays <p> [--content ...] [--roles a,b] [--family ...] [--note "..."] [--config-dir ...] [--command "..."] [--base-url ...] [--budget-hard N --budget-kind percent|usd]
+                                        write one account into features.accounts (§16) and make its folder under the accounts home
+    accounts note <name> <text>         replace the account's note
+    accounts key <name> [--remove]      enter the API key with echo off (never on the command line) into the account's own folder, or hand it to codex login; --remove deletes it
+    accounts remove <name>              delete the wrappers, the key and the §16 entry; the folder stays; refused while a worker holds the account's lease
+    accounts list [--json]              one line per account: worker, pays, content, roles, key present or absent (never the value), lease state, key file mode
     accounts migrate [--dry-run]        rewrite the 1.0 seat keys (seats, limits, secondaryConfigDir, credit) into features.accounts (backup first)
   check
     verify | features | doctor [--tool <list>] [--json] | check-ledgers | check-targets | personas-check

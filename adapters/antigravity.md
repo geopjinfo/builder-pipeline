@@ -56,3 +56,5 @@ check.
 
 Steps that are Claude Code only (cost accounting, the live page, Workflow-driven runs, spawn depth) are covered in
 the Codex adapter's table. The same answers apply here.
+
+`npx builder accounts key` refuses an Antigravity account: there is no key mode for Antigravity, which signs in through its own app and runs as a wrapper only in 2.0.0.
