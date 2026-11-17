@@ -160,7 +160,8 @@ function cmdDoctor(ctx, argv) {
   }));
   const rows = accountsRows(ctx.CWD);
   const capacity = capacityRows(ctx.CWD);
-  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'capacity', advisory: true, rows: capacity }], null, 2));
+  const reporterRow = reporterAdvisory(ctx.CWD); // REQ-1613: one advisory row
+  if (argv.includes('--json')) return console.log(JSON.stringify([...report, { section: 'accounts', advisory: true, rows }, { section: 'capacity', advisory: true, rows: capacity }, { section: 'reporter', advisory: true, rows: [reporterRow] }], null, 2));
   console.log(`builder kit ${ctx.VERSION} — doctor${none ? ' (no kit install detected — showing the native tools; pass --tool to pick)' : ''}`);
   for (const t of report) {
     console.log(`\n[${t.tool}] ${t.label}`);
@@ -174,9 +175,21 @@ function cmdDoctor(ctx, argv) {
   for (const r of rows) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
   console.log('\n[capacity] features.capacity — advisory, the exit code is unchanged');
   for (const r of capacity) console.log(`  ${r.status.padEnd(12)}${r.feature} — ${r.note}`);
+  console.log(`\n[reporter] features.reporter — advisory, the exit code is unchanged\n  ${reporterRow.status.padEnd(12)}${reporterRow.feature} — ${reporterRow.note}`);
   const hygiene = require('./git-hooks.cjs').status(ctx.CWD, ctx.KIT);
   console.log(`\n[repo] commit hygiene: ${hygiene.state} — ${hygiene.note}`);
   console.log('\npartial = the kit relies on instructions or a by-hand step there; unsupported = the feature does not exist for that tool.');
 }
 
-module.exports = { cmdDoctor, installedTools, accountsRows, capacityRows, LEGACY_ROW, NATIVE };
+/** The reporter's advisory row (REQ-1613): the `orch status` line, never a URL. */
+function reporterAdvisory(cwd) {
+  try {
+    const profile = require('../scripts/lib/profile.cjs');
+    const settings = profile.load(cwd).settings;
+    return { feature: 'reporter', status: 'advisory', note: require('../scripts/lib/report.cjs').statusLine(cwd, settings) };
+  } catch (e) {
+    return { feature: 'reporter', status: 'advisory', note: `reporter: unreadable (${String(e.message).split('\n')[0]})` };
+  }
+}
+
+module.exports = { cmdDoctor, installedTools, accountsRows, capacityRows, reporterAdvisory, LEGACY_ROW, NATIVE };

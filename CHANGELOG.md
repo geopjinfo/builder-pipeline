@@ -31,6 +31,34 @@ versions independently of any project it is pasted into.
   and OS files; no tool folders) and AGENTS.md rule 15 extended: stage by name, plain commit and PR text, branch names
   `feature/<topic>` with no assistant name, arm the commit-msg hook per clone, check `git status --ignored` before a
   push. Maintainer files only; nothing shipped changes.
+- **`features.reporter` (REQ-1601 to REQ-1618; D75 to D79, D85), default off.** `npx builder-pipeline run report --once |
+  --watch` (`scripts/report.mjs`, `scripts/lib/report.cjs`, `scripts/lib/report-rules.cjs`, `scripts/lib/notify.cjs`). One report per `intervalMinutes`
+  from the kit's own records — every run's state and next actions, the events since the last report, the board counts,
+  the capacity record, the readiness record, the 429 record, the cost window while `costAccounting` is on — in the fixed
+  order RUNS AND LANES, SINCE LAST REPORT, NEEDS A PERSON, CAPACITY AND ACCOUNTS, COST, NEXT; a missing source prints its
+  own line. Deterministic for the same inputs and clock (`tests/fixtures/report/golden.md`).
+- **Only on change, with a heartbeat.** `digest()` hashes the state parts, never the time; an unchanged tick writes the
+  file and sends nothing; every `heartbeatEvery`-th skipped tick sends one heartbeat line. The file channel writes a
+  dated file, `latest.md` and `state.json` under `.pipeline/reports/` atomically; the first report says it is the first.
+- **Channels.** `stdout`; `webhook` through `node:https` (plain http for loopback only, no redirect followed, 10 s
+  timeout, host and status logged and never a body; the URL from `urlEnv` or a 0600 `urlFile`, never §16 — a literal
+  `url` is refused without being echoed); Slack mrkdwn under `maxBytes` where a cut keeps NEEDS A PERSON and the run
+  lines and ends with the report file; a generic JSON object `{ title, text, digest, at, runs }`; `command` with `{file}`
+  filled, the text on stdin, the platform shell, the headless env allowlist and `timeoutMs`, a non-zero exit logged as
+  `command exited N` without its output.
+- **The guard in front of every payload (REQ-1607, REQ-1615).** A secret shape or an env value means NOT SENT, the log
+  reads `report.refused` with the kind and the line, the file copy carries `[refused: <kind>]` in that line's place and
+  the next header says the last send was refused.
+- **Alerts, watcher, status.** `alertOn` (stall, failed, conflict, rate-limit, limit, run-complete) polls the events every
+  `alertPollSeconds` and sends one line per event, once. `--watch` runs under a pid lease: a live lease makes a second
+  watcher exit 0 naming the pid, a dead pid is taken over. A send failure never changes the exit code. `orch status`
+  prints `reporter: last sent …`, `doctor` prints one advisory row, the orchestrator skill starts the watcher at run start.
+- **`features.reporterSummary` (experimental-off) and `agents/experimental/progress-reporter.md`.** The persona writes
+  `summary.md`; the report includes it under SUMMARY (model) only while the file is younger than one interval.
+  EXPERIMENTS §22 states the measurement; §21 is a numbered placeholder for M15's capacity governor.
+- Tests: `tests/report.test.mjs`, `tests/notify.test.mjs` (a loopback `node:http` server, a stub command),
+  `tests/report-cli.test.mjs`; rows in `profile`, `features`, `doctor`, `orch-gaps`, `pack-prose` and `experiments`.
+  Docs: FEATURES rows, GUIDE section, USAGE runbook, llms.txt.
 
 ## [2.0.0] — 2026-11-17
 
