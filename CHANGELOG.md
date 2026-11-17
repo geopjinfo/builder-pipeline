@@ -5,6 +5,35 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added — M9 board loop (experimental-off)
+
+- **`features.boardLoop` (REQ-901 to REQ-915; D17, D44, D48, D52), `experimental-off`.** A loop runner above a task
+  board: `npx builder run board-loop <account> <board.md>` and `orch loop <board.md>` share one runner
+  (`scripts/lib/board-loop.cjs`). While on, the profile carries `promptFile`, `gate`, `maxPasses` (required),
+  `passTimeoutMinutes` 60, `maxTurnsPerPass` 20, `stallMinutes` 5, `maxRetriesPerRow` 2, `maxConsecutiveFailures` 3 and
+  `maxConsecutiveNoProgress` 3; off, the command prints the not-configured line and exits 0.
+- **A pass.** A fresh worker session from the same prompt file (`templates/loop-prompt.md` installs as `LOOP_PROMPT.md`)
+  through the M6 runner and the Claude Code adapter in account mode; the runner, not the worker, picks the first open,
+  not blocked row and flips it. The pass ends on the gate exit code and the structured verdict together (PASS with gate
+  exit 1 is a failed pass). The gate output, capped at `bashCap.limitBytes`, and a one-line progress note feed the next
+  pass; the board, the progress log and git are the only memory. A passing pass is one commit with the trailers
+  `Builder-Account:` and `Builder-Requirement:` and no other kit trailer; a failing pass leaves no commit, is pinned to a
+  snapshot ref and the tree is restored and cleaned.
+- **Caps and stops.** The gate script, the test roots, the prompt file and the harness configuration are denied; a
+  write there, or a board edit outside the chosen row, is FAILED-SCOPE and stops the loop. A row failing
+  `maxRetriesPerRow` times is marked BLOCKED on the board and the loop moves on. Stops come from a closed set
+  (`all-pass`, `max-passes`, `not-ready`, `no-progress`, `consecutive-failures`, `rows-blocked`, `scope`, `stall`),
+  written to the summary line, the run log (`.pipeline/loop/<board>.jsonl`: pass, row, rows passing, retries, gate
+  digest, turns, cost or unmeasured, stop reason) and the state; the loop never pushes and exits 10 with rows open.
+  `--more-passes N` raises the cap once per run and is logged. A bypass flag in the prompt file, the account command or
+  the gate refuses the loop naming the flag.
+- **`orch loop`.** Places the loop through `scripts/lib/orch-loop.cjs` `placeLoop(settings, board, io)` — today the first
+  account whose readiness assessment reads ready; M3 replaces the body — records the job in `<orch root>/loops.json`
+  (kind loop, account, cap, passes, stop reason) and `orch status` prints it; a not-ready account is refused before any
+  pass. `--record-experiment <EXPERIMENTS.md>` appends one dated row to §17 and leaves the flag alone (REQ-909).
+- Tests: `tests/board-loop.test.mjs` (a stub worker with scripted passes, a stub gate, a scratch repo) and
+  `tests/orch-loop.test.mjs` (a stub `claude` for the probes). FEATURES row; template §16 line.
+
 ### Added — M10 accounts command (2.0.0 line)
 
 - **`npx builder accounts add | note | key | key --remove | remove | list` (REQ-108, REQ-1001 to REQ-1007; D2, D9, D19,

@@ -55,6 +55,9 @@
  *   enqueue <run> <lane>
  *   merge <run> --slot-ok [--gates "<cmd>"] [--repo P] [--integration-wt D] [--direct]
  *                                     one lane at a time into features.orchestrator.target through the gates
+ * Board loop (features.boardLoop, experimental-off — EXPERIMENTS.md §17)
+ *   loop <board.md> [--more-passes N]   place the loop runner on a ready account (M3 placement seam), record the job
+ *                                     (kind loop, account, cap) and run it; status shows passes and the stop reason
  * Credit lane (only with features.orchestrator.credit.enabled)
  *   credit-prep <run> <task> --key K --kind <kind> --scope "g1,g2" --worktree P --brief <file> --model M [--budget 0.50] [--allow-missing]
  *               [--queue <worktree>]  the queue the job goes into (default: the job worktree's own)
@@ -95,6 +98,8 @@ const credit = require('./lib/orch-credit.cjs');
 const snapshots = require('./lib/orch-snapshot.cjs');
 const ratelimit = require('./lib/orch-ratelimit.cjs');
 const lease = require('./lib/orch-lease.cjs');
+const orchLoop = require('./lib/orch-loop.cjs');
+const boardLoop = require('./lib/board-loop.cjs');
 
 const LEASED_CMDS = ['claim', 'set', 'approve', 'enqueue', 'merge', 'notice'];
 const BOOLEAN_FLAGS = new Set(['check', 'json', 'split', 'direct', 'slot-ok', 'all-queued', 'allow-missing', 'progress', 'reverted', 'resume', 'apply', 'tester', 'dry', 'rerun', 'queue-only']);
@@ -606,6 +611,7 @@ try {
       const ids = pos[0] ? [pos[0]] : runIds();
       if (!ids.length) {
         console.log(`no runs under ${root()}`);
+        for (const l of orchLoop.statusLines(root())) console.log(l);
         const c = creditLines();
         if (c) console.log(c);
         break;
@@ -618,6 +624,7 @@ try {
         printStatus(id, { split: !!flags.split });
         console.log('');
       }
+      for (const l of orchLoop.statusLines(root())) console.log(l);
       const c = creditLines();
       if (c) console.log(c);
       break;
@@ -709,6 +716,32 @@ try {
       for (const id of runIds()) state.setPaused(root(), id, false);
       console.log('RESUMED — run `status` for relaunch actions');
       break;
+    case 'loop': {
+      const bl = profile.feature(settings, 'boardLoop');
+      if (!bl.enabled) {
+        console.log(bl.line);
+        process.exit(0);
+      }
+      const [boardFile] = pos;
+      if (!boardFile) die(2, 'usage: loop <board.md> [--more-passes N]');
+      const key = path.basename(boardFile).replace(/\.md$/, '');
+      const placed = orchLoop.placeLoop(settings, boardFile, { env: process.env });
+      if (!placed.account) die(3, `REFUSED loop ${boardFile}: no account reads ready — ${placed.reason}`);
+      const more = flags['more-passes'] && flags['more-passes'] !== true ? Number(flags['more-passes']) : 0;
+      orchLoop.recordLoop(root(), key, { account: placed.account, cap: bl.config.maxPasses + more, board: boardFile, status: 'running', passes: 0, stopReason: null });
+      console.log(`loop ${key} placed on ${placed.account} (cap ${bl.config.maxPasses + more})`);
+      boardLoop
+        .runLoop({ cwd: process.cwd(), settings, accountName: placed.account, board: boardFile, morePasses: more, io: { env: process.env, log: (l) => console.log(l) } })
+        .then((r) => {
+          orchLoop.recordLoop(root(), key, { status: 'stopped', passes: r.passes, stopReason: r.reason, rowsDone: r.rowsDone, rowsTotal: r.rowsTotal });
+          process.exit(r.exitCode);
+        })
+        .catch((e) => {
+          orchLoop.recordLoop(root(), key, { status: 'error', error: e.message });
+          die(2, `loop ${key}: ${e.message}`);
+        });
+      break;
+    }
     case 'credit': {
       if (!creditOn()) creditOff();
       const croot = credit.creditRoot();

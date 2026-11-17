@@ -126,6 +126,13 @@ const FEATURES = {
     defaults: { state: 'experimental-off', cap: 4, trigger: 3, ledgers: ['(^|/)CHANGELOG\\.md$'], docsOnly: ['(^|/)README\\.md$'] },
     requires: [],
   },
+  /* The loop runner above a board — scripts/board-loop.mjs, scripts/lib/board-loop.cjs, EXPERIMENTS.md §17. The caps live
+   * in the runner (D44, D48): maxPasses is required while on; the rest default to the field's loop practice. */
+  boardLoop: {
+    defaults: { state: 'experimental-off', promptFile: 'LOOP_PROMPT.md', gate: null, maxPasses: null, passTimeoutMinutes: 60, maxTurnsPerPass: 20, stallMinutes: 5, maxRetriesPerRow: 2, maxConsecutiveFailures: 3, maxConsecutiveNoProgress: 3, testRoots: ['test/', 'tests/'] },
+    requires: ['promptFile', 'gate', 'maxPasses'],
+    experiment: '§17',
+  },
   /* Removes finished git worktrees after their branch merged — scripts/worktree-sweep.mjs. `holdCommand` is the
    * project's own "something still needs this worktree" check (null = none). */
   worktreeSweep: {
@@ -669,7 +676,7 @@ function feature(settings, name) {
     on: `${name}: on`,
     off: `${name}: not configured`,
     unmeasured: `${name}: on (unmeasured — its benefit has not been measured; see EXPERIMENTS.md)`,
-    'experimental-off': `${name}: experimental — not enabled`,
+    'experimental-off': FEATURES[name].experiment ? `${name}: experimental-off — not enabled; its measurement is EXPERIMENTS.md ${FEATURES[name].experiment}` : `${name}: experimental — not enabled`,
     'experimental-on': `${name}: experimental — enabled; its measurement is owed (EXPERIMENTS.md)`,
   }[state] ?? `${name}: invalid state ${JSON.stringify(state)}`;
   return { name, state, enabled, config, line };
