@@ -169,6 +169,22 @@ const FEATURES = {
     defaults: { state: 'off', keepDays: 30, roots: ['.pipeline', 'logs/backups'] },
     requires: ['roots'],
   },
+  /* Repo hygiene, code and docs (plan M20, specs/repo-hygiene.spec.md REQ-1821 to REQ-1825). One feature per check (D87),
+   * each default off; a check that is off prints `<feature>: not configured` and exits 3, never a pass.
+   *   depsCheck  scripts/deps-check.mjs runs the project's own package manager through `listCommand` and `auditCommand`
+   *              and reads their JSON (`format: npm`), or counts their output lines by `pattern` (`format: lines`, any tool).
+   *   docsCheck  scripts/docs-check.mjs: paths, links, anchors and `run <name>` commands in Markdown under `roots` resolve.
+   *   deadCode   scripts/dead-code.mjs, experimental-off (D91, EXPERIMENTS §23): orphan files on a ratchet bank, stale TODOs. */
+  depsCheck: {
+    defaults: { state: 'off', manifest: 'package.json', lockfile: true, listCommand: 'npm ls --json --all', auditCommand: 'npm audit --json', format: 'npm', maxSeverity: 'high', pattern: '\\b(missing|invalid|extraneous|vulnerabilit|severity)', timeoutMs: 120000, unused: { roots: [], extensions: [] } },
+    requires: ['manifest', 'listCommand', 'auditCommand'],
+  },
+  docsCheck: { defaults: { state: 'off', roots: ['README.md', 'docs'], ignorePaths: [] }, requires: ['roots'] },
+  deadCode: {
+    defaults: { state: 'experimental-off', roots: [], extensions: [], entries: [], baseline: null, testPattern: '\\.(test|spec)\\.[cm]?[jt]sx?$', todoDays: 90 },
+    requires: ['roots', 'extensions', 'baseline'],
+    experiment: '§23',
+  },
   /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
    * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
    * `target` through `gates`, and runs headless jobs on an api-key account with the guards in scripts/lib/orch-credit.cjs.
@@ -557,6 +573,7 @@ function validate(settings) {
   if (reader !== undefined && reader !== null && !COST_READERS.includes(reader)) {
     errors.push(`features.costAccounting.reader: one of ${COST_READERS.map((r) => `"${r}"`).join(' | ')}, got ${JSON.stringify(reader)}`);
   }
+  errors.push(...validateHygiene(settings, badRegex));
   errors.push(...validateOrchestrator(settings, badRegex));
   errors.push(...accountsRegistry.validateAccounts(settings, { secretPatterns: require('./outbound-guard.cjs').PATTERNS }));
   errors.push(...require('./report-rules.cjs').validateReporter(settings)); // REQ-1601: channel kinds, formats, urlEnv|urlFile, the alert set
@@ -570,6 +587,47 @@ function validate(settings) {
   }
   for (const [path, value] of strings(settings, '')) {
     if (PLACEHOLDER.test(value)) errors.push(`${path}: unfilled placeholder "${value.slice(0, 80)}"`);
+  }
+  return errors;
+}
+
+/**
+ * features.depsCheck, docsCheck, deadCode (M20) — the shapes, checked in any state (REQ-1821 to REQ-1824); the plan's rule:
+ * `format` is npm | lines, `maxSeverity` is low | moderate | high | critical, a number is never negative, a list holds
+ * non-empty strings. A typo here would otherwise print "unmeasurable" or scan nothing and look clean.
+ */
+const DEPS_FORMATS = ['npm', 'lines'];
+const SEVERITIES = ['low', 'moderate', 'high', 'critical'];
+function validateHygiene(settings, badRegex) {
+  const errors = [];
+  const strList = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && s);
+  const oneOf = (at, v, set) => { if (v !== undefined && !set.includes(v)) errors.push(`${at}: one of ${set.map((x) => `"${x}"`).join(' | ')}, got ${JSON.stringify(v)}`); };
+  const nonNeg = (at, v, integer = false) => { if (v !== undefined && v !== null && !(typeof v === 'number' && Number.isFinite(v) && v >= 0 && (!integer || Number.isInteger(v)))) errors.push(`${at}: a number >= 0`); };
+  const d = settings.features?.depsCheck;
+  if (isObject(d)) {
+    const at = (k) => `features.depsCheck.${k}`;
+    oneOf(at('format'), d.format, DEPS_FORMATS);
+    oneOf(at('maxSeverity'), d.maxSeverity, SEVERITIES);
+    for (const k of ['manifest', 'listCommand', 'auditCommand', 'pattern']) if (d[k] !== undefined && (typeof d[k] !== 'string' || !d[k])) errors.push(`${at(k)}: a non-empty string`);
+    if (typeof d.pattern === 'string' && badRegex(d.pattern)) errors.push(`${at('pattern')}: a valid regular expression`);
+    if (d.lockfile !== undefined && typeof d.lockfile !== 'boolean') errors.push(`${at('lockfile')}: true or false`);
+    nonNeg(at('timeoutMs'), d.timeoutMs, true);
+    if (d.unused !== undefined) {
+      if (!isObject(d.unused)) errors.push(`${at('unused')}: { "roots": [paths], "extensions": [".ext"] }`);
+      else for (const k of ['roots', 'extensions']) if (d.unused[k] !== undefined && !strList(d.unused[k])) errors.push(`${at(`unused.${k}`)}: an array of non-empty strings`);
+    }
+  }
+  const o = settings.features?.docsCheck;
+  if (isObject(o)) {
+    for (const k of ['roots', 'ignorePaths']) if (o[k] !== undefined && !strList(o[k])) errors.push(`features.docsCheck.${k}: an array of non-empty strings`);
+    for (const re of Array.isArray(o.ignorePaths) ? o.ignorePaths : []) if (typeof re === 'string' && badRegex(re)) errors.push(`features.docsCheck.ignorePaths: "${re}" is not a valid regular expression`);
+  }
+  const c = settings.features?.deadCode;
+  if (isObject(c)) {
+    for (const k of ['roots', 'extensions', 'entries']) if (c[k] !== undefined && !strList(c[k])) errors.push(`features.deadCode.${k}: an array of non-empty strings`);
+    if (c.baseline !== undefined && c.baseline !== null && (typeof c.baseline !== 'string' || !c.baseline)) errors.push('features.deadCode.baseline: null, or the path of the ratchet bank');
+    if (c.testPattern !== undefined && (typeof c.testPattern !== 'string' || badRegex(c.testPattern))) errors.push('features.deadCode.testPattern: a valid regular expression');
+    nonNeg('features.deadCode.todoDays', c.todoDays, true);
   }
   return errors;
 }
