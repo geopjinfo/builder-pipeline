@@ -111,7 +111,7 @@ describe('REQ-1102 — accounts.lock.json and backups', () => {
     const p = project({ gw: ACCOUNTS.gw });
     assert.equal(p.run(['accounts', 'install']).status, 0);
     const l = lock.read(p.home);
-    const rel = (f) => f.slice(p.home.length + 1);
+    const rel = (f) => f.slice(p.home.length + 1).split('\\').join('/');
     for (const f of [paths(p.home, 'gw').wrapperSh, paths(p.home, 'gw').wrapperPs1, paths(p.home, 'gw').settingsFile, paths(p.home, 'gw').srtSettingsFile]) assert.ok(l.files[rel(f)] && /^[0-9a-f]{64}$/.test(l.files[rel(f)].sha256), `${rel(f)} in the lock`);
     // a second run changes nothing
     const again = p.run(['accounts', 'install']);
@@ -147,9 +147,11 @@ describe('REQ-1103 — the refusal wrapper', () => {
     assert.match(ps1(p.home, 'free'), /^# builder-pipeline: closed$/m);
     assert.match(t, /freeAllowed/);
     assert.ok(!/claude |CLAUDE_CONFIG_DIR=/.test(t), 'a refusal wrapper launches nothing');
-    const r = spawnSync('sh', [paths(p.home, 'free').wrapperSh], { encoding: 'utf8' });
-    assert.equal(r.status, 1);
-    assert.match(r.stderr, /closed/);
+    if (POSIX) {
+      const r = spawnSync('sh', [paths(p.home, 'free').wrapperSh], { encoding: 'utf8' });
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /closed/);
+    }
     // the gateway account resolved its combo at write time
     assert.match(readFileSync(paths(p.home, 'gw').settingsFile, 'utf8'), /claude-haiku-5-5|anthropic\//);
   });
@@ -199,10 +201,16 @@ describe('REQ-1109 — srt-settings.json per Claude Code account', () => {
     assert.equal(p.run(['accounts', 'install']).status, 0);
     const f = paths(p.home, 'a1').srtSettingsFile;
     writeFileSync(f, JSON.stringify({ denyRead: [], allowWrite: [], credentials: { mask: [], inject: [] }, surprise: true }));
-    const r = spawnSync('/bin/sh', [paths(p.home, 'a1').wrapperSh, '--version'], { encoding: 'utf8', env: { ...p.env, PATH: '/nonexistent' } });
-    assert.notEqual(r.status, 0);
-    assert.ok(r.stderr.includes(f), r.stderr);
-    assert.match(r.stderr, /surprise/);
+    // the check script itself, on every platform; the sh wrapper's refusal where sh exists
+    const c = spawnSync(process.execPath, [join(PACK, 'scripts', 'lib', 'srt-check.cjs'), f], { encoding: 'utf8' });
+    assert.equal(c.status, 1);
+    assert.ok(c.stderr.includes(f) && /surprise/.test(c.stderr), c.stderr);
+    if (POSIX) {
+      const r = spawnSync('/bin/sh', [paths(p.home, 'a1').wrapperSh, '--version'], { encoding: 'utf8', env: { ...p.env, PATH: '/nonexistent' } });
+      assert.notEqual(r.status, 0);
+      assert.ok(r.stderr.includes(f), r.stderr);
+      assert.match(r.stderr, /surprise/);
+    }
   });
 });
 
