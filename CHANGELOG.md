@@ -7,6 +7,20 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Install one tool group (`specs/toolkit-unpack-groups.spec.md`, REQ-801 to REQ-811).** `npx builder unpack --tool
+  <harness> --tools <group>[,<group>]` installs one part of the kit: `spec`, `audit`, `orchestrator`, `hooks`, `evals`
+  or `pipeline`, plus the core set every install carries (the pointer block, the profile, the ledger seeds, `features`,
+  `choices`, and each `scripts/lib` file that two or more groups need). `scripts/lib/tool-groups.cjs` places every
+  installed file in exactly one group (`groupOf`, `select`, `parse`); the folder layout's `hooks` group also carries the
+  scripts the hooks load. An unknown group is refused with the list of valid groups and nothing is written; no `--tools`
+  or `--tools all` installs every group, byte for byte as before. `builder.lock.json` records `install.toolGroups`
+  (absent = all), `upgrade` repeats it unless `--tools` is given again, a narrowing `upgrade --tools` reports each locked
+  file outside the groups as `kept (outside the tool groups)` and removes it only with `--prune`, `verify` names the
+  groups and prints `SKIP` for a check outside them, and `--dry-run` prints the count of files per group. Docs: UNPACK.md
+  § "Install one tool group" (the group table), README § "One tool, without the pipeline", FEATURES.md row, llms.txt,
+  the CLI usage text. Tests: `tests/toolkit-unpack-groups.test.mjs` (one test per acceptance criterion, including a
+  guard that walks the real install list in both layouts and fails on any unmapped file).
+
 - **One tool, without the pipeline (`specs/toolkit-standalone.spec.md`, REQ-101 to REQ-405).** Each kit tool runs in a
   project that never adopted the pipeline. *Settings without a profile:* with no `PIPELINE_PROFILE.md`, the settings
   loader reads `builder.config.json` in the project root, or the file `BUILDER_CONFIG` names, as the bare JSON of §16,

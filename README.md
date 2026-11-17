@@ -124,7 +124,7 @@ records, how to resume, and the troubleshooting table.
 | `bootstrap [--tool <list>]` | only the builder-init skill, for the detected (or named) tools |
 | `inventory [--json] [--threshold n]` | the project's own skills/agents/personas/hooks and their overlap with the kit |
 | `choices list\|set\|unset\|check` | the per-item keep / kit / both decisions (builder.choices.json) |
-| `unpack --tool <list\|all>` | install (copy-if-absent; undecided clashes are skipped) |
+| `unpack --tool <list\|all> [--tools <groups>]` | install (copy-if-absent; undecided clashes are skipped); `--tools` installs one tool group or several (`spec`, `audit`, `orchestrator`, `hooks`, `evals`, `pipeline`; default all) |
 | `upgrade [--tool <list\|all>] [--prune]` | refresh kit-owned files (backup first; `--force` over local edits); tools and flags default to the install's, recorded in the lock; files a release dropped are reported `stale`, `--prune` removes them |
 | `uninstall --tool <list> \| --all [--dry-run]` | remove the kit's files for those tools and its pointer block; project-owned and locally edited files are kept and named |
 | `git-hooks [--dry-run]` | arm the `commit-msg` hook in this clone: commits carry human authors only (agent `Co-Authored-By:` trailers and "Generated with" lines are stripped); never overwrites a hook already there |
@@ -168,6 +168,7 @@ when a profile exists it is the one source and the file is ignored and said. `np
 in use.
 
 ```
+npx builder unpack --tool claude-code --tools audit
 npx builder run features --config kit.json
 npx builder check-ledgers --boards work/boards --registry work/REGISTRY.md
 npx builder run board-import --format ralph prd.json --out tasks/imported.md
@@ -180,6 +181,11 @@ source states is kept, what the importer infers is marked `⚠ CONFIRM`, every u
 source names no test keeps an empty evidence cell so `check-ledgers` reports it (LG-5). `spec-check` on a `.md` path and
 `spec-trace-check` on named files with `--tests` / `--packs` run with the default settings while their feature is off,
 and say so on their first line. The spec for this is `specs/toolkit-standalone.spec.md` in the repository.
+
+`unpack --tools <group>[,<group>]` installs one part of the kit: `spec`, `audit`, `orchestrator`, `hooks`, `evals` or
+`pipeline`, plus the core files every install carries (the pointer block, the profile, the ledger seeds, the shared
+libraries). The lock records the groups and `upgrade` repeats them; with no `--tools` the install is unchanged. The
+groups are listed in [`UNPACK.md` § Install one tool group](UNPACK.md); the spec is `specs/toolkit-unpack-groups.spec.md`.
 
 ## 📚 Documentation
 
