@@ -118,6 +118,10 @@ const SCRIPTS = {
   // 2.1.0: the capacity governor is one more term in the orchestrator's lane-cap rule (M15)
   capacity: 'orchestrator',
   report: 'orchestrator', // 2.1.0 M16: the progress reporter
+  // M19 tree hygiene (REQ-1811 to REQ-1813, REQ-1839)
+  'ignore-check': 'hygiene',
+  'size-check': 'hygiene',
+  'secret-scan': 'hygiene',
   'account-key': CORE,
   experiments: 'evals',
   'first-value': 'evals',
@@ -157,6 +161,11 @@ const LIBS = {
   capacity: 'orchestrator', // 2.1.0 (M15): read by orch-state, orch, board-loop and the capacity command
   'bash-cap': 'hooks',
   reanchor: 'hooks',
+  // M19 tree hygiene libs (REQ-1839); secret-scan.cjs is also what the two hooks load (HOOK_LOADS)
+  'hygiene-cli': 'hygiene',
+  'ignore-check': 'hygiene',
+  'size-check': 'hygiene',
+  'secret-scan': 'hygiene',
   'board-freshness': 'pipeline',
   'board-parse': CORE, // read by the pipeline boards tooling and by the progress reporter (orchestrator), 2.1.0
   'page-docs': 'pipeline',
@@ -237,6 +246,9 @@ const HOOK_LOADS = [
   'scripts/lib/outbound-guard.cjs',
   'scripts/lib/bash-cap.cjs',
   'scripts/lib/board-freshness.cjs',
+  // the pre-commit secret scan and the write guard (REQ-1815, REQ-1816) load the scan and its helper
+  'scripts/lib/hygiene-cli.cjs',
+  'scripts/lib/secret-scan.cjs',
   'scripts/lib/board-parse.cjs',
   'scripts/lib/board-rows.cjs',
   'scripts/lib/instruction-lint.cjs',
