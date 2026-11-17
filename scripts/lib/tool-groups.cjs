@@ -13,6 +13,7 @@
  *   hooks         hooks/ and the guard scripts, hook-trust, and (package layout) the scripts vendored beside them
  *   evals         cost-window, seat-peaks, the experimental tooling (scripts/experimental/)
  *   pipeline      everything else: the build-module-pipeline skills, the build personas, setup, the boards tooling
+ *   hygiene       repo hygiene in the project (specs/repo-hygiene.spec.md): branch-sweep, run-sweep and the checks that follow
  *
  * `core` is not a group a user names: it is the set every install carries, because several groups need it — the
  * pointer block, PIPELINE_PROFILE.md, the ledger seeds, `features`, `choices`, and each scripts/lib file that two or
@@ -24,7 +25,7 @@
  */
 'use strict';
 
-const GROUPS = ['spec', 'audit', 'orchestrator', 'hooks', 'evals', 'pipeline'];
+const GROUPS = ['spec', 'audit', 'orchestrator', 'hooks', 'evals', 'pipeline', 'hygiene'];
 const CORE = 'core';
 
 /** Personas (agents/*.md, agents/experimental/*.md, skills-extra/<x>/agents/*.md), by name. */
@@ -95,6 +96,8 @@ const SCRIPTS = {
   orch: 'orchestrator',
   'orchestrator-check': 'orchestrator',
   'worktree-sweep': 'orchestrator',
+  'branch-sweep': 'hygiene',
+  'run-sweep': 'hygiene',
   'cost-window': 'evals',
   'seat-peaks': 'evals',
   features: CORE,
@@ -148,7 +151,9 @@ const LIBS = {
   personas: 'audit',
   // every scripts/lib/orch-*.cjs is the orchestrator's (groupOf matches the prefix)
   'orchestrator-check': 'orchestrator',
-  'worktree-sweep': 'orchestrator',
+  'worktree-sweep': CORE, // the orchestrator's sweep and run-sweep (hygiene) share its tree helpers
+  'branch-sweep': 'hygiene',
+  'run-sweep': 'hygiene',
   capacity: 'orchestrator', // 2.1.0 (M15): read by orch-state, orch, board-loop and the capacity command
   'bash-cap': 'hooks',
   reanchor: 'hooks',

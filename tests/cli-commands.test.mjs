@@ -152,3 +152,15 @@ test('builder personas-check runs the kit script in the project folder', () => {
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /personas-check: no personas\//);
 });
+
+describe('run branch-sweep / run run-sweep (M18)', () => {
+  test('red: AC-1807b a flag without its value and an unknown flag are usage errors, exit 2', () => {
+    const { proj, cli } = project();
+    const a = run(cli, proj, ['run', 'branch-sweep', '--stale-days']);
+    assert.equal(a.status, 2, a.out);
+    assert.match(a.out, /usage:/);
+    const b = run(cli, proj, ['run', 'run-sweep', '--bogus']);
+    assert.equal(b.status, 2, b.out);
+    assert.match(b.out, /usage:/);
+  });
+});

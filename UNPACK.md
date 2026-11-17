@@ -146,6 +146,7 @@ node builder/cli.js upgrade            # repeats the groups builder.lock.json re
 | `hooks` | `.claude/hooks/` and `.codex/hooks/`, hook-trust, and the scripts the hooks load (`board-render`, `instruction-lint`, `bash-cap`, `reanchor` and their libraries) |
 | `evals` | `cost-window`, `seat-peaks`, the experimental tooling under `scripts/experimental/` (with `--experimental`) |
 | `pipeline` | everything else: the `build-module-pipeline`, lite, scaffold, readiness, setup, `builder-init` and `persona-detect` skills with their references, the planner, builder, tester and docs-maintainer personas, the boards tooling, the handoff scripts, the utility skills |
+| `hygiene` | repo hygiene in the project ([spec](specs/repo-hygiene.spec.md)): `branch-sweep` and `run-sweep` with their libraries; the other hygiene checks join this group as they land in 2.1.0 |
 | `core` | always installed, not a group you name: the pointer block, `PIPELINE_PROFILE.md`, the ledger seeds (board rules, registry, decision log, session board), `features`, `choices`, and each `scripts/lib` file that two or more groups need |
 
 No `--tools`, or `--tools all`, installs every group: the install is the one it always was. An unknown

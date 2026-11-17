@@ -10,8 +10,8 @@
 - [SETUP_PROMPT.md](SETUP_PROMPT.md): the one setup prompt (bootstrap, then the builder-init skill)
 - [USAGE.md](USAGE.md): the operator's runbook: stop points, record points, resuming, troubleshooting
 - [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files, instruction-lint and instruction-budget on named files, worktree-sweep --target <branch>)
-- [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files); `npx builder-pipeline unpack --tools <group>` installs one tool group (spec, audit, orchestrator, hooks, evals, pipeline)
-- [UNPACK.md § Install one tool group](UNPACK.md): the six tool groups, the core set every install carries, and how upgrade repeats the recorded groups
+- [README.md § One tool, without the pipeline](README.md): run one kit tool in a project with no profile (builder.config.json or --config, board-import from ralph or Spec Kit, spec-check and spec-trace-check on named files); `npx builder-pipeline unpack --tools <group>` installs one tool group (spec, audit, orchestrator, hooks, evals, pipeline, hygiene)
+- [UNPACK.md § Install one tool group](UNPACK.md): the seven tool groups, the core set every install carries, and how upgrade repeats the recorded groups
 
 ## How it works
 
