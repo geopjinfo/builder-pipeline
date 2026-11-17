@@ -30,6 +30,7 @@
  */
 const { existsSync, readFileSync, realpathSync } = require('node:fs');
 const { basename, dirname, isAbsolute, join, relative, resolve } = require('node:path');
+const accountsRegistry = require('./accounts-registry.cjs');
 
 const SCHEMA = 2;
 const STATES = ['on', 'off', 'unmeasured', 'experimental-off', 'experimental-on'];
@@ -132,11 +133,11 @@ const FEATURES = {
     requires: ['target'],
   },
   /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
-   * disjoint lanes, places each lane on a seat (`seats`: a secondary-account terminal worker and/or a sub-agent of
-   * the orchestrating session, each under its usage `limits` percent), merges finished lanes one at a time into
-   * `target` through `gates`, and — only with `credit.enabled` — runs credit jobs on an API credit balance with the
-   * guards in scripts/lib/orch-credit.cjs. Every command template is the project's own; null means "not available
-   * here" and the step says so. */
+   * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
+   * `target` through `gates`, and runs headless jobs on an api-key account with the guards in scripts/lib/orch-credit.cjs.
+   * The 1.0 keys `seats`, `limits`, `secondaryConfigDir` and `credit` are gone: a profile that still carries them is
+   * refused while the orchestrator is active and warned about otherwise (`npx builder accounts migrate`, D33). Every
+   * command template is the project's own; null means "not available here" and the step says so. */
   orchestrator: {
     defaults: {
       state: 'off',
@@ -153,10 +154,7 @@ const FEATURES = {
       modulesDir: null,
       stallMinutes: 90,
       usageStaleMinutes: 30,
-      seats: ['primary'],
       primaryLaunch: 'manual',
-      limits: { secondary: 80, primary: 60 },
-      secondaryConfigDir: null,
       usageCommand: null,
       launchCommand: null,
       stateCommand: null,
@@ -169,25 +167,12 @@ const FEATURES = {
       capacity: null,
       preflight: [],
       tests: { mode: 'local', local: null, remote: null },
-      credit: {
-        enabled: false,
-        worker: 'claude-code',
-        dailyCapUsd: null,
-        periodBudgetUsd: null,
-        renewDay: 1,
-        tzOffsetMinutes: 0,
-        reserveUsd: 0,
-        lapses: false,
-        fallback: ['secondary', 'primary'],
-        commands: ['git status', 'git diff', 'git diff --stat', 'git log --oneline -20'],
-        seatCommands: {},
-        forbidden: ['**/package.json', '**/package-lock.json', '**/npm-shrinkwrap.json', '**/yarn.lock', '**/pnpm-lock.yaml'],
-        testRoots: ['test/', 'tests/'],
-        guardDir: null,
-      },
     },
     requires: ['target'],
   },
+  /* Named accounts the orchestrator places lanes on: worker, who pays, content class, roles, budget, note — the
+   * registry rules are in scripts/lib/accounts-registry.cjs (plan M1, D22, D32). Replaces the 1.0 seats and credit lane. */
+  accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },
 };
 
 const DEFAULTS = {
@@ -468,6 +453,10 @@ function validate(settings) {
     }
   }
   errors.push(...validateOrchestrator(settings, badRegex));
+  errors.push(...accountsRegistry.validateAccounts(settings, { secretPatterns: require('./outbound-guard.cjs').PATTERNS }));
+  // The 1.0 seat keys: refused only while the orchestrator is active (D33); `warnings()` carries the other case.
+  const legacy = accountsRegistry.legacyKeys(settings.features?.orchestrator);
+  if (legacy.length && ACTIVE.has(settings.features?.orchestrator?.state)) errors.push(accountsRegistry.legacyMessage(legacy));
   const budget = settings.features?.instructionBudget?.maxLines;
   if (budget !== undefined && budget !== null && !(Number.isInteger(budget) && budget > 0)) errors.push('features.instructionBudget.maxLines: a positive integer');
   if (settings.features?.orchestratorModel && ACTIVE.has(settings.features.orchestratorModel.state) && !settings.models?.orchestrator) {
@@ -539,18 +528,8 @@ function validateOrchestrator(settings, badRegex) {
   if (active && o.standardPipeline === 'lite' && !ACTIVE.has(settings.features?.liteSplit?.state)) {
     errors.push(`${at('standardPipeline')}: "lite" needs features.liteSplit enabled — the lite lanes queue into its gate batch`);
   }
-  const seats = o.seats;
-  if (seats !== undefined) {
-    if (!Array.isArray(seats) || seats.length === 0 || seats.some((s) => !['primary', 'secondary'].includes(s)) || new Set(seats).size !== seats.length) {
-      errors.push(`${at('seats')}: a non-empty list of "secondary" and/or "primary", each once, in placement order`);
-    }
-  }
   if (o.primaryLaunch !== undefined && !['manual', 'app-session'].includes(o.primaryLaunch)) {
     errors.push(`${at('primaryLaunch')}: "manual" (the human starts the lane's session) or "app-session" (the orchestrator starts it — adapters/claude-code.md)`);
-  }
-  if (o.limits !== undefined) {
-    if (!isObject(o.limits)) errors.push(`${at('limits')}: { "secondary": pct, "primary": pct }`);
-    else for (const [k, v] of Object.entries(o.limits)) if (!['primary', 'secondary'].includes(k) || !(typeof v === 'number' && v > 0 && v <= 100)) errors.push(`${at(`limits.${k}`)}: a seat name with a percentage in (0, 100]`);
   }
   const template = (k, needs) => {
     const v = o[k];
@@ -563,9 +542,15 @@ function validateOrchestrator(settings, badRegex) {
   template('stopCommand', ['session']);
   template('launchCommand', ['brief']);
   template('gates', []);
-  for (const k of ['branchPrefix', 'worktreePrefix', 'secondaryConfigDir', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
-  if (active && Array.isArray(seats) && seats.includes('secondary') && !o.launchCommand) {
-    errors.push(`${at('launchCommand')}: required while "secondary" is a seat — it is how a secondary-seat lane starts (or drop "secondary" from seats)`);
+  for (const k of ['branchPrefix', 'worktreePrefix', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
+  /* The accounts the orchestrator runs on (features.accounts, through the 1.0 view until M3): a terminal worker
+   * account needs a launch command; an api-key account needs a model floor to check against. */
+  if (active) {
+    const view = accountsRegistry.legacyView(settings);
+    if (view.seats.includes('secondary') && !view.launchCommand && !o.launchCommand) {
+      errors.push(`features.accounts.accounts.${view.accounts.secondary}.command: required for a terminal worker account — it is how its lane starts ({brief})`);
+    }
+    if (view.credit.enabled && !settings.models?.strong && !settings.models?.mid) errors.push('models.strong / models.mid: at least one is required while an api-key account exists — the model floor is checked against them');
   }
   if (o.preflight !== undefined) {
     if (!Array.isArray(o.preflight)) errors.push(`${at('preflight')}: an array of { "name", "command", "tests"? }`);
@@ -588,36 +573,6 @@ function validateOrchestrator(settings, badRegex) {
       if (tests.mode === 'remote' && !tests.remote) errors.push(`${at('tests.remote')}: required while tests.mode is "remote"`);
     }
   }
-  const c = o.credit;
-  if (c !== undefined) {
-    if (!isObject(c)) return [...errors, `${at('credit')}: an object`];
-    if (typeof c.enabled !== 'boolean') errors.push(`${at('credit.enabled')}: true or false`);
-    if (c.worker !== 'claude-code') errors.push(`${at('credit.worker')}: "claude-code" (the one worker adapter shipped)`);
-    for (const k of ['commands', 'forbidden', 'testRoots']) if (c[k] !== undefined && !strList(c[k]) && !(Array.isArray(c[k]) && c[k].length === 0)) errors.push(`${at(`credit.${k}`)}: an array of non-empty strings`);
-    if (c.commands !== undefined && Array.isArray(c.commands) && c.commands.some((x) => typeof x === 'string' && /[*]/.test(x))) errors.push(`${at('credit.commands')}: whole named commands only — no wildcards`);
-    if (c.fallback !== undefined && (!Array.isArray(c.fallback) || c.fallback.some((a) => !['secondary', 'primary'].includes(a)) || new Set(c.fallback).size !== c.fallback.length)) {
-      errors.push(`${at('credit.fallback')}: a list of "secondary" and/or "primary", each once ([] = credit only)`);
-    }
-    if (c.seatCommands !== undefined && (!isObject(c.seatCommands) || Object.values(c.seatCommands).some((v) => !strList(v) || v.some((x) => /[*]/.test(x))))) {
-      errors.push(`${at('credit.seatCommands')}: { "<kind>": ["whole named command", …] }`);
-    }
-    const money = (k, { nullable }) => {
-      const v = c[k];
-      if (v === null || v === undefined) return nullable ? null : errors.push(`${at(`credit.${k}`)}: required while the credit lane is enabled`);
-      if (!(typeof v === 'number' && Number.isFinite(v) && v >= 0)) errors.push(`${at(`credit.${k}`)}: a number >= 0`);
-      return null;
-    };
-    if (c.renewDay !== undefined && !(Number.isInteger(c.renewDay) && c.renewDay >= 1 && c.renewDay <= 28)) errors.push(`${at('credit.renewDay')}: a whole day 1-28`);
-    if (c.tzOffsetMinutes !== undefined && !(Number.isInteger(c.tzOffsetMinutes) && Math.abs(c.tzOffsetMinutes) <= 14 * 60)) errors.push(`${at('credit.tzOffsetMinutes')}: whole minutes within ±840`);
-    if (active && c.enabled === true) {
-      money('dailyCapUsd', { nullable: false });
-      if (typeof c.dailyCapUsd === 'number' && !(c.dailyCapUsd > 0)) errors.push(`${at('credit.dailyCapUsd')}: must be > 0 (0 would read as "no cap" to one reader and "spend nothing" to another)`);
-      money('periodBudgetUsd', { nullable: true });
-      money('reserveUsd', { nullable: true });
-      if (Array.isArray(c.fallback) && c.fallback.includes('secondary') && !o.secondaryConfigDir) errors.push(`${at('secondaryConfigDir')}: required while the credit fallback names "secondary"`);
-      if (!settings.models?.strong && !settings.models?.mid) errors.push('models.strong / models.mid: at least one is required while the credit lane is enabled — the model floor is checked against them');
-    }
-  }
   return errors;
 }
 
@@ -635,17 +590,40 @@ function merge(base, over) {
  */
 function parse(text) {
   const blocks = [...String(text).matchAll(BLOCK)];
-  if (blocks.length === 0) return { found: false, settings: clone(DEFAULTS), errors: [] };
-  if (blocks.length > 1) return { found: true, settings: clone(DEFAULTS), errors: [`${blocks.length} pipeline-settings blocks — exactly one is allowed`] };
+  if (blocks.length === 0) return { found: false, settings: clone(DEFAULTS), errors: [], warnings: [] };
+  if (blocks.length > 1) return { found: true, settings: clone(DEFAULTS), errors: [`${blocks.length} pipeline-settings blocks — exactly one is allowed`], warnings: [] };
   let raw;
   try {
     raw = JSON.parse(blocks[0][1]);
   } catch (e) {
-    return { found: true, settings: clone(DEFAULTS), errors: [`pipeline-settings is not valid JSON: ${e.message}`] };
+    return { found: true, settings: clone(DEFAULTS), errors: [`pipeline-settings is not valid JSON: ${e.message}`], warnings: [] };
   }
-  if (!isObject(raw)) return { found: true, settings: clone(DEFAULTS), errors: ['pipeline-settings must be a JSON object'] };
+  if (!isObject(raw)) return { found: true, settings: clone(DEFAULTS), errors: ['pipeline-settings must be a JSON object'], warnings: [] };
   const settings = merge(DEFAULTS, raw);
-  return { found: true, settings, errors: validate(settings) };
+  return { found: true, settings, errors: validate(settings), warnings: warnings(settings) };
+}
+
+/**
+ * What loads but should be said once: the 1.0 seat keys on a profile whose orchestrator is off (D33). An error
+ * here would stop every checker in every installed project after `upgrade`; a warning names the fix and lets them run.
+ * @returns {string[]}
+ */
+function warnings(settings) {
+  const out = [];
+  const legacy = accountsRegistry.legacyKeys(settings.features?.orchestrator);
+  if (legacy.length && !ACTIVE.has(settings.features?.orchestrator?.state)) out.push(accountsRegistry.legacyMessage(legacy));
+  return out;
+}
+
+const warned = new Set();
+/** Print a profile warning to stderr once per process (every checker loads the profile; the person reads it once). */
+function warnOnce(path, list) {
+  for (const w of list || []) {
+    const key = `${path}:${w}`;
+    if (warned.has(key) || process.env.BUILDER_PROFILE_QUIET) continue;
+    warned.add(key);
+    process.stderr.write(`${basename(path)}: warning — ${w}\n`);
+  }
 }
 
 /**
@@ -672,8 +650,10 @@ function rootOf(dir) {
  */
 function load(root = process.cwd(), file = 'PIPELINE_PROFILE.md') {
   const path = join(root, file);
-  if (!existsSync(path)) return { path, found: false, settings: clone(DEFAULTS), errors: [] };
-  return { path, ...parse(readFileSync(path, 'utf8')) };
+  if (!existsSync(path)) return { path, found: false, settings: clone(DEFAULTS), errors: [], warnings: [] };
+  const loaded = { path, ...parse(readFileSync(path, 'utf8')) };
+  warnOnce(path, loaded.warnings);
+  return loaded;
 }
 
 /**
@@ -695,4 +675,4 @@ function feature(settings, name) {
   return { name, state, enabled, config, line };
 }
 
-module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, logsProblem, feature, merge, rootOf };
+module.exports = { SCHEMA, STATES, FEATURES, DEFAULTS, parse, load, validate, warnings, logsProblem, feature, merge, rootOf, accounts: accountsRegistry };

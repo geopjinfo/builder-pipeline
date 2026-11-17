@@ -6,12 +6,15 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 export const PACK = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const ORCH = join(PACK, 'scripts', 'orch.mjs');
 export const FIX = join(PACK, 'tests', 'fixtures', 'orch');
 export const STUB = join(FIX, 'stub-worker.cjs');
+export const registry = require(join(PACK, 'scripts', 'lib', 'accounts-registry.cjs'));
 
 export const tmp = (p) => mkdtempSync(join(tmpdir(), `orch-${p}-`));
 export const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -24,15 +27,20 @@ export const PATHS = {
   hot: ['CHANGELOG.md', 'contracts/openapi.json', 'db/migrations/**', 'config/permissions.csv'],
 };
 
-/** A PIPELINE_PROFILE.md holding only the settings block. */
-export function profileText({ orchestrator = {}, models = { strong: 'strong-model', mid: 'mid-model', orchestrator: null }, protectedGlobs = ['src/platform/**'], extraFeatures = {} } = {}) {
-  const block = {
+/**
+ * A PIPELINE_PROFILE.md holding only the settings block. The orchestrator options may still be written in the 1.0
+ * seat shape (`seats`, `limits`, `secondaryConfigDir`, `credit`): the rig runs `accounts migrate` on them, so every
+ * orchestrator test also proves the migration (REQ-106). `legacy: true` keeps the 1.0 keys as written.
+ */
+export function profileText({ orchestrator = {}, models = { strong: 'strong-model', mid: 'mid-model', orchestrator: null }, protectedGlobs = ['src/platform/**'], extraFeatures = {}, legacy = false } = {}) {
+  let block = {
     schema: 2,
     commands: { tier: null, tiers: [], affected: null, typecheck: null },
     models,
     protected: protectedGlobs,
     features: { orchestrator: { state: 'on', target: 'dev', ...orchestrator }, ...extraFeatures },
   };
+  if (!legacy) block = registry.migrate(block).settings;
   return `# profile\n\n\`\`\`json pipeline-settings\n${JSON.stringify(block, null, 2)}\n\`\`\`\n`;
 }
 

@@ -105,15 +105,15 @@ const matches = (file, globs) => globs.find((g) => globRe(norm(g)).test(norm(fil
  * tests pass a partial object.
  */
 function creditContext(settings = {}) {
-  const defaults = require('./profile.cjs').FEATURES.orchestrator.defaults;
-  const orch = { ...defaults, ...((settings.features && settings.features.orchestrator) || {}) };
-  const credit = { ...defaults.credit, ...(orch.credit || {}) };
+  // The api-key account's caps and guards, in the 1.0 credit shape (accounts-registry.cjs legacyView) until M3.
+  const view = require('./accounts-registry.cjs').legacyView(settings);
+  const credit = view.credit;
   return {
     credit,
     models: { strong: null, mid: null, ...(settings.models || {}) },
     paths: { boards: 'tasks', registry: 'DEFERRED_TASKS.md', decisions: 'DECISIONS.md', logs: 'logs', ...(settings.paths || {}) },
     protected: settings.protected || [],
-    secondaryConfigDir: orch.secondaryConfigDir || null,
+    secondaryConfigDir: view.secondaryConfigDir || null,
   };
 }
 
