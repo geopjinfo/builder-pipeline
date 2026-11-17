@@ -203,6 +203,9 @@ describe('REQ-810…811 — verify and dry-run name the groups', () => {
     assert.match(v.stdout, /tool groups: spec \(builder\.lock\.json\)/);
     assert.match(v.stdout, /SKIP\s+personas installed/);
     assert.doesNotMatch(v.stdout, /FAIL\s+personas installed/);
+    const audit = folderProject();
+    assert.equal(run(audit.cli, audit.proj, ['unpack', '--tool', 'claude-code', '--tools', 'audit']).status, 0);
+    assert.match(run(audit.cli, audit.proj, ['verify']).stdout, /PASS\s+personas installed/, 'the reviewer is a persona too');
     const full = folderProject();
     assert.equal(run(full.cli, full.proj, ['unpack', '--tool', 'claude-code']).status, 0);
     assert.match(run(full.cli, full.proj, ['verify']).stdout, /tool groups: all/);
