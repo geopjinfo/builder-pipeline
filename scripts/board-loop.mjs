@@ -1,8 +1,8 @@
 /**
  * The loop runner above a board — the manual command (plan M9, REQ-901 to REQ-915). Rules: scripts/lib/board-loop.cjs.
  *
- *   npx builder run board-loop <account> <board.md> [--more-passes N] [--record-experiment <EXPERIMENTS.md>]
- * (folder layout: node scripts/board-loop.mjs in place of npx builder run board-loop)
+ *   npx builder-pipeline run board-loop <account> <board.md> [--more-passes N] [--record-experiment <EXPERIMENTS.md>]
+ * (folder layout: node scripts/board-loop.mjs in place of npx builder-pipeline run board-loop)
  *
  * Settings (PIPELINE_PROFILE.md): features.boardLoop.{state, promptFile, gate, maxPasses, passTimeoutMinutes,
  * maxTurnsPerPass, stallMinutes, maxRetriesPerRow, maxConsecutiveFailures, maxConsecutiveNoProgress, testRoots} ·

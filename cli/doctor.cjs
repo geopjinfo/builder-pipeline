@@ -9,10 +9,10 @@
  * (adapters/lib/<tool>.cjs, checked against the harness docs) is printed with them, word for word. A report: exit 0.
  *
  * ACCOUNTS (REQ-701, REQ-107; D22, D37). After the tool blocks, one `[accounts]` section: one advisory row per account
- * in `features.accounts` with its readiness line (the same assessment `npx builder accounts` prints — the built-in
+ * in `features.accounts` with its readiness line (the same assessment `npx builder-pipeline accounts` prints — the built-in
  * probes run here, so a stub on PATH is what a test gives it), or one row `accounts: not configured`, or, while the
  * profile still carries the 1.0 seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`), exactly one row
- * `profile: legacy seats, run npx builder accounts migrate`. Advisory means the exit code never changes. `--json`
+ * `profile: legacy seats, run npx builder-pipeline accounts migrate`. Advisory means the exit code never changes. `--json`
  * carries the same rows as a last element `{ section: 'accounts', advisory: true, rows }`.
  */
 
@@ -87,7 +87,7 @@ function installedTools(ctx) {
   return out;
 }
 
-const LEGACY_ROW = 'profile: legacy seats, run npx builder accounts migrate';
+const LEGACY_ROW = 'profile: legacy seats, run npx builder-pipeline accounts migrate';
 const advisory = (note, extra = {}) => ({ feature: 'accounts', status: 'advisory', account: null, worker: null, state: null, ...extra, note });
 
 /**

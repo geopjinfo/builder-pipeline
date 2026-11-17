@@ -1,5 +1,5 @@
 /**
- * Installed as a package, the kit's scripts run FROM it — `npx builder run <name>` — with the project as the
+ * Installed as a package, the kit's scripts run FROM it — `npx builder-pipeline run <name>` — with the project as the
  * working directory. Unpack copies none of them into the project, the installed prose names the run form, and
  * verify looks for them in the package. A kit copied in as `builder/` still copies them (control).
  */
@@ -29,12 +29,12 @@ describe('builder run — kit scripts run from the package', () => {
   const { proj, cli } = project('node_modules/builder-pipeline');
   const unpacked = run(cli, proj, ['unpack', '--tool', 'claude-code']);
 
-  test('red: a package install copies no kit script and the installed prose says npx builder run', () => {
+  test('red: a package install copies no kit script and the installed prose says npx builder-pipeline run', () => {
     assert.equal(unpacked.status, 0, unpacked.stderr);
     assert.ok(!existsSync(join(proj, 'scripts', 'board-check-all.mjs')), 'scripts/ copies would drift from the package');
     assert.ok(!existsSync(join(proj, 'scripts', 'oracles')), 'oracle adapters run from the package too');
     const pointer = readFileSync(join(proj, 'CLAUDE.md'), 'utf8');
-    assert.match(pointer, /npx builder run features/);
+    assert.match(pointer, /npx builder-pipeline run features/);
     assert.doesNotMatch(pointer, /node scripts\/features\.mjs/);
   });
 

@@ -2,7 +2,7 @@
 /**
  * The README badges, computed from source — a maintainer tool (specs/toolkit-distribution.spec.md, REQ-505 to REQ-507).
  *
- * It runs in the kit repository (folder layout, from the kit root; it is not an `npx builder run` target):
+ * It runs in the kit repository (folder layout, from the kit root; it is not an `npx builder-pipeline run` target):
  *   folder layout: node scripts/readme-badges.cjs            check README.md against the generated block; exit 1 on a mismatch
  *   folder layout: node scripts/readme-badges.cjs --write    rewrite the badge block in README.md
  *   folder layout: node scripts/readme-badges.cjs [--write] FILE   the same on another file
@@ -45,7 +45,7 @@ function personaCount(root = KIT) {
   return fs.readdirSync(path.join(root, 'agents')).filter((n) => n.endsWith('.md')).length;
 }
 
-/** The `--tool` targets: the keys of the TOOLS table in cli.js (what `npx builder targets` prints). */
+/** The `--tool` targets: the keys of the TOOLS table in cli.js (what `npx builder-pipeline targets` prints). */
 function toolTargetCount(root = KIT) {
   const text = fs.readFileSync(path.join(root, 'cli.js'), 'utf8');
   const m = /^const TOOLS = \{\r?\n([\s\S]*?)^\};/m.exec(text);

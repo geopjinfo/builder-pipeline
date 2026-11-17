@@ -1,5 +1,5 @@
 /**
- * `npx builder accounts [--json]` — the readiness report (REQ-204, REQ-205; D7, D25), through cli.js in a temp project
+ * `npx builder-pipeline accounts [--json]` — the readiness report (REQ-204, REQ-205; D7, D25), through cli.js in a temp project
  * with BUILDER_ACCOUNTS_HOME inside it and stub executables on an isolated PATH.
  *
  * WHY. The report is the one place an account owner sees every account's state before a run. Its shape follows

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `npx builder run seat-peaks [--since <iso>] [--until <iso>] [--seat <agentType>] [--json]`
- * (folder layout: node scripts/seat-peaks.mjs in place of npx builder run seat-peaks)
+ * `npx builder-pipeline run seat-peaks [--since <iso>] [--until <iso>] [--seat <agentType>] [--json]`
+ * (folder layout: node scripts/seat-peaks.mjs in place of npx builder-pipeline run seat-peaks)
  *
  * Per-dispatch PEAK context by seat — the largest single turn's prompt (input + cache read + cache write)
  * each dispatch reached, with turns and cost. It is the measurement behind batching a seat's work: a turn

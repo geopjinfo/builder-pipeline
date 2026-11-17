@@ -205,7 +205,7 @@ describe('scripts/account-key.cjs read (REQ-1002, REQ-1005)', () => {
     assert.equal(r.stderr, '');
     const none = read(h, 'bravo');
     assert.equal(none.status, 2);
-    assert.match(none.stderr, /no key for account "bravo".*npx builder accounts key bravo/);
+    assert.match(none.stderr, /no key for account "bravo".*npx builder-pipeline accounts key bravo/);
     assert.equal(none.stdout, '');
     assert.equal(read(h, 'Bad_Name').status, 2);
     assert.equal(spawnSync(process.execPath, [helper], { encoding: 'utf8' }).status, 2);

@@ -3,15 +3,15 @@
  * EXPERIMENTAL (`features.livePage`) — write the read-only live page shell for one board.
  * CLAUDE CODE HOSTED-ARTIFACT PAGE RUNTIME ONLY; see EXPERIMENTS.md.
  *
- *   npx builder run experimental/page-shell <key> [--out <file>]
- * (folder layout: node scripts/experimental/page-shell.mjs in place of npx builder run experimental/page-shell)
+ *   npx builder-pipeline run experimental/page-shell <key> [--out <file>]
+ * (folder layout: node scripts/experimental/page-shell.mjs in place of npx builder-pipeline run experimental/page-shell)
  *
- * Installed by `npx builder unpack --experimental` beside `page-shell.cjs` in `scripts/experimental/`.
+ * Installed by `npx builder-pipeline unpack --experimental` beside `page-shell.cjs` in `scripts/experimental/`.
  * Default output: `.pipeline/<key>/page-shell.html` (outside the `page/` directory the render rewrites).
  *
  * The shell holds no run data. Publish it once, with the capabilities this prints (viewers read, only
  * the owner writes), then load the section documents written by
- * `npx builder run board-render <key> --json` into its `page` collection, one document per file. The
+ * `npx builder-pipeline run board-render <key> --json` into its `page` collection, one document per file. The
  * page has no write call and no click handler; the markdown board stays the truth and the rendered
  * board file the canonical copy. Cost cells are shown only as the render derived them, at its rate version.
  */

@@ -169,7 +169,7 @@ describe('D3 — the hooks run committed copies beside them, never node_modules'
     const { proj } = installed({ profile: { paths: { registry: 'DEFERRED_TASKS.md' }, features: { registryGuard: { state: 'on', seats: ['module-builder'] } } } });
     const r = hook(proj, 'registry-read-guard.cjs', { tool_name: 'Read', agent_type: 'module-builder', tool_input: { file_path: join(proj, 'DEFERRED_TASKS.md') } });
     assert.match(out(r), /Blocked Read/, out(r));
-    assert.match(out(r), /npx builder run ledger-row registry/);
+    assert.match(out(r), /npx builder-pipeline run ledger-row registry/);
   });
 
   test('red: registry-read-guard that cannot load its profile says so on stderr (one line) and allows', () => {

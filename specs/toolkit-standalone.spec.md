@@ -5,7 +5,7 @@ Status: ratified
 Ratified-by: George (autonomy mandate of 16 November 2026, applied by the build thread; see Decision log)
 
 > The kit's own spec for the toolkit split, part of release 2.0.0. It follows the installed spec template. Check it with
-> `npx builder run spec-check specs/toolkit-standalone.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-standalone.spec.md`).
+> `npx builder-pipeline run spec-check specs/toolkit-standalone.spec.md` (folder layout: `node scripts/spec-check.mjs specs/toolkit-standalone.spec.md`).
 > It is maintainer-only and does not ship in the package.
 
 ## Intent
@@ -50,12 +50,12 @@ Kind: `behaviour` (what succeeds) · `refusal` (what is refused, and why) · `ef
 | REQ-101 | With no `PIPELINE_PROFILE.md`, a script reads its settings from the file named by `BUILDER_CONFIG`, or else from `builder.config.json` in the project root | a team that runs another orchestrator | behaviour | brief Q1 |
 | REQ-102 | A config file is validated with the same rules as the profile's §16 block and an invalid one is refused with the same messages | a CI job | refusal | brief Q1 |
 | REQ-103 | When `PIPELINE_PROFILE.md` exists, the profile is the only source of settings and a config file beside it is ignored and reported | a maintainer of the kit | constraint | brief Q1 |
-| REQ-104 | `npx builder run NAME --config PATH` hands the path to the script as `BUILDER_CONFIG` and removes the flag from the script's arguments | a team that runs another orchestrator | behaviour | brief Q1 |
-| REQ-105 | `npx builder run features` names the source of the settings in use: the profile, a config file, or defaults | a CI job | effect | brief Q1 |
-| REQ-201 | `npx builder check-ledgers --boards DIR --registry FILE` checks those paths in place of §16 `paths` and the defaults | a team that runs another orchestrator | behaviour | brief C2 |
+| REQ-104 | `npx builder-pipeline run NAME --config PATH` hands the path to the script as `BUILDER_CONFIG` and removes the flag from the script's arguments | a team that runs another orchestrator | behaviour | brief Q1 |
+| REQ-105 | `npx builder-pipeline run features` names the source of the settings in use: the profile, a config file, or defaults | a CI job | effect | brief Q1 |
+| REQ-201 | `npx builder-pipeline check-ledgers --boards DIR --registry FILE` checks those paths in place of §16 `paths` and the defaults | a team that runs another orchestrator | behaviour | brief C2 |
 | REQ-202 | A `--boards` or `--registry` flag with no value is refused as a usage error | a CI job | refusal | brief C2 |
-| REQ-301 | `npx builder run board-import --format ralph PRD.json --out BOARD.md` writes one board row per user story, numbered `T1`… in file order, with the title as the task, the story id in Cites, `passes` as the status (DONE or PLANNED) and the acceptance criteria as the notes | a team that runs another orchestrator | behaviour | brief, audit section |
-| REQ-302 | `npx builder run board-import --format spec-kit TASKS.md --out BOARD.md` writes one row per task line, with the task id as stated, the checkbox as the status, and the `[P]` and `[USn]` markers in the Cites cell | a team that runs another orchestrator | behaviour | brief, audit section |
+| REQ-301 | `npx builder-pipeline run board-import --format ralph PRD.json --out BOARD.md` writes one board row per user story, numbered `T1`… in file order, with the title as the task, the story id in Cites, `passes` as the status (DONE or PLANNED) and the acceptance criteria as the notes | a team that runs another orchestrator | behaviour | brief, audit section |
+| REQ-302 | `npx builder-pipeline run board-import --format spec-kit TASKS.md --out BOARD.md` writes one row per task line, with the task id as stated, the checkbox as the status, and the `[P]` and `[USn]` markers in the Cites cell | a team that runs another orchestrator | behaviour | brief, audit section |
 | REQ-303 | The importer keeps what the source states and marks every inferred cell `⚠ CONFIRM`; every source line it did not map is listed under `## Unmapped` with its line number; every inference is listed under `## Inferred` | a team that runs another orchestrator | constraint | orch-digest rule |
 | REQ-304 | An imported DONE row with no test named by the source keeps an empty evidence cell, so the ledger gate reports it under LG-5 | the pipeline at step 0.7 and the readiness gate | constraint | brief, earned status |
 | REQ-305 | The importer refuses an unknown format, a missing or unreadable source, invalid JSON, and an existing output file without `--force`; it writes nothing when it refuses | a CI job | refusal | brief, audit section |

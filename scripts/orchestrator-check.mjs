@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `npx builder run orchestrator-check [--session <id>] [--transcript <file.jsonl>]`
- * (folder layout: node scripts/orchestrator-check.mjs in place of npx builder run orchestrator-check)
+ * `npx builder-pipeline run orchestrator-check [--session <id>] [--transcript <file.jsonl>]`
+ * (folder layout: node scripts/orchestrator-check.mjs in place of npx builder-pipeline run orchestrator-check)
  *
  * Pipeline step 0: is this session on the declared orchestrator model (`models.orchestrator`)?
  * Verdict: `scripts/lib/orchestrator-check.cjs`.
