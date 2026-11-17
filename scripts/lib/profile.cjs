@@ -124,6 +124,13 @@ const FEATURES = {
   walkPriority: { defaults: { state: 'experimental-off' }, requires: [] },
   ruleNotes: { defaults: { state: 'experimental-off' }, requires: [] },
   mutationGate: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* A second reader for a lane's P4 findings on a registry account of another worker `family`, at or above the
+   * writer's `tier` — scripts/lib/family-review.cjs, EXPERIMENTS.md §16 (plan M8, REQ-801, REQ-802, D6, D14). Off,
+   * nothing of it runs: the plan split is byte-identical with the key absent. */
+  familyReview: { defaults: { state: 'experimental-off' }, requires: [] },
+  /* Advisory account suggestion, risk flag and second-opinion advice for a lane; never changes a placement; any call
+   * goes behind outboundGuard after the data-recipient decision is recorded — scripts/lib/router-hint.cjs (M8b, D15). */
+  routerHint: { defaults: { state: 'experimental-off' }, requires: [] },
   /* The lite split: build-module-lite (plan → build → test, then queue) + build-module-lite-gate-batch (every
    * later phase over up to `cap` queued modules). `ledgers` / `docsOnly` are extra path regexes the gate queue
    * treats as bookkeeping (re-opens nothing) / docs (re-opens no module phase) — see scripts/lib/gate-queue.cjs. */

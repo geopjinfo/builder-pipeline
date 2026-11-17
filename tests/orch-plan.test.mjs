@@ -155,3 +155,86 @@ describe('the worker brief carries the account the lane is placed on (REQ-502)',
     assert.match(again.out, /exists/);
   });
 });
+
+describe('familyReview: a second reader of another family at or above the writer\'s tier (REQ-801, REQ-802)', () => {
+  const profile = require('../scripts/lib/profile.cjs');
+  const family = require('../scripts/lib/family-review.cjs');
+  const acct = (name, over) => ({ name, worker: 'claude-code', pays: 'subscription', content: 'any', roles: [], family: 'anthropic', tier: 'strong', ...over });
+  const strongWriter = acct('alpha');
+  const midOther = acct('bravo', { worker: 'codex', family: 'openai', tier: 'mid' });
+  const strongOther = acct('charlie', { worker: 'codex', family: 'openai', tier: 'strong' });
+  const strongSame = acct('delta', { tier: 'strong' });
+  const noTier = acct('echo', { worker: 'codex', family: 'openai', tier: null });
+
+  test('red: REQ-801 off, nothing of it runs: the split output is identical with the key absent and with experimental-off', () => {
+    const absent = plan.split(SAMPLE, PATHS);
+    const off = plan.split(SAMPLE, { ...PATHS, familyReview: { state: 'experimental-off', accounts: [strongWriter, strongOther], writer: 'alpha' } });
+    assert.deepEqual(off, absent);
+    assert.equal(JSON.stringify(off), JSON.stringify(absent));
+    assert.ok(!('familyReview' in off), 'off, the plan carries no familyReview key');
+    for (const l of off.lanes) assert.ok(!('secondReader' in l), `${l.name}: off, a lane carries no secondReader`);
+  });
+
+  test('red: REQ-802 AC-802a a mid-tier other-family account and a strong writer: no second reader, the reason is logged', () => {
+    const res = plan.split(SAMPLE, { ...PATHS, familyReview: { state: 'experimental-on', accounts: [strongWriter, midOther, strongSame, noTier], writer: 'alpha' } });
+    assert.equal(res.familyReview.writer, 'alpha');
+    for (const l of res.lanes) {
+      assert.equal(l.secondReader.account, null, l.name);
+      assert.equal(l.secondReader.reason, 'familyReview: no second reader — no other-family account at or above tier strong');
+    }
+    assert.ok(res.familyReview.log.some((line) => line.includes(`${res.lanes[0].name}: familyReview: no second reader — no other-family account at or above tier strong`)), res.familyReview.log.join('\n'));
+    const one = family.secondReader(strongWriter, [strongWriter, midOther, strongSame, noTier]);
+    assert.equal(one.account, null);
+    assert.match(one.reason, /no other-family account at or above tier strong/);
+  });
+
+  test('red: REQ-802 the positive case: an other-family account at or above the writer\'s tier is the second reader; same family or unknown tier never qualifies', () => {
+    const res = plan.split(SAMPLE, { ...PATHS, familyReview: { state: 'experimental-on', accounts: [strongWriter, midOther, strongSame, noTier, strongOther], writer: 'alpha' } });
+    for (const l of res.lanes) {
+      assert.equal(l.secondReader.account, 'charlie', l.name);
+      assert.match(l.secondReader.reason, /^familyReview: second reader charlie \(family openai, tier strong\) for writer alpha \(family anthropic, tier strong\)$/);
+    }
+    // a mid writer: the mid other-family account qualifies (at or above), and comes first in registry order
+    const mid = family.secondReader(acct('alpha', { tier: 'mid' }), [strongWriter, midOther, strongOther]);
+    assert.equal(mid.account, 'bravo');
+    // a writer with no tier is unknown: never "at or above"
+    const unknown = family.secondReader(acct('alpha', { tier: null }), [strongOther]);
+    assert.equal(unknown.account, null);
+    assert.match(unknown.reason, /writer alpha has no tier/);
+    // the writer itself is never its own second reader
+    assert.equal(family.secondReader(strongWriter, [strongWriter]).account, null);
+    assert.deepEqual(family.TIERS, ['free', 'mid', 'strong']);
+  });
+
+  test('red: REQ-802 the registry takes an optional tier from the ordered list and refuses any other value', () => {
+    const settings = (tier) => ({ features: { accounts: { state: 'on', accounts: { alpha: { worker: 'claude-code', pays: 'subscription', ...(tier === undefined ? {} : { tier }) } } } } });
+    const errs = (tier) => profile.accounts.validateAccounts(settings(tier));
+    assert.deepEqual(errs(undefined), []);
+    assert.deepEqual(errs(null), []);
+    for (const t of family.TIERS) assert.deepEqual(errs(t), [], t);
+    assert.match(errs('ultra').join('\n'), /features\.accounts\.accounts\.alpha\.tier: null, or one of free \| mid \| strong/);
+    assert.equal(profile.accounts.ACCOUNT_DEFAULTS.tier, null);
+  });
+
+  test('red: REQ-802 `orch split` with familyReview on writes the second reader into lanes.json and prints the reason lines', () => {
+    const dir = tmp('family');
+    const root = join(dir, 'orch');
+    const codexMid = { worker: 'codex', pays: 'subscription', content: 'any', roles: [], family: 'openai', tier: 'mid', maxTurns: 40, timeoutMinutes: 90, command: 'go {brief}' };
+    writeFileSync(join(dir, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { ...PATHS }, extraFeatures: { familyReview: { state: 'experimental-on' } }, accounts: { primary: { tier: 'strong' }, bravo: codexMid } }));
+    writeFileSync(join(dir, 'plan.md'), SAMPLE);
+    const outFile = join(dir, 'lanes.json');
+    const r = orch(dir, root, ['split', join(dir, 'plan.md'), '--out', outFile, '--writer', 'primary']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /familyReview: no second reader — no other-family account at or above tier strong/);
+    const lanes = JSON.parse(readFileSync(outFile, 'utf8'));
+    assert.equal(lanes.familyReview.writer, 'primary');
+    assert.equal(lanes.lanes[0].secondReader.account, null);
+    const off = tmp('family-off');
+    writeFileSync(join(off, 'PIPELINE_PROFILE.md'), profileText({ orchestrator: { ...PATHS }, accounts: { primary: { tier: 'strong' }, bravo: codexMid } }));
+    writeFileSync(join(off, 'plan.md'), SAMPLE);
+    const r2 = orch(off, join(off, 'orch'), ['split', join(off, 'plan.md'), '--out', join(off, 'lanes.json')]);
+    assert.equal(r2.status, 0, r2.out);
+    assert.ok(!r2.out.includes('familyReview'), 'off, orch split says nothing of familyReview');
+    assert.ok(!('familyReview' in JSON.parse(readFileSync(join(off, 'lanes.json'), 'utf8'))));
+  });
+});

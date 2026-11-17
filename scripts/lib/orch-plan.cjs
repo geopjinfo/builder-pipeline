@@ -25,6 +25,9 @@
  * HOT FILES are shared by many rows (the changelog, the manifest, the registry, generated contracts). They never
  * make two rows share a lane: the merge queue serialises them instead, one merge at a time.
  *
+ * FAMILY REVIEW (experimental, REQ-801, REQ-802). `opts.familyReview = { state, accounts, writer }` gives every lane
+ * a `secondReader` through scripts/lib/family-review.cjs. Absent or not active, the result is byte-identical.
+ *
  * Path rules are the project's, from features.orchestrator in §16: `sourceRoots` (production source),
  * `riskPaths.{migration,platform,permission}` (globs), `modulePattern` (a regex whose one capture names the
  * module — two modules in one row, or a glob in the module position, is cross-module).
@@ -37,6 +40,8 @@ const LEVEL_RANK = { Micro: 1, Small: 2, Standard: 3, Full: 4 };
 const TRACK_RANK = ['SOLO', 'RULINGS', 'FIX', 'ADDITIVE', 'FULL', 'PLATFORM'];
 const DISPATCH_RANK = ['solo', 'lite', 'full'];
 const LEVEL_OF_RISK = Object.freeze({ high: 'Full', medium: 'Standard', low: 'Micro' });
+
+const familyReview = require('./family-review.cjs');
 
 const DEFAULTS = Object.freeze({
   hot: ['CHANGELOG.md', 'package.json', 'package-lock.json', '.gitignore'],
@@ -340,7 +345,7 @@ function split(text, opts = {}) {
     l.name = `l${i + 1}`;
   });
 
-  return {
+  return familyReview.apply({
     plan: { title: meta.plan || meta.title || '', run: meta.run || '', source: meta.source || '' },
     maxLanes: cfg.maxLanes,
     smallEnabled: !!cfg.smallEnabled,
@@ -363,7 +368,7 @@ function split(text, opts = {}) {
     })),
     lanes,
     hotFilesQueued: uniq(lanes.flatMap((l) => l.hotFiles)),
-  };
+  }, opts.familyReview);
 }
 
 /** Owned-file overlaps between lanes — must be empty for a valid split. */

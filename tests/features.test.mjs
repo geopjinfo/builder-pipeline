@@ -31,6 +31,16 @@ describe('features', () => {
     assert.match(r.stdout, /^livePage: experimental — not enabled · decision: not yet measured \(\d{4}-\d{2}-\d{2}\)/m);
   });
 
+  test('red: REQ-801 familyReview is experimental-off by default: the loader knows it and its line says "not enabled" (AC-801a)', () => {
+    const r = run(project());
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^familyReview: experimental — not enabled$/m);
+    assert.match(r.stdout, /^routerHint: experimental — not enabled$/m);
+    const on = run(project(block({ schema: 2, features: { familyReview: { state: 'experimental-on' } } })));
+    assert.equal(on.status, 0, on.stdout);
+    assert.match(on.stdout, /^familyReview: experimental — enabled; its measurement is owed/m);
+  });
+
   test('a profile without the settings block is said, and defaults apply', () => {
     const r = run(project('# PIPELINE_PROFILE — prose only\n'));
     assert.equal(r.status, 0);

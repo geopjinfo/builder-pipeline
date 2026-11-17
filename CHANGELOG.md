@@ -34,6 +34,29 @@ versions independently of any project it is pasted into.
   migrate` until the rewrite is done; its exit code is unchanged. GUIDE § Accounts carries the migration note. The
   version bump to 2.0.0 is in this release.
 
+### Added — M8 family review and router hint (2.0.0 line)
+
+- **`features.familyReview`, experimental-off (REQ-801, REQ-802; plan M8, D6, D14).** On, `orch split` gives every
+  lane a second reader: the first registry account, in registry order, whose worker `family` differs from the
+  writer's and whose `tier` is at or above the writer's (`scripts/lib/family-review.cjs`, pure). The writer is
+  `--writer <account>`, else the first account that may hold a lane. The registry account gains an optional `tier`
+  from the ordered list `free < mid < strong` (`accounts-registry.cjs` validates it; absent is unknown and never "at
+  or above"). With no qualifying account the lane has no second reader and `lanes.json` and the log carry
+  `familyReview: no second reader — no other-family account at or above tier <x>`. Off, nothing of it runs: the split
+  output is byte-identical with the key absent. EXPERIMENTS.md §16 states the second reader, the measurement
+  (accepted findings per auditor family, loop-backs, cost per task over three modules each way) and the keep rule;
+  FEATURES.md and the profile template carry the row and the §16 line; the rulebook names the key.
+- **`features.routerHint`, experimental-off (M8b, D15).** `scripts/lib/router-hint.cjs` (pure): for a lane, an
+  account suggestion (the pays order, the content class against the project visibility), a risk flag (a refused
+  content class, a Full lane) and whether a second opinion is advised (the §16 rule). Advisory only: it never changes
+  a placement. A call that would send task text to an account whose data-recipient decision is not in the decision
+  log is refused with `E_DATA_RECIPIENT` first; then `E_GUARD_OFF` without `features.outboundGuard`; then the guard
+  itself (`E_OUTBOUND`). Off, `run()` returns the feature line and calls nothing.
+- Tests: `tests/orch-plan.test.mjs` (REQ-801 identical output with the key absent and off; REQ-802 AC-802a the
+  mid-tier other-family account and the strong writer, the positive case, the tier validation, `orch split` with the
+  feature on and off), `tests/router-hint.test.mjs` (off runs nothing, the suggestion and risk flag, the second
+  opinion, advisory only, the three refusal codes in order, the guard's verdict), `tests/features.test.mjs` (the two
+  `experimental — not enabled` lines), `tests/experiments.test.mjs` (§16 states the measurement, one §16).
 ### Added
 
 - **Install one tool group (`specs/toolkit-unpack-groups.spec.md`, REQ-801 to REQ-811).** `npx builder-pipeline unpack --tool
