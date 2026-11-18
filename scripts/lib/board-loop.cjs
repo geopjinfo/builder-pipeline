@@ -241,22 +241,26 @@ async function runLoop({ cwd, settings, accountName, board, morePasses = 0, io =
       // REQ-1509: at 0 lanes wait intervalSeconds and read again, up to holdMaxMinutes, then stop with the reason capacity
       const holdStart = stub && Number(env.BUILDER_LOOP_STUB_HOLD_START_MS) > 0 ? Number(env.BUILDER_LOOP_STUB_HOLD_START_MS) : Date.now();
       let reads = 0;
-      let last = null;
+      // the signal that took the record to 0 lanes: read once at the first held read, because the last read before
+      // the pass runs often says rise-damping (the rise is being delayed) rather than what held
+      let heldBy = null;
       for (;;) {
         const g = capacityLib.laneCap(orchRoot, Date.now());
         reads += 1;
         if (g.lanes === null || g.lanes > 0) {
-          if (last) {
-            log({ kind: 'capacity.hold', reads, seconds: Math.round((Date.now() - holdStart) / 1000), binding: last.binding || null, ended: 'pass' });
+          if (heldBy) {
+            log({ kind: 'capacity.hold', reads, seconds: Math.round((Date.now() - holdStart) / 1000), binding: heldBy, ended: 'pass' });
             say(`capacity: ${g.lanes === null ? 'no fresh record' : `${g.lanes} lane(s)`} — the pass runs after ${reads} read(s)`);
           }
           break;
         }
-        if (!last) say(`capacity: 0 lanes (${g.binding || 'capacity'}) — holding up to ${capCfg.holdMaxMinutes} min, reading again every ${capCfg.intervalSeconds} s`);
-        last = g;
+        if (!heldBy) {
+          heldBy = g.heldBinding || g.binding || 'capacity';
+          say(`capacity: 0 lanes (${heldBy}) — holding up to ${capCfg.holdMaxMinutes} min, reading again every ${capCfg.intervalSeconds} s`);
+        }
         if (Date.now() - holdStart >= capCfg.holdMaxMinutes * 60000) {
-          log({ kind: 'capacity.hold', reads, seconds: Math.round((Date.now() - holdStart) / 1000), binding: g.binding || null, ended: 'stop' });
-          return finish('capacity', { detail: `held ${reads} read(s) at 0 lanes — ${g.binding || 'capacity'}` });
+          log({ kind: 'capacity.hold', reads, seconds: Math.round((Date.now() - holdStart) / 1000), binding: heldBy, ended: 'stop' });
+          return finish('capacity', { detail: `held ${reads} read(s) at 0 lanes — ${heldBy}` });
         }
         await sleep(holdPollMs);
       }

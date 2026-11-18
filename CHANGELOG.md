@@ -41,12 +41,25 @@ versions independently of any project it is pasted into.
   an unmeasured signal never binds (load on win32, disk when `statfs` fails); a drop applies at once and a rise by one
   lane after `riseAfterTicks` ticks; a record older than `ttlSeconds` is ignored and said. The loop runner holds at
   0 lanes (new stop reason `capacity`, one `capacity.hold` run-log row) and, while the feature is on, samples its
-  worker's peak RSS (`ps -o rss=`, unmeasured on win32) into the pass row as `passPeakRssMb` — the evidence for
+  worker's peak RSS (the pid's whole process tree from `ps -eo pid=,ppid=,rss=`, so a wrapper-launched lane counts
+  the worker and not only the wrapper; unmeasured on win32) into the pass row as `passPeakRssMb` — the evidence for
   `perLaneMb`, which is a §16 project fact (null in the template). `orch status` prints one `capacity:` line;
   `doctor` adds one advisory row; `worker-runner` takes an `onSpawn` hook. New read-only persona
   `agents/capacity-steward.md` (tier mid) explains a bind; `skills/orchestrator.md` says when it is dispatched.
   Tests: `tests/capacity.test.mjs`, `tests/capacity-cli.test.mjs`, and new cases in profile, features, orch-state,
   orch-gaps, doctor and board-loop. Docs: FEATURES row, GUIDE § Capacity governor.
+- **M17 evidence and docs for the two agents (REQ-1701 to REQ-1703; D83, D105, D106).** EXPERIMENTS §21 now holds
+  the capacity governor's measurement from the loop runner's test project: 347 MB per lane (an 8-core, 15 GB Linux
+  host; the single-process sample read the gateway wrapper at 44 MB and is kept as the before-evidence), the recorded
+  tick log of one forced bind (62 ticks held, released) and the criterion with 0 false binds; the decision is keep.
+  The template's §16 text explains `perLaneMb` with the same figure. EXPERIMENTS §22 adds the reporter's recorded run
+  without a summary: 435 bytes per report, 150 per heartbeat, 34 of 48 ticks silent (71%). README gets one command
+  row each for `run capacity` and `run report` and the advisory doctor rows below the per-tool matrix; `llms.txt` maps
+  the capacity section and the two personas; the four adapter notes say how `capacity-steward` (read-only) and
+  `progress-reporter` (`--experimental`) install. Tests: REQ-1701 to REQ-1703 cases in experiments and doctor.
+- **Capacity hold row names the signal that held.** While rise damping keeps a record at 0 lanes, `govern()` carries
+  `heldBinding` (the signal that caused the hold) beside `binding`, the record stores it and `laneCap()` returns it,
+  so the loop runner's `capacity.hold` row, its stop detail and its hold lines say `memory` and not `rise-damping`.
 - **Repository hygiene for this repository.** A generic `.gitignore` (dependencies, the kit's own run output, editor
   and OS files; no tool folders) and AGENTS.md rule 15 extended: stage by name, plain commit and PR text, branch names
   `feature/<topic>` with no assistant name, arm the commit-msg hook per clone, check `git status --ignored` before a

@@ -18,6 +18,7 @@ Checked against the official docs on 2026-11-14:
 |---|---|
 | `agents/<name>.md` | `.agents/agents/<name>.md`: YAML frontmatter `name`, `description`, `tools` (list), `mainAgent: false`, `subagent: true`, `model`; the body is the persona text, with the seat's tool limits as its first paragraph |
 | `skills/<name>.md` | `.agents/skills/<name>/SKILL.md`. Codex reads the same folder; the files are written once |
+| `agents/capacity-steward.md` · `agents/experimental/progress-reporter.md` | the same mapping; the steward's `tools` list has no write tool, and the reporter persona is written only with `--experimental` |
 | pointer | `AGENTS.md` (read in the workspace folder and each parent up to the repo root) |
 
 `.agent/` (singular) is the legacy spelling; the kit writes `.agents/`. Workflows are deprecated in favour of skills, so

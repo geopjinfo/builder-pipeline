@@ -97,7 +97,7 @@ function stubs(bodies) {
 const CLAUDE_READY = `if (args[0] === 'auth' && args[1] === 'status') { process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })); process.exit(0); } if (args[0] === '--version') { process.stdout.write('1.2.3\\n'); process.exit(0); } process.exit(2);`;
 const CODEX_OUT = `if (args[0] === 'login' && args[1] === 'status') { process.stderr.write('Not logged in\\n'); process.exit(1); } process.exit(2);`;
 
-function doctorWith(features, bodies) {
+function doctorWith(features, bodies, extra = []) {
   const proj = project();
   writeFileSync(join(proj, 'PIPELINE_PROFILE.md'), profileText(features));
   const bin = stubs(bodies);
@@ -105,7 +105,8 @@ function doctorWith(features, bodies) {
   made.push(home);
   const env = { ...process.env, BUILDER_NO_BASH_CAP: '1', BUILDER_ACCOUNTS_HOME: home, PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
   const go = (args) => {
-    const r = spawnSync(process.execPath, ['builder/cli.js', 'doctor', '--tool', 'claude-code', ...args], { cwd: proj, encoding: 'utf8', env });
+    const toolArgs = extra.length ? extra : ['--tool', 'claude-code']; // the first --tool wins, so a caller's list replaces the default
+    const r = spawnSync(process.execPath, ['builder/cli.js', 'doctor', ...toolArgs, ...args], { cwd: proj, encoding: 'utf8', env });
     return { status: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}`, stdout: r.stdout ?? '' };
   };
   return { text: go([]), json: go(['--json']) };
@@ -187,6 +188,18 @@ describe('builder doctor reporter row (REQ-1613)', () => {
     assert.equal(section.rows[0].feature, 'reporter');
     assert.match(section.rows[0].note, /reporter: not configured/);
     assert.match(d.text.out, /\[reporter\] features\.reporter — advisory/);
+  });
+});
+
+describe('REQ-1703 — doctor --json for the three tools carries both agent rows (AC-1703b)', () => {
+  test('red: the capacity and reporter sections appear in one run over claude-code, codex and antigravity', () => {
+    const d = doctorWith({}, {}, ['--tool', 'claude-code,codex,antigravity']);
+    const report = JSON.parse(d.json.stdout);
+    for (const tool of ['claude-code', 'codex', 'antigravity']) assert.ok(report.some((t) => t.tool === tool), `${tool} is reported`);
+    const capacity = report.find((t) => t.section === 'capacity');
+    const reporter = report.find((t) => t.section === 'reporter');
+    assert.ok(capacity && capacity.rows[0].feature === 'capacity', 'the capacity row');
+    assert.ok(reporter && reporter.rows[0].feature === 'reporter', 'the reporter row');
   });
 });
 

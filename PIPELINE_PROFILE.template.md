@@ -299,6 +299,8 @@ nothing (it means *not told*, never *unimportant*) · `unmeasured` runs and ever
 benefit is unmeasured · `experimental-off` / `experimental-on` are opt-in; the second needs
 `unpack --experimental` and owes the measurement in `EXPERIMENTS.md`. An unknown feature name is an
 error, because a typo would otherwise switch a check off in silence.
+`features.capacity.perLaneMb` is this project's measured per-lane peak RSS in MB (the loop runner writes `passPeakRssMb`
+into each pass row); the kit's own figure is 347 MB per lane (`EXPERIMENTS.md` §21).
 
 ```json pipeline-settings
 {

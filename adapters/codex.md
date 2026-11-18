@@ -45,7 +45,7 @@ Not wired, each for a documented reason (the module's `unconfirmed` list):
 
 | Kit file | Target |
 |---|---|
-| `agents/*.md` (9) | `.codex/agents/*.toml` (no-Node fallback: `.builder/personas/*.md`) |
+| `agents/*.md` (10) | `.codex/agents/*.toml` (no-Node fallback: `.builder/personas/*.md`); `capacity-steward` is read-only, so its first paragraph says no edits; `agents/experimental/progress-reporter.md` only with `--experimental` |
 | `skills/*.md` + `skills/references/` | `.agents/skills/<name>/SKILL.md` + `.agents/skills/build-module-pipeline/references/` (no-Node fallback: `.builder/playbooks/`) |
 | `hooks/protected-paths.cjs` | `.codex/hooks/protected-paths.cjs` — copied, never armed |
 | `templates/task-board.md` | `tasks/README.md` |

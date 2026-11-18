@@ -181,7 +181,11 @@ function govern(r, policy, plannedMax, prev = null, extra = {}) {
   }
   if (lanes < planned) reasons.unshift(`CAPACITY: lanes capped at ${lanes} of ${planned} — ${lanes < computed ? 'rise damping' : binding}`);
   else reasons.unshift(`CAPACITY: ${planned} lane(s) as planned — no signal binds`);
-  return { lanes, computed, binding: lanes < planned ? (lanes < computed ? 'rise-damping' : binding) : 'none', caps, reasons, riseTicks };
+  // While rise damping holds the lane count below what the signals now allow, `heldBinding` keeps the signal that set
+  // the held level, so a hold row or a steward can name memory, not the damping that merely delays the rise.
+  const damped = lanes < planned && lanes < computed;
+  const heldBinding = damped ? (prev && (prev.heldBinding || (prev.binding !== 'rise-damping' ? prev.binding : null))) || binding : lanes < planned ? binding : 'none';
+  return { lanes, computed, binding: lanes < planned ? (damped ? 'rise-damping' : binding) : 'none', heldBinding, caps, reasons, riseTicks };
 }
 
 const DEFAULTS = Object.freeze({ perLaneMb: null, reserveCores: 2, maxLoadPerCore: 1.0, minFreeMb: 1024, minDiskMb: 2048, intervalSeconds: 60, ttlSeconds: 180, riseAfterTicks: 3, holdMaxMinutes: 60, explainAfterTicks: 10 });
@@ -230,7 +234,7 @@ function tick(root, settings, io = {}) {
   return withLock(path.join(root, LOCK), () => {
     const prev = readJson(file(root), null);
     const g = govern(readings(io), policy, planned, prev, extra);
-    const record = { lanes: g.lanes, plannedMax: planned, binding: g.binding, caps: g.caps, reasons: g.reasons, at: new Date(at).toISOString(), ttlSeconds: policy.ttlSeconds, tick: ((prev && prev.tick) || 0) + 1, riseTicks: g.riseTicks };
+    const record = { lanes: g.lanes, plannedMax: planned, binding: g.binding, heldBinding: g.heldBinding, caps: g.caps, reasons: g.reasons, at: new Date(at).toISOString(), ttlSeconds: policy.ttlSeconds, tick: ((prev && prev.tick) || 0) + 1, riseTicks: g.riseTicks };
     writeJsonAtomic(file(root), record);
     return record;
   });
@@ -254,7 +258,7 @@ function laneCap(root, at = Date.now()) {
   const r = read(root, at);
   if (!r) return { lanes: null, line: null };
   if (r.stale) return { lanes: null, line: r.line };
-  return { lanes: r.record.lanes, line: r.line, binding: r.record.binding };
+  return { lanes: r.record.lanes, line: r.line, binding: r.record.binding, heldBinding: r.record.heldBinding || r.record.binding };
 }
 
 /** `orch status` line (REQ-1511). */
@@ -311,16 +315,48 @@ function releaseLease(root, io = {}) {
 /* --------------------------------------------------------------- pass RSS ---- */
 
 /**
- * The peak RSS of a pid in MB, sampled with `ps -o rss= -p <pid>` (kB) on Unix; null (unmeasured) on win32 or when
- * ps fails (REQ-1516, D83). `io.ps(pid)` is injectable and returns the ps text.
+ * The resident memory of a pid AND its descendants, in MB (REQ-1516, D83). A lane launched through a wrapper (a gateway
+ * account's shell script, `npx`, a login shell) has the worker as a grandchild: the wrapper's own RSS is a few tens of
+ * MB and says nothing about the lane, so the sample walks the process tree from one `ps -eo pid=,ppid=,rss=` listing
+ * (kB per row) and sums it. null (unmeasured) on win32 or when ps fails. `io.ps(pid)` is injectable and returns the
+ * listing text; a single bare number is read as the pid's own RSS (a stub).
  */
 function rssMb(pid, io = {}) {
   const platform = io.platform || process.platform;
   if (platform === 'win32') return null;
   try {
-    const text = io.ps ? io.ps(pid) : require('node:child_process').spawnSync('ps', ['-o', 'rss=', '-p', String(pid)], { encoding: 'utf8', timeout: 5000 }).stdout;
-    const kb = Number(String(text || '').trim().split(/\s+/)[0]);
-    return Number.isFinite(kb) && kb > 0 ? Math.round(kb / 1024) : null;
+    const text = io.ps ? io.ps(pid) : require('node:child_process').spawnSync('ps', ['-eo', 'pid=,ppid=,rss='], { encoding: 'utf8', timeout: 5000 }).stdout;
+    const rows = String(text || '')
+      .split(/\r?\n/)
+      .map((l) => l.trim().split(/\s+/).filter(Boolean))
+      .filter((r) => r.length);
+    if (!rows.length) return null;
+    if (rows.length === 1 && rows[0].length === 1) {
+      const kb = Number(rows[0][0]);
+      return Number.isFinite(kb) && kb > 0 ? Math.round(kb / 1024) : null;
+    }
+    const children = new Map();
+    const rss = new Map();
+    for (const r of rows) {
+      if (r.length < 3) continue;
+      const [p, pp, kb] = r.map(Number);
+      if (!Number.isInteger(p)) continue;
+      rss.set(p, Number.isFinite(kb) ? kb : 0);
+      if (!children.has(pp)) children.set(pp, []);
+      children.get(pp).push(p);
+    }
+    if (!rss.has(Number(pid))) return null;
+    let total = 0;
+    const seen = new Set();
+    const queue = [Number(pid)];
+    while (queue.length) {
+      const p = queue.shift();
+      if (seen.has(p)) continue;
+      seen.add(p);
+      total += rss.get(p) || 0;
+      for (const c of children.get(p) || []) queue.push(c);
+    }
+    return total > 0 ? Math.round(total / 1024) : null;
   } catch (_) {
     return null;
   }

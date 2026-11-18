@@ -11,6 +11,8 @@ raw API loop, a human team), preserve these invariants — everything else is fr
 1. **One phase = one fresh context** whose system/first prompt is exactly: the persona file +
    `PIPELINE_PROFILE.md` + the distilled inputs the playbook names. Nothing else. If contexts
    can't be isolated, do an explicit reset and re-paste only those three things.
+   The `capacity-steward` and `progress-reporter` prompt files follow the same rule: paste the persona, the
+   profile and the record it reads (`capacity.json`, the report sources), nothing else.
 2. **Distilled artifacts between phases** — file paths and structured findings lists, never raw
    file contents or prior transcripts.
 3. **Role scoping honoured** — read-only seats make no edits; the tester touches test files only;
