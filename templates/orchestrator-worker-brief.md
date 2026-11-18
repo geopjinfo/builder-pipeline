@@ -70,6 +70,10 @@ generated files that carry it — one commit). Do not hold a version back or gue
 ## Rules
 The project's instruction file and `PIPELINE_PROFILE.md` apply in full. Never invent an oracle entry (profile §3).
 A track is a floor (the playbook's track rules).
+Stage files by name, never `git add .` or `git add -A`; inspect `git diff --cached --name-status` before the commit;
+a plain commit message and a plain PR title and body with no attribution trailer and no generated-content footer;
+remove scratch output before the close-out; run the completion gate (`hygiene --gate --since <target>`) before you
+report READY. A FAIL row is a FIX row, never a line to delete.
 
 ## Done-test
 <the exact command(s) and expected digest that prove this lane is done>

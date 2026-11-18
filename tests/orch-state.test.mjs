@@ -842,3 +842,24 @@ describe('REQ-1507, REQ-1508 — the capacity record is one more min() term in n
     assert.equal(capacityLib.laneCap(root).lanes, 2);
   });
 });
+
+describe('REQ-1834 — `orch next` offers the sweeps after a merge, dry run only', () => {
+  test('red: AC-1834 one merged lane and both sweep features on: two SWEEP lines, neither names --apply; with the features off, none', () => {
+    const root = tmp('sweep');
+    state.init(root, 'w1', lanes(2), { preflightMode: 'parallel' });
+    state.approve(root, 'w1', 'human');
+    state.setLane(root, 'w1', 'l1', { status: 'MERGED' });
+    const on = state.nextActions(root, state.load(root, 'w1'), Date.now(), { sweeps: ['branchSweep', 'worktreeSweep'] });
+    const sweeps = on.filter((a) => a.startsWith('SWEEP '));
+    assert.equal(sweeps.length, 2, on.join('\n'));
+    assert.match(sweeps[0], /^SWEEP branches: .*run branch-sweep/);
+    assert.match(sweeps[1], /^SWEEP worktrees: .*run worktree-sweep/);
+    for (const s of sweeps) assert.ok(!s.includes('--apply'), s);
+    const off = state.nextActions(root, state.load(root, 'w1'), Date.now(), { sweeps: [] });
+    assert.equal(off.some((a) => a.startsWith('SWEEP ')), false);
+    // no lane merged yet: nothing to sweep, whatever is on
+    const root2 = tmp('sweep2');
+    state.init(root2, 'w2', lanes(1), { preflightMode: 'parallel' });
+    assert.equal(state.nextActions(root2, state.load(root2, 'w2'), Date.now(), { sweeps: ['branchSweep'] }).some((a) => a.startsWith('SWEEP ')), false);
+  });
+});

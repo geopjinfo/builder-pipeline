@@ -153,6 +153,26 @@ test('builder personas-check runs the kit script in the project folder', () => {
   assert.match(r.out, /personas-check: no personas\//);
 });
 
+describe('run attribution-check / run artifact-check (M21)', () => {
+  test('red: AC-1841, AC-1842 off by default: each prints its not-configured line and exits 3; an unknown flag is exit 2', () => {
+    const { proj, cli } = project();
+    spawnSync('git', ['init', '-q'], { cwd: proj });
+    const a = run(cli, proj, ['run', 'attribution-check']);
+    assert.equal(a.status, 3, a.out);
+    assert.match(a.out, /^attributionCheck: not configured/m);
+    const b = run(cli, proj, ['run', 'artifact-check']);
+    assert.equal(b.status, 3, b.out);
+    assert.match(b.out, /^artifactCheck: not configured/m);
+    const c = run(cli, proj, ['run', 'artifact-check', '--bogus']);
+    assert.equal(c.status, 2, c.out);
+    assert.match(c.out, /usage:/);
+    const d = run(cli, proj, ['run', 'hygiene']);
+    assert.equal(d.status, 3, d.out);
+    assert.match(d.out, /^hygiene: no check is on/m);
+    assert.equal(run(cli, proj, ['run', 'hygiene', '--check']).status, 2);
+  });
+});
+
 describe('run branch-sweep / run run-sweep (M18)', () => {
   test('red: AC-1807b a flag without its value and an unknown flag are usage errors, exit 2', () => {
     const { proj, cli } = project();

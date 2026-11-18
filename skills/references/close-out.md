@@ -45,6 +45,29 @@ reviewer is dispatched — see *Fix in-run*.)
   not grow past the baseline. A module that renamed or moved a file fixes the instructions that
   cite it here, in the same run. Feature off → `instructionLint: not configured`.
 
+## Step 3 — the hygiene report and the completion gate
+
+`node scripts/hygiene.mjs --since <base> --json` runs every hygiene-class check whose §16 feature is on
+(`branchSweep`, `runSweep`, `worktreeSweep`, `ignoreCheck`, `sizeCheck`, `secretScan`, `depsCheck`, `docsCheck`,
+`deadCode`, `instructionLint`, `instructionBudget`, `attributionCheck`, `artifactCheck`) through its own script and
+prints one report; a check that is off prints its `not configured` line. `--since` narrows the checks that read
+files to the files changed since the ref; the sweeps and the tree checks judge the whole tree and say so. A **hard**
+finding (exit 1 from `secretScan`, `attributionCheck`, `artifactCheck`, `depsCheck`, `deadCode`) opens a `FIX-n`
+row; a soft finding goes to the handoff pack's gaps, with the `repo-steward` persona's keep / fix / allow and the
+§16 row that would record it. `--apply` reaches only the three sweeps and is never part of the close-out.
+
+`node scripts/hygiene.mjs --gate --since <base> --json` prints the seven rows of the completion gate — **file scope**,
+**ignore rules**, **secrets**, **staging**, **commit**, **delivery**, **separation** — each `PASS`, `FAIL` or
+`NOT CONFIGURED`, with the findings behind a `FAIL`. A `FAIL` row opens one `FIX-n` row per failing gate and the
+module stays open. `NOT CONFIGURED` is never a pass: record it as `hygiene: not configured` for that row. No gate
+check on at all → exit 3 and the same line for the module. The gate reads; it removes nothing, rewrites no history
+and erases no file of the person's.
+
+**Staging and commit rules.** Stage files by name, never `git add .` or `git add -A`; inspect
+`git diff --cached --name-status` before the commit; a plain commit message and a plain PR title and body with no
+attribution trailer and no generated-content footer; remove scratch output before the close-out; run the completion
+gate (`hygiene --gate --since <base>`) before the push. A FAIL row is a FIX row, never a line to delete.
+
 ## Step 5 — the handoff pack's sections
 
 Fill every `<fill …>` — §E (docs and contract changes) is written by hand. Sections: **§A progress** (commit, version, verdict,

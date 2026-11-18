@@ -92,6 +92,19 @@ describe('features — repo hygiene (M18)', () => {
   });
 });
 
+describe('features — completion gate (M21)', () => {
+  test('red: AC-1848 attributionCheck and artifactCheck are listed, off by default; a bad pattern and a bad allow list are refused', () => {
+    const r = run(project());
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^attributionCheck: not configured$/m);
+    assert.match(r.stdout, /^artifactCheck: not configured$/m);
+    const bad = run(project(block({ schema: 2, features: { attributionCheck: { state: 'on', patterns: ['('] }, artifactCheck: { state: 'on', allow: [1] } } })));
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stdout + bad.stderr, /attributionCheck\.patterns.*not a valid regular expression/);
+    assert.match(bad.stdout + bad.stderr, /artifactCheck\.allow: an array of non-empty strings/);
+  });
+});
+
 describe('REQ-1501 — features.capacity is in the table, default off (AC-1501c)', () => {
   test('red: the loader knows the feature and its line says not configured', () => {
     const r = run(project(block({ schema: 2 })));

@@ -212,6 +212,38 @@ Antigravity, ChatGPT/GPT, an @anthropic.com or @openai.com address, …) and the
 human co-author, and never blocks a commit. A commit-msg hook you already have is left alone: the command names it and
 prints the one line to add to it.
 
+## The index is checked before a commit (`git-hooks --artifact-check`)
+
+`features.artifactCheck` on, then:
+
+```
+npx builder-pipeline git-hooks --artifact-check   # arm the pre-commit in this clone
+npx builder-pipeline doctor                        # "[repo] artifact check pre-commit: armed"
+```
+
+It copies `hooks/artifact-check-precommit.sh` to the folder git runs hooks from and fills `KIT`. Before every commit
+the hook runs `artifact-check --staged` over the index: an assistant-specific file, a scratch file, an archive, an
+assistant line in `.gitignore` or a generated-content label refuses the commit with the path and the `git rm --cached`
+line to run. What a blanket `git add -A` picked up is caught here, before it becomes history. There is no unlock
+variable; `features.artifactCheck.allow` in §16 is the only way past. When the secret-scan pre-commit is already armed,
+the artifact check joins it in the same `pre-commit` (and the other way round); a pre-commit hook of your own is left
+alone, with the one line to add printed.
+
+## Completion gate (`run hygiene --gate`)
+
+```
+npx builder-pipeline run hygiene --since <base> --json         # every hygiene check that is on, one report
+npx builder-pipeline run hygiene --gate --since <base>         # the seven rows: PASS / FAIL / NOT CONFIGURED
+```
+
+The first command runs each hygiene check whose §16 feature is on through its own script and writes the report to
+`.pipeline/hygiene/last.json` (the progress reporter reads it). The second prints the completion gate: file scope,
+ignore rules, secrets, staging, commit, delivery, separation. Exit 0 when every configured row passes, 1 on a FAIL
+row, 3 when no gate check is on — `NOT CONFIGURED` is printed, never counted as a pass. The pipeline runs both at
+Phase 7 and opens one FIX row per failing gate; `"hygiene-gate"` in `features.orchestrator.gates` runs the gate in
+`orch merge` and refuses the merge on FAIL, with the rows on stderr. Nothing is removed and no history is rewritten:
+each finding prints the command a person would run.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

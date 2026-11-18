@@ -189,3 +189,62 @@ describe('REQ-1613 — the orchestrator skill starts the reporter beside board-w
     assert.match(text, /board-watch/);
   });
 });
+
+describe('REQ-1833, REQ-1845 to REQ-1848 — the completion gate is wired into the prose', () => {
+  const STAGING = [/never git add \. or git add -A/, /git diff --cached --name-status/, /plain commit message/, /no\s+attribution trailer and no generated-content footer/, /hygiene --gate/];
+
+  test('red: AC-1833, AC-1845 Phase 7 runs the report then the gate; a FAIL row is a FIX row and the module stays open; off is not configured', () => {
+    const text = flat(read(PLAYBOOK));
+    assert.match(text, /node scripts\/hygiene\.mjs --since <base> --json/);
+    assert.match(text, /node scripts\/hygiene\.mjs --gate --since <base> --json/);
+    assert.match(text, /FAIL row opens one FIX-n row per failing gate and the module stays open/);
+    assert.match(text, /hygiene: not configured/);
+    const readiness = flat(read('skills/module-readiness-check.md'));
+    assert.match(readiness, /run hygiene --since <base> --json/);
+    assert.match(readiness, /completion gate: PASS, FAIL .* or not configured/);
+    assert.match(readiness, /hygiene: not configured \(not a pass\)/);
+  });
+
+  test('red: AC-1845 the orchestrator skill names hygiene-gate in gates, the refusal on FAIL, the steward for soft findings and the SWEEP offer', () => {
+    const text = flat(read('skills/orchestrator.md'));
+    assert.match(text, /hygiene-gate.*features\.orchestrator\.gates/);
+    assert.match(text, /A FAIL row refuses the merge/);
+    assert.match(text, /repo-steward/);
+    assert.match(text, /SWEEP branches/);
+    assert.match(text, /never names --apply/);
+  });
+
+  test('red: AC-1846 builder-init proposes the allow list from builder.lock.json and the two checks on, and writes nothing before the confirm gate', () => {
+    const text = flat(read('skills/builder-init.md'));
+    assert.match(text, /features\.artifactCheck\.allow.*builder\.lock\.json/);
+    assert.match(text, /features\.attributionCheck and features\.artifactCheck \*\*on\*\* when §16 has features\.orchestrator on/);
+    assert.match(text, /Propose only; nothing is written before Step 4/);
+    assert.match(text, /arms neither/);
+  });
+
+  test('red: AC-1847 the four skills, the worker brief and the repo-steward persona carry the staging and commit rules', () => {
+    for (const file of [PLAYBOOK, 'skills/build-module-lite-gate-batch.md', 'skills/orchestrator.md', 'skills/references/close-out.md', 'templates/orchestrator-worker-brief.md', 'agents/repo-steward.md']) {
+      const text = flat(read(file));
+      for (const re of STAGING) assert.match(text, re, `${file} lacks ${re}`);
+    }
+    const steward = flat(read('agents/repo-steward.md'));
+    assert.match(steward, /separation/i);
+    assert.match(steward, /terminology|model .* only where the product needs it/i);
+    assert.match(steward, /never edit/i);
+  });
+
+  test('red: AC-1848 GUIDE has the "Repo hygiene and the completion gate" section with the seven rows and the limits; USAGE, FEATURES, llms.txt and the changelog name the gate', () => {
+    const guide = read('GUIDE.md');
+    const section = guide.slice(guide.indexOf('## 🧹 Repo hygiene and the completion gate'), guide.indexOf('## ⬆️ From 1.x'));
+    assert.ok(section.length > 500, 'the section exists before "From 1.x"');
+    for (const row of ['file scope', 'ignore rules', 'secrets', 'staging', 'commit', 'delivery', 'separation']) assert.match(section, new RegExp(`^\\| ${row} \\|`, 'm'), row);
+    assert.match(section, /remove nothing and rewrite no history/);
+    assert.match(section, /never erased to pass a check/);
+    assert.match(section, /NOT CONFIGURED` is never a pass/);
+    assert.match(read('USAGE.md'), /## Completion gate \(`run hygiene --gate`\)/);
+    assert.match(read('FEATURES.md'), /^\| Completion gate \|/m);
+    assert.match(read('FEATURES.md'), /^\| Hygiene runner \|/m);
+    assert.match(read('llms.txt'), /Repo hygiene and the completion gate/);
+    assert.match(read('CHANGELOG.md'), /M21 completion gate, part 2/);
+  });
+});

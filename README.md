@@ -3,7 +3,7 @@
 <p align="center">
   <img alt="agent-agnostic" src="https://img.shields.io/badge/agents-agnostic_by_design-critical?style=flat-square">
   <img alt="pipeline" src="https://img.shields.io/badge/pipeline-13_phases-blue?style=flat-square">
-  <img alt="personas" src="https://img.shields.io/badge/personas-10_agents-8A2BE2?style=flat-square">
+  <img alt="personas" src="https://img.shields.io/badge/personas-11_agents-8A2BE2?style=flat-square">
   <img alt="harnesses" src="https://img.shields.io/badge/--tool_targets-11-success?style=flat-square">
   <img alt="deps" src="https://img.shields.io/badge/CLI_dependencies-zero-brightgreen?style=flat-square">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square&logo=node.js&logoColor=white">

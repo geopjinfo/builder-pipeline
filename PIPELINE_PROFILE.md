@@ -19,7 +19,9 @@
   "paths": { "boards": "tasks", "registry": "DEFERRED_TASKS.md", "runs": ".pipeline", "decisions": "DECISIONS.md" },
   "features": {
     "handoffPack": { "state": "on", "decisionIdPattern": "D\\d+" },
-    "specAuthoring": { "state": "on", "dir": "specs", "idPattern": "REQ-\\d+" }
+    "specAuthoring": { "state": "on", "dir": "specs", "idPattern": "REQ-\\d+" },
+    "attributionCheck": { "state": "on", "target": "main" },
+    "artifactCheck": { "state": "on", "allow": ["AGENTS.md", "CLAUDE.md", "tests/", "specs/repo-hygiene.spec.md"] }
   }
 }
 ```

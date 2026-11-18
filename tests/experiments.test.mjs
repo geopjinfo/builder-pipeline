@@ -173,3 +173,12 @@ describe('REQ-1614 — reporterSummary is experimental-off with a §22 entry', (
     assert.equal(profile.FEATURES.reporter.defaults.state, 'off');
   });
 });
+
+describe('REQ-1825 — §23 carries the kit measurement (M22)', () => {
+  test('red: AC-1825 the §23 table has the kit row with findings, false count and rate, and the decision names the second repository as owed', () => {
+    const s23 = text.slice(text.indexOf('## 23.'), text.indexOf('## 24.') > 0 ? text.indexOf('## 24.') : undefined);
+    assert.match(s23, /^\| 2026-11-17 \| [0-9a-f]{7} \| the kit itself, roots as written above[^|]*\| [0-9a-f]{7} \| 73 \| 73 \| 100 percent \|$/m);
+    assert.match(s23, /^\*\*Decision \(\d{4}-\d{2}-\d{2}\)\.\*\* not yet measured — one of two repositories measured/m);
+    assert.match(s23, /second repository is a JavaScript project/);
+  });
+});

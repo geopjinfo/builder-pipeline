@@ -533,8 +533,26 @@ function nextActions(root, s, at = Date.now(), opts = {}) {
       acts.push(`ADD-LANES: ${c.seat} at ${u.pct}% — pull ${pull} row(s) from ${from} (${live} of cap ${c.laneCap} lanes live)`);
     }
   }
+  // SWEEP (REQ-1834, D86): a merged lane leaves a branch and a worktree behind; with the sweep on, offer the dry run.
+  // --apply is never offered: removal is a person's step. opts.sweeps injects the on features (tests); undefined reads the profile.
+  const sweeps = opts.sweeps === undefined ? sweepFeatures() : opts.sweeps;
+  if (lanes.some(([, l]) => l.status === 'MERGED')) {
+    if (sweeps.includes('branchSweep')) acts.push('SWEEP branches: a lane merged — run `npx builder-pipeline run branch-sweep` (dry run: MERGED, STALE, KEEP per branch; removal is yours)');
+    if (sweeps.includes('worktreeSweep')) acts.push('SWEEP worktrees: a lane merged — run `npx builder-pipeline run worktree-sweep` (dry run: KEEP or SWEEP per worktree; removal is yours)');
+  }
   if (lanes.every(([, l]) => l.status === 'MERGED')) acts.push('RUN COMPLETE: every lane merged — close out the records');
   return acts;
+}
+
+/** The sweep features that are on in the project's profile (cwd), or none when it cannot be read. */
+function sweepFeatures() {
+  try {
+    const profile = require('./profile.cjs');
+    const settings = profile.load(process.cwd()).settings;
+    return ['branchSweep', 'worktreeSweep'].filter((n) => profile.feature(settings, n).enabled);
+  } catch (_) {
+    return [];
+  }
 }
 
 module.exports = {

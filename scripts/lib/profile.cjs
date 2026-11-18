@@ -190,6 +190,21 @@ const FEATURES = {
   ignoreCheck: { defaults: { state: 'off', extra: [], allow: [] }, requires: [] },
   sizeCheck: { defaults: { state: 'off', maxFileKb: 512, history: false, maxCommits: 500, allow: [] }, requires: [] },
   secretScan: { defaults: { state: 'off', roots: ['.'], allow: [], history: false, maxCommits: 200 }, requires: [] },
+  /* Completion gate, commit side (specs/repo-hygiene.spec.md M21, REQ-1841, D99, D102, D104): trailers, footers, author
+   * identities and branch names that carry an assistant or tool name — scripts/attribution-check.mjs. `patterns` and
+   * `authors` add to the built-in lists; `allow` holds commit SHAs and branch globs; `target` is the integration branch
+   * (null = the --since ref). A finding is a fail; nothing is amended. */
+  attributionCheck: {
+    defaults: { state: 'off', target: null, patterns: [], authors: [], allow: [] },
+    requires: [],
+  },
+  /* Completion gate, tree side (REQ-1842, REQ-1843, D100, D101, D103): assistant files, scratch files, archives,
+   * assistant lines in .gitignore and generated-content labels in the tree or the index — scripts/artifact-check.mjs.
+   * `extra` adds paths to the catalogues; `allow` (globs) is the only way past a finding. */
+  artifactCheck: {
+    defaults: { state: 'off', extra: [], allow: [] },
+    requires: [],
+  },
   /* The batch orchestrator above the pipeline — scripts/orch.mjs, skills/orchestrator.md. It splits a plan into
    * disjoint lanes, places each lane on an account (`features.accounts`), merges finished lanes one at a time into
    * `target` through `gates`, and runs headless jobs on an api-key account with the guards in scripts/lib/orch-credit.cjs.
@@ -573,6 +588,19 @@ function validate(settings) {
     }
     if (rsweep.roots !== undefined && (!Array.isArray(rsweep.roots) || rsweep.roots.some((s) => typeof s !== 'string' || !s))) errors.push('features.runSweep.roots: an array of non-empty strings');
   }
+  /* Completion gate (M21): the lists are globs, SHAs or regular expressions as strings; a malformed pattern is a profile error. */
+  for (const [name, keys] of [['attributionCheck', ['patterns', 'authors', 'allow']], ['artifactCheck', ['extra', 'allow']]]) {
+    const f = settings.features?.[name];
+    if (!isObject(f)) continue;
+    for (const k of keys) {
+      const v = f[k];
+      if (v !== undefined && (!Array.isArray(v) || v.some((s) => typeof s !== 'string' || !s))) errors.push(`features.${name}.${k}: an array of non-empty strings`);
+    }
+    if (name === 'attributionCheck') {
+      if (f.target !== undefined && f.target !== null && (typeof f.target !== 'string' || !f.target)) errors.push('features.attributionCheck.target: null or a branch name');
+      for (const p of Array.isArray(f.patterns) ? f.patterns : []) if (typeof p === 'string' && badRegex(p)) errors.push(`features.attributionCheck.patterns: ${JSON.stringify(p)} is not a valid regular expression`);
+    }
+  }
   /* The cost readers the kit ships. A third value would make cost-window print "unmeasurable" for a typo. */
   const reader = settings.features?.costAccounting?.reader;
   if (reader !== undefined && reader !== null && !COST_READERS.includes(reader)) {
@@ -722,7 +750,10 @@ function validateOrchestrator(settings, badRegex) {
   template('stateCommand', ['session']);
   template('stopCommand', ['session']);
   template('launchCommand', ['brief']);
-  template('gates', []);
+  // `gates`: a command, or a list of commands; the entry `hygiene-gate` names the kit's completion gate (REQ-1845).
+  if (Array.isArray(o.gates)) {
+    if (!o.gates.length || o.gates.some((g) => typeof g !== 'string' || !g.trim())) errors.push(`${at('gates')}: null, a command, or a non-empty list of commands (the entry "hygiene-gate" names the completion gate)`);
+  } else template('gates', []);
   for (const k of ['branchPrefix', 'worktreePrefix', 'modulesDir']) if (o[k] !== undefined && o[k] !== null && (typeof o[k] !== 'string' || !o[k])) errors.push(`${at(k)}: null, or a non-empty string`);
   /* The accounts the orchestrator runs on (features.accounts, through the 1.0 view until M3): a terminal worker
    * account needs a launch command; an api-key account needs a model floor to check against. */

@@ -186,3 +186,16 @@ describe('REQ-1811 to REQ-1813 — the tree hygiene rows', () => {
     assert.deepEqual(parse({ sizeCheck: { state: 'on', maxFileKb: 256, history: true, maxCommits: 50, allow: ['a/*'] } }).errors, []);
   });
 });
+
+describe('REQ-1845 — features.orchestrator.gates is a command or a list of commands', () => {
+  const parse = (orchestrator) => profile.parse('```json pipeline-settings\n' + JSON.stringify({ schema: 2, features: { orchestrator: { state: 'on', target: 'dev', ...orchestrator } } }) + '\n```\n');
+  test('red: a string, null and a list naming hygiene-gate are valid; an empty list and a list with a blank entry are not, each naming the key', () => {
+    assert.deepEqual(parse({ gates: 'npm test' }).errors.filter((e) => e.includes('gates')), []);
+    assert.deepEqual(parse({ gates: null }).errors.filter((e) => e.includes('gates')), []);
+    assert.deepEqual(parse({ gates: ['hygiene-gate', 'npm test'] }).errors.filter((e) => e.includes('gates')), []);
+    for (const bad of [[], [''], ['npm test', 3]]) {
+      const r = parse({ gates: bad });
+      assert.ok(r.errors.some((e) => e.startsWith('features.orchestrator.gates:') && e.includes('hygiene-gate')), `${JSON.stringify(bad)}\n${r.errors.join('\n')}`);
+    }
+  });
+});
