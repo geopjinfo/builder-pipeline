@@ -67,22 +67,22 @@ it. Never load them all up front.
 ## Context & run discipline
 
 **Never run a test suite bare.** Route every suite through a wrapper that tees the FULL output to a log file (under
-`paths.logs`) and prints a bounded digest (≤25 lines: counts, each failing test with one assertion line, the log path)
-— `commands.tier` should name that wrapper. If you need more than the digest, have a seat read the log and return
-findings. Selective runs (`commands.affected`) are an inner-loop convenience ONLY and are never a board row's merge
-evidence; full tiers stay mandatory at the Test phase, the Review/behavioural gates, and before every PR.
+`paths.logs`) and prints a bounded digest (≤25 lines: counts, each failing test with one assertion line, the log path) —
+`commands.tier` should name that wrapper; for more than the digest, a seat reads the log. Selective runs (`commands.affected`)
+are an inner-loop convenience ONLY, never a board row's merge evidence; full tiers stay mandatory at the Test phase, the Review/behavioural gates, and before every PR.
 
-**Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `builder/skills/state-template.md` in the kit):
-loop number, open FIX rows, which phases must re-run, the last digest lines, the index verdict, each optional check's
-last result, decisions taken. Rewrite it at EVERY phase gate. After any context compaction, re-read in this order —
-(1) `state.md`, (2) the board's `phase:status` block, (3) the open `FIX-n` rows — BEFORE the next dispatch; never
-reconstruct a run from scrollback.
+**The last message of every run opens with `Track: <track> — <reason>` and a `Phases:` line** — a blocked run, an early
+stop and a `Needs a human` ending included; a report that opens with prose has no header (REQ-2007). **Every run dispatches
+at least one seat.** The orchestrator edits no production source itself: SMALL is one `module-builder` dispatch, never a direct edit (REQ-2002).
 
-**Put the loop-back list last.** When you re-dispatch the coder, the ordered `FIX-n` list is the final thing in the brief,
-after the context — recency is the one placement effect you control.
+**Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `builder/skills/state-template.md` in the kit): loop number, open FIX rows, which
+phases must re-run, the last digest lines, the index verdict, each optional check's last result, decisions taken. Rewrite it at EVERY phase gate. After
+any context compaction, re-read in this order — (1) `state.md`, (2) the board's `phase:status` block, (3) the open `FIX-n` rows — BEFORE the next
+dispatch; never reconstruct a run from scrollback.
 
 **Fixed dispatch header, every seat, every time:** `MODULE / TRACK / PLAN-PATH / BOARD-PATH / YOUR-TASK /
-RETURN-SHAPE`. Invariants + acceptance criteria + citations FIRST in any brief; the ordered action list LAST.
+RETURN-SHAPE`. Invariants + acceptance criteria + citations FIRST in any brief; the ordered action list LAST. **Put the
+loop-back list last:** when you re-dispatch the coder, the ordered `FIX-n` list is the final thing in the brief, after the context — recency is the one placement effect you control.
 
 **Every seat runs in the foreground.** Dispatch and wait for the return in the same step; concurrent seats are one message
 with several dispatches, and all of them return before the next step. Never schedule a timer, a wake-up or a sleep to wait for a seat

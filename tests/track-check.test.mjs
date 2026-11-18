@@ -246,6 +246,11 @@ describe('REQ-2001 to REQ-2007 — the skill text: the SMALL track, the foregrou
   });
   test('red: AC-2007 the report opens with Track: and Phases: lines', () => {
     assert.match(SKILL, /`Track: <track> — <reason>`/);
+    // pilot-02-E: 6 of 15 runs ended in prose with no header, and 4 dispatched no seat; the rule now sits in the run discipline
+    assert.match(SKILL, /\*\*The last message of every run opens with `Track: <track> — <reason>` and a `Phases:` line\*\*/);
+    assert.match(SKILL, /a blocked run, an early\s+stop and a `Needs a human` ending included/);
+    assert.match(SKILL, /\*\*Every run dispatches\s+at least one seat\.\*\*/);
+    assert.match(SKILL, /SMALL is one `module-builder` dispatch, never a direct edit/);
     assert.match(SKILL, /`Phases:`/);
     assert.match(REF, /^Track: /m);
     assert.match(REF, /^Phases: /m);

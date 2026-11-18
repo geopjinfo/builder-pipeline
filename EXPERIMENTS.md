@@ -830,6 +830,7 @@ runs that ended in a wait for a person, and the track each run reported. Then th
 | Date | Kit commit | Bed | Solved | Cost per run (USD) | Wall (min) | Seats per run | Waits | Note |
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-18 | 2.1.0 (before) | pilot-01, 5 tasks × 3 seeds | 14 of 15 | 1.64 (0.17 to 8.03) | 4.9 | 0 in 8 runs, 1 to 2 in 5, 8 and 14 in 2 | 2 | no SMALL track; two runs waited on a waiver nobody could give |
+| 2026-11-18 | 18677ff3 (after) | pilot-02-E, the same 5 tasks × 3 seeds, one subscription lane | 14 of 15 | 0.65 (0.14 to 1.10) | 3.7 | 0 in 4 runs, 1 in 10, 2 in 1 | 0 | tool calls 24 per run (was 48); 9 of 15 reports open with `Track: SMALL`, 6 with prose; 1 run blocked by the harness permission pin (E-T3-s3), 53 denied commands across 15 runs; one run wrote `Needs a human` and ended |
 
 **Keep rule.** Keep the numbers when, after the change, no run waits for a person, the cost per run on the pilot
 tasks falls below 1.00 USD with solved cells not below 14 of 15, and every report carries its `Track:` line. Raise the
@@ -839,4 +840,4 @@ SMALL run ships a defect the hidden tests catch. A change to the numbers is a ne
 **Risk.** Five tasks of one shape (small backend changes in one TypeScript project) decide the first numbers. A project
 with large files or deep module trees gets its own reading before the numbers are called general.
 
-**Decision (2026-11-18).** not yet measured — the before row is in; the after row comes from the arm E re-run on the same five tasks.
+**Decision (2026-11-18).** not yet measured — two of the three keep conditions hold after the change (no run waited for a person; 0.65 USD per run against 1.64, solved 14 of 15 both times) and the third does not: 9 of 15 reports carried the `Track:` header and 4 runs dispatched no seat, so the header and the one-seat rule moved into the skill's run discipline and the full batch measures them again. The numbers 4 files and 1 module stay as written until that batch.

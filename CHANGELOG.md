@@ -24,6 +24,8 @@ versions independently of any project it is pasted into.
   `Human:` and `Size hint:` lines; the detail lives in `skills/references/sizing.md`. Measured next in EXPERIMENTS §24.
   Source: the kit benchmark pilot of 2026-11-18 (8 of 15 kit runs dispatched no seat, 2 ran 8 to 14 seats for a change
   of three files; cost per run 0.17 to 8.03 USD).
+  Re-run on the same tasks with the change (EXPERIMENTS §24): 0.65 USD per run, no run waited for a person, 14 of 15
+  solved; 9 of 15 reports carried the header, so the header rule and the one-seat rule sit in the run discipline now.
 
 ## [2.1.0] — 2026-11-18
 
