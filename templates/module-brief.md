@@ -22,6 +22,11 @@ forbidden doc paths — changes there ride the handoff pack.
 > Build `<MODULE_KEY>` through the full pipeline (planner → coder → tester → standards+security+vuln+
 > invariant auditors → docs → reviewer → behavioural gate, gate-fail loop). **Wave/priority:** `<…>`.
 > **Why now / unblocks:** `<one line>`.
+> **Human:** `available` or `none` — `none` makes the run unattended: every human-only decision is recorded under
+> `Needs a human` with the assumption taken, and the run ends with its verdict (never a question).
+> **Size hint:** `<files and modules you expect to change>` — at most 4 production source files in one module, no new
+> operation, table, permission key or dependency, no protected path → the `SMALL` track (one builder dispatch); anything
+> larger names its track (`ADDITIVE`, `FULL` …). The orchestrator measures it with `track-check` after the builder returns.
 >
 > **0a. Context budget:** this thread dispatches and decides only. Every heavy step (reading a spec,
 > building a row, a seat, writing the pack) goes to one sub-agent that returns at most 10 lines

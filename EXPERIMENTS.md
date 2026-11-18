@@ -809,3 +809,34 @@ repositories. Drop when it is 10 percent or more on either. A rate on one reposi
 measurement before `experimental-on`.
 
 **Decision (2026-11-17).** not yet measured — one of two repositories measured: on the kit 73 findings, 73 false (100 percent), and still 5 of 5 false after the entry globs; the keep rule needs both repositories and the second (a JavaScript project, DL-4) is owed. The kit's number already says the reader cannot gate a repository whose entries are dispatched by a built path; the recommended course when the second number is in is drop, or a reader that takes `package.json` `bin` dispatch and hook settings as entries before the experiment is run again.
+
+## 24. Pipeline sizing — `track-check` (free check, unmeasured)
+
+**What ships.** The `SMALL` track of the `build-module-pipeline` skill (`specs/pipeline-sizing.spec.md` REQ-2001 to
+REQ-2010, D134 to D138): one builder dispatch for a change of at most 4 production source files in one module, the
+orchestrator running typecheck and the tiers itself, the foreground dispatch rule, the unattended mode (`Human: none`)
+and the `Track:` / `Phases:` report header. `npx builder-pipeline run track-check --since <base>` measures the limits
+from git. None of it is a §16 feature: the limits are fixed numbers in the skill (D135), so there is nothing to switch
+on and the measurement decides whether the numbers change, not whether the track exists.
+
+**Why it is here.** The numbers 4 files and 1 module come from one benchmark pilot, not from a sweep. Too low, and a
+small change takes the full pipeline for nothing; too high, and a change that needed an auditor goes without one.
+
+**Measurement (written before the second run).** The kit benchmark runs the same five tasks (two to six files each,
+hidden tests, three seeds) with the kit before this change (version 2.1.0) and after it, on the same model and lane.
+Record, per arm: solved cells of 15, cost per run, wall minutes per run, tool calls per run, seats dispatched per run,
+runs that ended in a wait for a person, and the track each run reported. Then the full batch (40 tasks, three arms).
+
+| Date | Kit commit | Bed | Solved | Cost per run (USD) | Wall (min) | Seats per run | Waits | Note |
+|---|---|---|---|---|---|---|---|---|
+| 2026-11-18 | 2.1.0 (before) | pilot-01, 5 tasks × 3 seeds | 14 of 15 | 1.64 (0.17 to 8.03) | 4.9 | 0 in 8 runs, 1 to 2 in 5, 8 and 14 in 2 | 2 | no SMALL track; two runs waited on a waiver nobody could give |
+
+**Keep rule.** Keep the numbers when, after the change, no run waits for a person, the cost per run on the pilot
+tasks falls below 1.00 USD with solved cells not below 14 of 15, and every report carries its `Track:` line. Raise the
+file limit only if a run that escalated would have been solved as SMALL with the same evidence; lower it only if a
+SMALL run ships a defect the hidden tests catch. A change to the numbers is a new decision row, with the run ids.
+
+**Risk.** Five tasks of one shape (small backend changes in one TypeScript project) decide the first numbers. A project
+with large files or deep module trees gets its own reading before the numbers are called general.
+
+**Decision (2026-11-18).** not yet measured — the before row is in; the after row comes from the arm E re-run on the same five tasks.

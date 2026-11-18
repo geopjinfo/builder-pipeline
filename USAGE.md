@@ -122,6 +122,11 @@ line. Your close-out: run the gates + full integration tier yourself, review the
 answer the pack, revert any unlock — and check every ruling you made during the run has its row in
 `DECISIONS.md`.
 
+**Nobody there? `Human: none`.** A brief line `Human: none` (or a session nobody watches) makes the run
+unattended: every stop point above is recorded under `Needs a human` in the report with the assumption the run
+took, and the run ends with its verdict instead of a question. A recorded gate skip stays CHANGES-REQUIRED;
+the absence of a person never upgrades a verdict.
+
 **Unscheduled stop — two-strike escalation.** If the same blocker survives two fix loops the
 pipeline stops and tells you. This almost always means the plan or a spec is wrong, not the code.
 Read the blocker, fix the upstream truth (profile, oracle, spec, brief), then resume.
@@ -136,6 +141,7 @@ None of these wait for you unless they fail. Each is a script, and each prints
 | P0 | `npx builder-pipeline run orchestrator-check` | The session's model vs `models.orchestrator`. Exit 5 is a **warning**, never a refusal; no readable transcript is *unmeasured*, not a pass |
 | P1, before the planner | `npx builder-pipeline run index-check` | Knowledge-index freshness. `0` fresh · `3` absent · `4` unmeasurable · `10` docs pending · `11` code behind · `12` both. With `features.graph` on, a non-zero exit that is not recorded in the run's state file **refuses the planner**: refresh (code refresh is free; doc embedding spends tokens, and above the automatic limit a person decides) or record the verdict. With it off: `graph: not configured`, and the run goes on |
 | P1 · P4 · P6 | `npx builder-pipeline run output-check plan\|findings\|review <file>` | The plan, each findings block and the review have their fixed shape; a malformed one goes back to its seat |
+| End of P2 (SMALL) | `npx builder-pipeline run track-check --since <base>` | The size of the diff from git: `SMALL: n source files in m module(s)` (exit 0) or one `ESCALATE: <reason>` line per broken limit (exit 1), after which the run continues from Phase 1 as ADDITIVE. A free check: no §16 key, no off state |
 | End of P2 and P5 | `npx builder-pipeline run claims-check --run <key>` | Every recorded count re-run, every `file:line` still points at its content, no retracted phrase, every owed note resolves |
 | P7 | `npx builder-pipeline run handoff-pack <key>` then `npx builder-pipeline run handoff-check <file>` | The handoff pack is generated from the board, run log and registry, then checked. **Close-out cannot finish on a failing pack** |
 | After P7 | — | `run.end` is logged and the session stops. Follow-up work takes a new key, board and session |
@@ -154,8 +160,11 @@ from the same sources; the board keeps the completed rows.
 
 ## Smaller than a module?
 
-For a fix or small feature that doesn't warrant the full phase list, use the FIX or SOLO track
-(phase 0.5) — or the pieces directly:
+For a fix or small feature that doesn't warrant the full phase list, use the SMALL, FIX or SOLO track
+(phase 0.5). SMALL is for a change of at most 4 production source files in one module with no new operation,
+table, permission key, dependency or protected path: one builder dispatch, the orchestrator runs typecheck and
+the tiers, no board, no pack; `npx builder-pipeline run track-check --since <base>` measures the limits after the
+builder returns and a broken one escalates the run to ADDITIVE. Or use the pieces directly:
 - `scaffold-module` skill — just the golden-path scaffold.
 - `module-builder` persona standalone — it then self-runs `module-readiness-check` +
   `standards-auditor` (its file tells it to).

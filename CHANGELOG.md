@@ -5,6 +5,26 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **Pipeline sizing (`specs/pipeline-sizing.spec.md` REQ-2001 to REQ-2010; D134 to D138).** The `build-module-pipeline`
+  skill gets a `SMALL` track below `FIX`: a change of at most 4 production source files inside one module directory,
+  with no new public operation, table, permission key, dependency or protected path, runs as one `module-builder`
+  dispatch; the orchestrator itself runs `commands.typecheck` and the tiers, writes no board and no handoff pack, and
+  the report names each skipped phase as `skipped (SMALL)`. A broken limit escalates to `ADDITIVE` from Phase 1 with the
+  builder's diff as context; the chain is `SOLO → SMALL → FIX → ADDITIVE → FULL`, still one direction. Every seat runs in
+  the foreground: the orchestrator never schedules a timer, a wake-up or a sleep to wait for a seat. A brief line
+  `Human: none` (or a session nobody watches) makes the run unattended: human-only decisions are recorded under
+  `Needs a human` with the assumption taken, the run ends with its verdict, and a recorded gate skip stays
+  `CHANGES-REQUIRED`. Every report opens with `Track: <track> — <reason>` and a `Phases:` line. New free check
+  `npx builder-pipeline run track-check --since <base> [--max-files 4] [--src <dirs>] [--json]` counts the production
+  source files and modules changed since a base from git (tests, docs, boards, ledgers and lock files ignored; a new
+  dependency or migration is a reason) and prints `SMALL: …` (exit 0) or one `ESCALATE: <reason>` line per broken
+  limit (exit 1); exit 2 outside git or on a bad argument; no §16 key and no off state. The brief template carries
+  `Human:` and `Size hint:` lines; the detail lives in `skills/references/sizing.md`. Measured next in EXPERIMENTS §24.
+  Source: the kit benchmark pilot of 2026-11-18 (8 of 15 kit runs dispatched no seat, 2 ran 8 to 14 seats for a change
+  of three files; cost per run 0.17 to 8.03 USD).
+
 ## [2.1.0] — 2026-11-18
 
 ### Added

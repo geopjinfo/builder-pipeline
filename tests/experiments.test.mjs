@@ -37,8 +37,8 @@ export function sections(md) {
 describe('EXPERIMENTS.md decision rows', () => {
   const all = sections(text);
 
-  test('sections 1 to 23 are present, numbered without a gap', () => {
-    assert.deepEqual(all.map((s) => s.n), Array.from({ length: 23 }, (_, i) => i + 1));
+  test('sections 1 to 24 are present, numbered without a gap', () => {
+    assert.deepEqual(all.map((s) => s.n), Array.from({ length: 24 }, (_, i) => i + 1));
   });
 
   test('red: every section has a non-blank decision row with a date and a verdict', () => {
@@ -102,7 +102,7 @@ describe('M14 — the evidence programme (REQ-1402, REQ-1405, REQ-1401)', () => 
   });
   test('red: the parser reads the decision of every section, and `experiments --check` passes on the shipped file', () => {
     const all = exp.parse(text);
-    assert.equal(all.length, 23);
+    assert.equal(all.length, 24);
     for (const s of all) assert.ok(['keep', 'drop', 'not yet measured'].includes(s.decision.verdict), `§${s.n}`);
     assert.equal(all.find((s) => s.n === 17).flag, 'boardLoop');
     assert.equal(all.find((s) => s.n === 6).flag, 'builderBatch');
