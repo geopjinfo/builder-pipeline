@@ -5,6 +5,8 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-18
+
 ### Added
 
 - **M22 evidence: EXPERIMENTS §23 carries the kit's `deadCode` measurement (`specs/repo-hygiene.spec.md` REQ-1825, D91).**
