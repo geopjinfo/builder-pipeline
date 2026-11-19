@@ -99,7 +99,7 @@ describe('a usage line printed from the package says npx builder-pipeline run', 
  */
 const SHIPPED = JSON.parse(readFileSync(join(PACK, 'package.json'), 'utf8')).files;
 const KIT_FORM = /node (builder\/cli\.js|scripts\/([\w./-]*))/g;
-const INSTALLED_TEMPLATES = new Set(['task-board', 'deferred-registry', 'module-brief', 'orchestrator-plan', 'orchestrator-worker-brief', 'decision-log', 'session-board'].map((n) => `templates/${n}.md`));
+const INSTALLED_TEMPLATES = new Set(['task-board', 'deferred-registry', 'module-brief', 'module-report', 'orchestrator-plan', 'orchestrator-worker-brief', 'decision-log', 'session-board'].map((n) => `templates/${n}.md`));
 const installedMd = (rel) => rel.endsWith('.md') && (/^(?:skills|agents)\//.test(rel) || /^skills-extra\/[^/]+\//.test(rel) || INSTALLED_TEMPLATES.has(rel));
 
 /** Is `scripts/<p>` a kit script (a file the kit ships under scripts/, or experimental/<x> from tooling/)? '' = a placeholder = yes. */

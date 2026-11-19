@@ -1,7 +1,8 @@
-# Sizing the run — the SMALL track, the foreground rule, the unattended mode and the report header
+# Sizing the run — the SMALL track, the MEDIUM and SOLO steps, the foreground rule, the unattended mode and the report header
 
-Part of the `build-module-pipeline` skill (`specs/pipeline-sizing.spec.md`, REQ-2001 to REQ-2010; decisions D134 to
-D138). The skill keeps the track row and the three rules; this file keeps the steps and the reasons.
+Part of the `build-module-pipeline` skill (`specs/pipeline-sizing.spec.md`, REQ-2001 to REQ-2010, decisions D134 to
+D138; `specs/pipeline-cost.spec.md`, REQ-2011 to REQ-2020, decisions D142 to D145). The skill keeps the track rows and
+the three rules; this file keeps the steps and the reasons.
 
 ## Why the pipeline must size itself (D134)
 
@@ -46,7 +47,67 @@ apply to the builder's return.
 **Escalation.** When the builder's return or `track-check` shows a broken limit, the run continues from Phase 1 as
 `ADDITIVE` (or higher, by the table) with the builder's diff as the planner's context. Nothing is thrown away and
 nothing is re-done; the diff becomes the first batch's evidence. A run never finishes as SMALL with a broken limit, and
-no run de-escalates: SOLO → SMALL → FIX → ADDITIVE → FULL is the only direction.
+no run de-escalates: SOLO → SMALL → MEDIUM → FIX → ADDITIVE → FULL is the only direction. With `features.mediumTrack`
+on, a broken SMALL limit inside the MEDIUM limits continues as MEDIUM (below) instead of ADDITIVE.
+
+## The MEDIUM step — `features.mediumTrack` (REQ-2011 to REQ-2013, D142; experimental-off)
+
+The full benchmark (`EXPERIMENTS.md` §25) measured why SMALL runs escalate: a new migration, a new table, a new CLI
+report kind, a fifth file, each inside one module. The ADDITIVE pipeline then cost ten times a SMALL run for the same
+result. MEDIUM is the step between them. It exists only while `features.mediumTrack` is on; with the feature off the
+MEDIUM row is not offered and a broken SMALL limit escalates to ADDITIVE as before.
+
+A change is MEDIUM when every one of these holds:
+
+1. At most **6 production source files** (`features.mediumTrack.maxFiles`) change, all in **one module directory**.
+2. **At most one addition** inside the module: a new migration, a new table, or one new public operation (a route, a
+   CLI command or report kind, a query parameter).
+3. **No new dependency, no new permission key, no protected path.** Each of these is ADDITIVE or more, on every track.
+
+```
+Phase 0.5   pick SMALL or MEDIUM from the brief and the Size hint; write `Track: <track> — <reason>` in state.md
+Phase 2     one `module-builder` dispatch, foreground, TDD per change, returns the diff summary
+            then: node scripts/track-check.mjs --since <base> --medium   (exit 0 SMALL; exit 3 MEDIUM; exit 1 escalate)
+Phase 3     the orchestrator itself runs `commands.typecheck` and every `commands.tiers` tier and quotes each result line
+Phase 4     one auditor dispatch, foreground, with the diff and the reading from track-check as its brief:
+              `security-auditor`  for a new public operation or query parameter (authorization scope is where it fails)
+              `invariant-auditor` for a new migration or table, or for a 5 to 6 file change with no addition
+            findings → one re-dispatch of the builder at most; a finding that survives it goes to `Open findings`
+            and the verdict is CHANGES-REQUIRED
+Phase 7     the report. No board, no handoff pack
+```
+
+Skipped and named in the report: P1 plan, P5 docs, P6 review, P6.5 behavioural gate, each as `skipped (MEDIUM)`; P3 is
+`run (orchestrator: …)` because the tiers ran, with no tester seat. A MEDIUM run dispatches two seats, three with the re-dispatch. The claims check and the hand-back
+check of Phase 2 still apply. A broken MEDIUM limit (a seventh file, a second module, a second addition, a dependency)
+continues from Phase 1 as `ADDITIVE` with the diff as context, exactly as a broken SMALL limit does.
+
+```
+Track: MEDIUM — 5 source files in src/report, one new migration, no new dependency
+Phases: 0 run · 0.5 run (MEDIUM) · 0.7 skipped (not configured) · 1 skipped (MEDIUM) · 2 run (1 builder dispatch) · 3 run (orchestrator: typecheck PASS, unit 214/214) · 3b skipped (no drift oracle) · 4 run (1 auditor: invariant-auditor, 0 findings) · 5 skipped (MEDIUM) · 6 skipped (MEDIUM) · 6.5 skipped (MEDIUM) · 7 run
+```
+
+## The SOLO path — `features.soloTrack` (REQ-2014 to REQ-2016, D143; experimental-off)
+
+The same benchmark measured the SMALL track at 3 to 5 times a bare run on a one-line change: the seat is the cost.
+With `features.soloTrack` on, SOLO also admits a production-source change of at most **2 production source files**
+(`features.soloTrack.maxFiles`) in **one module** with **no new behaviour**: no new operation, table, permission key,
+dependency, migration or protected path. The orchestrator makes the change itself and dispatches **no seat**. With the
+feature off, rule 1 stands as written: a production-source diff never goes SOLO, and every run dispatches a seat.
+
+```
+Phase 0.5   pick SOLO from the brief's Size hint (one or two named files, no new behaviour); write `Track: SOLO — <reason>`
+Phase 2     the orchestrator edits: a red test first, then the change (TDD), nothing else
+            then: node scripts/track-check.mjs --since <base> --solo   (`SOLO:` exit 0 → stay; `SMALL:` → below; `ESCALATE:` → REQ-2003)
+Phase 3     the orchestrator runs `commands.typecheck` and every tier once and quotes each result line
+Phase 7     the report. No board, no handoff pack
+```
+
+A `SMALL:` line (3 or 4 files, or a change that grew) continues the run as SMALL: one `module-builder` dispatch reviews
+and completes the diff with the orchestrator's edit as context, then Phase 3 runs again. An `ESCALATE:` line follows
+REQ-2003. The run never de-escalates and never finishes as SOLO with a diff past the limit. Rule 1 exists because a
+solo run once shipped with the gate chain red (`references/tracks-and-scope.md`); this path keeps the red test and the
+full tiers, so the lesson holds.
 
 ## Every seat runs in the foreground (REQ-2004, D136)
 
@@ -72,7 +133,9 @@ never by the absence of a person. With `Human: available` (the default) the run 
 
 ## The report header (REQ-2007, D138)
 
-The first two lines of every final report, whatever the track:
+The first two lines of every final report, whatever the track. Fill the installed `module-report` template
+(`specs/module-report.template.md`; kit: `builder/templates/module-report.md`); the two lines are its first two
+(REQ-2017), so a report written from it cannot open with prose:
 
 ```
 Track: SMALL — 2 source files in src/report, no new operation, no new dependency
@@ -80,6 +143,6 @@ Phases: 0 run · 0.5 run (SMALL) · 1 skipped (SMALL) · 2 run (1 builder dispat
 ```
 
 Every phase of the table appears once, as `run` or `skipped (<reason>)`. A phase that is absent from the line was not
-run and not recorded, which the close-out audit treats as a gap. The skipped reasons a report may use: `SMALL`, the
-track's own phase list (`FIX`, `RULINGS`), `no <capability>` for a profile §14 gap, and `not configured` for a feature
+run and not recorded, which the close-out audit treats as a gap. The skipped reasons a report may use: `SMALL`, `MEDIUM`,
+the track's own phase list (`FIX`, `RULINGS`), `no <capability>` for a profile §14 gap, and `not configured` for a feature
 that is off. A skip is never a pass; the behavioural-gate rule above still applies.

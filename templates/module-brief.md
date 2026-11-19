@@ -26,7 +26,9 @@ forbidden doc paths — changes there ride the handoff pack.
 > `Needs a human` with the assumption taken, and the run ends with its verdict (never a question).
 > **Size hint:** `<files and modules you expect to change>` — at most 4 production source files in one module, no new
 > operation, table, permission key or dependency, no protected path → the `SMALL` track (one builder dispatch); anything
-> larger names its track (`ADDITIVE`, `FULL` …). The orchestrator measures it with `track-check` after the builder returns.
+> larger names its track (`ADDITIVE`, `FULL` …). With `features.mediumTrack` on, one module, at most 6 files and one
+> addition (a migration, a table, a public operation) → `MEDIUM`; with `features.soloTrack` on, one or two named files
+> and no new behaviour → `SOLO`. The orchestrator measures it with `track-check` after the builder returns.
 >
 > **0a. Context budget:** this thread dispatches and decides only. Every heavy step (reading a spec,
 > building a row, a seat, writing the pack) goes to one sub-agent that returns at most 10 lines

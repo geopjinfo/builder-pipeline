@@ -260,6 +260,12 @@ const FEATURES = {
   },
   /* The model-written SUMMARY section of the report (agents/experimental/progress-reporter.md) — EXPERIMENTS.md §22. */
   reporterSummary: { defaults: { state: 'experimental-off' }, requires: [], experiment: '§22' },
+  /* Pipeline cost (specs/pipeline-cost.spec.md, EXPERIMENTS.md §25). mediumTrack: a MEDIUM track between SMALL and
+   * ADDITIVE for a one-module change of at most maxFiles files with one addition (D142). soloTrack: a SOLO path for a
+   * change of at most maxFiles files with no new behaviour that the orchestrator makes itself (D143). Neither changes
+   * track-check: the orchestrator passes --medium / --solo only when the key is on. */
+  mediumTrack: { defaults: { state: 'experimental-off', maxFiles: 6 }, requires: [], experiment: '§25' },
+  soloTrack: { defaults: { state: 'experimental-off', maxFiles: 2 }, requires: [], experiment: '§25' },
   /* Named accounts the orchestrator places lanes on: worker, who pays, content class, roles, budget, note — the
    * registry rules are in scripts/lib/accounts-registry.cjs (plan M1, D22, D32). Replaces the 1.0 seats and credit lane. */
   accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },

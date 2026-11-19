@@ -239,6 +239,7 @@ const FILES = {
   '.gitignore': CORE,
   'specs/spec.template.md': 'spec',
   'specs/module-brief.template.md': 'pipeline',
+  'specs/module-report.template.md': 'pipeline',
   'specs/orchestrator-plan.template.md': 'orchestrator',
   'specs/orchestrator-worker-brief.template.md': 'orchestrator',
   'CLAUDE.md': CORE,

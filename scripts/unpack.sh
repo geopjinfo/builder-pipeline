@@ -58,6 +58,7 @@ esac
 # again could only add a blank twin at the default beside the real one, which every checker reads §16 and
 # passes over in silence. So the ledgers are skipped there, and the CLI — which does read §16 — is named.
 copy "$KIT/templates/module-brief.md"       "specs/module-brief.template.md"
+copy "$KIT/templates/module-report.md"      "specs/module-report.template.md"
 if [ -e PIPELINE_PROFILE.md ]; then
   echo "skip (profile present): ledgers — this fallback cannot read §16 paths; run 'node builder/cli.js unpack' for"
   echo "                        any ledger this kit version adds, then 'node builder/cli.js verify'"

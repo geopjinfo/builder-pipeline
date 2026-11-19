@@ -382,6 +382,8 @@ into each pass row); the kit's own figure is 347 MB per lane (`EXPERIMENTS.md` Â
     "orchestrator":     { "state": "off", "target": null, "primaryLaunch": "manual", "sourceRoots": ["src/"], "riskPaths": { "migration": [], "platform": [], "permission": [] }, "preflight": [], "mechanical": null, "capacity": null },
     "reporter":         { "state": "off", "channels": [], "intervalMinutes": 30, "onlyOnChange": true, "heartbeatEvery": 4, "alertOn": [], "alertPollSeconds": 30, "maxBytes": 3500, "timeoutMs": 10000, "reportsDir": ".pipeline/reports" },
     "reporterSummary":  { "state": "experimental-off" },
+    "mediumTrack":      { "state": "experimental-off", "maxFiles": 6 },
+    "soloTrack":        { "state": "experimental-off", "maxFiles": 2 },
     "accounts":         { "state": "off", "softLimitPct": 80, "usageStaleMinutes": 30, "accounts": {} }
   }
 }
