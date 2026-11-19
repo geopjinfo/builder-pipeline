@@ -841,3 +841,62 @@ SMALL run ships a defect the hidden tests catch. A change to the numbers is a ne
 with large files or deep module trees gets its own reading before the numbers are called general.
 
 **Decision (2026-11-18).** not yet measured — two of the three keep conditions hold after the change (no run waited for a person; 0.65 USD per run against 1.64, solved 14 of 15 both times) and the third does not: 9 of 15 reports carried the `Track:` header and 4 runs dispatched no seat, so the header and the one-seat rule moved into the skill's run discipline and the full batch measures them again. The numbers 4 files and 1 module stay as written until that batch.
+
+**Measured again (2026-11-19, full batch `full-01`, 15 tasks × 5 seeds, kit at 00f0a12, one subscription lane).** Arm E
+on the five pilot tasks: 25 of 25 solved, 1.15 USD per run (median 0.65; 19 runs SMALL at 0.21 to 1.01, 4 runs
+escalated to ADDITIVE at 3.71 to 4.64, 2 reports without a `Track:` line), no run waited for a person. Across all 15
+tasks: 71 of 75 solved under the registered grading rule (75 of 75 under the D141 sensitivity rule of the benchmark),
+1.42 USD per run, 72 of 75 reports with a `Track:` line, 56 SMALL runs at 0.45 USD mean and 16 ADDITIVE runs at 4.94
+USD mean. Records: Library `benchmark/full-01/` (comparison.md, gaps.md, stats.json).
+
+**Decision (2026-11-19).** keep — the SMALL track stays as written: it removed the waits, and a SMALL run costs 0.45 USD against
+1.64 for the 2.1.0 pipeline on the same tasks. The keep rule's cost condition failed (1.15 USD on the pilot tasks against
+the 1.00 limit) for one reason that is not the limits: 4 of 25 pilot-task runs escalated to ADDITIVE, and an ADDITIVE run
+costs ten times a SMALL run. That is gap §25, which has its own measurement. The header rule reached 72 of 75 reports,
+not all; §25 G3 carries the fix. The numbers 4 files and 1 module are not changed by this batch (D140).
+
+## 25. Escalation cost — the ADDITIVE step for one-module changes (planned, experimental, measured first)
+
+**What was measured (2026-11-19, benchmark `full-01`, 600 cells, arms A to J, Library `benchmark/full-01/`).** The kit
+(arm E, 00f0a12) solved 71 of 75 cells against 74 of 75 for a bare agent and 75 of 75 for a plain `CLAUDE.md`; the
+paired difference is no evidence either way (-0.040 [-0.160, 0.040] and -0.053 [-0.160, 0.000]). Cost per run was 1.42
+USD against 0.12 and 0.13. On the three trivial tasks the kit cost 4.75 times the plain agent against a registered
+claim of at most 2 times. Every arm, kit or not, solved 93 to 100 percent, so the bed did not separate the arms on
+accuracy; it separated them on cost. The kit's cost has two parts, read from the `Track:` line of each report:
+
+| Part | Runs | Cost per run (USD) | Tool calls | Wall (min) | What the bare agent paid on the same tasks |
+|---|---|---|---|---|---|
+| SMALL track | 56 of 75 | 0.45 (0.21 to 1.01) | 13 | 1.7 | 0.04 to 0.23 |
+| Escalated to ADDITIVE | 16 of 75 | 4.94 (3.71 to 6.57) | 136 | 17.5 | 0.09 to 0.23 |
+| No `Track:` line | 3 of 75 | 0.64 | 18 | 8.6 | |
+
+The escalations were: a new migration (T8, 2 of 5 seeds), a new table (T9, 5 of 5), a new CLI report kind (T14, 2 of
+5), a new field across the job queue (T11, 3 of 5), a five-file split (T5, 3 of 5), a new query parameter (T3, 1 of 5).
+The same task escalated on some seeds and not on others, so the limits, not the task, decide the cost. Arms A and B
+solved every one of these cells.
+
+**The gap.** G1: a change that stays in one module leaves SMALL because it adds a migration, a table, a CLI kind or a
+fifth file, and the ADDITIVE pipeline (four auditors, a board, a pack, a planner) costs ten times as much for the same
+result on this bed. G2: the SMALL track itself costs 3 to 5 times a bare run on a one-line change; the seat is the cost.
+G3: 3 of 75 reports had no `Track:` line although the rule is in the skill's run discipline.
+
+**Proposed change (not in this release; experimental, default off until measured).** G1: a `MEDIUM` step between SMALL
+and ADDITIVE, or wider SMALL limits that treat a migration, a table or a CLI kind inside one module as a reading in
+the report rather than an escalation; one builder seat plus one auditor, no board, no pack. G2: a `SOLO` path for a
+change the orchestrator can make itself (one or two files, no new behaviour), tiers run once. G3: the `Track:` and
+`Phases:` lines move into the report template the orchestrator fills, so the rule cannot be skipped.
+
+**Measurement (written before any change).** The benchmark runs arm E before and after on T3, T5, T8, T9, T11, T14
+(G1) and on T1, T6, T7 (G2), same model, same seeds, one lane. Keep G1 when E's cost per run on the six tasks falls
+below 1.00 USD with solved cells not below this batch and no new hidden-test failure; keep G2 when the E over B cost
+ratio on the trivial tasks is at most 2 (the PT3 claim) with solved unchanged; keep G3 when 75 of 75 reports carry the
+line. A bed where the bare agent fails some seeds is needed before any accuracy claim; that is a benchmark decision,
+not a kit change.
+
+**Risk.** Lowering the escalation makes a migration or a new table run without the auditors that exist for exactly
+those changes. The measurement must include the security and migration auditors' findings on the escalated runs of
+this batch before the step is widened; if those auditors found nothing on the 16 runs, the risk is small on this bed
+and unknown elsewhere.
+
+**Decision (2026-11-19).** not yet measured — the rows above are the before measurement of full-01 (600 cells); no kit
+code changes in this entry (D140). The after measurement decides each of G1, G2 and G3 on its own.

@@ -7,6 +7,12 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **EXPERIMENTS §24 measured again and §25 opened (D140).** The full benchmark batch (`full-01`, 600 cells, ten arms,
+  15 tasks, 5 seeds, Library `benchmark/full-01/`) keeps the SMALL limits and records the escalation-cost gap: 16 of 75
+  kit runs escalated to ADDITIVE at ten times the cost of a SMALL run, with no gain in solved cells; the kit showed no
+  accuracy advantage over a bare agent on this bed and cost 4.75 times a plain `CLAUDE.md` on trivial tasks. The
+  proposed changes (a `MEDIUM` step, a `SOLO` path, the header in the report template) are written with their
+  measurement and are not in this release.
 - **Pipeline sizing (`specs/pipeline-sizing.spec.md` REQ-2001 to REQ-2010; D134 to D138).** The `build-module-pipeline`
   skill gets a `SMALL` track below `FIX`: a change of at most 4 production source files inside one module directory,
   with no new public operation, table, permission key, dependency or protected path, runs as one `module-builder`
