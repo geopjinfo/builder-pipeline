@@ -233,6 +233,18 @@ groups are listed in [`UNPACK.md` § Install one tool group](UNPACK.md); the spe
 | [`llms.txt`](llms.txt) | the same map for an AI agent, readable from `node_modules` |
 | [`AGENTS.md`](AGENTS.md) · [`RELEASING.md`](RELEASING.md) | working on the kit repository itself, and releasing it (in the repo, not shipped in the package) |
 
+## 📏 Evidence
+
+The kit has been measured, and the measurement did not show what we hoped. A pre-registered benchmark (19 Nov 2026:
+600 runs, ten setups, 15 tasks on one 3,000-line TypeScript service, one Sonnet-class model, hidden tests, a blind
+grader) found **no evidence that the kit solves more tasks than a bare agent or a plain `CLAUDE.md`**: every setup
+solved 93 to 100 percent of its runs. On that bed the kit cost 1.42 USD per run against 0.13 for a plain `CLAUDE.md`,
+and 4.75 times as much on one-line tasks. What the kit did measurably more of: audit trail (the judge's score 0.68
+against 0.43), added tests, and zero waits, leaks or new dependencies. The numbers, the gaps they opened and the
+measurement that decides each proposed fix are in [`EXPERIMENTS.md`](EXPERIMENTS.md) §24 and §25. Until a harder
+bed shows a difference, do not read this kit as a way to get more tasks right; read it as a way to get a recorded,
+reviewed, scoped change at a known extra cost.
+
 ## 🛠️ Working on the kit itself
 
 For maintainers of this repository, not for projects that install it: the rules for changing the kit are in
