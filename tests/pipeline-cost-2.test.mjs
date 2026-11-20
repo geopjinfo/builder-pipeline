@@ -41,6 +41,24 @@ describe('REQ-2022 — the foreground guard', () => {
     assert.match(d.reason, /REQ-2004/);
     assert.match(d.reason, /\.pipeline\/k1\/state\.md/);
   });
+  test('red: AC-2022g a run folder with only run.jsonl (no state.md) is open — a SMALL run writes no state file', () => {
+    const root = tmp('fg-');
+    write(root, '.pipeline/k7/run.jsonl', '{"event":"run.start"}\n');
+    const d = guard.decide({ tool_name: 'ScheduleWakeup' }, on, { root });
+    assert.equal(d.block, true);
+    assert.match(d.reason, /\.pipeline\/k7\/run\.jsonl/);
+    assert.equal(guard.openRuns(root, '.pipeline', 12)[0].key, 'k7');
+  });
+  test('red: AC-2022h scope "project" blocks with no run folder at all; an unknown scope reads as "run"', () => {
+    const root = tmp('fg-');
+    const project = withFeatures({ foregroundGuard: { state: 'on', scope: 'project' } });
+    const d = guard.decide({ tool_name: 'Monitor' }, project, { root });
+    assert.equal(d.block, true);
+    assert.match(d.reason, /scope is "project"/);
+    assert.deepEqual(guard.decide({ tool_name: 'Monitor' }, withFeatures({ foregroundGuard: { state: 'on', scope: 'bogus' } }), { root }), { block: false });
+    assert.deepEqual(guard.SCOPES, ['run', 'project']);
+    assert.equal(profile.FEATURES.foregroundGuard.defaults.scope, 'run');
+  });
   test('red: AC-2022b the state file 13 hours old → passes', () => {
     const root = tmp('fg-');
     write(root, '.pipeline/k1/state.md', 'Now: phase 2\n');
@@ -82,7 +100,7 @@ describe('REQ-2022 — the foreground guard', () => {
     assert.equal(run(JSON.stringify({ tool_name: 'ScheduleWakeup', cwd: root })).status, 0);
   });
   test('red: AC-2022f the registry, the template, FEATURES.md, the adapter and hooks/README.md name foregroundGuard experimental-off with openHours 12', () => {
-    assert.match(read('PIPELINE_PROFILE.template.md'), /"foregroundGuard":\s*\{ "state": "experimental-off", "openHours": 12 \}/);
+    assert.match(read('PIPELINE_PROFILE.template.md'), /"foregroundGuard":\s*\{ "state": "experimental-off", "openHours": 12, "scope": "run" \}/);
     assert.match(read('FEATURES.md'), /^\| `foregroundGuard` \|.*`openHours`, 12.*\[§26\]\(EXPERIMENTS\.md\)/m);
     const adapter = read('adapters/claude-code.md');
     assert.match(adapter, /"matcher": "ScheduleWakeup\|CronCreate\|Monitor"/);

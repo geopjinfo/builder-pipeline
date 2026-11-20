@@ -142,9 +142,11 @@ diff finds a new public operation or a new query parameter; git cannot see a rou
 ## The foreground guard (REQ-2022, D146; `features.foregroundGuard`, experimental-off)
 
 With the key on, the hook `hooks/claude-code/foreground-guard.cjs` (installed to `.claude/hooks/`, armed by the
-settings entry in `adapters/claude-code.md`) denies `ScheduleWakeup`, `CronCreate` and `Monitor` while a run is open: a
-`<runs>/<key>/state.md` written in the last `openHours` (default 12). The denial names REQ-2004. The rule below is
-unchanged; the hook makes it hold when the text is forgotten.
+settings entry in `adapters/claude-code.md`) denies `ScheduleWakeup`, `CronCreate` and `Monitor` while a run is open:
+any file in a `<runs>/<key>/` folder written in the last `openHours` (default 12). With `scope: "project"` it denies them
+whenever the key is on, run or no run; the first batch showed that a SMALL run writes no `state.md` and a FULL run
+writes it late, so a run-folder reading alone let timer calls through (D152). The denial names REQ-2004. The rule below
+is unchanged; the hook makes it hold when the text is forgotten.
 
 ## Every seat runs in the foreground (REQ-2004, D136)
 

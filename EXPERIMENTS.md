@@ -958,10 +958,11 @@ the auditor dispatched, the hidden-test result.
 | Date | Kit commit | Change | Bed | Solved | Timer waits | FULL runs | Cost per run (USD) | Note |
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-19 | 0e09b2f (before) | all four | hard-01 and g12-after-E as read above | 50 of 50 · 45 of 45 | 9 · 4 | 7 · 0 | 3.24 (hard-01) · 1.44 (g12 six tasks) | before rows; the hard bed is saturated (bare 100 percent), so solved cannot fall below the before row without a new hidden-test failure |
-| | (after) | REQ-2022 | round-one, 42 cells | | | | | owed: timer waits (expected 0), reports with the line of all (expected 42 of 42) |
-| | (after) | REQ-2023 | round-one, T16 T17 T18 T21 × 3 | | | | | owed: FULL runs (expected 0), solved (expected 12 of 12), cost against 2.72 |
-| | (after) | REQ-2024 | round-one, the six g12 tasks × 5 | | | | | owed: T9 tracks (expected MEDIUM where the second module was `src/shared/errors.ts`), cost per run against 1.44 and the 1.00 rule |
-| | (after) | REQ-2027 | round-one, every MEDIUM run | | | | | owed: the auditor dispatched against the reading (expected 100 percent) |
+| 2026-11-20 | 741dda5 (after) | REQ-2022 | round-one, 42 cells, hook armed (`scope` run, the only reading then) | 42 of 42 | 9 calls in 8 cells: 4 blocked (E-T5-s1, E-T16-s2, E-T17-s2, E-T21-s3), 5 let through in 4 cells (E-T3-s4, E-T9-s1, E-T16-s1, E-T17-s1 twice) | — | — | the 5 passed because the hook read `state.md` alone: a SMALL run writes none, E-T16-s1 wrote it late; those 4 cells took 18 to 21 min; 37 of 42 reports carry the `Track:` line; fixed by D152 (any run-folder file, `scope: project`), measured again in round two |
+| 2026-11-20 | 741dda5 (after) | REQ-2023 | round-one, T16 T17 T18 T21 × 3 | 12 of 12 | — | 3 of 12 (E-T16-s1, E-T18-s3, E-T21-s2), was 4 | 3.74 (was 5.47); wall 14.3 min (was 19.3) | by task: T17 5.53 to 1.54, T18 5.30 to 2.32, T16 4.30 to 4.19, T21 6.77 to 6.90; the hint rule halved two tasks and left two; the 3 FULL runs need their `Track:` reasons read before the next rule |
+| 2026-11-20 | 741dda5 (after) | REQ-2024 | round-one, the six g12 tasks × 5, `--shared src/shared/errors.ts,src/shared/config.ts` | 30 of 30 | — | 0 | 1.02 [0.70, 1.51] (was 1.44); T9 4.59 to 1.07; 29 runs mean 0.85, one ADDITIVE (E-T14-s3, 5.87) | the allowance did what it was for (T9 stays MEDIUM); the rule "under 1.00" misses by 0.02 on one escalated seed |
+| 2026-11-20 | 741dda5 (after) | REQ-2027 | round-one, 14 MEDIUM runs | — | — | — | — | `invariant-auditor` 11, `security-auditor` 2 (E-T14-s1, E-T14-s5: a new CLI report kind read as a public operation), none 1 (E-T11-s3); 13 of 14 match the rule, 1 run dispatched no auditor |
+| 2026-11-20 | 741dda5 (after) | cost by model | round-one | — | — | — | Opus share: 71 percent of the g12 cells (21.75 of 30.51 USD), 84 percent of the hard cells (37.84 of 44.87) | the before row of §27 (REQ-2021) |
 
 **Keep rule.** Keep REQ-2022 at 0 timer waits and 42 of 42 reports with the line. Keep REQ-2023 at 0 FULL runs with
 solved 12 of 12. Keep REQ-2024 when the six G1 tasks fall under 1.00 USD per run with solved 30 of 30 and no new
@@ -973,7 +974,13 @@ an added line can still change behaviour (a default, a switch). The measurement 
 MEDIUM run that used the allowance before the rule is called general. The hook judges a run open by a file's age, so a
 run abandoned within `openHours` blocks a timer in an unrelated session of the same project until it ages out.
 
-**Decision (2026-11-20).** not yet measured — the before rows are hard-01 and g12-after-E; the code ships with
-`foregroundGuard` `experimental-off` and the three free rules in the skill and the script. The `round-one` batch decides
-each of the four on its own rule above.
+**Decision (2026-11-20).** not yet measured — round-one (42 cells, kit 741dda5, 18:30Z, Library `benchmark/round-one/`)
+met none of the four rules as written and moved every number the right way: REQ-2022 blocked 4 of 9 timer calls and the
+5 it missed are one defect (a run read as open from `state.md` alone), fixed as D152 before this row was written and
+owed a re-run; REQ-2023 cut FULL runs from 4 to 3 of 12 and the cost of the four hard tasks from 5.47 to 3.74 USD per
+run, not to 0 FULL; REQ-2024 took the six G1 tasks from 1.44 to 1.02 USD per run against the 1.00 rule, with T9 solved
+at 1.07 instead of 4.59; REQ-2027 matched in 13 of 14 MEDIUM runs. Solved 42 of 42, as every arm on these beds. The keys
+stay `experimental-off`. Round two (the same 42 cells) measures D152 with `scope: project`, and reads the three FULL
+reports and the one auditor-less MEDIUM run before any further rule; the 1.00 figure is kept as written, since it was
+set before the data and missed by one seed.
 
