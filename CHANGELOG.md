@@ -7,6 +7,19 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Escalation discipline (`specs/pipeline-cost-2.spec.md` REQ-2022 to REQ-2024 and REQ-2027; D146 to D149; EXPERIMENTS
+  §26).** Four changes read from the hard benchmark (`hard-01`) and the first cost re-run (`g12-after-E`), measured
+  before any is switched on. `features.foregroundGuard` (`experimental-off`, `openHours` 12):
+  `hooks/claude-code/foreground-guard.cjs`, a `PreToolUse` hook on `ScheduleWakeup`, `CronCreate` and `Monitor`, denies
+  the call while a pipeline run is open (any file in a run folder written in the last `openHours`; `scope: "project"`
+  denies them whenever the key is on, D152) and names the foreground rule (REQ-2004); copied, never armed, and it passes
+  without a trusted profile. The planner returns a `Track hint:` and never raises the track; `FULL` is entered from the
+  brief's `Size hint:` or a new bounded context named in the brief. `track-check --shared <file,file>` names the shared
+  catalogue files of profile §5: a listed file that only gained lines counts as a file, not as a module, the line ends
+  with `; shared additions: <files>` and `--json` carries `sharedAdditions`. On `MEDIUM` the auditor is
+  `invariant-auditor` unless the diff adds a public operation or query parameter, then `security-auditor`, and `--json`
+  carries `auditor`. EXPERIMENTS §25 gets its after rows (g12-after-E: G1 2.85 to 1.44 USD per run, G2 not triggered,
+  G3 42 of 45) and the decision that both keys stay `experimental-off`.
 - **Pipeline cost (`specs/pipeline-cost.spec.md` REQ-2011 to REQ-2020; D142 to D145; EXPERIMENTS §25).** Three changes
   for the cost gaps the full benchmark found, each measured before it is switched on. `features.mediumTrack`
   (`experimental-off`, `maxFiles` 6): a `MEDIUM` track between `SMALL` and `ADDITIVE` for a one-module change of at most

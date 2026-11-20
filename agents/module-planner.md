@@ -92,9 +92,10 @@ interpreting it.
    In one adopting project, three such gaps reached the builder: two candidate files, a conditional
    step, and a race asserted as one fixed code. The builder settled each one silently, and no later
    seat saw it.
-9. **## Track** — confirm or reject the orchestrator's phase-0.5 track (FULL · ADDITIVE · PLATFORM ·
-   RULINGS · FIX · SOLO). You are the first seat that reads the actual docs, so this is the one
-   cheap correction seam. A track may only escalate **up**; say why if you move it.
+9. **## Track** — return `Track hint: <track> — <reason>` against the orchestrator's phase-0.5 track (FULL ·
+   ADDITIVE · MEDIUM · SMALL · PLATFORM · RULINGS · FIX · SOLO). You are the first seat that reads the actual docs,
+   so say what you see. A hint never changes the track: the orchestrator keeps it unless `track-check` or the
+   brief raises it (REQ-2023). Name the limit you believe is broken, so the orchestrator can measure it.
 10. **BLOCKERS — triaged into three classes.** A gap is not automatically a question for a human.
    - `DECIDED-FROM-DOCS` — a ratified source settles it, including by clear implication. **Decide,
      record it** (what, the citation, why, how to reverse it — profile §11) and keep planning.
@@ -126,6 +127,6 @@ asked **before the code exists**. The coder never authors them — the author of
 the author of the questions about the code. Work the taxonomy in profile §15 (or the seed classes in
 the `invariant-auditor` persona if §15 is unfilled).
 
-Return to the orchestrator: the `plan.md` path, the digest path, the confirmed track, and the
+Return to the orchestrator: the `plan.md` path, the digest path, the `Track hint:` line, and the
 triaged blocker list verbatim — plus the `graph:` line when the trial is on. Do not begin
 implementation.

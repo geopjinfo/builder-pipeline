@@ -384,6 +384,7 @@ into each pass row); the kit's own figure is 347 MB per lane (`EXPERIMENTS.md` Â
     "reporterSummary":  { "state": "experimental-off" },
     "mediumTrack":      { "state": "experimental-off", "maxFiles": 6 },
     "soloTrack":        { "state": "experimental-off", "maxFiles": 2 },
+    "foregroundGuard":  { "state": "experimental-off", "openHours": 12, "scope": "run" },
     "accounts":         { "state": "off", "softLimitPct": 80, "usageStaleMinutes": 30, "accounts": {} }
   }
 }

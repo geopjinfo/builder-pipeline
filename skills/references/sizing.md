@@ -1,8 +1,9 @@
 # Sizing the run — the SMALL track, the MEDIUM and SOLO steps, the foreground rule, the unattended mode and the report header
 
 Part of the `build-module-pipeline` skill (`specs/pipeline-sizing.spec.md`, REQ-2001 to REQ-2010, decisions D134 to
-D138; `specs/pipeline-cost.spec.md`, REQ-2011 to REQ-2020, decisions D142 to D145). The skill keeps the track rows and
-the three rules; this file keeps the steps and the reasons.
+D138; `specs/pipeline-cost.spec.md`, REQ-2011 to REQ-2020, decisions D142 to D145; `specs/pipeline-cost-2.spec.md`,
+REQ-2022 to REQ-2024 and REQ-2027, decisions D146 to D149). The skill keeps the track rows and the three rules; this
+file keeps the steps and the reasons.
 
 ## Why the pipeline must size itself (D134)
 
@@ -108,6 +109,44 @@ and completes the diff with the orchestrator's edit as context, then Phase 3 run
 REQ-2003. The run never de-escalates and never finishes as SOLO with a diff past the limit. Rule 1 exists because a
 solo run once shipped with the gate chain red (`references/tracks-and-scope.md`); this path keeps the red test and the
 full tiers, so the lesson holds.
+
+## Who raises the track (REQ-2023, D147)
+
+Only a measured limit or the brief raises the track. `track-check` raises it when a file, module, dependency or
+migration limit breaks; the orchestrator raises it for a protected path, a permission key or a new public operation it
+reads in the diff; the brief raises it with `Size hint:`. The planner returns `Track hint: <track> — <reason>` and the
+orchestrator records the hint in `state.md`, then keeps the track unless one of those three says otherwise. FULL is
+entered from the `Size hint:` or a new bounded context the brief names, never from a seat's reading.
+
+Why: on the harder benchmark bed, 7 of 50 kit runs went FULL on the planner's reading at 4.12 USD per run against 2.72
+for ADDITIVE. Every one of those cells was solved by a bare agent at 0.20 to 0.35 USD. The planner sees the docs; it
+does not see the cost, and it cannot measure the diff that does not exist yet.
+
+## The shared catalogue allowance (REQ-2024, D148)
+
+Profile §5 names the shared catalogue files: the files every module adds a line to, such as `src/shared/errors.ts` or a
+config key list. Pass them to `track-check` as `--shared <file,file>`. A listed file that existed at the base and only
+gained lines counts as a source file but not as a module, and the answer line ends with
+`; shared additions: <files>`. A removed or changed line in a listed file is an ordinary edit and counts its module.
+
+Why: one new error code in `src/shared` was the only second module in 4 of 5 escalations of one benchmark task, and in
+every escalation of two tasks on the harder bed. The catalogue exists to be added to; an addition changes no caller.
+
+## The MEDIUM auditor (REQ-2027, D149)
+
+One auditor runs on MEDIUM. `invariant-auditor` for a new migration, a new table or a plain 5 to 6 file change; this is
+what `track-check --medium --json` reports as `auditor`. `security-auditor` when the orchestrator's own reading of the
+diff finds a new public operation or a new query parameter; git cannot see a route, so this part is the orchestrator's.
+`standards-auditor` and `vuln-auditor` never run on MEDIUM. Write the choice and its reason in the `Phases:` line.
+
+## The foreground guard (REQ-2022, D146; `features.foregroundGuard`, experimental-off)
+
+With the key on, the hook `hooks/claude-code/foreground-guard.cjs` (installed to `.claude/hooks/`, armed by the
+settings entry in `adapters/claude-code.md`) denies `ScheduleWakeup`, `CronCreate` and `Monitor` while a run is open:
+any file in a `<runs>/<key>/` folder written in the last `openHours` (default 12). With `scope: "project"` it denies them
+whenever the key is on, run or no run; the first batch showed that a SMALL run writes no `state.md` and a FULL run
+writes it late, so a run-folder reading alone let timer calls through (D152). The denial names REQ-2004. The rule below
+is unchanged; the hook makes it hold when the text is forgotten.
 
 ## Every seat runs in the foreground (REQ-2004, D136)
 
