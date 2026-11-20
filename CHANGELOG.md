@@ -5,6 +5,34 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Added
+
+- **EXPERIMENTS §24 measured again and §25 opened (D140).** The full benchmark batch (`full-01`, 600 cells, ten arms,
+  15 tasks, 5 seeds, Library `benchmark/full-01/`) keeps the SMALL limits and records the escalation-cost gap: 16 of 75
+  kit runs escalated to ADDITIVE at ten times the cost of a SMALL run, with no gain in solved cells; the kit showed no
+  accuracy advantage over a bare agent on this bed and cost 4.75 times a plain `CLAUDE.md` on trivial tasks. The
+  proposed changes (a `MEDIUM` step, a `SOLO` path, the header in the report template) are written with their
+  measurement and are not in this release.
+- **Pipeline sizing (`specs/pipeline-sizing.spec.md` REQ-2001 to REQ-2010; D134 to D138).** The `build-module-pipeline`
+  skill gets a `SMALL` track below `FIX`: a change of at most 4 production source files inside one module directory,
+  with no new public operation, table, permission key, dependency or protected path, runs as one `module-builder`
+  dispatch; the orchestrator itself runs `commands.typecheck` and the tiers, writes no board and no handoff pack, and
+  the report names each skipped phase as `skipped (SMALL)`. A broken limit escalates to `ADDITIVE` from Phase 1 with the
+  builder's diff as context; the chain is `SOLO → SMALL → FIX → ADDITIVE → FULL`, still one direction. Every seat runs in
+  the foreground: the orchestrator never schedules a timer, a wake-up or a sleep to wait for a seat. A brief line
+  `Human: none` (or a session nobody watches) makes the run unattended: human-only decisions are recorded under
+  `Needs a human` with the assumption taken, the run ends with its verdict, and a recorded gate skip stays
+  `CHANGES-REQUIRED`. Every report opens with `Track: <track> — <reason>` and a `Phases:` line. New free check
+  `npx builder-pipeline run track-check --since <base> [--max-files 4] [--src <dirs>] [--json]` counts the production
+  source files and modules changed since a base from git (tests, docs, boards, ledgers and lock files ignored; a new
+  dependency or migration is a reason) and prints `SMALL: …` (exit 0) or one `ESCALATE: <reason>` line per broken
+  limit (exit 1); exit 2 outside git or on a bad argument; no §16 key and no off state. The brief template carries
+  `Human:` and `Size hint:` lines; the detail lives in `skills/references/sizing.md`. Measured next in EXPERIMENTS §24.
+  Source: the kit benchmark pilot of 2026-11-18 (8 of 15 kit runs dispatched no seat, 2 ran 8 to 14 seats for a change
+  of three files; cost per run 0.17 to 8.03 USD).
+  Re-run on the same tasks with the change (EXPERIMENTS §24): 0.65 USD per run, no run waited for a person, 14 of 15
+  solved; 9 of 15 reports carried the header, so the header rule and the one-seat rule sit in the run discipline now.
+
 ## [2.1.0] — 2026-11-18
 
 ### Added

@@ -67,31 +67,33 @@ it. Never load them all up front.
 ## Context & run discipline
 
 **Never run a test suite bare.** Route every suite through a wrapper that tees the FULL output to a log file (under
-`paths.logs`) and prints a bounded digest (≤25 lines: counts, each failing test with one assertion line, the log path)
-— `commands.tier` should name that wrapper. If you need more than the digest, have a seat read the log and return
-findings. Selective runs (`commands.affected`) are an inner-loop convenience ONLY and are never a board row's merge
-evidence; full tiers stay mandatory at the Test phase, the Review/behavioural gates, and before every PR.
+`paths.logs`) and prints a bounded digest (≤25 lines: counts, each failing test with one assertion line, the log path) —
+`commands.tier` should name that wrapper; for more than the digest, a seat reads the log. Selective runs (`commands.affected`)
+are an inner-loop convenience ONLY, never a board row's merge evidence; full tiers stay mandatory at the Test phase, the Review/behavioural gates, and before every PR.
 
-**Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `builder/skills/state-template.md` in the kit):
-loop number, open FIX rows, which phases must re-run, the last digest lines, the index verdict, each optional check's
-last result, decisions taken. Rewrite it at EVERY phase gate. After any context compaction, re-read in this order —
-(1) `state.md`, (2) the board's `phase:status` block, (3) the open `FIX-n` rows — BEFORE the next dispatch; never
-reconstruct a run from scrollback.
+**The last message of every run opens with `Track: <track> — <reason>` and a `Phases:` line** — a blocked run, an early
+stop and a `Needs a human` ending included; a report that opens with prose has no header (REQ-2007). **Every run dispatches
+at least one seat.** The orchestrator edits no production source itself: SMALL is one `module-builder` dispatch, never a direct edit (REQ-2002).
 
-**Put the loop-back list last.** When you re-dispatch the coder, the ordered `FIX-n` list is the final thing in the
-brief, after the context — recency is the one placement effect you control.
+**Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `builder/skills/state-template.md` in the kit): loop number, open FIX rows, which
+phases must re-run, the last digest lines, the index verdict, each optional check's last result, decisions taken. Rewrite it at EVERY phase gate. After
+any context compaction, re-read in this order — (1) `state.md`, (2) the board's `phase:status` block, (3) the open `FIX-n` rows — BEFORE the next
+dispatch; never reconstruct a run from scrollback.
 
-**Fixed dispatch header, every seat, every time:**
-`MODULE / TRACK / PLAN-PATH / BOARD-PATH / YOUR-TASK / RETURN-SHAPE`. Invariants + acceptance criteria + citations
-FIRST in any brief; the ordered action list LAST.
+**Fixed dispatch header, every seat, every time:** `MODULE / TRACK / PLAN-PATH / BOARD-PATH / YOUR-TASK /
+RETURN-SHAPE`. Invariants + acceptance criteria + citations FIRST in any brief; the ordered action list LAST. **Put the
+loop-back list last:** when you re-dispatch the coder, the ordered `FIX-n` list is the final thing in the brief, after the context — recency is the one placement effect you control.
+
+**Every seat runs in the foreground.** Dispatch and wait for the return in the same step; concurrent seats are one message
+with several dispatches, and all of them return before the next step. Never schedule a timer, a wake-up or a sleep to wait for a seat
+(D136). **`Human: none` in the brief, or a session nobody watches, makes the run unattended:** every human-only
+decision is recorded under `Needs a human` with the assumption taken, and the run ends with its verdict, never with a question (→ `references/sizing.md`).
 
 ## Inputs
 
-A module key and its scope brief (written from the installed `module-brief` template). If scope is missing, pull it
-from the requirements oracle (profile §3) before starting. With `features.specAuthoring` on, the oracle for this
-module is its ratified spec, `<specs>/<key>.spec.md` (the `spec-author` skill writes it; step 0.7 checks it). The brief pins the up-front decisions (boundary fork, exact
-catalogue keys, scope shape, dependency fallbacks) and requires the final **handoff pack** — one file under
-`<handoffs>`, sections §A–§F (step 7). A table in the chat report is not a handoff.
+A module key and its scope brief (written from the installed `module-brief` template). If scope is missing, pull it from
+the requirements oracle (profile §3) before starting. With `features.specAuthoring` on, the oracle for this module is its ratified spec, `<specs>/<key>.spec.md` (the `spec-author` skill writes it; step 0.7 checks it). The brief pins the
+up-front decisions (boundary fork, exact catalogue keys, scope shape, dependency fallbacks) and requires the final **handoff pack** — one file under `<handoffs>`, sections §A–§F (step 7). A table in the chat report is not a handoff.
 
 ## Phase order
 
@@ -114,13 +116,11 @@ catalogue keys, scope shape, dependency fallbacks) and requires the final **hand
 
 Seat models come from each persona's tier, mapped in profile §12 — do not override.
 
-**The orchestrator is the row that gets forgotten.** It has no persona file, so no tier routes it: its model is
-whatever the session was started on, and nothing stops a run on the wrong one. → How to choose and measure it:
-`references/run-discipline.md`.
+**The orchestrator is the row that gets forgotten.** It has no persona file, so no tier routes it: its model is whatever
+the session started on, and nothing stops a run on the wrong one. → Choosing and measuring it: `references/run-discipline.md`.
 
-**Phases 3b, 4d and 6.5 exist because everything else in this list asks the same question** (the blind spots they
-cover: `references/tracks-and-scope.md`). Skip these phases only where the profile says the capability does not exist
-(§14) — and then **record the skip**, never let it read as a pass.
+**Phases 3b, 4d and 6.5 exist because everything else in this list asks the same question** (the blind spots they cover:
+`references/tracks-and-scope.md`). Skip them only where the profile says the capability does not exist (§14) — and then **record the skip**, never let it read as a pass.
 
 ## Phase 0.5 — track selection
 
@@ -134,22 +134,23 @@ it as its first output** (it is the first seat that reads the actual docs). Put 
 | **PLATFORM** | shared/foundation code | needs explicit human authorization named in the board header; the standards auditor is the **primary** seat, not one of four; a mechanical wiring check is mandatory — shared code ahead of its consumer must be *ruled* latent, not merely noticed |
 | **RULINGS** | decision/doc-authority work | 0.5 → 1 → 7. No coder, no tester. Search → decide-from-docs → escalate. Rows are `D-n` decisions; the artifact is a ruling request, not a diff |
 | **FIX** | remediation from a verified blocker list | 2 → 3 → 3b → 4 → 6 → 6.5 → 7. **No planner** — the blocker list *is* the plan |
+| **SMALL** | a bounded change inside one module: at most 4 production source files, one module directory, no new public operation, table, permission key or dependency, no protected path | 0.5 → 2 (one builder dispatch, TDD) → the orchestrator runs typecheck and the tiers → 7 (report). No planner, tester, auditor, docs or reviewer; no board, no pack. A broken limit escalates — `references/sizing.md` |
 | **SOLO** | ledger / docs / test-only | no pipeline — but **declared**, never assumed |
 
 Two rules keep this from making things worse (their history: `references/tracks-and-scope.md`):
 
 1. **A production-source diff may never go SOLO.** If the blocker list turns out not to be verified — if a seat must
    decide *what to build* rather than fix *what was measured* — rule 2 applies and the run escalates.
-2. **The track is a floor, not a ceiling.** A run may escalate **up** mid-flight (SOLO → FIX → ADDITIVE → FULL);
+2. **The track is a floor, not a ceiling.** A run may escalate **up** mid-flight (SOLO → SMALL → FIX → ADDITIVE → FULL);
    nothing may de-escalate. A wrong guess costs a resumed phase, never lost coverage. Record the escalation as a board
    row so the reason survives.
+3. **Size the run before the first dispatch.** Read the brief's `Size hint:` and `Human:` lines. A diff inside the SMALL
+   limits is SMALL; after the builder returns, `node scripts/track-check.mjs --since <base>` measures them, and `ESCALATE`
+   means the run continues from Phase 1 as `ADDITIVE` with the builder's diff as context (REQ-2003). → The SMALL steps, the unattended mode and the report header: `references/sizing.md`.
 
-**`SPLIT` — work that belongs somewhere else.** When any seat finds work belonging to another module or another track,
-the output is a `SPLIT` finding: a deferred-registry row (with its blocking dependency and how-to-resume) plus a
-**proposed** separate run for the human to queue.
-
-**The pipeline never starts another pipeline.** Scope grows by human decision, not by discovery. → Why:
-`references/tracks-and-scope.md`.
+**`SPLIT` — work that belongs somewhere else.** When any seat finds work belonging to another module or another track, the
+output is a `SPLIT` finding: a deferred-registry row (with its blocking dependency and how-to-resume) plus a **proposed** separate
+run for the human to queue. **The pipeline never starts another pipeline.** Scope grows by human decision, not by discovery. → Why: `references/tracks-and-scope.md`.
 
 ## Run it
 
@@ -247,7 +248,7 @@ line.
 4. **Audit** — three preparations, then the dispatch. → Read `references/gate-checks.md` § *P4 — the three audit
    preparations* first (index re-sync, `rules.txt` for the vuln-auditor, experimental role profiles).
 
-   Then dispatch all four auditors **concurrently** (a single message with four agent dispatches). Name the account
+   Then dispatch all four auditors **concurrently** (a single message with four agent dispatches; all four return before Phase 5). Name the account
    each auditor runs on: the lane's own account (the brief's `Account:` line) or the headless account the orchestrator
    routed the seat to; `references/account-selection.md` says which accounts may take an auditor. Collect their
    structured `findings[]` + verdicts — pass these forward as-is; do not re-summarize into prose.
@@ -378,7 +379,8 @@ When **MERGE-READY** (→ the detailed procedure for each step: `references/clos
    diff and the decisions; fill every `<fill …>`, then
    `node scripts/handoff-check.mjs <handoffs>/<date>-<key>-handoff.md`. → The §A–§F sections and what the check
    refuses: `references/close-out.md`.
-6. **Report** — a concise summary (its contents: `references/close-out.md`). Report a green behavioural run as
+6. **Report** — the first two lines are `Track: <track> — <reason>` and `Phases:` (each phase `run` or `skipped (<reason>)`,
+   → `references/sizing.md`), then a concise summary (its contents: `references/close-out.md`). Report a green behavioural run as
    **"every declared behaviour held"** — never "the system is sound". Name the handoff pack's path. **The report may
    summarise the pack; it never replaces it** — a handoff that exists only in a chat report has no owner once the
    session ends.
