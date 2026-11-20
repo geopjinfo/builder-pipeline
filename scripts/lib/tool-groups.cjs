@@ -101,6 +101,7 @@ const SCRIPTS = {
   'personas-check': 'audit',
   orch: 'orchestrator',
   'orchestrator-check': 'orchestrator',
+  'seat-models': 'orchestrator', // seat model parity (REQ-2029): the free check of the installed agents' model lines against §16
   'worktree-sweep': 'orchestrator',
   'branch-sweep': 'hygiene',
   'run-sweep': 'hygiene',
@@ -169,6 +170,7 @@ const LIBS = {
   personas: 'audit',
   // every scripts/lib/orch-*.cjs is the orchestrator's (groupOf matches the prefix)
   'orchestrator-check': 'orchestrator',
+  'seat-models': 'orchestrator',
   'worktree-sweep': CORE, // the orchestrator's sweep and run-sweep (hygiene) share its tree helpers
   'branch-sweep': 'hygiene',
   'run-sweep': 'hygiene',

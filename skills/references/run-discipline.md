@@ -58,7 +58,14 @@ was recorded as done; declaring it in `models.orchestrator` makes the divergence
 
 ```
 node scripts/orchestrator-check.mjs
+node scripts/seat-models.mjs
 ```
+
+`seat-models` (REQ-2029) compares the `model:` line of every installed agent with `models.strong` /
+`models.mid` of §16. One `DRIFT:` line per agent and exit `1` means the seats would run on another
+model than the profile declares — the benchmark measured Opus seats under a profile that said Sonnet.
+Run `node scripts/seat-models.mjs --write` to put them in step, then go on. A profile without models,
+or another harness, prints one line and exits `0`.
 
 Exit `5` means this session is not on `models.orchestrator`: switch the session's model, or record
 in `state.md` that the run proceeds on the other one. The choice is the operator's; the check only

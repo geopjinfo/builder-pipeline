@@ -7,6 +7,13 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Seat model parity (`specs/pipeline-cost-3.spec.md` REQ-2021, REQ-2029 and REQ-2030; D150, D151; EXPERIMENTS §27).** The
+  Claude Code install (`unpack`, `upgrade`) reads `models.strong` / `models.mid` from PIPELINE_PROFILE.md §16 for the
+  agents' `model:` lines; `--models` on the command still wins, tier by tier; the lock records only the flag, never the
+  profile. New free check `npx builder-pipeline run seat-models [--write] [--json]`: the installed agents' `model:` lines
+  against §16, one `DRIFT:` line per agent (exit 1), `--write` rewrites them and the lock hashes. Named before step 0 in
+  the run discipline beside `orchestrator-check`. Why: the benchmark's arm E declared Sonnet in §16 and every seat ran
+  Opus, 76 to 83 percent of the kit's cost.
 - **Escalation discipline (`specs/pipeline-cost-2.spec.md` REQ-2022 to REQ-2024 and REQ-2027; D146 to D149; EXPERIMENTS
   §26).** Four changes read from the hard benchmark (`hard-01`) and the first cost re-run (`g12-after-E`), measured
   before any is switched on. `features.foregroundGuard` (`experimental-off`, `openHours` 12):
