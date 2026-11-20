@@ -7,6 +7,25 @@ versions independently of any project it is pasted into.
 
 ### Added
 
+- **Pipeline cost (`specs/pipeline-cost.spec.md` REQ-2011 to REQ-2020; D142 to D145; EXPERIMENTS §25).** Three changes
+  for the cost gaps the full benchmark found, each measured before it is switched on. `features.mediumTrack`
+  (`experimental-off`, `maxFiles` 6): a `MEDIUM` track between `SMALL` and `ADDITIVE` for a one-module change of at most
+  6 production source files with one addition (a migration, a table or a public operation): one `module-builder`
+  dispatch, the orchestrator's typecheck and tiers, one auditor dispatch (`security-auditor` for a public operation,
+  `invariant-auditor` for a migration, a table or a plain change), one re-dispatch at most, no board, no pack; a new
+  dependency, permission key or protected path still escalates to `ADDITIVE`. The chain is
+  `SOLO → SMALL → MEDIUM → FIX → ADDITIVE → FULL`. `features.soloTrack` (`experimental-off`, `maxFiles` 2): a `SOLO`
+  path for a production-source change of at most 2 files with no new behaviour, made by the orchestrator with a red
+  test first, no seat, the tiers run once; with the key off, rule 1 (a production-source diff never goes SOLO) and the
+  one-seat rule stand. New `templates/module-report.md`, installed once as the project-owned
+  `specs/module-report.template.md` by `unpack` and both fallback installers: it opens with the `Track:` and `Phases:`
+  lines and the skill's Finish step fills it. `track-check` gains `--medium [N]` (a one-module diff past a SMALL limit
+  with at most N files, no dependency change and at most one new migration prints `MEDIUM: … — <reading>`, exit 3) and
+  `--solo [N]` (`SOLO: …`, exit 0); without the flags the output and exit codes are unchanged, and the script still reads
+  no profile feature. FEATURES.md, the profile template, GUIDE and USAGE name both keys; the sizing reference holds the
+  steps. Tests: `tests/pipeline-cost.test.mjs`. Source: EXPERIMENTS §25 (full-01: 16 of 75 kit runs escalated to
+  `ADDITIVE` at 4.94 USD against 0.45 for `SMALL`; `SMALL` at 3 to 5 times a bare run on a one-line change; 3 of 75
+  reports without a `Track:` line).
 - **EXPERIMENTS §24 measured again and §25 opened (D140).** The full benchmark batch (`full-01`, 600 cells, ten arms,
   15 tasks, 5 seeds, Library `benchmark/full-01/`) keeps the SMALL limits and records the escalation-cost gap: 16 of 75
   kit runs escalated to ADDITIVE at ten times the cost of a SMALL run, with no gain in solved cells; the kit showed no

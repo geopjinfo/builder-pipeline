@@ -834,6 +834,7 @@ function installCommon(tools = []) {
   copyIfAbsent(path.join(KIT, 'templates', 'task-board.md'), path.join(boards, 'README.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'deferred-registry.md'), registry, own);
   copyIfAbsent(path.join(KIT, 'templates', 'module-brief.md'), path.join('specs', 'module-brief.template.md'), own);
+  copyIfAbsent(path.join(KIT, 'templates', 'module-report.md'), path.join('specs', 'module-report.template.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'spec.md'), path.join('specs', 'spec.template.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-plan.md'), path.join('specs', 'orchestrator-plan.template.md'), own);
   copyIfAbsent(path.join(KIT, 'templates', 'orchestrator-worker-brief.md'), path.join('specs', 'orchestrator-worker-brief.template.md'), own);

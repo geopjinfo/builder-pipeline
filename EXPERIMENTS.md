@@ -855,7 +855,7 @@ the 1.00 limit) for one reason that is not the limits: 4 of 25 pilot-task runs e
 costs ten times a SMALL run. That is gap §25, which has its own measurement. The header rule reached 72 of 75 reports,
 not all; §25 G3 carries the fix. The numbers 4 files and 1 module are not changed by this batch (D140).
 
-## 25. Escalation cost — the ADDITIVE step for one-module changes (planned, experimental, measured first)
+## 25. Escalation cost — `mediumTrack`, `soloTrack` and the report template (experimental-off, measured first)
 
 **What was measured (2026-11-19, benchmark `full-01`, 600 cells, arms A to J, Library `benchmark/full-01/`).** The kit
 (arm E, 00f0a12) solved 71 of 75 cells against 74 of 75 for a bare agent and 75 of 75 for a plain `CLAUDE.md`; the
@@ -898,5 +898,29 @@ those changes. The measurement must include the security and migration auditors'
 this batch before the step is widened; if those auditors found nothing on the 16 runs, the risk is small on this bed
 and unknown elsewhere.
 
-**Decision (2026-11-19).** not yet measured — the rows above are the before measurement of full-01 (600 cells); no kit
-code changes in this entry (D140). The after measurement decides each of G1, G2 and G3 on its own.
+**What ships (2026-11-19, `specs/pipeline-cost.spec.md` REQ-2011 to REQ-2020, D142 to D145).** G1: `features.mediumTrack`
+(`experimental-off`, `maxFiles` 6), a `MEDIUM` track between `SMALL` and `ADDITIVE`: at most 6 production source files
+in one module with one addition (a migration, a table or a public operation); one builder dispatch, the orchestrator's
+typecheck and tiers, one auditor dispatch chosen by the addition (`security-auditor` for a public operation,
+`invariant-auditor` for a migration, a table or a plain change), one re-dispatch at most, no board, no pack. A
+dependency, a permission key or a protected path still escalates. G2: `features.soloTrack` (`experimental-off`,
+`maxFiles` 2), a `SOLO` path for a production-source change of at most 2 files with no new behaviour: the orchestrator
+edits with a red test first, dispatches no seat, runs the tiers once; with the key off, rule 1 stands. G3:
+`templates/module-report.md`, installed once as `specs/module-report.template.md`, opens with the `Track:` and
+`Phases:` lines; it has no §16 key because the header rule is already in force (REQ-2007) and a template has no off
+state. `track-check` gains `--medium [N]` (exit 3 on a `MEDIUM` line) and `--solo [N]`; without the flags nothing
+changes, and the orchestrator passes a flag only when its key is on.
+
+| Date | Kit commit | Gap | Keys | Bed | Solved | Cost per run (USD) | Tool calls | Note |
+|---|---|---|---|---|---|---|---|---|
+| 2026-11-19 | 00f0a12 (before) | G1 | off | full-01, arm E, T3 T5 T8 T9 T11 T14 × 5 seeds | 28 of 30 | 2.85 (16 ADDITIVE escalations at 4.94, 14 SMALL at 0.45) | 136 per escalated run | arms A and B solved every one of these cells |
+| 2026-11-19 | 00f0a12 (before) | G2 | off | full-01, arm E, T1 T6 T7 × 5 seeds | 15 of 15 | 0.45 SMALL mean; E over B on the trivial tasks 4.75 [4.38, 5.36] | 13 | the registered claim was at most 2 |
+| 2026-11-19 | 00f0a12 (before) | G3 | — | full-01, arm E, 75 reports | — | — | — | 72 of 75 reports carry the `Track:` line |
+| | (after) | G1 | `mediumTrack: experimental-on` | the same six tasks and seeds | | | | owed: the auditor's findings on each MEDIUM run, and the escalations left |
+| | (after) | G2 | `soloTrack: experimental-on` | the same three tasks and seeds | | | | owed: the E over B ratio, seats per run (expected 0) |
+| | (after) | G3 | — | every arm E report of the batch | | | | owed: reports with the line, of all |
+
+**Decision (2026-11-19).** not yet measured — the before rows are full-01 (600 cells, D140); the code ships with both keys
+`experimental-off` and the template installed. The after measurement decides each of G1, G2 and G3 on its own: keep G1 at
+under 1.00 USD per run on the six tasks with solved not below 28 of 30 and no new hidden-test failure; keep G2 at an E
+over B ratio of at most 2 on the trivial tasks with solved unchanged; keep G3 at 75 of 75 reports with the line.

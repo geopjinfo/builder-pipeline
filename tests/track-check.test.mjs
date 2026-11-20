@@ -230,7 +230,7 @@ describe('REQ-2001 to REQ-2007 — the skill text: the SMALL track, the foregrou
   test('red: AC-2003 a broken limit continues from Phase 1 as ADDITIVE, measured by track-check', () => {
     assert.match(BOTH, /track-check\.mjs --since/);
     assert.match(BOTH, /continues from Phase 1 as `ADDITIVE`/);
-    assert.match(SKILL, /SOLO → SMALL → FIX → ADDITIVE → FULL/);
+    assert.match(SKILL, /SOLO → SMALL → MEDIUM → FIX → ADDITIVE → FULL/); // MEDIUM joined the chain in specs/pipeline-cost.spec.md (D142)
   });
   test('red: AC-2004 the foreground rule forbids a timer, wake-up or sleep, and the four auditors return before Phase 5', () => {
     assert.match(SKILL, /foreground/);

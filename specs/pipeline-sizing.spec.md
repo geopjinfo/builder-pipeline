@@ -39,7 +39,9 @@ The checker treats these as non-negotiable (D45). Every requirement below holds 
   the report and in `state.md`.
 - A human-only decision is never invented. In unattended mode it is recorded with the assumption taken, and the run
   ends with a verdict that names it; the decision stays open for a person.
-- A spec change after ratification is an amendment row in this file (D45).
+- A spec change after ratification is an amendment row in this file (D45). Amendments AM-1 to AM-3 of
+  `specs/pipeline-cost.spec.md` (19 November 2026) scope the SOLO invariant and the REQ-2003 escalation target to the
+  state of `features.soloTrack` and `features.mediumTrack`, and move the REQ-2007 header into `templates/module-report.md`.
 
 ## Actors
 

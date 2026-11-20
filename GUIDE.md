@@ -93,8 +93,9 @@ Not every job is a module build. The track is chosen with the brief and confirme
 | **PLATFORM** | shared / foundation code | all + named human authorization; standards auditor is primary; wiring check mandatory |
 | **FIX** | a *verified* blocker list | all except the planner (the blocker list is the plan) |
 | **SMALL** | at most 4 production source files in one module, no new operation, table, permission key, dependency or protected path | one builder dispatch; the orchestrator runs typecheck and the tiers; no board, no pack; a broken limit escalates to ADDITIVE (`track-check --since <base>` measures it) |
+| **MEDIUM** (experimental, `features.mediumTrack`) | at most 6 production source files in one module with one addition: a migration, a table or a public operation | one builder dispatch; the orchestrator runs typecheck and the tiers; one auditor dispatch; no board, no pack; a dependency, a permission key or a protected path escalates to ADDITIVE (`track-check --since <base> --medium`) |
 | **RULINGS** | decision / doc-authority work | 0.5 → 1 → 7 — no coder, no tester |
-| **SOLO** | ledger / docs / test-only | no pipeline, but declared — **never** for a production-source diff |
+| **SOLO** | ledger / docs / test-only | no pipeline, but declared — **never** for a production-source diff. Experimental (`features.soloTrack`): a change of at most 2 production source files with no new behaviour, made by the orchestrator with a red test first and the tiers run once (`track-check --since <base> --solo`) |
 
 ```mermaid
 flowchart LR

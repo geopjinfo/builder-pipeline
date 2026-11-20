@@ -11,12 +11,21 @@
  * profile, a lock file, a manifest, and any file without a code extension. A manifest is judged on its own: a
  * dependency added, removed or re-pinned in package.json is a reason; any edit to another manifest is a reason.
  *
+ * Two optional readings (specs/pipeline-cost.spec.md REQ-2018, D145). `--medium N` (default 6): when a SMALL limit
+ * breaks but at most N files in one module changed, with no dependency change and at most one new migration, the
+ * answer is MEDIUM and the broken SMALL limits are the reading. `--solo N` (default 2): at most N files in one module,
+ * no dependency change, no migration, is SOLO. The orchestrator passes a flag only when the matching §16 feature is on.
+ *
  * A free check: it reads no PIPELINE_PROFILE.md feature and has no off state (REQ-2009). The protected
  * paths of profile §4 and "no new public operation or permission key" stay the orchestrator's reading of the diff.
  */
 const { spawnSync } = require('node:child_process');
 
 const DEFAULT_MAX_FILES = 4;
+const DEFAULT_MEDIUM_FILES = 6;
+const DEFAULT_SOLO_FILES = 2;
+/** The exit code of each answer: SOLO and SMALL stay on the track (0), MEDIUM is its own answer (3), ESCALATE is 1. */
+const EXIT = { SOLO: 0, SMALL: 0, MEDIUM: 3, ESCALATE: 1 };
 /** Folders a module directory sits under. `src/report/x.ts` → module `report`; `packages/billing/src/a.ts` → `billing`. */
 const DEFAULT_SRC = ['src', 'lib', 'app', 'apps', 'server', 'packages', 'services', 'modules'];
 
@@ -131,30 +140,48 @@ function dependencyChanges(root, since, manifests, readFile) {
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
- * SMALL or ESCALATE from the counted facts. Reasons, in order: the file count, the module count, each dependency
- * change, each new migration.
+ * The answer from the counted facts. Reasons, in order: the file count, the module count, each dependency change,
+ * each new migration. With `solo`, a diff of at most `solo` files in one module with no dependency change and no
+ * migration is SOLO. With `medium`, a diff that breaks a SMALL limit but stays at or under `medium` files in one
+ * module, with no dependency change and at most one new migration, is MEDIUM; its reasons are the reading, not an
+ * escalation. Otherwise SMALL when no reason, ESCALATE when one.
  */
-function judge({ files, modules, dependency = [], migrations = [], maxFiles = DEFAULT_MAX_FILES }) {
+function judge({ files, modules, dependency = [], migrations = [], maxFiles = DEFAULT_MAX_FILES, medium = null, solo = null }) {
   const reasons = [];
   if (files.length > maxFiles) reasons.push(`${plural(files.length, 'source file')} changed, limit ${maxFiles}`);
   if (modules.length > 1) reasons.push(`${plural(modules.length, 'module')} touched (${modules.join(', ')}), limit 1`);
   for (const r of dependency) reasons.push(r);
   for (const m of migrations) reasons.push(`new migration ${m}`);
-  return { track: reasons.length ? 'ESCALATE' : 'SMALL', files, modules, reasons, maxFiles };
+  const oneModule = modules.length <= 1;
+  let track = reasons.length ? 'ESCALATE' : 'SMALL';
+  if (track === 'SMALL' && solo && files.length <= solo && migrations.length === 0) track = 'SOLO';
+  if (track === 'ESCALATE' && medium && oneModule && dependency.length === 0) {
+    if (files.length > medium) reasons.push(`${plural(files.length, 'source file')} changed, limit ${medium}`);
+    else if (migrations.length > 1) reasons.push(`${plural(migrations.length, 'new migration')}, limit 1`);
+    else track = 'MEDIUM';
+  }
+  // under --medium the SMALL-limit reasons are a reading; an ESCALATE prints only the MEDIUM limits that broke
+  const printed = track === 'ESCALATE' && medium && oneModule && dependency.length === 0 ? reasons.filter((r) => !r.endsWith(`limit ${maxFiles}`) && !r.startsWith('new migration ')) : reasons;
+  return { track, files, modules, reasons: printed, maxFiles, mediumMaxFiles: medium, soloMaxFiles: solo };
 }
+
+/** The exit code of an answer (REQ-2018). */
+const exitCode = (track) => EXIT[track] ?? 1;
 
 /** The lines to print: one SMALL line, or one ESCALATE line per reason. */
 function render(result) {
-  if (result.track === 'SMALL') return `SMALL: ${plural(result.files.length, 'source file')} in ${plural(result.modules.length, 'module')}`;
+  const size = `${plural(result.files.length, 'source file')} in ${plural(result.modules.length, 'module')}`;
+  if (result.track === 'SOLO' || result.track === 'SMALL') return `${result.track}: ${size}`;
+  if (result.track === 'MEDIUM') return `MEDIUM: ${size} — ${result.reasons.join('; ')}`;
   return result.reasons.map((r) => `ESCALATE: ${r}`).join('\n');
 }
 
 /**
  * The whole check over a repository.
- * @param {{ root: string, since: string, maxFiles?: number, src?: string[], readFile?: (rel: string) => string }} o
+ * @param {{ root: string, since: string, maxFiles?: number, medium?: number|null, solo?: number|null, src?: string[], readFile?: (rel: string) => string }} o
  * @returns {{ ok: false, error: string } | { ok: true, track, files, modules, reasons, maxFiles, base, ignored }}
  */
-function check({ root, since, maxFiles = DEFAULT_MAX_FILES, src = DEFAULT_SRC, readFile }) {
+function check({ root, since, maxFiles = DEFAULT_MAX_FILES, medium = null, solo = null, src = DEFAULT_SRC, readFile }) {
   const read = readFile || ((rel) => { try { return require('node:fs').readFileSync(require('node:path').join(root, rel), 'utf8'); } catch { return '{}'; } });
   const changed = changedSince(root, since);
   if (!changed.ok) return changed;
@@ -173,8 +200,8 @@ function check({ root, since, maxFiles = DEFAULT_MAX_FILES, src = DEFAULT_SRC, r
   }
   const modules = [...new Set(files.map((f) => moduleOf(f, src)))].sort();
   const dependency = dependencyChanges(root, since, manifests, read);
-  const judged = judge({ files, modules, dependency, migrations, maxFiles });
+  const judged = judge({ files, modules, dependency, migrations, maxFiles, medium, solo });
   return { ok: true, ...judged, base: since, ignored };
 }
 
-module.exports = { DEFAULT_MAX_FILES, DEFAULT_SRC, kindOf, moduleOf, repoRoot, changedSince, dependencyChanges, judge, render, check };
+module.exports = { DEFAULT_MAX_FILES, DEFAULT_MEDIUM_FILES, DEFAULT_SOLO_FILES, DEFAULT_SRC, kindOf, exitCode, moduleOf, repoRoot, changedSince, dependencyChanges, judge, render, check };
