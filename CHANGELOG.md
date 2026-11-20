@@ -18,7 +18,8 @@ versions independently of any project it is pasted into.
   §26).** Four changes read from the hard benchmark (`hard-01`) and the first cost re-run (`g12-after-E`), measured
   before any is switched on. `features.foregroundGuard` (`experimental-off`, `openHours` 12):
   `hooks/claude-code/foreground-guard.cjs`, a `PreToolUse` hook on `ScheduleWakeup`, `CronCreate` and `Monitor`, denies
-  the call while a pipeline run is open and names the foreground rule (REQ-2004); copied, never armed, and it passes
+  the call while a pipeline run is open (any file in a run folder written in the last `openHours`; `scope: "project"`
+  denies them whenever the key is on, D152) and names the foreground rule (REQ-2004); copied, never armed, and it passes
   without a trusted profile. The planner returns a `Track hint:` and never raises the track; `FULL` is entered from the
   brief's `Size hint:` or a new bounded context named in the brief. `track-check --shared <file,file>` names the shared
   catalogue files of profile §5: a listed file that only gained lines counts as a file, not as a module, the line ends
