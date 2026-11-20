@@ -121,6 +121,7 @@ const SCRIPTS = {
   'instruction-budget': 'pipeline',
   'instruction-lint': 'pipeline',
   'ledger-row': 'pipeline',
+  'track-check': 'pipeline', // pipeline sizing (REQ-2008): the free SMALL-or-ESCALATE check of Phase 0.5
   // 2.0.0 accounts line: the loop runner and the account key helper go with the orchestrator; the evidence programme
   // scripts with evals; readme-badges is the kit's own README reader (core, like features)
   'board-loop': 'orchestrator',
@@ -184,6 +185,7 @@ const LIBS = {
   'size-check': 'hygiene',
   'secret-scan': 'hygiene',
   'board-freshness': 'pipeline',
+  'track-check': 'pipeline',
   'board-parse': CORE, // read by the pipeline boards tooling and by the progress reporter (orchestrator), 2.1.0
   'page-docs': 'pipeline',
   'run-log': CORE,

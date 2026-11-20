@@ -92,12 +92,14 @@ Not every job is a module build. The track is chosen with the brief and confirme
 | **ADDITIVE** | a new field or operation on an existing module | all — digest refreshed; all four auditors kept |
 | **PLATFORM** | shared / foundation code | all + named human authorization; standards auditor is primary; wiring check mandatory |
 | **FIX** | a *verified* blocker list | all except the planner (the blocker list is the plan) |
+| **SMALL** | at most 4 production source files in one module, no new operation, table, permission key, dependency or protected path | one builder dispatch; the orchestrator runs typecheck and the tiers; no board, no pack; a broken limit escalates to ADDITIVE (`track-check --since <base>` measures it) |
 | **RULINGS** | decision / doc-authority work | 0.5 → 1 → 7 — no coder, no tester |
 | **SOLO** | ledger / docs / test-only | no pipeline, but declared — **never** for a production-source diff |
 
 ```mermaid
 flowchart LR
-    SOLO["SOLO"] -->|"needs a source change"| FIX["FIX"]
+    SOLO["SOLO"] -->|"needs a source change"| SMALL["SMALL"]
+    SMALL -->|"a limit breaks"| FIX["FIX"]
     FIX -->|"must decide what to build"| ADD["ADDITIVE"]
     ADD -->|"new bounded context"| FULL["FULL"]
 ```
