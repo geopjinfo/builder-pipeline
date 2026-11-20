@@ -170,7 +170,7 @@ you installed; *partial* = the kit relies on instructions or a by-hand step ther
 | skills | supported — `.claude/skills/` | supported — `.agents/skills/` | supported — `.agents/skills/` | partial — playbooks in `.builder/playbooks/` |
 | pointer | supported — `CLAUDE.md` | supported — `AGENTS.md` | partial — `AGENTS.md`; `GEMINI.md` is read too, order undocumented | supported — `AGENTS.md` (or the tool's rules file) |
 | per-seat tool limits | supported — a tools list per subagent | partial — sandbox not narrowable per agent; checked with `git status` after each phase | partial — whole-tool grants; checked with `git status` | partial — instruction-held |
-| model tiers | supported — `--models strong=…,mid=…,low=…` | partial — no kit defaults; `--models codex.<tier>=…` | partial — inherit / flash / pro | partial — recorded in profile §12 |
+| model tiers | supported — profile §16 `models`, or `--models strong=…,mid=…,low=…`; `run seat-models` checks the install | partial — no kit defaults; `--models codex.<tier>=…` | partial — inherit / flash / pro | partial — recorded in profile §12 |
 | effort | supported | supported — `model_reasoning_effort` | unsupported | unsupported |
 | protected-paths hook | supported — copied, never armed | partial — Bash only (`apply_patch` not judged); copied, never armed | unsupported — not written | unsupported — the pre-commit hook in `hooks/` works with any tool |
 | reviewer-write / registry-read guards | supported — copied, never armed | unsupported — no agent name in hook input | unsupported | unsupported |

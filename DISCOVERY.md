@@ -76,7 +76,8 @@ be true of this repository **now**, not of what the project might adopt later.
   `citationRoots` (the directories a `file:line` citation may point into). Use the paths the unpack
   step created unless this repo already has its own.
 - **`models`** — `strong` and `mid` from the setup's confirmed mapping; `orchestrator` is the model
-  the orchestrating session should run on, or `null` if nobody declared one.
+  the orchestrating session should run on, or `null` if nobody declared one. On Claude Code the install
+  writes `strong` and `mid` into the agents' `model:` lines (REQ-2021); `seat-models` checks them later.
 - **`protected`** — the same globs as §4, as a JSON array. The protected-paths hook reads them too (add-only:
   they join the hook's own list, never replace it), and while the list is non-empty the profile itself is protected.
 - **`features`** — one entry per feature, each with a `state`. Decide each from evidence:

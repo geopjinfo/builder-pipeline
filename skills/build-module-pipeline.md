@@ -154,9 +154,9 @@ run for the human to queue. **The pipeline never starts another pipeline.** Scop
 
 ## Run it
 
-**Before step 0 — the orchestrator model check (optional; warns, never refuses):**
-`node scripts/orchestrator-check.mjs`. → Read `references/run-discipline.md` for its exit `5` and its `not configured`
-line.
+**Before step 0 — the model checks (optional; warn, never refuse):** `node scripts/orchestrator-check.mjs` and
+`node scripts/seat-models.mjs` (the seats' `model:` lines vs §16; `--write` puts them in step). → Read
+`references/run-discipline.md` for exit `5`, `DRIFT:` and `not configured`.
 
 0. **Index freshness (entry) — a gate, not advice.** Before dispatching the planner (the heaviest consumer of any
    knowledge index), run `node scripts/index-check.mjs` and branch on its **exit code**, never on its prose: `0` fresh
