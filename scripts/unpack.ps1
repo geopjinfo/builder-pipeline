@@ -58,6 +58,7 @@ else {
 # add a blank twin at the default beside the real one, which every checker reads §16 and passes over in
 # silence. So the ledgers are skipped there, and the CLI — which does read §16 — is named.
 Copy-KitFile (Join-Path $Kit 'templates\module-brief.md')      'specs\module-brief.template.md'
+Copy-KitFile (Join-Path $Kit 'templates\module-report.md')     'specs\module-report.template.md'
 if (Test-Path 'PIPELINE_PROFILE.md') {
     Write-Host "skip (profile present): ledgers — this fallback cannot read §16 paths; run 'node builder/cli.js unpack' for"
     Write-Host "                        any ledger this kit version adds, then 'node builder/cli.js verify'"

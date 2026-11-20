@@ -142,6 +142,7 @@ None of these wait for you unless they fail. Each is a script, and each prints
 | P1, before the planner | `npx builder-pipeline run index-check` | Knowledge-index freshness. `0` fresh · `3` absent · `4` unmeasurable · `10` docs pending · `11` code behind · `12` both. With `features.graph` on, a non-zero exit that is not recorded in the run's state file **refuses the planner**: refresh (code refresh is free; doc embedding spends tokens, and above the automatic limit a person decides) or record the verdict. With it off: `graph: not configured`, and the run goes on |
 | P1 · P4 · P6 | `npx builder-pipeline run output-check plan\|findings\|review <file>` | The plan, each findings block and the review have their fixed shape; a malformed one goes back to its seat |
 | End of P2 (SMALL) | `npx builder-pipeline run track-check --since <base>` | The size of the diff from git: `SMALL: n source files in m module(s)` (exit 0) or one `ESCALATE: <reason>` line per broken limit (exit 1), after which the run continues from Phase 1 as ADDITIVE. A free check: no §16 key, no off state |
+| End of P2 (MEDIUM, SOLO) | `npx builder-pipeline run track-check --since <base> --medium [6]` · `--solo [2]` | With `features.mediumTrack` on: `MEDIUM: … — <reading>` (exit 3) for a one-module diff past a SMALL limit with at most 6 files, no dependency change and at most one new migration. With `features.soloTrack` on: `SOLO: …` (exit 0) for at most 2 files, no migration. Without the flag nothing changes |
 | End of P2 and P5 | `npx builder-pipeline run claims-check --run <key>` | Every recorded count re-run, every `file:line` still points at its content, no retracted phrase, every owed note resolves |
 | P7 | `npx builder-pipeline run handoff-pack <key>` then `npx builder-pipeline run handoff-check <file>` | The handoff pack is generated from the board, run log and registry, then checked. **Close-out cannot finish on a failing pack** |
 | After P7 | — | `run.end` is logged and the session stops. Follow-up work takes a new key, board and session |
@@ -164,7 +165,11 @@ For a fix or small feature that doesn't warrant the full phase list, use the SMA
 (phase 0.5). SMALL is for a change of at most 4 production source files in one module with no new operation,
 table, permission key, dependency or protected path: one builder dispatch, the orchestrator runs typecheck and
 the tiers, no board, no pack; `npx builder-pipeline run track-check --since <base>` measures the limits after the
-builder returns and a broken one escalates the run to ADDITIVE. Or use the pieces directly:
+builder returns and a broken one escalates the run to ADDITIVE. Two experimental steps (EXPERIMENTS §25) sit beside it:
+with `features.mediumTrack` on, a one-module change of at most 6 files with one addition (a migration, a table, a public
+operation) runs as MEDIUM (one builder, one auditor; `track-check --since <base> --medium`, exit 3) instead of
+ADDITIVE; with `features.soloTrack` on, a change of at most 2 files with no new behaviour is SOLO: the orchestrator
+edits it with a red test first and runs the tiers once (`track-check --since <base> --solo`). Or use the pieces directly:
 - `scaffold-module` skill — just the golden-path scaffold.
 - `module-builder` persona standalone — it then self-runs `module-readiness-check` +
   `standards-auditor` (its file tells it to).

@@ -72,8 +72,8 @@ it. Never load them all up front.
 are an inner-loop convenience ONLY, never a board row's merge evidence; full tiers stay mandatory at the Test phase, the Review/behavioural gates, and before every PR.
 
 **The last message of every run opens with `Track: <track> — <reason>` and a `Phases:` line** — a blocked run, an early
-stop and a `Needs a human` ending included; a report that opens with prose has no header (REQ-2007). **Every run dispatches
-at least one seat.** The orchestrator edits no production source itself: SMALL is one `module-builder` dispatch, never a direct edit (REQ-2002).
+stop and a `Needs a human` ending included; fill the installed `module-report` template (`specs/module-report.template.md`): the two lines are its first two (REQ-2007, REQ-2017).
+**Every run dispatches at least one seat.** The one exception is a SOLO edit with `features.soloTrack` on (→ `references/sizing.md`). The orchestrator edits no production source itself: SMALL is one `module-builder` dispatch, never a direct edit (REQ-2002).
 
 **Keep an orchestrator state file** (`<runs>/<key>/state.md` — shape: `builder/skills/state-template.md` in the kit): loop number, open FIX rows, which
 phases must re-run, the last digest lines, the index verdict, each optional check's last result, decisions taken. Rewrite it at EVERY phase gate. After
@@ -135,18 +135,18 @@ it as its first output** (it is the first seat that reads the actual docs). Put 
 | **RULINGS** | decision/doc-authority work | 0.5 → 1 → 7. No coder, no tester. Search → decide-from-docs → escalate. Rows are `D-n` decisions; the artifact is a ruling request, not a diff |
 | **FIX** | remediation from a verified blocker list | 2 → 3 → 3b → 4 → 6 → 6.5 → 7. **No planner** — the blocker list *is* the plan |
 | **SMALL** | a bounded change inside one module: at most 4 production source files, one module directory, no new public operation, table, permission key or dependency, no protected path | 0.5 → 2 (one builder dispatch, TDD) → the orchestrator runs typecheck and the tiers → 7 (report). No planner, tester, auditor, docs or reviewer; no board, no pack. A broken limit escalates — `references/sizing.md` |
-| **SOLO** | ledger / docs / test-only | no pipeline — but **declared**, never assumed |
+| **MEDIUM** | experimental, `features.mediumTrack` on: at most 6 production source files in one module with one addition (a new migration, table or public operation); a new dependency, permission key or protected path escalates | 0.5 → 2 (one builder dispatch, TDD) → the orchestrator runs typecheck and the tiers → 4 (one auditor dispatch) → 7. No planner, tester, docs or reviewer; no board, no pack — `references/sizing.md` |
+| **SOLO** | ledger / docs / test-only; with `features.soloTrack` on, also a change of at most 2 production source files in one module with no new behaviour, made by the orchestrator (`references/sizing.md`) | no pipeline — but **declared**, never assumed |
 
 Two rules keep this from making things worse (their history: `references/tracks-and-scope.md`):
 
-1. **A production-source diff may never go SOLO.** If the blocker list turns out not to be verified — if a seat must
-   decide *what to build* rather than fix *what was measured* — rule 2 applies and the run escalates.
-2. **The track is a floor, not a ceiling.** A run may escalate **up** mid-flight (SOLO → SMALL → FIX → ADDITIVE → FULL);
+1. **A production-source diff may never go SOLO** (the one exception: `features.soloTrack` on, at most 2 files, no new behaviour, a red test first, the tiers once). If the blocker list turns out not to be verified — if a seat must decide *what to build* rather than fix *what was measured* — rule 2 applies and the run escalates.
+2. **The track is a floor, not a ceiling.** A run may escalate **up** mid-flight (SOLO → SMALL → MEDIUM → FIX → ADDITIVE → FULL);
    nothing may de-escalate. A wrong guess costs a resumed phase, never lost coverage. Record the escalation as a board
    row so the reason survives.
 3. **Size the run before the first dispatch.** Read the brief's `Size hint:` and `Human:` lines. A diff inside the SMALL
-   limits is SMALL; after the builder returns, `node scripts/track-check.mjs --since <base>` measures them, and `ESCALATE`
-   means the run continues from Phase 1 as `ADDITIVE` with the builder's diff as context (REQ-2003). → The SMALL steps, the unattended mode and the report header: `references/sizing.md`.
+   limits is SMALL; after the builder returns, `node scripts/track-check.mjs --since <base>` measures them (add `--medium` only with `features.mediumTrack` on, `--solo` only with `features.soloTrack` on), and `ESCALATE`
+   means the run continues from Phase 1 as `ADDITIVE` with the builder's diff as context (REQ-2003); with `features.mediumTrack` off the MEDIUM row is not offered. → The SMALL, MEDIUM and SOLO steps, the unattended mode and the report header: `references/sizing.md`.
 
 **`SPLIT` — work that belongs somewhere else.** When any seat finds work belonging to another module or another track, the
 output is a `SPLIT` finding: a deferred-registry row (with its blocking dependency and how-to-resume) plus a **proposed** separate
@@ -379,7 +379,7 @@ When **MERGE-READY** (→ the detailed procedure for each step: `references/clos
    diff and the decisions; fill every `<fill …>`, then
    `node scripts/handoff-check.mjs <handoffs>/<date>-<key>-handoff.md`. → The §A–§F sections and what the check
    refuses: `references/close-out.md`.
-6. **Report** — the first two lines are `Track: <track> — <reason>` and `Phases:` (each phase `run` or `skipped (<reason>)`,
+6. **Report** — fill `specs/module-report.template.md`: the first two lines are `Track: <track> — <reason>` and `Phases:` (each phase `run` or `skipped (<reason>)`,
    → `references/sizing.md`), then a concise summary (its contents: `references/close-out.md`). Report a green behavioural run as
    **"every declared behaviour held"** — never "the system is sound". Name the handoff pack's path. **The report may
    summarise the pack; it never replaces it** — a handoff that exists only in a chat report has no owner once the
