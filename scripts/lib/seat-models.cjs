@@ -10,7 +10,7 @@
  *
  * `check(root, kitRoot, settings)` → { declared, entries, drift }. `declared` is the §16 map with placeholders and
  * nulls removed; `entries` one per installed `.claude/agents/*.md` whose name is a kit persona (`builder-` prefix
- * stripped), with its tier (from the kit's neutral `agents/**.md`), the model installed and the model expected;
+ * stripped), with its tier (from the kit's neutral `agents/**.md` and `skills-extra/<name>/agents/`), the model installed and the model expected;
  * `drift` the entries whose model differs from the declared one for their tier. A tier with no declared model is in
  * step by definition. A project-owned agent (no kit persona of that name) is skipped.
  *
@@ -44,10 +44,18 @@ const frontmatter = (text) => {
 };
 const field = (fm, key) => ((fm.match(new RegExp(`^${key}:[ \\t]*(.*)$`, 'm')) || [])[1] || '').split('#')[0].trim();
 
-/** The kit's personas by name → tier, from `agents/*.md` and `agents/experimental/*.md`. */
+/** The extra skills' persona folders: `skills-extra/<name>/agents/`. */
+function extrasAgentDirs(kitRoot) {
+  const base = path.join(kitRoot, 'skills-extra');
+  let names = [];
+  try { names = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return []; }
+  return names.map((n) => path.join(base, n, 'agents')).filter((d) => fs.existsSync(d));
+}
+
+/** The kit's personas by name → tier, from `agents/*.md`, `agents/experimental/*.md` and `skills-extra/<name>/agents/`. */
 function kitTiers(kitRoot) {
   const out = {};
-  for (const dir of [path.join(kitRoot, 'agents'), path.join(kitRoot, 'agents', 'experimental')]) {
+  for (const dir of [path.join(kitRoot, 'agents'), path.join(kitRoot, 'agents', 'experimental'), ...extrasAgentDirs(kitRoot)]) {
     let files = [];
     try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.md')); } catch { continue; }
     for (const f of files) {
@@ -116,4 +124,4 @@ function write(root, result) {
   return written;
 }
 
-module.exports = { TIERS, declaredModels, kitTiers, check, render, write };
+module.exports = { TIERS, declaredModels, extrasAgentDirs, kitTiers, check, render, write };

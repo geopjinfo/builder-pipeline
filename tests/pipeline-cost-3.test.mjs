@@ -126,6 +126,16 @@ describe('REQ-2029 — seat-models, the free parity check', () => {
     assert.equal(b.status, 0);
     assert.match(b.stdout, /declares no strong or mid model/);
   });
+  test('red: an extras persona (skills-extra/*/agents) is checked too, and --write aligns it', () => {
+    const p = project({ strong: 'claude-sonnet-5-5', mid: 'claude-sonnet-5-5' });
+    ok(cli(p, ['unpack', '--tool', 'claude-code', '--models', 'strong=opus,mid=opus']));
+    assert.match(agent(p, 'repo-auditor'), /^model: opus$/m, 'the extras persona was installed on the flag model');
+    const before = JSON.parse(script(p, ['--json']).stdout);
+    assert.ok(before.entries.some((e) => e.name === 'repo-auditor'), 'the extras persona is an entry');
+    assert.equal(before.entries.length, before.drift.length, 'every installed kit agent drifts under the flag');
+    assert.equal(script(p, ['--write']).status, 0);
+    assert.match(agent(p, 'repo-auditor'), /^model: claude-sonnet-5-5$/m);
+  });
   test('red: a renamed "both" install (builder-<name>) is read by its kit name; declaredModels drops placeholders', () => {
     assert.deepEqual(lib.declaredModels({ models: { strong: '<id>', mid: ' x ', orchestrator: 'o' } }), { mid: 'x' });
     const root = mkdtempSync(join(tmpdir(), 'kit-models-lib-'));
