@@ -127,7 +127,7 @@ describe('builder bootstrap', () => {
     const r = run(cli, proj, ['bootstrap', '--tool', 'antigravity']);
     assert.equal(r.status, 0, r.out);
     assert.deepEqual(files(proj), ['.agents/skills/builder-init/SKILL.md', 'builder.lock.json']);
-    assert.match(readFileSync(join(proj, '.agents/skills/builder-init/SKILL.md'), 'utf8'), /npx builder-pipeline inventory/);
+    assert.match(readFileSync(join(proj, '.agents/skills/builder-init/SKILL.md'), 'utf8'), /npx --no-install builder-pipeline inventory/);
     assert.equal(run(cli, proj, ['bootstrap', '--tool', 'nope']).status, 1);
   });
 });

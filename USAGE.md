@@ -12,8 +12,8 @@ looks like from your side of the desk. The agent-facing mechanics live in the in
 pipeline **stops and waits for you**, what it **records** along the way, and what to do at each
 point.
 
-> **Commands.** Written for the npm-package install: `npx builder-pipeline <command>`, and a kit script as
-> `npx builder-pipeline run <name>`. With the kit copied in as a `builder/` folder instead ([`UNPACK.md`](UNPACK.md)),
+> **Commands.** Written for the npm-package install: `npx --no-install builder-pipeline <command>`, and a kit script as
+> `npx --no-install builder-pipeline run <name>`. With the kit copied in as a `builder/` folder instead ([`UNPACK.md`](UNPACK.md)),
 > run the CLI through `builder/cli.js` with Node, and a kit script from the project's `scripts/` copy.
 
 ## Running one module build
@@ -25,7 +25,7 @@ When a module has an intent but no requirement rows, say *"Write the spec for `<
 Given/When/Then acceptance criteria, an OpenAPI 3 contract, the oracle entries it would need (as
 *pending* amendments, never invented), and its open questions. Answer the questions, rule the
 amendments, then **you** flip `Status: ratified` and `Ratified-by:` and run
-`npx builder-pipeline run spec-check <moduleKey> --ratified`. The pipeline's step 0.7 refuses a draft, so a run can
+`npx --no-install builder-pipeline run spec-check <moduleKey> --ratified`. The pipeline's step 0.7 refuses a draft, so a run can
 never start on requirements nobody ratified. `--rows`, `--pack` and `--contract <out.json>` print the
 tracker rows, the requirement-pack skeleton and the contract file the later phases read.
 
@@ -138,13 +138,13 @@ None of these wait for you unless they fail. Each is a script, and each prints
 
 | When | Command | What it means |
 |---|---|---|
-| P0 | `npx builder-pipeline run orchestrator-check` | The session's model vs `models.orchestrator`. Exit 5 is a **warning**, never a refusal; no readable transcript is *unmeasured*, not a pass |
-| P1, before the planner | `npx builder-pipeline run index-check` | Knowledge-index freshness. `0` fresh · `3` absent · `4` unmeasurable · `10` docs pending · `11` code behind · `12` both. With `features.graph` on, a non-zero exit that is not recorded in the run's state file **refuses the planner**: refresh (code refresh is free; doc embedding spends tokens, and above the automatic limit a person decides) or record the verdict. With it off: `graph: not configured`, and the run goes on |
-| P1 · P4 · P6 | `npx builder-pipeline run output-check plan\|findings\|review <file>` | The plan, each findings block and the review have their fixed shape; a malformed one goes back to its seat |
-| End of P2 (SMALL) | `npx builder-pipeline run track-check --since <base>` | The size of the diff from git: `SMALL: n source files in m module(s)` (exit 0) or one `ESCALATE: <reason>` line per broken limit (exit 1), after which the run continues from Phase 1 as ADDITIVE. A free check: no §16 key, no off state |
-| End of P2 (MEDIUM, SOLO) | `npx builder-pipeline run track-check --since <base> --medium [6]` · `--solo [2]` | With `features.mediumTrack` on: `MEDIUM: … — <reading>` (exit 3) for a one-module diff past a SMALL limit with at most 6 files, no dependency change and at most one new migration. With `features.soloTrack` on: `SOLO: …` (exit 0) for at most 2 files, no migration. Without the flag nothing changes |
-| End of P2 and P5 | `npx builder-pipeline run claims-check --run <key>` | Every recorded count re-run, every `file:line` still points at its content, no retracted phrase, every owed note resolves |
-| P7 | `npx builder-pipeline run handoff-pack <key>` then `npx builder-pipeline run handoff-check <file>` | The handoff pack is generated from the board, run log and registry, then checked. **Close-out cannot finish on a failing pack** |
+| P0 | `npx --no-install builder-pipeline run orchestrator-check` | The session's model vs `models.orchestrator`. Exit 5 is a **warning**, never a refusal; no readable transcript is *unmeasured*, not a pass |
+| P1, before the planner | `npx --no-install builder-pipeline run index-check` | Knowledge-index freshness. `0` fresh · `3` absent · `4` unmeasurable · `10` docs pending · `11` code behind · `12` both. With `features.graph` on, a non-zero exit that is not recorded in the run's state file **refuses the planner**: refresh (code refresh is free; doc embedding spends tokens, and above the automatic limit a person decides) or record the verdict. With it off: `graph: not configured`, and the run goes on |
+| P1 · P4 · P6 | `npx --no-install builder-pipeline run output-check plan\|findings\|review <file>` | The plan, each findings block and the review have their fixed shape; a malformed one goes back to its seat |
+| End of P2 (SMALL) | `npx --no-install builder-pipeline run track-check --since <base>` | The size of the diff from git: `SMALL: n source files in m module(s)` (exit 0) or one `ESCALATE: <reason>` line per broken limit (exit 1), after which the run continues from Phase 1 as ADDITIVE. A free check: no §16 key, no off state |
+| End of P2 (MEDIUM, SOLO) | `npx --no-install builder-pipeline run track-check --since <base> --medium [6]` · `--solo [2]` | With `features.mediumTrack` on: `MEDIUM: … — <reading>` (exit 3) for a one-module diff past a SMALL limit with at most 6 files, no dependency change and at most one new migration. With `features.soloTrack` on: `SOLO: …` (exit 0) for at most 2 files, no migration. Without the flag nothing changes |
+| End of P2 and P5 | `npx --no-install builder-pipeline run claims-check --run <key>` | Every recorded count re-run, every `file:line` still points at its content, no retracted phrase, every owed note resolves |
+| P7 | `npx --no-install builder-pipeline run handoff-pack <key>` then `npx --no-install builder-pipeline run handoff-check <file>` | The handoff pack is generated from the board, run log and registry, then checked. **Close-out cannot finish on a failing pack** |
 | After P7 | — | `run.end` is logged and the session stops. Follow-up work takes a new key, board and session |
 
 ## Interruptions and resumption
@@ -164,7 +164,7 @@ from the same sources; the board keeps the completed rows.
 For a fix or small feature that doesn't warrant the full phase list, use the SMALL, FIX or SOLO track
 (phase 0.5). SMALL is for a change of at most 4 production source files in one module with no new operation,
 table, permission key, dependency or protected path: one builder dispatch, the orchestrator runs typecheck and
-the tiers, no board, no pack; `npx builder-pipeline run track-check --since <base>` measures the limits after the
+the tiers, no board, no pack; `npx --no-install builder-pipeline run track-check --since <base>` measures the limits after the
 builder returns and a broken one escalates the run to ADDITIVE. Two experimental steps (EXPERIMENTS §25) sit beside it:
 with `features.mediumTrack` on, a one-module change of at most 6 files with one addition (a migration, a table, a public
 operation) runs as MEDIUM (one builder, one auditor; `track-check --since <base> --medium`, exit 3) instead of
@@ -182,11 +182,11 @@ edits it with a red test first and runs the tiers once (`track-check --since <ba
 Switch `features.reporter` on in §16 with one or more channels, then start the watcher once at run start:
 
 ```
-npx builder-pipeline run report --watch
+npx --no-install builder-pipeline run report --watch
 ```
 
 One report every `intervalMinutes` (default 30), only when something changed, with a heartbeat line every fourth quiet
-tick. `npx builder-pipeline run report --once` sends one now. The files are under `.pipeline/reports/` (`latest.md`,
+tick. `npx --no-install builder-pipeline run report --once` sends one now. The files are under `.pipeline/reports/` (`latest.md`,
 `state.json`, one dated file per tick, `report.log.jsonl` for sends, skips, refusals and failures). A Slack channel is
 an Incoming Webhook whose URL you keep in an environment variable (`urlEnv`) or a 0600 file (`urlFile`), never in the
 profile. A report that would carry a secret shape is not sent and says so in its next header. `orch status` prints
@@ -195,9 +195,9 @@ profile. A report that would carry a secret shape is not sent and says so in its
 ## Removing a tool, or the kit (`uninstall`)
 
 ```
-npx builder-pipeline uninstall --tool codex --dry-run   # what would go
-npx builder-pipeline uninstall --tool codex             # drop one tool
-npx builder-pipeline uninstall --all                    # drop the kit
+npx --no-install builder-pipeline uninstall --tool codex --dry-run   # what would go
+npx --no-install builder-pipeline uninstall --tool codex             # drop one tool
+npx --no-install builder-pipeline uninstall --all                    # drop the kit
 ```
 
 It removes only what `builder.lock.json` says the kit wrote, and only files whose bytes still match the lock (each is
@@ -214,9 +214,9 @@ The pointer block tells every agent: no `Co-Authored-By:` trailer for an AI agen
 a commit message or PR body. Agents follow instructions most of the time; the git hook makes it hold every time.
 
 ```
-npx builder-pipeline git-hooks --dry-run   # where it would go
-npx builder-pipeline git-hooks             # arm it in this clone
-npx builder-pipeline doctor                # "[repo] commit hygiene: armed"
+npx --no-install builder-pipeline git-hooks --dry-run   # where it would go
+npx --no-install builder-pipeline git-hooks             # arm it in this clone
+npx --no-install builder-pipeline doctor                # "[repo] commit hygiene: armed"
 ```
 
 It copies `hooks/commit-msg-no-ai-attribution.sh` to the folder git runs hooks from (`core.hooksPath` when set,
@@ -231,8 +231,8 @@ prints the one line to add to it.
 `features.artifactCheck` on, then:
 
 ```
-npx builder-pipeline git-hooks --artifact-check   # arm the pre-commit in this clone
-npx builder-pipeline doctor                        # "[repo] artifact check pre-commit: armed"
+npx --no-install builder-pipeline git-hooks --artifact-check   # arm the pre-commit in this clone
+npx --no-install builder-pipeline doctor                        # "[repo] artifact check pre-commit: armed"
 ```
 
 It copies `hooks/artifact-check-precommit.sh` to the folder git runs hooks from and fills `KIT`. Before every commit
@@ -246,8 +246,8 @@ alone, with the one line to add printed.
 ## Completion gate (`run hygiene --gate`)
 
 ```
-npx builder-pipeline run hygiene --since <base> --json         # every hygiene check that is on, one report
-npx builder-pipeline run hygiene --gate --since <base>         # the seven rows: PASS / FAIL / NOT CONFIGURED
+npx --no-install builder-pipeline run hygiene --since <base> --json         # every hygiene check that is on, one report
+npx --no-install builder-pipeline run hygiene --gate --since <base>         # the seven rows: PASS / FAIL / NOT CONFIGURED
 ```
 
 The first command runs each hygiene check whose §16 feature is on through its own script and writes the report to
@@ -264,23 +264,23 @@ each finding prints the command a person would run.
 |---|---|---|
 | `verify` fails on placeholders | profile never filled / half-filled | run the kit's `DISCOVERY.md` prompt; answer the `⚠ CONFIRM` batch |
 | `verify` reports a §16 error, or a script refuses to start with a settings error | the `pipeline-settings` block is invalid: JSON syntax, more than one block, a feature `on` with a required key empty, an unknown feature name (usually a typo), a `<placeholder>` left in, `commands.tier` without `{tier}` | fix the path the error names. Never set a feature `on` to silence an error, and never delete the block — with no block every optional feature is off |
-| A run prints `<feature>: not configured` | that feature's state is `off` in §16 — the default for anything the project was not shown to have | expected if the project lacks the file or tool. To switch it on: install what it needs, set `state: "on"`, fill its required keys, run `npx builder-pipeline verify`, then `npx builder-pipeline run features` |
+| A run prints `<feature>: not configured` | that feature's state is `off` in §16 — the default for anything the project was not shown to have | expected if the project lacks the file or tool. To switch it on: install what it needs, set `state: "on"`, fill its required keys, run `npx --no-install builder-pipeline verify`, then `npx --no-install builder-pipeline run features` |
 | Planner not dispatched at P1 | the index gate saw a stale index and no recorded verdict | run the free code refresh; embed pending docs if within the limit (or decide, if above it); or record the verdict in the state file's `Graph:` line |
 | `orchestrator-check` exits 5 | the session was started on a different model from `models.orchestrator` | restart the session on the declared model, or proceed and note it — it is a cost and capability choice, not a correctness gate |
 | Claims check fails at the end of P2 or P5 | a stale count, a citation whose line moved, a retracted phrase, an owed note naming nothing | fix the record. Never widen the checker to pass a false record |
 | Handoff check refuses close-out | a section missing, an item without `RESPONSE REQUIRED`, a fill marker left, a cited id that does not exist | complete the pack; the check names each gap |
-| The pack is out of date (a newer release, or the installed files lag the kit's `CHANGELOG.md`) | `unpack` copies only absent files, so an upgrade never overwrites installed ones | bump the dependency tag, run `npx builder-pipeline upgrade` (tools and flags come from `builder.lock.json`; it refreshes kit-owned files after a backup, keeps your local edits, reports files the release dropped as `stale`, and `--prune` removes them), read the CHANGELOG entries since your old version, then `npx builder-pipeline verify` |
-| Cost figures look wrong against the bill | the rate table is stale, or accounting is off / unavailable in this harness | compare the kit's `scripts/lib/pricing.cjs` and its version with the published rates. A package install copies no scripts into the project (they run as `npx builder-pipeline run <name>`), so the table is in `node_modules/builder-pipeline/scripts/lib/pricing.cjs`: report it upstream and take the release that fixes it. A folder copy has it at `scripts/lib/pricing.cjs`: update the table and its version together. Em-dashes mean unmeasured, not free |
+| The pack is out of date (a newer release, or the installed files lag the kit's `CHANGELOG.md`) | `unpack` copies only absent files, so an upgrade never overwrites installed ones | bump the dependency tag, run `npx --no-install builder-pipeline upgrade` (tools and flags come from `builder.lock.json`; it refreshes kit-owned files after a backup, keeps your local edits, reports files the release dropped as `stale`, and `--prune` removes them), read the CHANGELOG entries since your old version, then `npx --no-install builder-pipeline verify` |
+| Cost figures look wrong against the bill | the rate table is stale, or accounting is off / unavailable in this harness | compare the kit's `scripts/lib/pricing.cjs` and its version with the published rates. A package install copies no scripts into the project (they run as `npx --no-install builder-pipeline run <name>`), so the table is in `node_modules/builder-pipeline/scripts/lib/pricing.cjs`: report it upstream and take the release that fixes it. A folder copy has it at `scripts/lib/pricing.cjs`: update the table and its version together. Em-dashes mean unmeasured, not free |
 | `pack tests: Node …` | Node older than 18 | upgrade Node; the pack's scripts and tests need 18 or newer |
 | Agent invents a permission key / state name | oracle path in profile §3 wrong, or oracle not listed | fix §3; the persona rule only bites if the oracle is findable |
-| Personas don't load (Claude Code) | files not under `.claude/agents/` (unpack run from wrong dir) | re-run `npx builder-pipeline unpack --tool claude-code` from repo root (`--tool` is required); check `verify` |
+| Personas don't load (Claude Code) | files not under `.claude/agents/` (unpack run from wrong dir) | re-run `npx --no-install builder-pipeline unpack --tool claude-code` from repo root (`--tool` is required); check `verify` |
 | Other tools ignore the pipeline | pointer block missing from that tool's instruction file | re-run unpack for that `--tool`; check the file for the `builder-kit:pipeline` marker |
 | Coder edits a protected path | harness has no hook enforcement | add one (see `hooks/README.md`); meanwhile reject the diff and re-dispatch |
 | A hook registered today does nothing | harness hooks and settings are read at session start | start a new session |
-| Board rows DONE without test evidence | persona rules being paraphrased/trimmed | restore verbatim persona files; that rule is load-bearing (DESIGN §7). `npx builder-pipeline check-ledgers` catches it mechanically — wire it into CI |
-| `npx builder-pipeline check-targets` fails | safety gate for the `qa-audit` skill: a target whose DATASTORE is shared is marked destructive, an attach target does not declare `shared`, or a credential is embedded in the config | fix the config. Run it in CI — the rule must not depend on someone reading a doc |
-| Ledger drift (dangling `DEFERRED→id`, odd statuses) | hand-edited boards/registry | `npx builder-pipeline check-ledgers` — 7 rules (LG-0 unreadable ledger · LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 `DEFERRED→id` exists · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence · LG-6 row does not match its header), exits non-zero for CI |
-| Board shows a percentage nobody believes | the bar was typed, not computed | `npx builder-pipeline run board-check-all` (`--fix` to rewrite). Wire it into the gate chain — a bar looks like an output even when it is an input, which is how one board sat at "0%" with 8 of 12 rows done |
+| Board rows DONE without test evidence | persona rules being paraphrased/trimmed | restore verbatim persona files; that rule is load-bearing (DESIGN §7). `npx --no-install builder-pipeline check-ledgers` catches it mechanically — wire it into CI |
+| `npx --no-install builder-pipeline check-targets` fails | safety gate for the `qa-audit` skill: a target whose DATASTORE is shared is marked destructive, an attach target does not declare `shared`, or a credential is embedded in the config | fix the config. Run it in CI — the rule must not depend on someone reading a doc |
+| Ledger drift (dangling `DEFERRED→id`, odd statuses) | hand-edited boards/registry | `npx --no-install builder-pipeline check-ledgers` — 7 rules (LG-0 unreadable ledger · LG-1 unique registry ids · LG-2 in-vocabulary statuses · LG-3 `DEFERRED→id` exists · LG-4 no unresolved ⚠ VERIFY · LG-5 DONE needs evidence · LG-6 row does not match its header), exits non-zero for CI |
+| Board shows a percentage nobody believes | the bar was typed, not computed | `npx --no-install builder-pipeline run board-check-all` (`--fix` to rewrite). Wire it into the gate chain — a bar looks like an output even when it is an input, which is how one board sat at "0%" with 8 of 12 rows done |
 | Pipeline "finishes" but reviewer never ran | orchestrator drifted from the playbook | ask for the review file's verdict; no verdict = not done, re-run Phase 6 |
 | Same blocker loops forever | upstream truth wrong (spec/brief/plan) | that's what two-strike escalation is for — fix the doc, not the code |
 
@@ -290,7 +290,7 @@ One module is a dozen or more agent dispatches: the planner, the builder in batc
 `features.builderBatch.rows` rows, the tester, four auditors, docs and the reviewer, plus
 loop-backs. Strong-model phases dominate cost; profile §12 is where you trade cost vs. rigor. Where
 the harness keeps transcripts and `features.costAccounting` is on, the board shows measured spend
-per seat. `npx builder-pipeline run cost-window` and `npx builder-pipeline run seat-peaks` compare runs before and
+per seat. `npx --no-install builder-pipeline run cost-window` and `npx --no-install builder-pipeline run seat-peaks` compare runs before and
 after a change. `cost-window` reads Claude Code transcripts (`reader: "claude-code"`) or Codex CLI
 rollout files (`reader: "codex"`; tokens are shown, cost only with a `--rates` table). Judge any setting change over several runs, never one. Scaling guidance — what may
 be merged or skipped and what never — is in `DESIGN.md` §"Tuning".

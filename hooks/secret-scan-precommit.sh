@@ -5,7 +5,7 @@
 # exists: the profile's `features.secretScan.allow` list (PIPELINE_PROFILE.md §16) is the only exception.
 #
 # Arm it (each clone; git hooks are not pushed):
-#   npx builder-pipeline git-hooks --secret-scan
+#   npx --no-install builder-pipeline git-hooks --secret-scan
 # copies this file to the repository's hooks folder as `pre-commit` (never over a pre-commit already there: it names
 # the line to add) and fills KIT_LIB below with the kit's lib folder. By hand: copy it, make it executable, fill KIT_LIB.
 #

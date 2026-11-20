@@ -1,6 +1,6 @@
 # Adapter — Google Antigravity
 
-> **Commands.** Written for the npm-package install: a kit script runs as `npx builder-pipeline run <name>`. With the
+> **Commands.** Written for the npm-package install: a kit script runs as `npx --no-install builder-pipeline run <name>`. With the
 > kit copied in as a `builder/` folder ([`UNPACK.md`](../UNPACK.md)), run it from the project's `scripts/` copy with Node.
 
 Antigravity has custom subagents, skills and hooks under one workspace folder, `.agents/`. The renderer in
@@ -55,7 +55,7 @@ Antigravity account is assessed (its probe) but has no launcher of its own. The 
 `skills/references/account-selection.md`.
 
 - **Start.** A person starts the lane by hand in the lane worktree, on the account signed in to the workspace, with
-  the brief pointer as the first prompt, then records it: `npx builder-pipeline run orch set <run> <lane> status=LAUNCHED
+  the brief pointer as the first prompt, then records it: `npx --no-install builder-pipeline run orch set <run> <lane> status=LAUNCHED
   seat=<account> sessionId=<id>`. Headless form, where the installed version has it: `-p --output-format json
   --print-timeout <seconds>` with the timeout from `timeoutMinutes`.
 - **Environment.** The account is the one the workspace is signed in to; pays is `subscription` only (no key
@@ -78,4 +78,4 @@ Antigravity account is assessed (its probe) but has no launcher of its own. The 
 Steps that are Claude Code only (cost accounting, the live page, Workflow-driven runs, spawn depth) are covered in
 the Codex adapter's table. The same answers apply here.
 
-`npx builder-pipeline accounts key` refuses an Antigravity account: there is no key mode for Antigravity, which signs in through its own app and runs as a wrapper only in 2.0.0. The readiness report (`npx builder-pipeline accounts`) probes an Antigravity account with its models listing under a timeout: a listing is ready, the words "sign in" in the output are not ready, a timeout is unmeasured. Set the account's `readyCommand` when the listing command differs.
+`npx --no-install builder-pipeline accounts key` refuses an Antigravity account: there is no key mode for Antigravity, which signs in through its own app and runs as a wrapper only in 2.0.0. The readiness report (`npx --no-install builder-pipeline accounts`) probes an Antigravity account with its models listing under a timeout: a listing is ready, the words "sign in" in the output are not ready, a timeout is unmeasured. Set the account's `readyCommand` when the listing command differs.

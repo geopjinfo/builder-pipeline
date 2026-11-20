@@ -33,7 +33,7 @@ points — batch everything else.
   - if the profile has **no §16 `pipeline-settings` block**, run Phase 3 for §16 only;
   - otherwise skip Phase 3 and jump to Phase 5.
 
-## Phase 1 — choose harness targets, models & settings 🧑‍💼
+## Phase 1 — choose harness targets, models & settings (human confirms)
 
 **1a. Detect targets.** Existing tool config: `.claude/` → claude-code · `AGENTS.md` →
 codex/opencode · `GEMINI.md` → gemini · `.cursor/` → cursor ·
@@ -47,7 +47,9 @@ from the kit's memory (model line-ups change too fast):
 
 - Inspect the harness's own config for available/default models (examples: `~/.claude/`
   settings or the harness UI for Claude Code; `~/.codex/config.toml` or `codex --help` for
-  Codex; the harness's config/model-picker elsewhere). If inspection is inconclusive, ASK.
+  Codex; the harness's config/model-picker elsewhere). Read only the model keys. Do not read,
+  copy or print API keys, tokens or other credentials that sit in the same files, and do not
+  write to them. If inspection is inconclusive, ASK.
 - Recommendation shape: **strong** (plan · code · test · standards/security/invariant audits ·
   review) = the best reasoning model the subscription allows; **mid** (vuln-audit · docs) = the
   cheaper workhorse tier. Offer a budget variant (mid = cheapest capable model) if cost was
@@ -94,7 +96,7 @@ state from what this repository actually has. **Never switch a feature on withou
 tool it needs** — `off` prints `not configured`, which is honest; `on` with nothing behind it is
 not. Experimental features stay `experimental-off` unless the human asked for them in Phase 1.
 
-## Phase 4 — the confirm batch 🧑‍💼
+## Phase 4 — the confirm batch (human confirms)
 
 Present ALL `⚠ CONFIRM` items as one batched question set, each with your recommended answer —
 including every feature you left `off` that the human might want, with what it would need.

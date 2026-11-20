@@ -8,7 +8,7 @@
 # With the feature off the check prints "artifactCheck: not configured" and the commit goes through (exit 3 is not a
 # refusal here: an unconfigured check never decides).
 #
-# Arm it (each clone; git hooks are not pushed): `npx builder-pipeline git-hooks --artifact-check` copies it to the
+# Arm it (each clone; git hooks are not pushed): `npx --no-install builder-pipeline git-hooks --artifact-check` copies it to the
 # repository's hooks folder as `pre-commit` (never over a hook already there) and fills KIT below.
 # By hand: copy it to .git/hooks/pre-commit (or your core.hooksPath directory), make it executable, set KIT.
 # (folder layout: node builder/cli.js git-hooks --artifact-check)

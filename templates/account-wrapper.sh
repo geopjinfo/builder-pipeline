@@ -1,6 +1,6 @@
 #!/bin/sh
 # builder-pipeline: wrapper v1 @NAME@
-# Written by `npx builder-pipeline accounts install` from PIPELINE_PROFILE.md §16. Edit the profile and run install again; a
+# Written by `npx --no-install builder-pipeline accounts install` from PIPELINE_PROFILE.md §16. Edit the profile and run install again; a
 # local edit here is kept and named until `accounts install --force`.
 # @NOTE@
 name='@NAME@'
