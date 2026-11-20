@@ -266,6 +266,10 @@ const FEATURES = {
    * track-check: the orchestrator passes --medium / --solo only when the key is on. */
   mediumTrack: { defaults: { state: 'experimental-off', maxFiles: 6 }, requires: [], experiment: '§25' },
   soloTrack: { defaults: { state: 'experimental-off', maxFiles: 2 }, requires: [], experiment: '§25' },
+  /* The foreground guard (specs/pipeline-cost-2.spec.md REQ-2022, D146, EXPERIMENTS.md §26): hooks/claude-code/
+   * foreground-guard.cjs denies ScheduleWakeup, CronCreate and Monitor while a run is open — a `<paths.runs>/<key>/
+   * state.md` written in the last openHours. Copied, never armed; the orchestrator reads it only through the hook. */
+  foregroundGuard: { defaults: { state: 'experimental-off', openHours: 12 }, requires: [], experiment: '§26' },
   /* Named accounts the orchestrator places lanes on: worker, who pays, content class, roles, budget, note — the
    * registry rules are in scripts/lib/accounts-registry.cjs (plan M1, D22, D32). Replaces the 1.0 seats and credit lane. */
   accounts: { defaults: accountsRegistry.FEATURE_DEFAULTS, requires: [] },

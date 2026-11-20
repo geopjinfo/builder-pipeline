@@ -916,11 +916,64 @@ changes, and the orchestrator passes a flag only when its key is on.
 | 2026-11-19 | 00f0a12 (before) | G1 | off | full-01, arm E, T3 T5 T8 T9 T11 T14 × 5 seeds | 28 of 30 | 2.85 (16 ADDITIVE escalations at 4.94, 14 SMALL at 0.45) | 136 per escalated run | arms A and B solved every one of these cells |
 | 2026-11-19 | 00f0a12 (before) | G2 | off | full-01, arm E, T1 T6 T7 × 5 seeds | 15 of 15 | 0.45 SMALL mean; E over B on the trivial tasks 4.75 [4.38, 5.36] | 13 | the registered claim was at most 2 |
 | 2026-11-19 | 00f0a12 (before) | G3 | — | full-01, arm E, 75 reports | — | — | — | 72 of 75 reports carry the `Track:` line |
-| | (after) | G1 | `mediumTrack: experimental-on` | the same six tasks and seeds | | | | owed: the auditor's findings on each MEDIUM run, and the escalations left |
-| | (after) | G2 | `soloTrack: experimental-on` | the same three tasks and seeds | | | | owed: the E over B ratio, seats per run (expected 0) |
-| | (after) | G3 | — | every arm E report of the batch | | | | owed: reports with the line, of all |
+| 2026-11-19 | 0e09b2f (after, PR #44) | G1 | `mediumTrack: experimental-on` | g12-after-E, arm E, T3 T5 T8 T9 T11 T14 × 5 seeds, one subscription lane | 30 of 30 | 1.44 (0.80 without T9); PT5 after minus before -1.52 [-2.11, -0.95] | — | PT6: ADDITIVE runs fell from 16 to 5 (4 of them T9, `src/shared/errors.ts` read as a second module), MEDIUM 14, SMALL 8, 3 runs with no `Track:` line; no auditor finding on any MEDIUM run; the auditor deviated from the rule in 2 MEDIUM runs |
+| 2026-11-19 | 0e09b2f (after, PR #44) | G2 | `soloTrack: experimental-on` | g12-after-E, arm E, T1 T6 T7 × 5 seeds | 15 of 15 | 0.17 SMALL median; PT7 E over B 4.92 [4.54, 5.42] | — | SOLO never triggered: the brief carries no `Size hint:` and rule 1 holds without one; the orchestrator's own context (0.17 USD of a 0.30 run) is the cost, not the seat |
+| 2026-11-19 | 0e09b2f (after, PR #44) | G3 | — | g12-after-E, 45 arm E reports | — | — | — | 42 of 45 reports carry the `Track:` line; the 3 without are the runs whose last message was a timer's reply (PT8 solved +0.089 [0.000, 0.267], 41 of 45 to 45 of 45 under the registered rule) |
 
-**Decision (2026-11-19).** not yet measured — the before rows are full-01 (600 cells, D140); the code ships with both keys
-`experimental-off` and the template installed. The after measurement decides each of G1, G2 and G3 on its own: keep G1 at
-under 1.00 USD per run on the six tasks with solved not below 28 of 30 and no new hidden-test failure; keep G2 at an E
-over B ratio of at most 2 on the trivial tasks with solved unchanged; keep G3 at 75 of 75 reports with the line.
+**Decision (2026-11-20).** not yet measured — the after rows are g12-after-E (45 cells, kit 0e09b2f, Library
+`benchmark/g12-after-E/`). G1 fell from 2.85 to 1.44 USD per run with solved 30 of 30 and no auditor finding on any
+MEDIUM run, but the keep rule (under 1.00 USD) is not met: 4 of the 5 escalations left are T9, where the only second
+module was one added line in `src/shared/errors.ts`; §26 (REQ-2024) carries that fix and G1 is measured again with it.
+G2 was not measured: SOLO never triggered because the brief has no `Size hint:` (REQ-2025, reserved for the third round).
+G3 reached 42 of 45; the 3 missing lines are timer runs, which §26 (REQ-2022) removes. Both keys stay `experimental-off`.
+
+## 26. Escalation discipline — `foregroundGuard`, the planner's hint and the shared allowance (experimental-off / free checks, unmeasured)
+
+**What ships (2026-11-20, `specs/pipeline-cost-2.spec.md` REQ-2022 to REQ-2024 and REQ-2027, D146 to D149).** Four
+changes read from `hard-01` (250 cells, Library `benchmark/hard-01/`) and `g12-after-E`. `features.foregroundGuard`
+(`experimental-off`, `openHours` 12): `hooks/claude-code/foreground-guard.cjs`, a `PreToolUse` hook on
+`ScheduleWakeup`, `CronCreate` and `Monitor`, denies the call while a run is open and names the foreground rule
+(REQ-2004). The planner returns a `Track hint:` and never raises the track; `FULL` is entered from the brief's
+`Size hint:` or a new bounded context named in the brief (REQ-2023). `track-check --shared <file,file>` names the
+shared catalogue files of profile §5: a listed file that only gained lines counts as a file, not as a module
+(REQ-2024). On `MEDIUM` the auditor is `invariant-auditor` unless the diff adds a public operation or query parameter,
+then `security-auditor`, and `track-check --medium --json` carries the choice (REQ-2027). The last three are free: no
+§16 key, nothing to switch on; the measurement decides whether the rules stay.
+
+**Why it is here.** Four readings of the two batches, none a kit feature before this section:
+
+| Reading | Batch | Runs | Cost |
+|---|---|---|---|
+| A timer tool called although REQ-2004 is in the skill; the last message is the timer's reply and the report is lost | hard-01 · g12 | 9 of 50 · 4 of 45 | 1.64 USD and 19.7 min per run against 3 to 15 min for the same tracks |
+| The planner raised the track to `FULL` | hard-01 | 7 of 50 (T16, T17, T18, T21) | 4.12 USD per run against 2.72 for ADDITIVE; the bare agent solved the same cells at 0.20 to 0.35 |
+| One added line in `src/shared` read as a second module | g12 · hard-01 | T9 4 of 5 · T24, T25 | the ADDITIVE escalation (4.94 USD) for one error code |
+| The MEDIUM auditor deviated from the rule (`vuln-auditor`, `standards-auditor`) | g12 | 2 of 14 MEDIUM runs | no finding either way |
+
+**Measurement (written before the re-run).** Benchmark batch `round-one`: arm E on T3, T5, T8, T9, T11, T14 (the g12
+cells, 30) and on T16, T17, T18, T21 at 3 seeds (12), kit at this section's commit, keys `mediumTrack`, `soloTrack`
+and `foregroundGuard` `experimental-on`, `--shared src/shared/errors.ts,src/shared/config.ts` in the arm profile, the
+hook armed in the arm's settings, one subscription lane. Record per run: the `Track:` line, timer calls, cost by seat,
+the auditor dispatched, the hidden-test result.
+
+| Date | Kit commit | Change | Bed | Solved | Timer waits | FULL runs | Cost per run (USD) | Note |
+|---|---|---|---|---|---|---|---|---|
+| 2026-11-19 | 0e09b2f (before) | all four | hard-01 and g12-after-E as read above | 50 of 50 · 45 of 45 | 9 · 4 | 7 · 0 | 3.24 (hard-01) · 1.44 (g12 six tasks) | before rows; the hard bed is saturated (bare 100 percent), so solved cannot fall below the before row without a new hidden-test failure |
+| | (after) | REQ-2022 | round-one, 42 cells | | | | | owed: timer waits (expected 0), reports with the line of all (expected 42 of 42) |
+| | (after) | REQ-2023 | round-one, T16 T17 T18 T21 × 3 | | | | | owed: FULL runs (expected 0), solved (expected 12 of 12), cost against 2.72 |
+| | (after) | REQ-2024 | round-one, the six g12 tasks × 5 | | | | | owed: T9 tracks (expected MEDIUM where the second module was `src/shared/errors.ts`), cost per run against 1.44 and the 1.00 rule |
+| | (after) | REQ-2027 | round-one, every MEDIUM run | | | | | owed: the auditor dispatched against the reading (expected 100 percent) |
+
+**Keep rule.** Keep REQ-2022 at 0 timer waits and 42 of 42 reports with the line. Keep REQ-2023 at 0 FULL runs with
+solved 12 of 12. Keep REQ-2024 when the six G1 tasks fall under 1.00 USD per run with solved 30 of 30 and no new
+hidden-test failure; a seed that still escalates past 6 files is the limit at work, not the allowance. Keep REQ-2027 at
+100 percent. A rule that fails its number is a new decision row with the run ids, not a quiet edit.
+
+**Risk.** The shared allowance lets a change to a catalogue the whole project reads run without the standards auditor;
+an added line can still change behaviour (a default, a switch). The measurement reads the hidden-test result of every
+MEDIUM run that used the allowance before the rule is called general. The hook judges a run open by a file's age, so a
+run abandoned within `openHours` blocks a timer in an unrelated session of the same project until it ages out.
+
+**Decision (2026-11-20).** not yet measured — the before rows are hard-01 and g12-after-E; the code ships with
+`foregroundGuard` `experimental-off` and the three free rules in the skill and the script. The `round-one` batch decides
+each of the four on its own rule above.
+
