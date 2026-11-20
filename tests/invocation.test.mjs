@@ -218,7 +218,7 @@ describe('the reference docs give install-neutral commands', () => {
       const text = readFileSync(join(PACK, ...doc.split('/')), 'utf8');
       const hits = text.split(/\r?\n/).map((l, i) => (HARD.test(l) ? `${doc}:${i + 1}: ${l.trim().slice(0, 100)}` : null)).filter(Boolean);
       assert.deepEqual(hits, []);
-      if (/npx builder-pipeline run /.test(text)) assert.match(text, /^> \*\*Commands\.\*\*/m, `${doc} names npx builder-pipeline run without the folder-layout note`);
+      if (/npx (?:--no-install )?builder-pipeline run /.test(text)) assert.match(text, /^> \*\*Commands\.\*\*/m, `${doc} names npx builder-pipeline run without the folder-layout note`);
     });
   }
 });

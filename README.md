@@ -37,17 +37,13 @@ Node 18 or newer. From the project root, pin a release tag:
 
 ```
 npm i -D github:geopjinfo/builder-pipeline#<tag>
-npx builder-pipeline --version
-```
-
-Or install from the npm registry (the registry listing starts with 2.0.0; earlier releases exist only as git tags):
-
-```
-npm i -D builder-pipeline
+npx --no-install builder-pipeline --version
 ```
 
 The tag is the version: every project names exactly one, and nothing changes until you bump it. After the one
-fetch the kit runs offline.
+fetch the kit runs offline. Always type `npx --no-install builder-pipeline`: it runs the installed copy and stops when
+there is none. The same command without `--no-install`, typed outside an installed project, fetches a package of that
+name from the npm registry, and the kit is not published there.
 
 ### 2. Paste the one setup prompt
 
@@ -68,12 +64,12 @@ with you confirming each decision.
 | Antigravity | `.agents/skills/builder-init/SKILL.md` | ask for the `builder-init` skill by name |
 
 Several tools in one project: `bootstrap` adds the skill for each; run `builder-init` from any one of them — the
-choices file is shared. Any other agent: `npx builder-pipeline unpack --tool <target>` (see `npx builder-pipeline targets`), then open
+choices file is shared. Any other agent: `npx --no-install builder-pipeline unpack --tool <target>` (see `npx --no-install builder-pipeline targets`), then open
 [`DISCOVERY.md`](DISCOVERY.md) in it.
 
 ### 3. Greenfield or brownfield
 
-`builder-init` decides from what is in the repository (`npx builder-pipeline inventory` prints the evidence):
+`builder-init` decides from what is in the repository (`npx --no-install builder-pipeline inventory` prints the evidence):
 
 - **Greenfield** — an empty or near-empty repository. The skill interviews you (what is built, for whom, stack,
   domain) and drafts `PIPELINE_PROFILE.md` from your answers.
@@ -81,7 +77,7 @@ choices file is shared. Any other agent: `npx builder-pipeline unpack --tool <ta
   hook you already have, scores each against the kit, and shows one table — keep yours / use the kit's / keep both
   (the kit's renamed `builder-<name>`) — with reasons, before anything is installed.
 
-Then it installs (`npx builder-pipeline unpack`), fills the profile from your docs, verifies (`npx builder-pipeline verify`) and runs
+Then it installs (`npx --no-install builder-pipeline unpack`), fills the profile from your docs, verifies (`npx --no-install builder-pipeline verify`) and runs
 the persona detector (`persona-detect`), which proposes personas for your project and makes none an agent until you
 confirm it.
 
@@ -93,7 +89,7 @@ confirm it.
 | record each keep / kit / both answer in **`builder.choices.json`** (commit it), so a later `upgrade` never undoes it | arm a hook — hooks are copied, never armed; enabling one is your act |
 | record what it wrote, file by file, in **`builder.lock.json`** (commit it) | touch the text around its pointer block in `CLAUDE.md` / `AGENTS.md` — only the marked block is the kit's |
 | seed the project-owned files once: `PIPELINE_PROFILE.md`, the boards, the deferred registry, the decision log, the brief templates | rewrite a project-owned file once it exists — not on `unpack`, not on `upgrade` |
-| append `.pipeline/` to `.gitignore` | copy the kit's scripts into the project (installed as a package they run from it: `npx builder-pipeline run <name>`) |
+| append `.pipeline/` to `.gitignore` | copy the kit's scripts into the project (installed as a package they run from it: `npx --no-install builder-pipeline run <name>`) |
 
 **Local edits are kept.** A kit-owned file you changed since the kit wrote it (the lock says so) is reported
 `kept (local edit)` on upgrade, not overwritten; `--force` overwrites it after a backup. Better: move the change
@@ -114,21 +110,21 @@ records, how to resume, and the troubleshooting table.
 3. Preview, then apply, with the same tools you installed for:
 
    ```
-   npx builder-pipeline upgrade --dry-run
-   npx builder-pipeline upgrade            # tools, models and extras come from builder.lock.json; --prune removes what a release dropped
+   npx --no-install builder-pipeline upgrade --dry-run
+   npx --no-install builder-pipeline upgrade            # tools, models and extras come from builder.lock.json; --prune removes what a release dropped
    ```
 
    Kit-owned files are refreshed, each backed up first to `.builder/backup-<stamp>/`; local edits are kept; your
    choices are applied again; project-owned files are never touched.
-4. `npx builder-pipeline verify`, `npx builder-pipeline features` (settings a release adds default to off) and `npx builder-pipeline doctor`.
+4. `npx --no-install builder-pipeline verify`, `npx --no-install builder-pipeline features` (settings a release adds default to off) and `npx --no-install builder-pipeline doctor`.
 5. **From 1.x:** 2.0.0 has one command, `builder-pipeline`. In your own scripts, CI and instruction files, change the
    command name after `npx` from `builder` to `builder-pipeline`. `upgrade` does not rewrite project-owned files, so
    the project makes this edit itself ([`GUIDE.md`](GUIDE.md) § "From 1.x: the command name").
 
 ## ⌨️ Every command
 
-`npx builder-pipeline <command>` (folder layout, with the kit copied in as a `builder/` folder: `node builder/cli.js <command>` — see
-[`UNPACK.md`](UNPACK.md)). `npx builder-pipeline` with no command prints the same list.
+`npx --no-install builder-pipeline <command>` (folder layout, with the kit copied in as a `builder/` folder: `node builder/cli.js <command>` — see
+[`UNPACK.md`](UNPACK.md)). `npx --no-install builder-pipeline` with no command prints the same list.
 
 | Command | What it does |
 |---|---|
@@ -147,7 +143,7 @@ records, how to resume, and the troubleshooting table.
 | `accounts migrate [--dry-run]` | rewrite the 1.0 orchestrator seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into `features.accounts`; only the settings block changes, with a `PIPELINE_PROFILE.md.bak` backup |
 | `accounts add \| note \| key \| remove \| list \| migrate` | manage the accounts in `features.accounts` (§16): `add <name> --worker <w> --pays <p>` writes one account and makes its folder, `note` replaces its note, `key <name>` takes the API key with echo off (never on the command line; stored 0600 in the account's own folder, or handed to `codex login`), `key --remove` and `remove` take them out again (the folder stays), `list [--json]` shows key present or absent, lease state and key file mode; `migrate [--dry-run]` rewrites the 1.0 seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into accounts, settings block only, with a `PIPELINE_PROFILE.md.bak` backup |
 | `accounts [--json]`, `accounts add \| note \| key \| remove \| list \| migrate` | `accounts` alone prints the readiness report (one block per account, as `gh auth status`; exit 1 when any account is not ready, 0 with `--json`; `accounts: not configured` with the feature off); the subcommands manage the accounts in `features.accounts` (§16): `add <name> --worker <w> --pays <p>` writes one account and makes its folder, `note` replaces its note, `key <name>` takes the API key with echo off (never on the command line; stored 0600 in the account's own folder, or handed to `codex login`), `key --remove` and `remove` take them out again (the folder stays), `list [--json]` shows key present or absent, lease state and key file mode; `migrate [--dry-run]` rewrites the 1.0 seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into accounts, settings block only, with a `PIPELINE_PROFILE.md.bak` backup |
-| `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why; then one advisory `accounts` row per account with its readiness (or `profile: legacy seats, run npx builder-pipeline accounts migrate`); the exit code is unchanged |
+| `doctor [--tool <list>] [--json]` | per tool: each kit feature supported, partial or unsupported, and why; then one advisory `accounts` row per account with its readiness (or `profile: legacy seats, run npx --no-install builder-pipeline accounts migrate`); the exit code is unchanged |
 | `accounts migrate [--dry-run]` | rewrite the 1.0 orchestrator seat keys (`seats`, `limits`, `secondaryConfigDir`, `credit`) into `features.accounts`; only the settings block changes, with a `PIPELINE_PROFILE.md.bak` backup |
 | `accounts` · `accounts add\|note\|key\|remove\|list` | the readiness report (one block per account, exit 1 when one is not ready) and the registry commands; they land with the accounts-commands change of the 2.0.0 release — [GUIDE § Accounts](GUIDE.md) |
 | `check-ledgers` | the mechanical board / registry gates — wire into CI |
@@ -161,7 +157,7 @@ records, how to resume, and the troubleshooting table.
 
 ## 🔌 Per-tool support
 
-What `npx builder-pipeline doctor --tool claude-code,codex,antigravity,generic` reports (run it in your project for the tools
+What `npx --no-install builder-pipeline doctor --tool claude-code,codex,antigravity,generic` reports (run it in your project for the tools
 you installed; *partial* = the kit relies on instructions or a by-hand step there):
 
 | Feature | Claude Code | Codex | Antigravity | Any other agent (`generic` and the other prompt-file targets) |
@@ -180,7 +176,7 @@ Below the matrix, `doctor` adds advisory rows that never change the exit code: o
 `capacity` row (`features.capacity`; load is unmeasured on Windows) and one `reporter` row (`features.reporter`, the
 `orch status` line, never a URL).
 
-The native targets are `claude-code`, `codex` and `antigravity`. The other `--tool` targets — `generic`, `opencode`, `gemini`, `cursor`, `copilot`, `windsurf`, `cline`, `aider` — install as prompt files under `.builder/`, each with its pointer in its own instruction or rules file (`npx builder-pipeline targets` lists them).
+The native targets are `claude-code`, `codex` and `antigravity`. The other `--tool` targets — `generic`, `opencode`, `gemini`, `cursor`, `copilot`, `windsurf`, `cline`, `aider` — install as prompt files under `.builder/`, each with its pointer in its own instruction or rules file (`npx --no-install builder-pipeline targets` lists them).
 
 ## 🧰 One tool, without the pipeline
 
@@ -188,19 +184,19 @@ Each kit tool also runs in a project that never adopted the pipeline. The checks
 (`check-ledgers`, `output-check`, `claims-check`, `fix-rate`, `inventory`) need nothing. An opt-in check reads its
 settings from a file when there is no `PIPELINE_PROFILE.md`: `builder.config.json` in the project root, or the file
 `--config <path>` (`BUILDER_CONFIG`) names. The file holds the bare JSON of profile §16 and is validated the same way;
-when a profile exists it is the one source and the file is ignored and said. `npx builder-pipeline run features` names the source
+when a profile exists it is the one source and the file is ignored and said. `npx --no-install builder-pipeline run features` names the source
 in use.
 
 ```
-npx builder-pipeline unpack --tool claude-code --tools audit
-npx builder-pipeline run features --config kit.json
-npx builder-pipeline check-ledgers --boards work/boards --registry work/REGISTRY.md
-npx builder-pipeline run board-import --format ralph prd.json --out tasks/imported.md
-npx builder-pipeline run spec-check specs/orders.spec.md
-npx builder-pipeline run spec-trace-check docs/requirements.md --tests tests --packs packs
-npx builder-pipeline run instruction-lint AGENTS.md CLAUDE.md
-npx builder-pipeline run instruction-budget AGENTS.md --max-lines 200
-npx builder-pipeline run worktree-sweep --target main --idle-hours 6
+npx --no-install builder-pipeline unpack --tool claude-code --tools audit
+npx --no-install builder-pipeline run features --config kit.json
+npx --no-install builder-pipeline check-ledgers --boards work/boards --registry work/REGISTRY.md
+npx --no-install builder-pipeline run board-import --format ralph prd.json --out tasks/imported.md
+npx --no-install builder-pipeline run spec-check specs/orders.spec.md
+npx --no-install builder-pipeline run spec-trace-check docs/requirements.md --tests tests --packs packs
+npx --no-install builder-pipeline run instruction-lint AGENTS.md CLAUDE.md
+npx --no-install builder-pipeline run instruction-budget AGENTS.md --max-lines 200
+npx --no-install builder-pipeline run worktree-sweep --target main --idle-hours 6
 ```
 
 `board-import` writes another tool's task file (ralph `prd.json`, Spec Kit `tasks.md`) as a kit build board: what the
@@ -253,5 +249,5 @@ For maintainers of this repository, not for projects that install it: the rules 
 ## 📁 Copying the kit as a folder (secondary)
 
 Without npm, a release archive of the kit can be extracted at the project root as a `builder/` folder, and the
-commands run as `node builder/cli.js <command>` — the folder layout (`builder/` folder) form of `npx builder-pipeline`. That path, and how to receive
+commands run as `node builder/cli.js <command>` — the folder layout (`builder/` folder) form of `npx --no-install builder-pipeline`. That path, and how to receive
 a release archive safely, is in [`UNPACK.md`](UNPACK.md); the package install above is the primary path.

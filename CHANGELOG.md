@@ -42,6 +42,22 @@ versions independently of any project it is pasted into.
   user before ..."; "Do not run commands"). The remaining findings were reviewed and accepted: `npx builder-pipeline`
   runs the installed, lock-pinned package (`builder-init` step 0 checks this with `--no-install`), and the graphify
   `rm -f` lines remove only its own temporary files under `graphify-out/`.
+- **Package pinning (`specs/package-pinning.spec.md` REQ-2028 to REQ-2030; D155).** Every kit command in the shipped
+  skills, agents, templates, adapters, hooks and docs now reads `npx --no-install builder-pipeline …` (305 lines), and
+  `unpack` writes the same form when it rewrites a folder-layout command for a package install. The reason: the npm name
+  `builder-pipeline` is not registered, and a bare `npx builder-pipeline` outside an installed project fetches a package
+  of that name from the registry; `--no-install` runs the installed copy or stops. `builder-init` step 0 also stops when
+  the lock file has no entry for the kit. The README gives the GitHub tag install only. The CLI's printed run hints keep
+  the bare form for now (`DEF-PIN-1`).
+
+### Added
+
+- **`pin-check` and `features.pinCheck` (REQ-2030; default off).** `npx --no-install builder-pipeline run pin-check
+  [--defaults] [--json]` reads the tracked files that match `files` (`.md`, `.mdc`, `.txt`, `.toml`, `.sh`, `.ps1` by
+  default) and prints one UNPINNED line, with path and line, for each `npx builder-pipeline …` or `npm exec
+  builder-pipeline …` that carries no `--no-install`, `--no` or version; exit 1 on a finding; `allow` suppresses by
+  path. `hygiene --gate` reads UNPINNED into the delivery row, so the gate keeps its seven rows. `hygiene` runs it with
+  the other checks when it is on.
 
 ## [2.1.0] — 2026-11-18
 

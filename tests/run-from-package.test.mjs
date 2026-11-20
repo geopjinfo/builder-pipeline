@@ -34,7 +34,7 @@ describe('builder run — kit scripts run from the package', () => {
     assert.ok(!existsSync(join(proj, 'scripts', 'board-check-all.mjs')), 'scripts/ copies would drift from the package');
     assert.ok(!existsSync(join(proj, 'scripts', 'oracles')), 'oracle adapters run from the package too');
     const pointer = readFileSync(join(proj, 'CLAUDE.md'), 'utf8');
-    assert.match(pointer, /npx builder-pipeline run features/);
+    assert.match(pointer, /npx --no-install builder-pipeline run features/);
     assert.doesNotMatch(pointer, /node scripts\/features\.mjs/);
   });
 

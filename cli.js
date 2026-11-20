@@ -109,13 +109,15 @@ const RUN = /(^|[\\/])node_modules[\\/]/.test(KIT) ? 'npx builder-pipeline' : `n
 const KIT_ENTRY = /(?<![.\w@/-])builder\/(?=(?:cli\.js|[A-Z][A-Z_]*(?:\.template)?\.md|adapters|agents|examples|hooks|oracles|scripts|skills-extra|skills|templates|tooling|tests)\b)/g;
 /** Installed as a package, the kit's scripts run from it (`npx builder-pipeline run <name>`) and are not copied into the project. */
 const PACKAGED = RUN === 'npx builder-pipeline';
+/** The form written into installed text (REQ-2028): it runs the installed copy or stops, never a registry fetch. */
+const RUN_TEXT = PACKAGED ? 'npx --no-install builder-pipeline' : RUN;
 /** Where the kit scripts are for this install: the package itself, or the project's scripts/ copies. */
 const SCRIPTS_HOME = PACKAGED ? path.join(KIT, 'scripts') : path.join(CWD, 'scripts');
 function kitPaths(text) {
   if (KIT_REL === 'builder') return text;
-  let out = text.replace(/\bnode builder\/cli\.js\b/g, RUN).replace(KIT_ENTRY, `${KIT_REL}/`);
+  let out = text.replace(/\bnode builder\/cli\.js\b/g, RUN_TEXT).replace(KIT_ENTRY, `${KIT_REL}/`);
   if (PACKAGED) {
-    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx builder-pipeline run ${name}` : m));
+    out = out.replace(/\bnode scripts\/((?:experimental\/)?[\w-]+)\.(?:mjs|cjs|js)\b/g, (m, name) => (kitScript(name) ? `npx --no-install builder-pipeline run ${name}` : m));
   }
   return out;
 }
