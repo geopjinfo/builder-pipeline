@@ -5,6 +5,16 @@ versions independently of any project it is pasted into.
 
 ## [Unreleased]
 
+### Changed
+
+- **Skill files reviewed with a static security scanner.** `skills/setup-builder.md`: the model discovery step now
+  reads only the model keys of a harness config file and never reads, copies or prints credentials from it; the two
+  human-confirm headings carry the text `(human confirms)` instead of an emoji sequence (its zero-width joiner trips
+  hidden-text detectors). `skills-extra/graphify/SKILL.md`: two rules are restated in the positive form ("Warn the
+  user before ..."; "Do not run commands"). The remaining findings were reviewed and accepted: `npx builder-pipeline`
+  runs the installed, lock-pinned package (`builder-init` step 0 checks this with `--no-install`), and the graphify
+  `rm -f` lines remove only its own temporary files under `graphify-out/`.
+
 ## [2.1.0] — 2026-11-18
 
 ### Added

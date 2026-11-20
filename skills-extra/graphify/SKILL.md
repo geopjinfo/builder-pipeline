@@ -48,7 +48,7 @@ Drop any folder of code, docs, papers, images, or video into graphify and get a 
 
 ## What You Must Do When Invoked
 
-If the user invoked `/graphify --help` or `/graphify -h` (with no other arguments), print the contents of the `## Usage` section above verbatim and stop. Do not run any commands, do not detect files, do not default the path to `.`. Just print the Usage block and return.
+If the user invoked `/graphify --help` or `/graphify -h` (with no other arguments), print the contents of the `## Usage` section above verbatim and stop. Do not run commands, do not detect files, do not default the path to `.`. Just print the Usage block and return.
 
 **Fast path — existing graph:** Before doing anything else, check whether `graphify-out/graph.json` exists. The expected location is `graphify-out/graph.json` relative to the **current working directory** (i.e. the project root where you are running commands). If it exists AND the user's request is a natural-language question about the codebase (e.g. "How does X work?", "What calls Y?", "Trace the data flow through Z") and NOT an explicit rebuild command (`--update`, `--cluster-only`, or a bare path/URL that implies fresh extraction): **skip Steps 1–5 entirely and jump straight to `## For /graphify query`.** Run `graphify query "<question>"` immediately. Do not run detect. Do not check corpus size. Do not ask the user to narrow. The graph is already built — use it.
 
@@ -709,4 +709,4 @@ If vertical scrolling breaks in PowerShell after running graphify, this is cause
 - Never skip the corpus check warning.
 - Always show token cost in the report.
 - Never hide cohesion scores behind symbols - show the raw number.
-- Never run HTML viz on a graph with more than 5,000 nodes without warning the user.
+- Warn the user before you run HTML viz on a graph with more than 5,000 nodes.
