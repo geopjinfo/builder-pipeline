@@ -45,7 +45,7 @@ describe('the kit names itself where it is installed', () => {
     // opencode is a dotBuilder tool (codex installs natively now; tests/native-tools.test.mjs covers it in package mode).
     const r = run(cli, proj, ['unpack', '--tool', 'claude-code,opencode']);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /npx builder-pipeline verify/);
+    assert.match(r.stdout, /npx --no-install builder-pipeline verify/);
     assert.doesNotMatch(r.stdout, /node builder\/cli\.js/);
     const stale = mdFiles(proj).filter((f) => OLD.test(readFileSync(f, 'utf8'))).map((f) => relative(proj, f));
     assert.deepEqual(stale, [], `still name a builder/ folder: ${stale.join(', ')}`);

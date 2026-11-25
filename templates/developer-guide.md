@@ -53,7 +53,7 @@ lost. This guide is the 10-minute version for developers; deep dives: `builder/U
 | Deferred work | `DEFERRED_TASKS.md` | the ONLY deferral home; swept at every build entry |
 | Rulings log | `DECISIONS.md` | `D-n` rows; planners cite these instead of re-asking |
 | Run artifacts | `.pipeline/<key>/{plan,review}.md` | gitignored audit trail |
-| Kit docs & CLI | `builder/` or the package | `npx builder-pipeline <verify|check-ledgers|targets>` (folder layout: `node builder/cli.js …`) |
+| Kit docs & CLI | `builder/` or the package | `npx --no-install builder-pipeline <verify|check-ledgers|targets>` (folder layout: `node builder/cli.js …`) |
 
 ## ✅ Definition of done (what MERGE-READY means)
 
@@ -61,7 +61,7 @@ Gates green ({{GATE_COMMAND}}) · integration tier run explicitly ({{INTEGRATION
 readiness checklist clean · all four auditors + reviewer PASS · every invariant candidate covered
 or deferred · the behavioural-gate result recorded · requirement-traceability table
 all-aligned · task board fully closed (`DONE` with test evidence / `DROPPED` reasoned /
-`DEFERRED→id`) · `npx builder-pipeline check-ledgers` PASS · version bump + changelog entry on
+`DEFERRED→id`) · `npx --no-install builder-pipeline check-ledgers` PASS · version bump + changelog entry on
 the branch. Then a human reviews, merges, tags {{TAG_CONVENTION}}.
 
 ## 🛠️ Utility skills available *(omit rows not installed)*
@@ -77,7 +77,7 @@ the branch. Then a human reviews, merges, tags {{TAG_CONVENTION}}.
 
 ## 🧯 When something's off
 
-Fast checks: `npx builder-pipeline verify` (install/profile) · `npx builder-pipeline
+Fast checks: `npx --no-install builder-pipeline verify` (install/profile) · `npx --no-install builder-pipeline
 check-ledgers` (board/registry drift) · then the troubleshooting table in `builder/USAGE.md`.
 Two rules worth memorizing: an agent asking you to rule on a BLOCKER is the mechanism **working**
 (never let it guess); and if the same blocker survives two fix loops, the spec/brief is wrong,

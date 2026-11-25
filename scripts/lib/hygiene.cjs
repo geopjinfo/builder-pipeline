@@ -14,6 +14,7 @@
  *
  * The gate (REQ-1844) maps the findings onto the seven rows of the completion gate — file scope, ignore rules, secrets,
  * staging, commit, delivery, separation — PASS, FAIL or NOT CONFIGURED. A row whose check is off never reads PASS.
+ * The delivery row also reads `pinCheck` UNPINNED (REQ-2030): a kit command the text would fetch from the registry.
  * The last report is written to <runs>/hygiene/last.json (the gate to gate.json) for the progress reporter (REQ-1836).
  */
 const fs = require('fs');
@@ -28,6 +29,7 @@ const CHECKS = [
   { name: 'ignoreCheck', script: 'ignore-check', since: 'filter' },
   { name: 'sizeCheck', script: 'size-check', since: 'filter' },
   { name: 'secretScan', script: 'secret-scan', since: 'filter' },
+  { name: 'pinCheck', script: 'pin-check', since: 'filter' },
   { name: 'depsCheck', script: 'deps-check', since: 'ignores' },
   { name: 'docsCheck', script: 'docs-check', since: 'filter' },
   { name: 'deadCode', script: 'dead-code', since: 'ignores' },
@@ -37,7 +39,7 @@ const CHECKS = [
   { name: 'artifactCheck', script: 'artifact-check', since: 'native' },
 ];
 /** The checks the completion gate reads (REQ-1844). */
-const GATE_CHECKS = ['artifactCheck', 'attributionCheck', 'ignoreCheck', 'secretScan', 'sizeCheck'];
+const GATE_CHECKS = ['artifactCheck', 'attributionCheck', 'ignoreCheck', 'pinCheck', 'secretScan', 'sizeCheck'];
 /** Verdict words that open a line without being a finding. */
 const NOT_FINDINGS = new Set(['KEEP', 'PASS', 'OK', 'INFO', 'NOTE', 'RESULT', 'DRAINED', 'MEASURED']);
 const FINDING = /^([A-Z][A-Z0-9-]{1,})\s+(\S+)(?:\s+(.*))?$/;
@@ -183,7 +185,7 @@ function gate(opts) {
     rowOf('secrets', on('secretScan'), by.secretScan ? by.secretScan.findings : [], 'secretScan over the tracked text'),
     rowOf('staging', artifactOn, stagingFindings, staged ? 'artifactCheck --staged over the index' : opts.since ? `artifactCheck over the commits since ${opts.since} (index empty)` : 'index empty, no base given'),
     rowOf('commit', on('attributionCheck'), by.attributionCheck ? by.attributionCheck.findings : [], 'attributionCheck: trailers, author identities, branch names'),
-    rowOf('delivery', on('ignoreCheck') || on('sizeCheck'), [...kindsOf(by.ignoreCheck, ['TRACKED-JUNK']), ...kindsOf(by.sizeCheck, ['LARGE', 'LARGE-HISTORY'])], 'tracked junk and large files'),
+    rowOf('delivery', on('ignoreCheck') || on('sizeCheck') || on('pinCheck'), [...kindsOf(by.ignoreCheck, ['TRACKED-JUNK']), ...kindsOf(by.sizeCheck, ['LARGE', 'LARGE-HISTORY']), ...kindsOf(by.pinCheck, ['UNPINNED'])], 'tracked junk, large files and unpinned kit calls'),
     rowOf('separation', artifactOn, kindsOf(by.artifactCheck, ['ARCHIVE']), 'archives and packaging output; the repo-steward judges the rest when it runs'),
   ];
   for (const c of report.checks) if (c.state === 'error') for (const r of rows) if (r.note.includes(c.name) && r.result !== 'NOT CONFIGURED') { r.result = 'FAIL'; r.findings.push(`${c.script}: ERROR — ${c.error}`); }

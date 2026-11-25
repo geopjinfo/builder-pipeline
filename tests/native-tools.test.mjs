@@ -128,7 +128,7 @@ describe('--tool all and package mode', () => {
     for (const rel of ['.agents/skills/build-module-pipeline/SKILL.md', '.codex/agents/module-builder.toml', '.agents/agents/module-builder.md']) {
       assert.doesNotMatch(read(proj, rel), /node builder\/cli\.js|node scripts\/features\.mjs/, rel);
     }
-    assert.match(read(proj, '.agents/skills/build-module-pipeline/SKILL.md'), /npx builder-pipeline/);
+    assert.match(read(proj, '.agents/skills/build-module-pipeline/SKILL.md'), /npx --no-install builder-pipeline/);
   });
 });
 

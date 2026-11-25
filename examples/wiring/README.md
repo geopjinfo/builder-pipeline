@@ -3,7 +3,7 @@
 `typescript-di.kinds.json` is **one example** of `features.wiring.kinds` for one stack: a TypeScript service that
 wires classes through a dependency-injection container, has an in-process event bus, and turns queues with async
 methods. It is not installed by the pack, and nothing in the pipeline depends on these patterns. Write your own
-kinds from the seams **your** code declares. The check that reads them is `npx builder-pipeline run wiring-check` (folder layout: `node scripts/wiring-check.mjs`). The rule
+kinds from the seams **your** code declares. The check that reads them is `npx --no-install builder-pipeline run wiring-check` (folder layout: `node scripts/wiring-check.mjs`). The rule
 is in `scripts/lib/wiring.cjs`.
 
 ## Why a wiring check
