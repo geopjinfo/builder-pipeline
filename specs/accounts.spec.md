@@ -54,19 +54,19 @@ The plan artifact https://claude.ai/artifact/FLZ6L6YJqhq8Jd3uV3pvdJ is the sourc
   statement, the publish step in RELEASING.md.
 - In: M14 Evidence programme — decision rows in every EXPERIMENTS section, one recorded run, measured or off
   defaults, time to first value, false-positive rates, the 2.0.0 build log as evidence.
-- Out: a remote-lane daemon, relay, pairing flow, live terminal or phone approvals — KIT-D1.
-- Out: automatic placement of lanes over machines; one machine per lane is placed by hand — KIT-D2.
-- Out: features for regulated or client-facing shops — KIT-D3.
-- Out: transcript checkpoints in a ref namespace — KIT-D4.
-- Out: Antigravity as a headless account; it stays a wrapper in 2.0.0 — KIT-D5.
-- Out: a keychain key store (`--store keychain`); the helper seam exists — KIT-D6.
-- Out: reading an API key's credit balance; such an account is ready with the balance unmeasured — KIT-D7.
-- Out: reading Claude subscription usage from the CLI; a Claude plan account stays unmeasured — KIT-D8.
-- Out: per-account cost on the live page and in cost-window — KIT-D9.
-- Out: an account-level concurrency cap — KIT-D10.
-- Out: an alias layer that keeps 1.0 `seats` profiles loading — KIT-D11.
-- Out: gateway machine provisioning (users, systemd units, polkit, idle timer) — KIT-D12.
-- Out: desktop-app registration of the free-model MCP server; the kit prints the block — KIT-D13.
+- Out: a remote-lane daemon, relay, pairing flow, live terminal or phone approvals — KIT-DEF-1.
+- Out: automatic placement of lanes over machines; one machine per lane is placed by hand — KIT-DEF-2.
+- Out: features for regulated or client-facing shops — KIT-DEF-3.
+- Out: transcript checkpoints in a ref namespace — KIT-DEF-4.
+- Out: Antigravity as a headless account; it stays a wrapper in 2.0.0 — KIT-DEF-5.
+- Out: a keychain key store (`--store keychain`); the helper seam exists — KIT-DEF-6.
+- Out: reading an API key's credit balance; such an account is ready with the balance unmeasured — KIT-DEF-7.
+- Out: reading Claude subscription usage from the CLI; a Claude plan account stays unmeasured — KIT-DEF-8.
+- Out: per-account cost on the live page and in cost-window — KIT-DEF-9.
+- Out: an account-level concurrency cap — KIT-DEF-10.
+- Out: an alias layer that keeps 1.0 `seats` profiles loading — KIT-DEF-11.
+- Out: gateway machine provisioning (users, systemd units, polkit, idle timer) — KIT-DEF-12.
+- Out: desktop-app registration of the free-model MCP server; the kit prints the block — KIT-DEF-13.
 
 ### INVARIANTS
 
