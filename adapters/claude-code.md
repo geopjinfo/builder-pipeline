@@ -38,10 +38,13 @@ but without the frontmatter transform.
 
 ## Post-copy wiring
 
-1. **Models.** The install transform maps `tier: strong` → `opus`, `mid` → `sonnet`; override at
-   install with `--models strong=<x>,mid=<y>` (the setup skill picks these by inspecting your
-   subscription). To change later, edit the installed `.claude/agents/` files — never
-   `builder/agents/`, which stays neutral. Keep strong models where profile §12 puts them.
+1. **Models.** The install transform maps `tier: strong` → `opus`, `mid` → `sonnet` unless the
+   project declares its models: `models.strong` / `models.mid` in `PIPELINE_PROFILE.md` §16 reach
+   the agents at `unpack` and `upgrade` (REQ-2021), and `--models strong=<x>,mid=<y>` on the command
+   wins over both (the setup skill picks these by inspecting your subscription). To change later,
+   edit §16 and run `npx --no-install builder-pipeline run seat-models --write` (REQ-2031; without `--write` it
+   reports each agent whose `model:` line differs from §16) — never edit `builder/agents/`, which
+   stays neutral. Keep strong models where profile §12 puts them.
 2. **Effort.** A persona may carry `effort:` (`low` … `max`). It overrides the session's effort for
    that seat only. The pack ships the docs seat at `low`: it writes prose from facts it is handed,
    and it is a small share of any run's spend. Other seats inherit the session's effort.

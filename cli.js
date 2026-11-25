@@ -1680,6 +1680,7 @@ function main() {
     upgrade [--tool <list|all>]         refresh kit-owned files (backup first; --force over local edits);
                                         names files this release dropped as stale, --prune deletes them (backup first)
       [--dry-run] [--no-extras|--extras] [--experimental|--no-experimental] [--models strong=x,mid=y | codex.<tier>=x | antigravity.<tier>=x]
+                                        (Claude Code agents take PIPELINE_PROFILE.md §16 models.strong / models.mid unless --models says otherwise)
       [--tools <group list|all>]        one tool group or several: spec, audit, orchestrator, hooks, evals, pipeline, hygiene (default all;
                                         the core files come with any group; upgrade repeats what builder.lock.json recorded)
     uninstall --tool <list> | --all     remove the kit files builder.lock.json recorded (local edits and project-owned files kept) [--dry-run]
@@ -1744,6 +1745,26 @@ function main() {
       }
     }
   }
+
+  /*
+   * PIPELINE_PROFILE.md §16 `models.strong` / `models.mid` (specs/pipeline-cost-3.spec.md REQ-2021, D150): the
+   * project's declared models reach the Claude Code agents at install. Precedence: `--models` on this command, then
+   * the profile, then the lock's recorded overrides, then the defaults. The profile is read each time and never
+   * recorded in the lock: the lock holds what was typed, the profile holds what the project declares. An unfilled
+   * placeholder (`<id>`) or an unreadable profile leaves the mapping as it was.
+   */
+  const fromProfile = {};
+  try {
+    const declared = profileLib().load(CWD).settings?.models || {};
+    for (const tier of ['strong', 'mid', 'low']) {
+      const v = declared[tier];
+      if (typeof v === 'string' && v.trim() && !/<[^<>\n]{2,80}>/.test(v)) fromProfile[tier] = v.trim();
+    }
+  } catch (_) {
+    /* no profile, or one the loader cannot read: the mapping stands */
+  }
+  for (const [tier, model] of Object.entries(fromProfile)) MODELS['claude-code'][tier] = model;
+  if (Object.keys(fromProfile).length) console.log(`model mapping (PIPELINE_PROFILE.md §16 models): ${Object.entries(fromProfile).map(([k, v]) => `${k}=${v}`).join(', ')} (--models overrides)`);
 
   const m = argv.indexOf('--models');
   if (m !== -1 && argv[m + 1]) {

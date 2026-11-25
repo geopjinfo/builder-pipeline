@@ -984,3 +984,49 @@ stay `experimental-off`. Round two (the same 42 cells) measures D152 with `scope
 reports and the one auditor-less MEDIUM run before any further rule; the 1.00 figure is kept as written, since it was
 set before the data and missed by one seed.
 
+## 27. Seat model parity — `seat-models` (free check, unmeasured)
+
+**What ships (2026-11-20, `specs/pipeline-cost-3.spec.md` REQ-2021 and REQ-2031, D150, D151).** The Claude Code
+install reads `models.strong` / `models.mid` from PIPELINE_PROFILE.md §16 for the agents' `model:` lines (`--models`
+on the command wins, tier by tier; the lock records the flag, never the profile). `npx --no-install builder-pipeline run
+seat-models` reads the installed agents back against §16: `seat models: in step` (exit 0) or one `DRIFT:` line per
+agent (exit 1), `--write` rewrites the lines and the lock hashes. Neither is a §16 feature: the install rule has no
+off state (a project that declares no model keeps the defaults), and the check is free.
+
+**Why it is here.** Every kit benchmark so far ran the seats on Opus while the arm's profile declared Sonnet for both
+tiers: the install wrote `model: opus` from the tier defaults and never read §16. Read from the transcripts
+(`parent_tool_use_id` and `message.model`):
+
+| Batch | Kit cost on Opus seats | Kit cost per run (USD) | Bare arm (Sonnet only) |
+|---|---|---|---|
+| full-01 (75 kit runs) | 76 percent | 1.42 | 0.12 |
+| hard-01 (50 kit runs) | 83 percent | 3.24 | 0.20 |
+| g12-after-E (45 kit runs) | 71 percent | 0.96 | — |
+
+So every E-versus-A comparison was also an Opus-versus-Sonnet comparison, with no accuracy gain to show for it (PT1,
+PT4 saturated). The cost gap the plan attributes to the pipeline's shape cannot be separated from the model gap until
+the seats run the declared model.
+
+**Measurement (written before the run).** Benchmark `third-01` (the third test bed, bed decisions D150 to D158 of the
+benchmark repository), stage PT9: arm E at this section's commit with §16 `models.strong` and `models.mid` at the bare
+arm's model (parity) against arm E at the earlier commit (Opus seats), same tasks, same seeds, one subscription lane.
+Record per run: `seat-models` exit before the run (expected 0), the model of every seat message, cost by seat, solved.
+
+| Date | Kit commit | Bed | Seats on the declared model | Solved | Cost per run (USD) | Note |
+|---|---|---|---|---|---|---|
+| 2026-11-19 | 0e09b2f (before) | full-01, hard-01, g12-after-E | 0 of 170 runs (every strong seat on Opus under a Sonnet profile) | 100 percent on the saturated beds | 1.42 · 3.24 · 0.96 | before rows: the Opus share above |
+| | (after) | third-01 PT9, arm E at parity | | | | owed: seats on the declared model of all (expected 100 percent), cost per run against the Opus arm, solved against the Opus arm and the bare arm |
+
+**Keep rule.** Keep REQ-2021 and REQ-2031 when 100 percent of seat messages in the parity arm run the declared model
+and `seat-models` exits 0 before every run; they are correctness rules, not cost bets. The cost and accuracy numbers of
+PT9 decide a different question — whether the kit's seats need the stronger model at all — and that is a decision row
+of the benchmark, carried back here as a tier default change only with its run ids.
+
+**Risk.** A project that declared Sonnet in §16 for the orchestrator's cost reasons, and relied on the seats being
+Opus by accident, gets weaker seats on its next upgrade; the install prints the mapping it used, and `seat-models`
+shows the state at any time. The check reads Claude Code's layout only; Codex and Antigravity still read §12 at
+dispatch.
+
+**Decision (2026-11-20).** not yet measured — the before rows are the three batches above; the code ships with the
+install rule in force and the check named before step 0. PT9 of third-01 decides on its own rule above.
+
