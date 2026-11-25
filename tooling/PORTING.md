@@ -26,7 +26,7 @@ Claude Code tool-call fence is `hooks/protected-paths.cjs`, and the universal ba
 pre-commit guard) and the path-scoped rules content (project constitution, write your own — but DO
 use the pattern: root instruction file under ~200 lines, path-scoped rule files for anything that
 only matters in one directory, and a gate on the line count so it cannot grow back — that gate ships
-as `npx builder-pipeline run instruction-budget` (folder layout: `node scripts/instruction-budget.mjs`), `features.instructionBudget`).
+as `npx --no-install builder-pipeline run instruction-budget` (folder layout: `node scripts/instruction-budget.mjs`), `features.instructionBudget`).
 
 Rules that ride with any tier runner (bake into your orchestrator playbook):
 - never run a suite bare — wrapper only, digest spoken, full log kept. This is also what stands in

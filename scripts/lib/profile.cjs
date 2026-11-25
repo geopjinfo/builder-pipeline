@@ -190,6 +190,10 @@ const FEATURES = {
   ignoreCheck: { defaults: { state: 'off', extra: [], allow: [] }, requires: [] },
   sizeCheck: { defaults: { state: 'off', maxFileKb: 512, history: false, maxCommits: 500, allow: [] }, requires: [] },
   secretScan: { defaults: { state: 'off', roots: ['.'], allow: [], history: false, maxCommits: 200 }, requires: [] },
+  /* Package pinning (specs/package-pinning.spec.md REQ-2030, D155): a kit command in the project's text that would fetch
+   * from the registry — scripts/pin-check.mjs. `files` are the globs read; `allow` suppresses by path. A finding fails
+   * the delivery row of the gate. */
+  pinCheck: { defaults: { state: 'off', files: ['*.md', '*.mdc', '*.txt', '*.toml', '*.sh', '*.ps1'], allow: [] }, requires: [] },
   /* Completion gate, commit side (specs/repo-hygiene.spec.md M21, REQ-1841, D99, D102, D104): trailers, footers, author
    * identities and branch names that carry an assistant or tool name — scripts/attribution-check.mjs. `patterns` and
    * `authors` add to the built-in lists; `allow` holds commit SHAs and branch globs; `target` is the integration branch
@@ -618,6 +622,7 @@ function validate(settings) {
     ['ignoreCheck', ['extra', 'allow'], [], []],
     ['sizeCheck', ['allow'], ['maxFileKb', 'maxCommits'], ['history']],
     ['secretScan', ['roots', 'allow'], ['maxCommits'], ['history']],
+    ['pinCheck', ['files', 'allow'], [], []],
   ]) {
     const f = settings.features?.[name];
     if (!isObject(f)) continue;

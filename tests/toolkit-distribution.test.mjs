@@ -64,11 +64,11 @@ describe('REQ-503…504 — the package name', () => {
     assert.deepEqual(hits, []);
   });
 
-  test('AC-505: the README gives the git-tag form and the registry form, and dates the registry listing', () => {
+  test('AC-505: the README gives the git-tag form only and the pinned command (DL-11, REQ-2028)', () => {
     const readme = read('README.md');
     assert.ok(readme.includes('npm i -D github:geopjinfo/builder-pipeline#'), 'git-tag install form missing');
-    assert.match(readme, /npm i -D builder-pipeline\b/, 'registry install form missing');
-    assert.ok(readme.includes('starts with 2.0.0'), 'the registry listing start is not stated');
+    assert.doesNotMatch(readme, /npm i -D builder-pipeline\b/, 'the registry install form is back; the name is not registered (DL-11)');
+    assert.match(readme, /npx --no-install builder-pipeline --version/);
   });
 });
 
