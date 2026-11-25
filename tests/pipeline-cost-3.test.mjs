@@ -163,7 +163,7 @@ describe('the ledgers and the texts', () => {
   });
   test('red: adapters/claude-code.md, USAGE.md and the run discipline name §16 models and seat-models', () => {
     assert.match(read('adapters/claude-code.md'), /`models\.strong` \/ `models\.mid`[^\n]*§16/);
-    assert.match(read('USAGE.md'), /`npx builder-pipeline run seat-models`/);
+    assert.match(read('USAGE.md'), /`npx --no-install builder-pipeline run seat-models`/);
     assert.match(read('skills/references/run-discipline.md'), /seat-models/);
     assert.match(read('skills/build-module-pipeline.md'), /seat-models/);
     assert.ok(read('skills/build-module-pipeline.md').split('\n').length <= 400);
