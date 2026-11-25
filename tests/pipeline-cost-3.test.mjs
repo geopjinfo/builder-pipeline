@@ -1,5 +1,5 @@
 /**
- * REQ-2021 and REQ-2029 — seat model parity (specs/pipeline-cost-3.spec.md). The install reads profile §16
+ * REQ-2021 and REQ-2031 — seat model parity (specs/pipeline-cost-3.spec.md). The install reads profile §16
  * `models.strong` / `models.mid` for the Claude Code agents, and `seat-models` reads the installed agents back
  * against it. Measurement: EXPERIMENTS §27 (benchmark third-01, PT9).
  */
@@ -74,8 +74,8 @@ describe('REQ-2021 — the install reads profile §16 models', () => {
   });
 });
 
-describe('REQ-2029 — seat-models, the free parity check', () => {
-  test('red: AC-2029a agents in step → one line, exit 0; --json carries the entries', () => {
+describe('REQ-2031 — seat-models, the free parity check', () => {
+  test('red: AC-2031a agents in step → one line, exit 0; --json carries the entries', () => {
     const p = project({ strong: 'claude-sonnet-5-5', mid: 'claude-sonnet-5-5' });
     ok(cli(p, ['unpack', '--tool', 'claude-code', '--no-extras']));
     const r = script(p);
@@ -85,7 +85,7 @@ describe('REQ-2029 — seat-models, the free parity check', () => {
     assert.ok(j.entries.some((e) => e.name === 'module-planner' && e.tier === 'strong' && e.model === 'claude-sonnet-5-5'));
     assert.equal(j.drift.length, 0);
   });
-  test('red: AC-2029b an agent on another model → one DRIFT line per agent naming file, model, tier and the declared model; exit 1', () => {
+  test('red: AC-2031b an agent on another model → one DRIFT line per agent naming file, model, tier and the declared model; exit 1', () => {
     const p = project({ strong: 'claude-sonnet-5-5', mid: 'claude-sonnet-5-5' });
     ok(cli(p, ['unpack', '--tool', 'claude-code', '--no-extras']));
     // the install from before REQ-2021, or a hand edit: the strong seats on opus
@@ -98,7 +98,7 @@ describe('REQ-2029 — seat-models, the free parity check', () => {
       'DRIFT: .claude/agents/module-planner.md runs opus, profile §16 declares strong=claude-sonnet-5-5',
     ]);
   });
-  test('red: AC-2029c --write rewrites the drifted lines, refreshes the lock hash, and the next upgrade sees no local edit', () => {
+  test('red: AC-2031c --write rewrites the drifted lines, refreshes the lock hash, and the next upgrade sees no local edit', () => {
     const p = project({ strong: 'claude-sonnet-5-5', mid: 'claude-sonnet-5-5' });
     ok(cli(p, ['unpack', '--tool', 'claude-code', '--no-extras']));
     writeFileSync(join(p.proj, '.claude', 'agents', 'module-planner.md'), agent(p, 'module-planner').replace(/^model: .*$/m, 'model: opus'));
@@ -111,7 +111,7 @@ describe('REQ-2029 — seat-models, the free parity check', () => {
     assert.doesNotMatch(up, /kept \(local edit\)[^\n]*module-planner/);
     assert.equal(script(p).status, 0);
   });
-  test('red: AC-2029d a profile without models, a project-owned agent and a tier the profile leaves null are all in step', () => {
+  test('red: AC-2031d a profile without models, a project-owned agent and a tier the profile leaves null are all in step', () => {
     const p = project({ strong: 'claude-sonnet-5-5' });
     ok(cli(p, ['unpack', '--tool', 'claude-code', '--no-extras']));
     writeFileSync(join(p.proj, '.claude', 'agents', 'my-own-agent.md'), '---\nname: my-own-agent\nmodel: anything\n---\nbody\n');
@@ -159,7 +159,7 @@ describe('the ledgers and the texts', () => {
     assert.match(s27.body, /PT9/);
     const dec = read('DECISIONS.md');
     for (const id of ['D150', 'D151']) assert.match(dec, new RegExp(`^\\| ${id} \\| 2026-11-20 \\| pipeline-cost-3 \\|`, 'm'));
-    assert.match(read('CHANGELOG.md'), /\*\*Seat model parity \(`specs\/pipeline-cost-3\.spec\.md` REQ-2021, REQ-2029 and REQ-2030/);
+    assert.match(read('CHANGELOG.md'), /\*\*Seat model parity \(`specs\/pipeline-cost-3\.spec\.md` REQ-2021, REQ-2031 and REQ-2032/);
   });
   test('red: adapters/claude-code.md, USAGE.md and the run discipline name §16 models and seat-models', () => {
     assert.match(read('adapters/claude-code.md'), /`models\.strong` \/ `models\.mid`[^\n]*§16/);

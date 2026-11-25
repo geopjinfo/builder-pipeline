@@ -101,7 +101,7 @@ const SCRIPTS = {
   'personas-check': 'audit',
   orch: 'orchestrator',
   'orchestrator-check': 'orchestrator',
-  'seat-models': 'orchestrator', // seat model parity (REQ-2029): the free check of the installed agents' model lines against §16
+  'seat-models': 'orchestrator', // seat model parity (REQ-2031): the free check of the installed agents' model lines against §16
   'worktree-sweep': 'orchestrator',
   'branch-sweep': 'hygiene',
   'run-sweep': 'hygiene',

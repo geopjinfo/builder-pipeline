@@ -986,7 +986,7 @@ set before the data and missed by one seed.
 
 ## 27. Seat model parity — `seat-models` (free check, unmeasured)
 
-**What ships (2026-11-20, `specs/pipeline-cost-3.spec.md` REQ-2021 and REQ-2029, D150, D151).** The Claude Code
+**What ships (2026-11-20, `specs/pipeline-cost-3.spec.md` REQ-2021 and REQ-2031, D150, D151).** The Claude Code
 install reads `models.strong` / `models.mid` from PIPELINE_PROFILE.md §16 for the agents' `model:` lines (`--models`
 on the command wins, tier by tier; the lock records the flag, never the profile). `npx --no-install builder-pipeline run
 seat-models` reads the installed agents back against §16: `seat models: in step` (exit 0) or one `DRIFT:` line per
@@ -1017,7 +1017,7 @@ Record per run: `seat-models` exit before the run (expected 0), the model of eve
 | 2026-11-19 | 0e09b2f (before) | full-01, hard-01, g12-after-E | 0 of 170 runs (every strong seat on Opus under a Sonnet profile) | 100 percent on the saturated beds | 1.42 · 3.24 · 0.96 | before rows: the Opus share above |
 | | (after) | third-01 PT9, arm E at parity | | | | owed: seats on the declared model of all (expected 100 percent), cost per run against the Opus arm, solved against the Opus arm and the bare arm |
 
-**Keep rule.** Keep REQ-2021 and REQ-2029 when 100 percent of seat messages in the parity arm run the declared model
+**Keep rule.** Keep REQ-2021 and REQ-2031 when 100 percent of seat messages in the parity arm run the declared model
 and `seat-models` exits 0 before every run; they are correctness rules, not cost bets. The cost and accuracy numbers of
 PT9 decide a different question — whether the kit's seats need the stronger model at all — and that is a decision row
 of the benchmark, carried back here as a tier default change only with its run ids.

@@ -61,7 +61,7 @@ node scripts/orchestrator-check.mjs
 node scripts/seat-models.mjs
 ```
 
-`seat-models` (REQ-2029) compares the `model:` line of every installed agent with `models.strong` /
+`seat-models` (REQ-2031) compares the `model:` line of every installed agent with `models.strong` /
 `models.mid` of §16. One `DRIFT:` line per agent and exit `1` means the seats would run on another
 model than the profile declares — the benchmark measured Opus seats under a profile that said Sonnet.
 Run `node scripts/seat-models.mjs --write` to put them in step, then go on. A profile without models,

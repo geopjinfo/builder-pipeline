@@ -7,7 +7,7 @@ versions independently of any project it is pasted into.
 
 ### Added
 
-- **Seat model parity (`specs/pipeline-cost-3.spec.md` REQ-2021, REQ-2029 and REQ-2030; D150, D151; EXPERIMENTS §27).** The
+- **Seat model parity (`specs/pipeline-cost-3.spec.md` REQ-2021, REQ-2031 and REQ-2032; D150, D151; EXPERIMENTS §27).** The
   Claude Code install (`unpack`, `upgrade`) reads `models.strong` / `models.mid` from PIPELINE_PROFILE.md §16 for the
   agents' `model:` lines; `--models` on the command still wins, tier by tier; the lock records only the flag, never the
   profile. New free check `npx builder-pipeline run seat-models [--write] [--json]`: the installed agents' `model:` lines

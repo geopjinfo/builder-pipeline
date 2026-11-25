@@ -20,7 +20,7 @@ Ratified-by: George ("proceed as recommended", 20 November 2026, on the kit impr
 ## Scope
 
 - In: the Claude Code install reads profile §16 `models.strong` / `models.mid` for the agents' `model:` lines
-  (REQ-2021) · a free check that reads the installed agents back against §16 and can rewrite them (REQ-2029) · the
+  (REQ-2021) · a free check that reads the installed agents back against §16 and can rewrite them (REQ-2031) · the
   run discipline names the check before step 0 · EXPERIMENTS §27.
 - Out: Codex and Antigravity agents (no kit defaults; §12 at dispatch time) · a change to the tier defaults
   themselves (opus, sonnet, haiku), which is a benchmark decision after PT9 · REQ-2025 and REQ-2026.
@@ -46,8 +46,8 @@ Ratified-by: George ("proceed as recommended", 20 November 2026, on the kit impr
 | Id | Requirement | Actor | Kind | Source |
 |---|---|---|---|---|
 | REQ-2021 | At `unpack` and `upgrade` for Claude Code, a string `models.strong`, `models.mid` or `models.low` in PIPELINE_PROFILE.md §16 that is not an unfilled placeholder is the model written into every agent of that tier. Precedence: `--models` on the command, then §16, then the lock's recorded overrides, then the defaults. The install prints the mapping it took from the profile. §16 is read each time and never recorded in the lock. | the person installing the kit | behaviour | intent, D150 |
-| REQ-2029 | `npx builder-pipeline run seat-models [--write] [--json]` compares the `model:` line of every kit agent under `.claude/agents/` (core, experimental and extras personas; a `builder-` prefix stripped) with §16 by the persona's tier. In step: one line, exit 0. Drift: one `DRIFT:` line per agent that names the file, the model it runs, the tier and the declared model, exit 1. `--write` rewrites the drifted lines and the agents' builder.lock.json hashes, then exits 0. A project-owned agent, a tier the profile leaves null, and a profile without models are in step. Exit 2 on an unknown argument or an invalid profile. | the orchestrator | behaviour | intent, D151 |
-| REQ-2030 | `seat-models` refuses an unknown argument and an invalid profile (exit 2) and writes nothing on either; without `--write` it never changes a file, whatever it finds. | the orchestrator | refusal | D151 |
+| REQ-2031 | `npx builder-pipeline run seat-models [--write] [--json]` compares the `model:` line of every kit agent under `.claude/agents/` (core, experimental and extras personas; a `builder-` prefix stripped) with §16 by the persona's tier. In step: one line, exit 0. Drift: one `DRIFT:` line per agent that names the file, the model it runs, the tier and the declared model, exit 1. `--write` rewrites the drifted lines and the agents' builder.lock.json hashes, then exits 0. A project-owned agent, a tier the profile leaves null, and a profile without models are in step. Exit 2 on an unknown argument or an invalid profile. | the orchestrator | behaviour | intent, D151 |
+| REQ-2032 | `seat-models` refuses an unknown argument and an invalid profile (exit 2) and writes nothing on either; without `--write` it never changes a file, whatever it finds. | the orchestrator | refusal | D151 |
 
 ## Acceptance criteria
 
@@ -57,11 +57,11 @@ Ratified-by: George ("proceed as recommended", 20 November 2026, on the kit impr
 | AC-2021b | REQ-2021 | assert | the same profile | `unpack … --models strong=big-model` | strong agents `big-model`, mid agents `claude-haiku-4-5` |
 | AC-2021c | REQ-2021 | assert | the template's unfilled `strong` placeholder | `unpack` | the defaults `opus` and `sonnet`; no profile line printed |
 | AC-2021d | REQ-2021 | assert | an installed project whose §16 `strong` changes | `upgrade` | the strong agents carry the new model |
-| AC-2029a | REQ-2029 | assert | an install in step | `seat-models` | `seat models: in step — n agent(s) on the declared models (…)`, exit 0; `--json` lists the entries with tier and model |
-| AC-2029b | REQ-2029 | assert | two strong agents edited to `model: opus` under a Sonnet profile | `seat-models` | two `DRIFT:` lines naming file, model, tier and declared model, sorted by file, exit 1 |
-| AC-2029c | REQ-2029 | assert | one drifted agent | `seat-models --write` | a `written:` line naming the file, then in step, exit 0; the next `upgrade` reports no local edit on it |
-| AC-2030 | REQ-2030 | assert | an unknown argument | `seat-models --bogus` | exit 2, no file changed |
-| AC-2029d | REQ-2029 | assert | a project-owned agent, a null `mid`, a profile without models | `seat-models` | exit 0 each; the project-owned agent is not listed |
+| AC-2031a | REQ-2031 | assert | an install in step | `seat-models` | `seat models: in step — n agent(s) on the declared models (…)`, exit 0; `--json` lists the entries with tier and model |
+| AC-2031b | REQ-2031 | assert | two strong agents edited to `model: opus` under a Sonnet profile | `seat-models` | two `DRIFT:` lines naming file, model, tier and declared model, sorted by file, exit 1 |
+| AC-2031c | REQ-2031 | assert | one drifted agent | `seat-models --write` | a `written:` line naming the file, then in step, exit 0; the next `upgrade` reports no local edit on it |
+| AC-2032 | REQ-2032 | assert | an unknown argument | `seat-models --bogus` | exit 2, no file changed |
+| AC-2031d | REQ-2031 | assert | a project-owned agent, a null `mid`, a profile without models | `seat-models` | exit 0 each; the project-owned agent is not listed |
 
 ## Expected effect and measurement
 
@@ -72,7 +72,7 @@ one subscription lane. Before any run `seat-models` exits 0 in the arm's checkou
 | Change | Expected | Keep rule |
 |---|---|---|
 | REQ-2021 | every seat message of the parity arm carries the declared model | 100 percent of seat messages on the declared model |
-| REQ-2029 | the check exits 0 before every run; a deliberate drift in a dry run is reported | exit 0 on every run; the dry-run drift reported |
+| REQ-2031 | the check exits 0 before every run; a deliberate drift in a dry run is reported | exit 0 on every run; the dry-run drift reported |
 
 The cost and accuracy of the parity arm against the Opus arm answer whether the seats need the stronger model; that
 is PT9's question and the benchmark's decision, carried back here as a tier default change only with run ids.
@@ -92,6 +92,7 @@ No API contract — the module is one install rule, one script and one library o
 | Id | Clause | Change | Decision |
 |---|---|---|---|
 | AM-6 | adapters/claude-code.md § Post-copy wiring 1, "To change later, edit the installed `.claude/agents/` files" | edit §16 and run `seat-models --write`; the installed files are rewritten, not edited by hand | D151 |
+| AM-7 | this spec, REQ-2029 and REQ-2030 (20 Nov) | renumbered REQ-2031 and REQ-2032, with their AC rows, on 25 Nov: `specs/package-pinning.spec.md` (PR 45, merged first) holds REQ-2029 and REQ-2030; LG-1 keeps registry ids unique | D150 stands; ids only |
 
 ## Open questions
 

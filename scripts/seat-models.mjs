@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * seat-models — do the installed seats run the models profile §16 declares? (specs/pipeline-cost-3.spec.md REQ-2029,
+ * seat-models — do the installed seats run the models profile §16 declares? (specs/pipeline-cost-3.spec.md REQ-2031,
  * D151). Rule and reading: scripts/lib/seat-models.cjs.
  *
  *   npx builder-pipeline run seat-models [--write] [--json]

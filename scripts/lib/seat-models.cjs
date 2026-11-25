@@ -1,5 +1,5 @@
 /**
- * Seat model parity (specs/pipeline-cost-3.spec.md REQ-2021, REQ-2029; D150, D151). Rule and reading of
+ * Seat model parity (specs/pipeline-cost-3.spec.md REQ-2021, REQ-2031; D150, D151). Rule and reading of
  * `npx builder-pipeline run seat-models`.
  *
  * WHY. A persona declares a tier (`strong` | `mid`); the Claude Code install writes a `model:` line from the tier →

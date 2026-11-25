@@ -42,7 +42,7 @@ but without the frontmatter transform.
    project declares its models: `models.strong` / `models.mid` in `PIPELINE_PROFILE.md` §16 reach
    the agents at `unpack` and `upgrade` (REQ-2021), and `--models strong=<x>,mid=<y>` on the command
    wins over both (the setup skill picks these by inspecting your subscription). To change later,
-   edit §16 and run `npx --no-install builder-pipeline run seat-models --write` (REQ-2029; without `--write` it
+   edit §16 and run `npx --no-install builder-pipeline run seat-models --write` (REQ-2031; without `--write` it
    reports each agent whose `model:` line differs from §16) — never edit `builder/agents/`, which
    stays neutral. Keep strong models where profile §12 puts them.
 2. **Effort.** A persona may carry `effort:` (`low` … `max`). It overrides the session's effort for
