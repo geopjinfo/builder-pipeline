@@ -56,15 +56,15 @@ the offending location.
       forced-failure rollback test exists and passes.
 - [ ] Absence assertions carry positive controls (the tester's positive-control rule).
 - [ ] **Spec trace** — every requirement id the module declares has a test or a requirement-pack step
-      (`assert` · `by-design <cite>` · `gap` · `skipped`): run `npx builder-pipeline run spec-trace-check <requirements>`;
+      (`assert` · `by-design <cite>` · `gap` · `skipped`): run `npx --no-install builder-pipeline run spec-trace-check <requirements>`;
       an `UNTRACED` id fails this item. Feature off → record `specTrace: not configured` (not a pass).
 
 ## Repo hygiene
 
-- [ ] No hard hygiene finding since base: `npx builder-pipeline run hygiene --since <base> --json` has no `hard`
+- [ ] No hard hygiene finding since base: `npx --no-install builder-pipeline run hygiene --since <base> --json` has no `hard`
       check (no secret, no assistant or scratch file, no attribution trailer or identity). Feature off → record
       `hygiene: not configured` (not a pass).
-- [ ] Completion gate: `npx builder-pipeline run hygiene --gate --since <base>` — record `completion gate: PASS`,
+- [ ] Completion gate: `npx --no-install builder-pipeline run hygiene --gate --since <base>` — record `completion gate: PASS`,
       `FAIL` (one FIX row per failing gate; not ready) or `not configured` (no gate check is on; not a pass).
 
 ## Ledgers (§11)

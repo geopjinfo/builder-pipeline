@@ -107,6 +107,7 @@ const SCRIPTS = {
   'run-sweep': 'hygiene',
   'attribution-check': 'hygiene',
   'artifact-check': 'hygiene',
+  'pin-check': 'hygiene',
   hygiene: 'hygiene', // the runner and the completion gate
   'cost-window': 'evals',
   'seat-peaks': 'evals',
@@ -176,6 +177,7 @@ const LIBS = {
   'run-sweep': 'hygiene',
   'attribution-check': 'hygiene',
   'artifact-check': 'hygiene',
+  'pin-check': 'hygiene',
   'hygiene-match': 'hygiene', // the glob rules the gate checks share
   hygiene: CORE, // the runner and the gate rows; the progress reporter (orchestrator) reads its record through it (REQ-1836)
   capacity: 'orchestrator', // 2.1.0 (M15): read by orch-state, orch, board-loop and the capacity command

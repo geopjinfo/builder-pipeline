@@ -124,12 +124,12 @@ For each `LAUNCH <lane>` line, in order:
 ## 4. While lanes run — the hub
 
 At run start, beside `board-watch` and the lane watchers, start the progress reporter once in the background when
-`features.reporter` is on: `npx builder-pipeline run report --watch`. It sends one report per interval on the configured
+`features.reporter` is on: `npx --no-install builder-pipeline run report --watch`. It sends one report per interval on the configured
 channels, only on change, and never fails the run; a second start exits at once naming the live watcher's pid.
 
 - **Messages carry pointers, never content**: "brief at X; write the result to Y"; "heads-up at Z".
 - **Capacity governor** (`features.capacity`, default off; 2.1.0): at run start, start
-  `npx builder-pipeline run capacity --watch` in the background beside the board watcher (one watcher per orch root
+  `npx --no-install builder-pipeline run capacity --watch` in the background beside the board watcher (one watcher per orch root
   holds a pid lease; a second one exits saying so). Its record is one more term in the lane cap: `orch next`
   prints `CAPACITY: lanes capped at N of M — <signal>`, `gate-launch --resume` counts it as a slot limit, and the
   loop runner holds at 0 lanes (stop reason `capacity` after `holdMaxMinutes`). It lowers only and never stops a
