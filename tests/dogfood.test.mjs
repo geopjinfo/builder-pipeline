@@ -548,6 +548,52 @@ ${rows}
     assert.equal(r.status, 1, r.out);
     assert.match(r.out, /\[LG-6\] DEFERRED_TASKS\.md :: D-2 — row has 6 cell\(s\), its header has 7/);
   });
+
+  // LG-3 resolves a pointer against EVERY registry table that has an id column, and against the id a
+  // struck-through (closed) row names. Before: a still-blocked table with no Status header was skipped
+  // whole, and a closed row was keyed under the literal `~~D-7~~` — both reported a real target as missing.
+  const registry = `# Deferred
+
+## Section A — open and closed
+
+| Id | Raised by | Task | Status | Dependency | Why blocked | How to resume |
+|----|-----------|------|--------|------------|-------------|---------------|
+| D-1 | stock | wait for the queue | DEFERRED | queue | one line | steps |
+| ~~D-7~~ | stock | closed row | DONE | queue | one line | steps |
+
+## Section B — still blocked
+
+| ID | Module | Item | Blocked on | Why | When |
+|----|--------|------|------------|-----|------|
+| D-9 | stock | blocked row | the queue | one line | after the queue |
+`;
+  const deferBoard = (ref) => board(`| T1 | reorder level per item | D-1 | DEFERRED→${ref} | — | |`);
+
+  test('red: a board deferring to a row of a registry table with no Status column resolves (no LG-3)', () => {
+    write(root, 'DEFERRED_TASKS.md', registry);
+    write(root, 'tasks/stock-levels.md', deferBoard('D-9'));
+    const r = run(root, ['builder/cli.js', 'check-ledgers']);
+    assert.doesNotMatch(r.out, /\[LG-3\]/, r.out);
+    assert.equal(r.status, 0, r.out);
+  });
+
+  test('red: a board deferring to a row closed as ~~id~~ resolves, with or without the strikethrough on the pointer', () => {
+    write(root, 'DEFERRED_TASKS.md', registry);
+    for (const ref of ['D-7', '~~D-7~~']) {
+      write(root, 'tasks/stock-levels.md', deferBoard(ref));
+      const r = run(root, ['builder/cli.js', 'check-ledgers']);
+      assert.doesNotMatch(r.out, /\[LG-3\]/, `${ref}: ${r.out}`);
+      assert.equal(r.status, 0, r.out);
+    }
+  });
+
+  test('a pointer to an id that is in no registry table is still LG-3', () => {
+    write(root, 'DEFERRED_TASKS.md', registry);
+    write(root, 'tasks/stock-levels.md', deferBoard('D-404'));
+    const r = run(root, ['builder/cli.js', 'check-ledgers']);
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /\[LG-3\] tasks\/stock-levels\.md :: T1 — DEFERRED→D-404 has no matching row/);
+  });
 });
 
 /**
