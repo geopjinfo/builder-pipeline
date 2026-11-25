@@ -1345,6 +1345,23 @@ function columnsOf(headers) {
 const isLedgerTable = (cols) => cols.id >= 0 && cols.status >= 0;
 
 /**
+ * A REGISTRY table needs only an id column. A registry is not one table: rows that are still blocked often
+ * sit in a table with no `Status` header at all (`ID | Module | Item | Blocked on | Why | When`), and those
+ * are exactly the rows a board defers TO. Admitting registry tables only when they had a status column left
+ * every id in such a table out of the set `DEFERRED→<id>` is resolved against, so the gate reported LG-3
+ * against pointers whose target existed. Boards still need the id-and-status pair (`isLedgerTable`).
+ */
+const isRegistryTable = (cols) => cols.id >= 0;
+
+/**
+ * The id a registry row or a `DEFERRED→<id>` pointer NAMES. A row closed by striking its id through
+ * (`~~D-7~~`) is still the row `D-7`; keying it under the literal `~~D-7~~` made closing a row correctly
+ * break every pointer to it. Applied at BOTH the definition and the reference, so either side may carry
+ * the strikethrough.
+ */
+const ledgerKey = (raw) => String(raw ?? '').replace(/~~/g, '').trim();
+
+/**
  * The vocabulary term a status cell CLAIMS, or null.
  *
  * WHY THIS IS NOT `vocab.includes(cell)`. People write ledgers in markdown, for people: `**DONE**`,
@@ -1395,10 +1412,10 @@ function stripEmphasis(raw) {
  * the board — a missing cell, an unescaped `|` in prose — and it hid behind the positional read for as long
  * as that read existed.
  */
-function* ledgerRows(md, file, note) {
+function* ledgerRows(md, file, note, admit = isLedgerTable) {
   for (const table of parseTables(md)) {
     const cols = columnsOf(table.headers);
-    if (!isLedgerTable(cols)) continue;
+    if (!admit(cols)) continue;
     for (const cells of table.rows) {
       if (cells.length !== table.headers.length) {
         const id = cells[0] || '-';
@@ -1456,9 +1473,13 @@ function cmdCheckLedgers(args = []) {
     const raw = fs.readFileSync(regPath, 'utf8');
     if (raw.includes('⚠ VERIFY'))
       note(registryFile, '-', 'LG-4', 'unresolved "⚠ VERIFY" flag — resolve it, either way');
-    for (const { cells, cols } of ledgerRows(raw, registryFile, note)) {
-      const id = cells[cols.id];
-      const status = cells[cols.status];
+    for (const { cells, cols } of ledgerRows(raw, registryFile, note, isRegistryTable)) {
+      const id = ledgerKey(cells[cols.id]);
+      // A struck-through id is a CLOSED row: it is a valid pointer target, but its status cell is the closing
+      // history, not a vocabulary claim — LG-2 never read it before (the raw `~~id~~` failed the id shape
+      // below), and keying the row must not start failing every closure note on typography.
+      const closed = /~~/.test(cells[cols.id] ?? '');
+      const status = cols.status >= 0 && !closed ? cells[cols.status] : '';
       if (!/^[A-Za-z0-9_.-]+$/.test(id)) continue; // prose/example rows
       if (regIds.has(id)) note(registryFile, id, 'LG-1', 'duplicate registry id');
       regIds.add(id);
@@ -1490,7 +1511,7 @@ function cmdCheckLedgers(args = []) {
       const def = bare.match(/^DEFERRED(?:→|->)\s*`?([^`\s]+)`?/);
       const term = statusToken(bare, BOARD_STATUSES);
       if (def) {
-        const ref = def[1].trim();
+        const ref = ledgerKey(def[1]);
         if (!regIds.has(ref)) note(rel, id, 'LG-3', `DEFERRED→${ref} has no matching row in ${registryFile}`);
       } else if (!term) {
         note(rel, id, 'LG-2', `status "${status}" not in board vocabulary [${BOARD_STATUSES.join(', ')}, DEFERRED→<id>]`);
