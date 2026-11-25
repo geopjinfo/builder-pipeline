@@ -124,8 +124,8 @@ the session started on, and nothing stops a run on the wrong one. → Choosing a
 
 ## Phase 0.5 — track selection
 
-Not every piece of work is a module build. Pick the track while writing the brief; **the planner confirms or rejects
-it as its first output** (it is the first seat that reads the actual docs). Put the track in the board header.
+Not every piece of work is a module build. Pick the track while writing the brief; **the planner returns a `Track hint:`
+and never raises the track** (REQ-2023): only `track-check` or the brief's `Size hint:` does. Put the track in the board header.
 
 | Track | Nature | Phases |
 |---|---|---|
@@ -142,11 +142,11 @@ Two rules keep this from making things worse (their history: `references/tracks-
 
 1. **A production-source diff may never go SOLO** (the one exception: `features.soloTrack` on, at most 2 files, no new behaviour, a red test first, the tiers once). If the blocker list turns out not to be verified — if a seat must decide *what to build* rather than fix *what was measured* — rule 2 applies and the run escalates.
 2. **The track is a floor, not a ceiling.** A run may escalate **up** mid-flight (SOLO → SMALL → MEDIUM → FIX → ADDITIVE → FULL);
-   nothing may de-escalate. A wrong guess costs a resumed phase, never lost coverage. Record the escalation as a board
-   row so the reason survives.
+   nothing may de-escalate, and no seat raises the track: a broken limit (`track-check`, a dependency, a protected path) or the
+   brief does. FULL is entered from the `Size hint:` or a new bounded context named in the brief. Record the escalation as a board row.
 3. **Size the run before the first dispatch.** Read the brief's `Size hint:` and `Human:` lines. A diff inside the SMALL
-   limits is SMALL; after the builder returns, `node scripts/track-check.mjs --since <base>` measures them (add `--medium` only with `features.mediumTrack` on, `--solo` only with `features.soloTrack` on), and `ESCALATE`
-   means the run continues from Phase 1 as `ADDITIVE` with the builder's diff as context (REQ-2003); with `features.mediumTrack` off the MEDIUM row is not offered. → The SMALL, MEDIUM and SOLO steps, the unattended mode and the report header: `references/sizing.md`.
+   limits is SMALL; after the builder returns, `node scripts/track-check.mjs --since <base>` measures them (add `--medium` only with `features.mediumTrack` on, `--solo` only with `features.soloTrack` on, `--shared <files>` from profile §5's shared catalogue), and `ESCALATE`
+   means the run continues from Phase 1 as `ADDITIVE` with the builder's diff as context (REQ-2003); with `features.mediumTrack` off the MEDIUM row is not offered. On MEDIUM the auditor is `invariant-auditor`, or `security-auditor` for a new public operation; no other (REQ-2027). → The steps, the shared allowance, the foreground guard, the unattended mode and the report header: `references/sizing.md`.
 
 **`SPLIT` — work that belongs somewhere else.** When any seat finds work belonging to another module or another track, the
 output is a `SPLIT` finding: a deferred-registry row (with its blocking dependency and how-to-resume) plus a **proposed** separate
@@ -175,7 +175,7 @@ line.
    that line in `state.md` and go on: the brief's §1 scope is the requirements source, as before. Never let a missing
    spec read as a pass.
 1. **Plan** — dispatch `module-planner`. It writes `<runs>/<key>/plan.md` and returns the path + a **triaged blocker
-   list**. It also confirms-or-rejects the step-0.5 track and **authors the module digest** (profile §14) — the
+   list**. It also returns a `Track hint:` (a hint, never a change; REQ-2023) and **authors the module digest** (profile §14) — the
    semantic model of this bounded context plus a list of `OPEN` **invariant candidates**: the things that might be
    true and that nothing checks. (Why the planner, not the coder: `references/tracks-and-scope.md`. The experimental
    graph trial: `references/gate-checks.md`.)

@@ -87,6 +87,7 @@ function hooksSettings() {
         { matcher: 'Read', hooks: [cmd('registry-read-guard.cjs')] },
         { matcher: 'Write|Edit|MultiEdit', hooks: [cmd('reviewer-write-guard.cjs')] },
         { matcher: 'Write|Edit|MultiEdit', hooks: [cmd('secret-write-guard.cjs')] }, // REQ-1816
+        { matcher: 'ScheduleWakeup|CronCreate|Monitor', hooks: [cmd('foreground-guard.cjs')] }, // REQ-2022
       ],
       PostToolUse: [{ matcher: 'Bash', hooks: [cmd('bash-output-cap.cjs')] }],
     },

@@ -67,7 +67,9 @@ but without the frontmatter transform.
       { "matcher": "Write|Edit|MultiEdit",
         "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/reviewer-write-guard.cjs\"" }] },
       { "matcher": "Write|Edit|MultiEdit",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/secret-write-guard.cjs\"" }] }
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/secret-write-guard.cjs\"" }] },
+      { "matcher": "ScheduleWakeup|CronCreate|Monitor",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/foreground-guard.cjs\"" }] }
     ],
     "PostToolUse": [
       { "matcher": "Bash",
@@ -122,6 +124,7 @@ defaults, and the advisory hooks say they did not run.
 | `reanchor-after-compact.cjs` | `SessionStart` · `compact` | After a compaction, hands the session each run in flight: its `state.md` with the `Now:` line, the board and its first open phase, and the open `FIX-n` rows copied verbatim. It reads files only and makes no model call; no run in flight means no output. The orchestrator still re-reads the files: this only stops a summary from losing where they are | `reanchor` on · `maxRuns` · `paths.runs` · `paths.boards` |
 | `reviewer-write-guard.cjs` | `PreToolUse` · `Write\|Edit\|MultiEdit` | The reviewer may write exactly one kind of file: its review, `<runs>/<key>/review-pass<n>.md`. Every other write by that seat is blocked. A grant of Write to one file is only a grant if something enforces the one file | `reviewTemplate` on · `paths.runs` |
 | `secret-write-guard.cjs` | `PreToolUse` · `Write\|Edit\|MultiEdit` | The content of a Write and the new text of an Edit or MultiEdit is scanned with the outbound guard's secret shapes (`scripts/lib/outbound-guard.cjs` SHAPES, D88); a hit denies the write naming the kind, never the text. A path in `features.secretScan.allow` passes. The shapes and the loader come through hook trust; untrusted, the hook passes and says so — the pre-commit scan (`hooks/secret-scan-precommit.sh`, any tool) still holds | `secretScan` on · `allow` |
+| `foreground-guard.cjs` | `PreToolUse` · `ScheduleWakeup\|CronCreate\|Monitor` | While a pipeline run is open (any file in a `<paths.runs>/<key>/` folder written in the last `openHours`; or always, with `scope: "project"`), a timer tool call by the orchestrator is denied with the foreground rule as the reason (REQ-2004, REQ-2022): the seat is dispatched and waited for in the same step. Off, or without a trusted profile, the hook passes. A failure in the hook allows the call | `foregroundGuard` on · `openHours` · `scope` · `paths.runs` |
 | `lane-gate.cjs` | `TaskCompleted` · `Stop` | Runs the lane's gate (its test command) before a headless worker may call its work done. Exit 0 lets the completion through; a failed gate returns exit 2 with the gate output as the reason, so the verdict stays open. The kit writes this entry into a lane's `--settings` pin only, with the marker `builder-pipeline-lane-gate`, so the entry can be found and removed; it never enters a project's live settings | `accounts` on · the lane's gate command |
 | `lane-shell-allow.cjs` | `PreToolUse` · `Bash` | The loop worker's gate command in its two normalised forms (D69): with a `cd <own worktree> &&` prefix (no `..`, no other directory, no second command) or one `\| head -n N` / `\| tail -n N`. An accepted command answers `permissionDecision: allow`; any other command gets no answer and the exact allow list denies it as before. Written into the loop's `--settings` pin only, with the marker `builder-pipeline-lane-gate` | `boardLoop` on · the lane's gate command and worktree |
 
